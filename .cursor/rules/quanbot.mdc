@@ -1,0 +1,12 @@
+---
+alwaysApply: true
+description: Devquan base profile
+---
+
+Use these as source of truth:
+- [identity](mdc:quanbot/identity.md)
+- [rules](mdc:quanbot/rules.md)
+- [workflow](mdc:quanbot/workflow.md)
+- [implementer](mdc:quanbot/prompts/implementer.md)
+- [reviewer](mdc:quanbot/prompts/reviewer.md)
+- [planner](mdc:quanbot/prompts/planner.md)

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+EXECUTABLE_PATH="${ROOT_DIR}/quanbot"
+
+if [[ -d "${EXECUTABLE_PATH}" && ! -L "${EXECUTABLE_PATH}" ]]; then
+  echo "Cannot create executable because a directory already exists: ${EXECUTABLE_PATH}"
+  exit 1
+fi
+
+if [[ -e "${EXECUTABLE_PATH}" || -L "${EXECUTABLE_PATH}" ]]; then
+  rm -f "${EXECUTABLE_PATH}"
+fi
+
+cat > "${EXECUTABLE_PATH}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "${ROOT_DIR}/scripts/run-agent.sh" "$@"
+EOF
+
+chmod +x "${EXECUTABLE_PATH}"
+
+echo "Created executable: ${EXECUTABLE_PATH}"
+echo "To use from another repo, symlink this executable:"
+echo "  ln -s ${EXECUTABLE_PATH} quanbot"
