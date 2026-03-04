@@ -1,0 +1,24 @@
+[user]
+	name = Shaquan Nelson
+	# email is intentionally omitted — set per-machine:
+	#   git config --global user.email "you@example.com"
+
+[core]
+	editor = nvim
+	autocrlf = input
+	excludesfile = ~/.gitignore_global
+
+[pull]
+	rebase = true
+
+[rebase]
+	autosquash = true
+
+[push]
+	default = current
+	autoSetupRemote = true
+
+[alias]
+	lg = log --oneline --graph --decorate --all
+	st = status -sb
+	co = checkout

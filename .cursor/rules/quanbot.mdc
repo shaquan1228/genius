@@ -1,12 +1,10 @@
 ---
 alwaysApply: true
-description: Devquan base profile
+description: Engineering identity, rules, workflow, and stack management
 ---
 
 Use these as source of truth:
-- [identity](mdc:quanbot/identity.md)
-- [rules](mdc:quanbot/rules.md)
-- [workflow](mdc:quanbot/workflow.md)
-- [implementer](mdc:quanbot/prompts/implementer.md)
-- [reviewer](mdc:quanbot/prompts/reviewer.md)
-- [planner](mdc:quanbot/prompts/planner.md)
+- [identity](mdc:/Users/shaquan1228/Desktop/quanbot/identity.md)
+- [rules](mdc:/Users/shaquan1228/Desktop/quanbot/rules.md)
+- [workflow](mdc:/Users/shaquan1228/Desktop/quanbot/workflow.md)
+- [stack](mdc:/Users/shaquan1228/Desktop/quanbot/prompts/stack.md)

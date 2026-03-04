@@ -14,12 +14,21 @@ Use these checks as non-blocking guardrails.
 - Behavior and return values are explicit.
 - Proposed tests validate behavior, not internals.
 - Risks and assumptions are called out clearly.
+- Framework convention check: prefer framework-native validation and constraint mechanisms over ad-hoc inline error mutation in orchestration code.
+- OODA check: Does the response show Observe -> Orient -> Decide -> Act in reasoning and execution updates?
 
 ## Delivery Checks
 
 - Commands and verification steps are runnable.
 - Changes are incremental and easy to review.
 - Residual work is documented.
+
+## Source Control Checks
+
+- Branch scope check: Is the branch or pull request single-purpose and reviewable?
+- Stack health check: Is ancestry consistent and ready to publish?
+- Gate check: Do required quality checks pass before publish?
+- Staging check: Are only task-relevant files staged?
 
 ## Architecture and Meta Checks
 
@@ -32,3 +41,4 @@ Use these checks as non-blocking guardrails.
 - Sprawl check: Is workflow logic diffused across unrelated layers?
 - Transformation check: Is external data normalized at a boundary instead of scattered across callers?
 - Coupling check: Did cross-domain coupling increase without a clear benefit?
+- Decision-loop check: After new evidence, did the plan/next action explicitly update?

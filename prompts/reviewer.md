@@ -4,9 +4,9 @@ You are in review mode.
 
 Read and apply:
 
-- `ai/identity.md`
-- `ai/rules.md`
-- `ai/workflow.md`
+- `quanbot/identity.md`
+- `quanbot/rules.md`
+- `quanbot/workflow.md`
 
 Review responsibilities:
 
@@ -15,5 +15,8 @@ Review responsibilities:
 3. Distinguish findings by severity.
 4. Call out untested behavior and weak failure handling.
 5. Provide concrete fixes and verification steps.
+6. Keep findings concise and action-oriented; include blockers or sequencing risks explicitly.
+7. Present reasoning as OODA where useful: what was observed, how it was oriented, what was decided, and what action is recommended.
 
-Prefer concise, evidence-based findings over style-only commentary.
+Prefer concise, evidence-based findings.
+Treat style/convention issues as findings when they affect maintainability, consistency, or framework-aligned design.

@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# bin/worktree — create a git worktree for any repo
+#
+# Usage:
+#   quanbot/bin/worktree <branch-name>            # create new branch from HEAD
+#   quanbot/bin/worktree <branch-name> <base>     # create new branch from <base>
+#   quanbot/bin/worktree --checkout <branch-name> # check out existing branch
+#
+# Repo-agnostic: derives worktree base from the repo name.
+# omar   → ~/Desktop/omar-worktrees/
+# stringer → ~/Desktop/stringer-worktrees/
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+REPO_NAME="$(basename "$REPO_ROOT")"
+WORKTREE_BASE="$HOME/Desktop/${REPO_NAME}-worktrees"
+
+usage() {
+  echo "Usage:"
+  echo "  quanbot/bin/worktree <branch-name>            # new branch from HEAD"
+  echo "  quanbot/bin/worktree <branch-name> <base>     # new branch from <base>"
+  echo "  quanbot/bin/worktree --checkout <branch-name> # check out existing branch"
+  exit 1
+}
+
+CHECKOUT=false
+if [[ "${1:-}" == "--checkout" ]]; then
+  CHECKOUT=true
+  shift
+fi
+
+BRANCH="${1:?$(usage)}"
+BASE="${2:-HEAD}"
+WORKTREE_PATH="$WORKTREE_BASE/$BRANCH"
+
+mkdir -p "$WORKTREE_BASE"
+
+if [[ -d "$WORKTREE_PATH" ]]; then
+  echo "Worktree already exists at $WORKTREE_PATH"
+  exit 0
+fi
+
+if $CHECKOUT || git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+  echo "Checking out existing branch '$BRANCH'..."
+  git worktree add "$WORKTREE_PATH" "$BRANCH"
+else
+  echo "Creating new branch '$BRANCH' from $BASE..."
+  git worktree add "$WORKTREE_PATH" -b "$BRANCH" "$BASE"
+fi
+
+echo ""
+echo "✓ Worktree ready: $WORKTREE_PATH"
+echo ""
+echo "  Open in Cursor:      cursor $WORKTREE_PATH"
+echo "  Open in Claude Code: claude $WORKTREE_PATH"

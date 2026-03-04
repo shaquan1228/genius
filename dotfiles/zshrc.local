@@ -1,0 +1,21 @@
+# quanbot — portable shell additions
+# Sourced by ~/.zshrc via bin/setup hook. Safe to re-source.
+
+# ── Version manager ───────────────────────────────────────────────────────────
+. /opt/homebrew/opt/asdf/libexec/asdf.sh
+
+# ── PATH ─────────────────────────────────────────────────────────────────────
+export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.yarn/bin:$PATH"
+export PATH="/opt/homebrew/opt/mysql@8.0/bin:$PATH"
+export PATH="/opt/homebrew/opt/openssl@3.5/bin:$PATH"
+
+# ── Editor ────────────────────────────────────────────────────────────────────
+export EDITOR="nvim"
+
+# ── Google Cloud SDK ─────────────────────────────────────────────────────────
+[[ -f "$HOME/Downloads/google-cloud-sdk/path.zsh.inc" ]] && \
+  source "$HOME/Downloads/google-cloud-sdk/path.zsh.inc"
+[[ -f "$HOME/Downloads/google-cloud-sdk/completion.zsh.inc" ]] && \
+  source "$HOME/Downloads/google-cloud-sdk/completion.zsh.inc"
+export CLOUDSDK_PYTHON=/usr/bin/python3

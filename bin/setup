@@ -1,27 +1,128 @@
 #!/usr/bin/env bash
+# bin/setup — bootstrap quanbot on a new machine.
+#
+# Usage: bin/setup
+#
+# What it does:
+#   1. Installs Homebrew (if missing)
+#   2. Installs dependencies from Brewfile
+#   3. Symlinks dotfiles into ~ and sets git email (prompted from GitHub)
+#   4. Writes ~/.claude/CLAUDE.md (auto-loaded by Claude Code)
+#   5. Symlinks commands/ into ~/.claude/commands/
+#   6. Writes .cursor/rules/quanbot.mdc (auto-loaded by Cursor)
+#
+# Safe to re-run (all steps are idempotent).
+
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-EXECUTABLE_PATH="${ROOT_DIR}/quanbot"
+BIN_LINK="$ROOT_DIR/bin/link"
 
-if [[ -d "${EXECUTABLE_PATH}" && ! -L "${EXECUTABLE_PATH}" ]]; then
-  echo "Cannot create executable because a directory already exists: ${EXECUTABLE_PATH}"
-  exit 1
+section() { echo; echo "── $1"; }
+
+# ── 1. Homebrew ───────────────────────────────────────────────────────────────
+section "Homebrew"
+if ! command -v brew &>/dev/null; then
+  echo "  Installing Homebrew..."
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+else
+  echo "  Homebrew already installed."
 fi
 
-if [[ -e "${EXECUTABLE_PATH}" || -L "${EXECUTABLE_PATH}" ]]; then
-  rm -f "${EXECUTABLE_PATH}"
+# ── 2. Dependencies ───────────────────────────────────────────────────────────
+section "Dependencies (Brewfile)"
+brew bundle --file="$ROOT_DIR/Brewfile" --no-upgrade
+echo "  Brewfile dependencies resolved."
+
+# ── 3. Dotfiles ───────────────────────────────────────────────────────────────
+section "Dotfiles"
+"$BIN_LINK" "$ROOT_DIR/dotfiles/gitconfig"             "$HOME/.gitconfig"
+"$BIN_LINK" "$ROOT_DIR/dotfiles/zshrc.local"           "$HOME/.zshrc.local"
+"$BIN_LINK" "$ROOT_DIR/dotfiles/claude-settings.local.json" \
+            "$HOME/.claude/settings.local.json"
+
+# ── Git email ────────────────────────────────────────────────────────────────
+CURRENT_EMAIL="$(git config --global user.email 2>/dev/null || true)"
+if [[ -n "$CURRENT_EMAIL" ]]; then
+  echo "  Git email already set: $CURRENT_EMAIL"
+else
+  if command -v gh &>/dev/null; then
+    if ! gh auth status &>/dev/null 2>&1; then
+      echo "  gh not authenticated — launching gh auth login..."
+      gh auth login
+    fi
+    mapfile -t EMAILS < <(gh api user/emails --jq '.[].email' 2>/dev/null || true)
+    if [[ ${#EMAILS[@]} -gt 0 ]]; then
+      echo "  GitHub emails:"
+      for i in "${!EMAILS[@]}"; do
+        echo "    $((i+1))) ${EMAILS[$i]}"
+      done
+      printf "  Pick a number (or press Enter to skip): "
+      read -r CHOICE
+      if [[ "$CHOICE" =~ ^[0-9]+$ && "$CHOICE" -ge 1 && "$CHOICE" -le ${#EMAILS[@]} ]]; then
+        SELECTED="${EMAILS[$((CHOICE-1))]}"
+        git config --global user.email "$SELECTED"
+        echo "  Set git email: $SELECTED"
+      else
+        echo "  Skipped. Run: git config --global user.email \"you@example.com\""
+      fi
+    else
+      echo "  Could not fetch GitHub emails. Run: git config --global user.email \"you@example.com\""
+    fi
+  else
+    echo "  gh not installed — skipping email setup. Run bin/setup again after brew bundle completes."
+  fi
 fi
 
-cat > "${EXECUTABLE_PATH}" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "${ROOT_DIR}/scripts/run-agent.sh" "$@"
+ZSHRC="$HOME/.zshrc"
+ZSHRC_HOOK='[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local'
+if ! grep -qF "$ZSHRC_HOOK" "$ZSHRC"; then
+  printf '\n# quanbot local overrides\n%s\n' "$ZSHRC_HOOK" >> "$ZSHRC"
+  echo "  Appended .zshrc.local hook to ~/.zshrc"
+else
+  echo "  ~/.zshrc already sources .zshrc.local"
+fi
+
+# ── 4. Claude Code global context ─────────────────────────────────────────────
+section "Claude Code (CLAUDE.md)"
+mkdir -p "$HOME/.claude"
+cat > "$HOME/.claude/CLAUDE.md" <<EOF
+# Engineering context (quanbot)
+
+@${ROOT_DIR}/identity.md
+@${ROOT_DIR}/rules.md
+@${ROOT_DIR}/workflow.md
+@${ROOT_DIR}/prompts/stack.md
 EOF
+echo "  Wrote ~/.claude/CLAUDE.md"
 
-chmod +x "${EXECUTABLE_PATH}"
+# ── 5. Claude Code slash commands ─────────────────────────────────────────────
+section "Claude Code commands"
+mkdir -p "$HOME/.claude/commands"
+for cmd in "$ROOT_DIR/commands/"*.md; do
+  "$BIN_LINK" "$cmd" "$HOME/.claude/commands/$(basename "$cmd")"
+done
 
-echo "Created executable: ${EXECUTABLE_PATH}"
-echo "To use from another repo, symlink this executable:"
-echo "  ln -s ${EXECUTABLE_PATH} quanbot"
+# ── 6. Cursor rules ───────────────────────────────────────────────────────────
+section "Cursor rules"
+CURSOR_MDC="$ROOT_DIR/.cursor/rules/quanbot.mdc"
+mkdir -p "$(dirname "$CURSOR_MDC")"
+cat > "$CURSOR_MDC" <<EOF
+---
+alwaysApply: true
+description: Engineering identity, rules, workflow, and stack management
+---
+
+Use these as source of truth:
+- [identity](mdc:${ROOT_DIR}/identity.md)
+- [rules](mdc:${ROOT_DIR}/rules.md)
+- [workflow](mdc:${ROOT_DIR}/workflow.md)
+- [stack](mdc:${ROOT_DIR}/prompts/stack.md)
+EOF
+echo "  Wrote .cursor/rules/quanbot.mdc"
+echo ""
+echo "  For global Cursor coverage, paste into Cursor > Settings > Rules for AI:"
+echo "    @${ROOT_DIR}/identity.md  @${ROOT_DIR}/rules.md  @${ROOT_DIR}/workflow.md"
+
+echo ""
+echo "Setup complete."
