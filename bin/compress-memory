@@ -26,11 +26,9 @@ if $ALL; then
   FILES=(
     "$QUANBOT_DIR/identity.md"
     "$QUANBOT_DIR/rules.md"
-    "$QUANBOT_DIR/workflow.md"
-    "$QUANBOT_DIR/prompts/stack.md"
-    "$QUANBOT_DIR/prompts/implementer.md"
-    "$QUANBOT_DIR/prompts/planner.md"
-    "$QUANBOT_DIR/prompts/reviewer.md"
+    "$QUANBOT_DIR/docs/dev/WORKFLOW.md"
+    "$QUANBOT_DIR/docs/dev/GIT-WORKFLOW.md"
+    "$QUANBOT_DIR/docs/OODA.md"
   )
   # Add auto-memory files if they exist
   if [ -d "$MEMORY_DIR" ]; then

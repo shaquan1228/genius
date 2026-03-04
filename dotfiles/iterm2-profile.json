@@ -1,0 +1,10 @@
+{
+  "Profiles" : [
+    {
+      "Use Separate Colors for Light and Dark Mode" : true,
+      "Rewritable" : true,
+      "Name" : "quanbot",
+      "Guid" : "quanbot-dev-profile"
+    }
+  ]
+}

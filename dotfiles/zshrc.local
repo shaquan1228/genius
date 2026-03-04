@@ -1,10 +1,26 @@
 # quanbot — portable shell additions
 # Sourced by ~/.zshrc via bin/setup hook. Safe to re-source.
 
+# ── tmux Auto-attach (MUST BE BEFORE instant prompt) ─────────────────────────
+# Only auto-attach in iTerm2, not in Cursor or other editors
+if [[ -z "$TMUX" && -n "$ITERM_SESSION_ID" ]]; then
+  exec tmux new-session -A -s main
+fi
+
+# ── Powerlevel10k ─────────────────────────────────────────────────────────────
+# Enable Powerlevel10k instant prompt
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
+# Load lean style config
+[[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh
+
 # ── Version manager ───────────────────────────────────────────────────────────
 . /opt/homebrew/opt/asdf/libexec/asdf.sh
 
 # ── PATH ─────────────────────────────────────────────────────────────────────
+export PATH="$HOME/Desktop/quanbot/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="$HOME/.yarn/bin:$PATH"
 export PATH="/opt/homebrew/opt/mysql@8.0/bin:$PATH"
@@ -19,3 +35,102 @@ export EDITOR="nvim"
 [[ -f "$HOME/Downloads/google-cloud-sdk/completion.zsh.inc" ]] && \
   source "$HOME/Downloads/google-cloud-sdk/completion.zsh.inc"
 export CLOUDSDK_PYTHON=/usr/bin/python3
+
+# ── Graphite Aliases ──────────────────────────────────────────────────────────
+alias gts='gt status'
+alias gtl='gt log short'
+alias gtls='gt log short --show-commits'
+
+# ── Dashboard ─────────────────────────────────────────────────────────────────
+alias dash='~/Desktop/quanbot/bin/dashboard'
+
+# ── Worktree Helpers ──────────────────────────────────────────────────────────
+alias wtl='git worktree list'
+alias wtc='_worktree_cd'
+alias wtr='_worktree_remove'
+
+_worktree_cd() {
+  local worktrees=($(git worktree list | awk '{print $1}'))
+  if [[ ${#worktrees[@]} -eq 0 ]]; then
+    echo "No worktrees found"
+    return 1
+  fi
+  
+  echo "Available worktrees:"
+  for i in {1..${#worktrees[@]}}; do
+    echo "  $i) ${worktrees[$i]}"
+  done
+  
+  printf "Select worktree (1-${#worktrees[@]}): "
+  read choice
+  
+  if [[ "$choice" =~ ^[0-9]+$ && "$choice" -ge 1 && "$choice" -le ${#worktrees[@]} ]]; then
+    cd "${worktrees[$choice]}"
+  else
+    echo "Invalid choice"
+    return 1
+  fi
+}
+
+_worktree_remove() {
+  local worktrees=($(git worktree list | tail -n +2 | awk '{print $1}'))
+  if [[ ${#worktrees[@]} -eq 0 ]]; then
+    echo "No worktrees to remove (main repo cannot be removed)"
+    return 1
+  fi
+  
+  echo "Available worktrees:"
+  for i in {1..${#worktrees[@]}}; do
+    echo "  $i) ${worktrees[$i]}"
+  done
+  
+  printf "Select worktree to remove (1-${#worktrees[@]}): "
+  read choice
+  
+  if [[ "$choice" =~ ^[0-9]+$ && "$choice" -ge 1 && "$choice" -le ${#worktrees[@]} ]]; then
+    local target="${worktrees[$choice]}"
+    printf "Remove worktree at $target? (y/N): "
+    read confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+      git worktree remove "$target"
+      echo "Removed: $target"
+    else
+      echo "Cancelled"
+    fi
+  else
+    echo "Invalid choice"
+    return 1
+  fi
+}
+
+# ── Git Commit Helpers ────────────────────────────────────────────────────────
+alias gca='git commit --amend --no-edit'
+alias gcae='git commit --amend'
+alias gcn='_git_commit_new'
+
+_git_commit_new() {
+  local type="${1:-feat}"
+  local msg="${2:-}"
+  
+  if [[ -z "$msg" ]]; then
+    printf "Commit message: "
+    read msg
+  fi
+  
+  git commit -m "${type}: ${msg}"
+}
+
+# ── Worktree Context in Prompt ────────────────────────────────────────────────
+# Powerlevel10k will show git info, worktree indicator added to right prompt
+function prompt_worktree() {
+  local git_dir=$(git rev-parse --git-dir 2>/dev/null)
+  if [[ "$git_dir" == *".git/worktrees/"* ]]; then
+    local worktree_name=$(basename $(git rev-parse --show-toplevel))
+    p10k segment -f 178 -t "wt:$worktree_name"
+  fi
+}
+
+# Add worktree to right prompt elements if using p10k
+if (( ${+POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS} )); then
+  POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS+=(worktree)
+fi

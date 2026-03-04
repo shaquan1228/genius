@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# bin/teardown — safely remove quanbot setup from machine
+#
+# Usage:
+#   bin/teardown [--dry-run] [--confirm]
+#
+# Removes symlinks and configuration created by bin/setup
+# Keeps backups (.bak files) and logs
+# Requires --confirm flag for actual removal (dry-run by default)
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOG_FILE="$HOME/.quanbot/teardown.log"
+DRY_RUN=true
+
+for arg in "$@"; do
+  case $arg in
+    --dry-run)
+      DRY_RUN=true
+      shift
+      ;;
+    --confirm)
+      DRY_RUN=false
+      shift
+      ;;
+    *)
+      echo "Usage: bin/teardown [--dry-run] [--confirm]"
+      exit 1
+      ;;
+  esac
+done
+
+log() {
+  mkdir -p "$(dirname "$LOG_FILE")"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+}
+
+section() {
+  echo ""
+  echo "── $1"
+}
+
+remove_symlink() {
+  local target="$1"
+  local name="$2"
+  
+  if [[ -L "$target" ]]; then
+    if $DRY_RUN; then
+      echo "  [DRY-RUN] Would remove: $target"
+    else
+      rm "$target"
+      echo "  Removed: $target"
+      log "REMOVE: $name at $target"
+    fi
+  else
+    echo "  Not a symlink (skipped): $target"
+  fi
+}
+
+remove_file() {
+  local target="$1"
+  local name="$2"
+  
+  if [[ -f "$target" ]]; then
+    if $DRY_RUN; then
+      echo "  [DRY-RUN] Would remove: $target"
+    else
+      rm "$target"
+      echo "  Removed: $target"
+      log "REMOVE: $name at $target"
+    fi
+  else
+    echo "  Not found (skipped): $target"
+  fi
+}
+
+remove_line_from_file() {
+  local file="$1"
+  local pattern="$2"
+  local name="$3"
+  
+  if [[ -f "$file" ]] && grep -qF "$pattern" "$file"; then
+    if $DRY_RUN; then
+      echo "  [DRY-RUN] Would remove line from: $file"
+    else
+      grep -vF "$pattern" "$file" > "${file}.tmp"
+      mv "${file}.tmp" "$file"
+      echo "  Removed line from: $file"
+      log "REMOVE: $name from $file"
+    fi
+  else
+    echo "  Pattern not found (skipped): $file"
+  fi
+}
+
+if $DRY_RUN; then
+  echo "╔════════════════════════════════════════════════════════════════╗"
+  echo "║                         DRY RUN MODE                           ║"
+  echo "║  No changes will be made. Run with --confirm to actually      ║"
+  echo "║  remove files.                                                 ║"
+  echo "╚════════════════════════════════════════════════════════════════╝"
+else
+  echo "╔════════════════════════════════════════════════════════════════╗"
+  echo "║                    TEARDOWN CONFIRMED                          ║"
+  echo "║  This will remove quanbot configuration from your system.     ║"
+  echo "╚════════════════════════════════════════════════════════════════╝"
+  log "TEARDOWN: Started with --confirm"
+fi
+
+section "Dotfiles"
+remove_symlink "$HOME/.gitconfig" "gitconfig"
+remove_symlink "$HOME/.zshrc.local" "zshrc.local"
+remove_symlink "$HOME/.tmux.conf" "tmux.conf"
+remove_symlink "$HOME/.claude/settings.local.json" "claude-settings"
+
+section "iTerm2 Profile"
+remove_symlink "$HOME/Library/Application Support/iTerm2/DynamicProfiles/quanbot.json" "iTerm2 profile"
+
+section "Claude Code"
+remove_file "$HOME/.claude/CLAUDE.md" "Claude context"
+
+echo ""
+echo "  Claude commands (in ~/.claude/commands/):"
+for cmd in "$ROOT_DIR/commands/"*.md; do
+  CMD_NAME=$(basename "$cmd")
+  remove_symlink "$HOME/.claude/commands/$CMD_NAME" "command: $CMD_NAME"
+done
+
+section "Cursor Rules"
+remove_file "$ROOT_DIR/.cursor/rules/quanbot.mdc" "Cursor rules"
+
+section "Shell Hooks"
+ZSHRC_HOOK='[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local'
+remove_line_from_file "$HOME/.zshrc" "$ZSHRC_HOOK" "zshrc.local hook"
+
+section "Shortcuts Reference"
+remove_file "$HOME/.quanbot/shortcuts.md" "shortcuts reference"
+
+echo ""
+echo "────────────────────────────────────────────────────────────────"
+echo ""
+
+if $DRY_RUN; then
+  echo "This was a dry run. No changes were made."
+  echo ""
+  echo "To actually remove these files, run:"
+  echo "  bin/teardown --confirm"
+  log "TEARDOWN: Dry-run completed"
+else
+  echo "✓ Teardown complete."
+  echo ""
+  echo "Preserved:"
+  echo "  • Backup files (*.bak)"
+  echo "  • Logs (~/.quanbot/*.log)"
+  echo "  • Homebrew packages (run 'brew uninstall tmux graphite' manually if needed)"
+  echo ""
+  echo "Logs saved to: $LOG_FILE"
+  log "TEARDOWN: Completed successfully"
+fi

@@ -2,9 +2,11 @@
 # bin/worktree — create a git worktree for any repo
 #
 # Usage:
-#   quanbot/bin/worktree <branch-name>            # create new branch from HEAD
-#   quanbot/bin/worktree <branch-name> <base>     # create new branch from <base>
-#   quanbot/bin/worktree --checkout <branch-name> # check out existing branch
+#   quanbot/bin/worktree <branch-name>                # create new branch from HEAD
+#   quanbot/bin/worktree <branch-name> <base>         # create new branch from <base>
+#   quanbot/bin/worktree --checkout <branch-name>     # check out existing branch
+#   quanbot/bin/worktree --temporal <branch-name>     # create temporal worktree (temp- prefix)
+#   quanbot/bin/worktree --permanent <branch-name>    # create permanent worktree (keep- prefix)
 #
 # Repo-agnostic: derives worktree base from the repo name.
 # omar   → ~/Desktop/omar-worktrees/
@@ -15,38 +17,65 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 REPO_NAME="$(basename "$REPO_ROOT")"
 WORKTREE_BASE="$HOME/Desktop/${REPO_NAME}-worktrees"
+LOG_FILE="$HOME/.quanbot/worktree.log"
 
 usage() {
   echo "Usage:"
-  echo "  quanbot/bin/worktree <branch-name>            # new branch from HEAD"
-  echo "  quanbot/bin/worktree <branch-name> <base>     # new branch from <base>"
-  echo "  quanbot/bin/worktree --checkout <branch-name> # check out existing branch"
+  echo "  quanbot/bin/worktree <branch-name>                # new branch from HEAD"
+  echo "  quanbot/bin/worktree <branch-name> <base>         # new branch from <base>"
+  echo "  quanbot/bin/worktree --checkout <branch-name>     # check out existing branch"
+  echo "  quanbot/bin/worktree --temporal <branch-name>     # temporal (temp- prefix, auto-cleanup)"
+  echo "  quanbot/bin/worktree --permanent <branch-name>    # permanent (keep- prefix)"
   exit 1
 }
 
+log() {
+  mkdir -p "$(dirname "$LOG_FILE")"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+}
+
 CHECKOUT=false
+TEMPORAL=false
+PERMANENT=false
+
 if [[ "${1:-}" == "--checkout" ]]; then
   CHECKOUT=true
+  shift
+elif [[ "${1:-}" == "--temporal" ]]; then
+  TEMPORAL=true
+  shift
+elif [[ "${1:-}" == "--permanent" ]]; then
+  PERMANENT=true
   shift
 fi
 
 BRANCH="${1:?$(usage)}"
 BASE="${2:-HEAD}"
+
+if $TEMPORAL; then
+  BRANCH="temp-${BRANCH}"
+elif $PERMANENT; then
+  BRANCH="keep-${BRANCH}"
+fi
+
 WORKTREE_PATH="$WORKTREE_BASE/$BRANCH"
 
 mkdir -p "$WORKTREE_BASE"
 
 if [[ -d "$WORKTREE_PATH" ]]; then
   echo "Worktree already exists at $WORKTREE_PATH"
+  log "SKIP: $BRANCH (already exists)"
   exit 0
 fi
 
 if $CHECKOUT || git show-ref --verify --quiet "refs/heads/$BRANCH"; then
   echo "Checking out existing branch '$BRANCH'..."
   git worktree add "$WORKTREE_PATH" "$BRANCH"
+  log "CHECKOUT: $BRANCH at $WORKTREE_PATH"
 else
   echo "Creating new branch '$BRANCH' from $BASE..."
   git worktree add "$WORKTREE_PATH" -b "$BRANCH" "$BASE"
+  log "CREATE: $BRANCH from $BASE at $WORKTREE_PATH"
 fi
 
 echo ""
@@ -54,3 +83,11 @@ echo "✓ Worktree ready: $WORKTREE_PATH"
 echo ""
 echo "  Open in Cursor:      cursor $WORKTREE_PATH"
 echo "  Open in Claude Code: claude $WORKTREE_PATH"
+
+if $TEMPORAL; then
+  echo ""
+  echo "  This is a TEMPORAL worktree (auto-cleanup eligible after 7 days)"
+elif $PERMANENT; then
+  echo ""
+  echo "  This is a PERMANENT worktree (manual cleanup only)"
+fi

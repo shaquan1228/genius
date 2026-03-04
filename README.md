@@ -4,51 +4,19 @@ Portable dev toolkit. Bootstraps a new machine and injects engineering context i
 
 ## Quickstart
 
-```bash
-git clone git@github.com:your-handle/quanbot.git ~/Desktop/quanbot
-~/Desktop/quanbot/bin/setup
-```
+1. Clone: `git clone git@github.com:your-handle/quanbot.git`
+2. Run `bin/setup` within your cloned repo.
+3. Set your git email (not tracked) `git config --global user.email "you@example.com"`
+4. For global Cursor context, paste the printed snippet into **Cursor > Settings > Rules for AI** from within your cloned repo: `echo "@$(pwd)/identity.md @$(pwd)/rules.md @$(pwd)/docs/DEV-WORKFLOW.md @$(pwd)/docs/GIT-WORKFLOW.md @$(pwd)/docs/OODA.md" | pbcopy`
+5. Open a new shell after setup completes.
 
-That's it. Open a new shell after setup completes.
+## Commands
 
-## What bin/setup does
-
-1. Installs Homebrew (if missing)
-2. Installs dependencies from `Brewfile` (gh, gt, asdf, neovim, etc.)
-3. Symlinks `dotfiles/` into `~` (gitconfig, zshrc.local, claude permissions)
-4. Writes `~/.claude/CLAUDE.md` — auto-loaded by Claude Code every session
-5. Symlinks `commands/` into `~/.claude/commands/` — slash commands for Claude Code
-6. Writes `.cursor/rules/quanbot.mdc` — auto-loaded by Cursor when workspace is open
-
-## After setup
-
-Set your git email (not tracked — work-specific):
-```bash
-git config --global user.email "you@example.com"
-```
-
-For Cursor to load context in all projects (not just this workspace), paste the printed snippet into **Cursor > Settings > Rules for AI**.
-
-## Worktree helper
-
-```bash
-# from any git repo:
-quanbot/bin/worktree <branch>              # new branch from HEAD
-quanbot/bin/worktree <branch> <base>       # new branch from <base>
-quanbot/bin/worktree --checkout <branch>   # check out existing branch
-```
-
-Worktrees are created at `~/Desktop/<repo-name>-worktrees/<branch>`.
-
-## Files
-
-- `identity.md` — engineering identity and principles
-- `rules.md` — language-agnostic coding, design, and testing rules
-- `workflow.md` — OODA-based task execution process
-- `prompts/` — role overlays: planner, implementer, reviewer, stack
-- `commands/` — Claude Code slash commands
-- `dotfiles/` — portable config: gitconfig, zshrc.local, claude permissions
-- `Brewfile` — dependency declarations
-- `bin/setup` — full bootstrapper
-- `bin/link` — symlink helper used by setup
-- `bin/worktree` — git worktree creation utility
+| Command                    | Description                                                                |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `bin/setup`                | Bootstrap machine: install deps, symlink dotfiles, configure Claude/Cursor |
+| `worktree <branch> [base]` | Create git worktree for parallel work                                      |
+| `worktree-agent "task"`    | Create temporal agent worktree (auto-cleanup after 7 days)                 |
+| `worktree-cleanup`         | Remove old temporal worktrees                                              |
+| `dashboard`                | Show over-tinkering monitor and system status                              |
+| `bin/teardown`             | Safely remove quanbot configuration                                        |

@@ -5,10 +5,10 @@
 #
 # What it does:
 #   1. Installs Homebrew (if missing)
-#   2. Installs dependencies from Brewfile
+#   2. Installs dependencies from Brewfile (tmux, iTerm2, Powerlevel10k font, etc.)
 #   3. Symlinks dotfiles into ~ and sets git email (prompted from GitHub)
-#   4. Writes ~/.claude/CLAUDE.md (auto-loaded by Claude Code)
-#   5. Symlinks commands/ into ~/.claude/commands/
+#   4. Imports iTerm2 profile
+#   5. Writes ~/.claude/CLAUDE.md (auto-loaded by Claude Code)
 #   6. Writes .cursor/rules/quanbot.mdc (auto-loaded by Cursor)
 #
 # Safe to re-run (all steps are idempotent).
@@ -17,29 +17,44 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_LINK="$ROOT_DIR/bin/link"
+LOG_FILE="$HOME/.quanbot/setup.log"
 
 section() { echo; echo "── $1"; }
+
+log() {
+  mkdir -p "$(dirname "$LOG_FILE")"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+}
 
 # ── 1. Homebrew ───────────────────────────────────────────────────────────────
 section "Homebrew"
 if ! command -v brew &>/dev/null; then
   echo "  Installing Homebrew..."
+  log "Installing Homebrew"
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  log "Homebrew installed"
 else
   echo "  Homebrew already installed."
+  log "Homebrew already installed"
 fi
 
 # ── 2. Dependencies ───────────────────────────────────────────────────────────
 section "Dependencies (Brewfile)"
+log "Installing dependencies from Brewfile"
 brew bundle --file="$ROOT_DIR/Brewfile" --no-upgrade
 echo "  Brewfile dependencies resolved."
+log "Brewfile dependencies resolved"
 
 # ── 3. Dotfiles ───────────────────────────────────────────────────────────────
 section "Dotfiles"
+log "Symlinking dotfiles"
 "$BIN_LINK" "$ROOT_DIR/dotfiles/gitconfig"             "$HOME/.gitconfig"
 "$BIN_LINK" "$ROOT_DIR/dotfiles/zshrc.local"           "$HOME/.zshrc.local"
+"$BIN_LINK" "$ROOT_DIR/dotfiles/tmux.conf"             "$HOME/.tmux.conf"
+"$BIN_LINK" "$ROOT_DIR/dotfiles/p10k-lean.zsh"         "$HOME/.p10k.zsh"
 "$BIN_LINK" "$ROOT_DIR/dotfiles/claude-settings.local.json" \
             "$HOME/.claude/settings.local.json"
+log "Dotfiles symlinked"
 
 # ── Git email ────────────────────────────────────────────────────────────────
 CURRENT_EMAIL="$(git config --global user.email 2>/dev/null || true)"
@@ -79,9 +94,24 @@ ZSHRC_HOOK='[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local'
 if ! grep -qF "$ZSHRC_HOOK" "$ZSHRC"; then
   printf '\n# quanbot local overrides\n%s\n' "$ZSHRC_HOOK" >> "$ZSHRC"
   echo "  Appended .zshrc.local hook to ~/.zshrc"
+  log "Added .zshrc.local hook to ~/.zshrc"
 else
   echo "  ~/.zshrc already sources .zshrc.local"
 fi
+
+# ── 3a. iTerm2 Profile ────────────────────────────────────────────────────────
+section "iTerm2 Profile"
+ITERM2_PROFILE_DIR="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
+mkdir -p "$ITERM2_PROFILE_DIR"
+"$BIN_LINK" "$ROOT_DIR/dotfiles/iterm2-profile.json" \
+            "$ITERM2_PROFILE_DIR/quanbot.json"
+echo "  iTerm2 profile imported (restart iTerm2 to see 'quanbot' profile)"
+log "iTerm2 profile imported"
+
+# ── 3b. Create quanbot directory ──────────────────────────────────────────────
+mkdir -p "$HOME/.quanbot"
+echo "  Created ~/.quanbot/ for logs"
+log "Created ~/.quanbot/ directory"
 
 # ── 4. Claude Code global context ─────────────────────────────────────────────
 section "Claude Code (CLAUDE.md)"
@@ -91,38 +121,44 @@ cat > "$HOME/.claude/CLAUDE.md" <<EOF
 
 @${ROOT_DIR}/identity.md
 @${ROOT_DIR}/rules.md
-@${ROOT_DIR}/workflow.md
-@${ROOT_DIR}/prompts/stack.md
+@${ROOT_DIR}/docs/dev/WORKFLOW.md
+@${ROOT_DIR}/docs/dev/GIT-WORKFLOW.md
+@${ROOT_DIR}/docs/OODA.md
 EOF
 echo "  Wrote ~/.claude/CLAUDE.md"
+log "Wrote ~/.claude/CLAUDE.md"
 
-# ── 5. Claude Code slash commands ─────────────────────────────────────────────
-section "Claude Code commands"
-mkdir -p "$HOME/.claude/commands"
-for cmd in "$ROOT_DIR/commands/"*.md; do
-  "$BIN_LINK" "$cmd" "$HOME/.claude/commands/$(basename "$cmd")"
-done
-
-# ── 6. Cursor rules ───────────────────────────────────────────────────────────
+# ── 5. Cursor rules ───────────────────────────────────────────────────────────
 section "Cursor rules"
 CURSOR_MDC="$ROOT_DIR/.cursor/rules/quanbot.mdc"
 mkdir -p "$(dirname "$CURSOR_MDC")"
 cat > "$CURSOR_MDC" <<EOF
 ---
 alwaysApply: true
-description: Engineering identity, rules, workflow, and stack management
+description: Engineering identity, rules, dev workflow, git workflow, and OODA
 ---
 
 Use these as source of truth:
 - [identity](mdc:${ROOT_DIR}/identity.md)
 - [rules](mdc:${ROOT_DIR}/rules.md)
-- [workflow](mdc:${ROOT_DIR}/workflow.md)
-- [stack](mdc:${ROOT_DIR}/prompts/stack.md)
+- [dev-workflow](mdc:${ROOT_DIR}/docs/dev/WORKFLOW.md)
+- [git-workflow](mdc:${ROOT_DIR}/docs/dev/GIT-WORKFLOW.md)
+- [ooda](mdc:${ROOT_DIR}/docs/OODA.md)
 EOF
 echo "  Wrote .cursor/rules/quanbot.mdc"
+log "Wrote .cursor/rules/quanbot.mdc"
 echo ""
 echo "  For global Cursor coverage, paste into Cursor > Settings > Rules for AI:"
-echo "    @${ROOT_DIR}/identity.md  @${ROOT_DIR}/rules.md  @${ROOT_DIR}/workflow.md"
+echo "    @${ROOT_DIR}/identity.md  @${ROOT_DIR}/rules.md  @${ROOT_DIR}/docs/dev/WORKFLOW.md  @${ROOT_DIR}/docs/dev/GIT-WORKFLOW.md"
 
 echo ""
 echo "Setup complete."
+echo ""
+echo "Next steps:"
+echo "  1. Close iTerm2 (Cmd+Q) and reopen"
+echo "  2. Set quanbot profile as default in iTerm2 Preferences"
+echo "  3. Press Alt+1/2/3 to switch between work/agents/dashboard windows"
+echo "  4. Read docs/dev/STOP-TINKERING.md before adding anything new"
+echo ""
+echo "Logs saved to: $LOG_FILE"
+log "Setup completed successfully"

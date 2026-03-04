@@ -4,7 +4,7 @@
 	#   git config --global user.email "you@example.com"
 
 [core]
-	editor = nvim
+	editor = vim
 	autocrlf = input
 	excludesfile = ~/.gitignore_global
 
