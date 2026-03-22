@@ -7,7 +7,6 @@ brew "gh"           # GitHub CLI
 brew "graphite"     # gt — stacked PR workflow
 brew "asdf"         # version manager (ruby, node, etc.)
 brew "jq"
-brew "neovim"
 brew "mysql@8.0"
 brew "redis"
 brew "imagemagick"
