@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# bin/link — create a symlink from SOURCE to TARGET.
+#
+# Usage: bin/link <source> <target>
+#
+# Idempotent: skips if symlink already points to the correct source.
+# Safe: backs up any existing plain file to <target>.bak before replacing.
+
+set -euo pipefail
+
+SOURCE="${1:?Usage: bin/link <source> <target>}"
+TARGET="${2:?Usage: bin/link <source> <target>}"
+
+mkdir -p "$(dirname "$TARGET")"
+
+if [[ -L "$TARGET" && "$(readlink "$TARGET")" == "$SOURCE" ]]; then
+  echo "  linked (already correct): $TARGET"
+  exit 0
+fi
+
+if [[ -f "$TARGET" && ! -L "$TARGET" ]]; then
+  BACKUP="${TARGET}.bak"
+  mv "$TARGET" "$BACKUP"
+  echo "  backed up: $TARGET → $BACKUP"
+fi
+
+ln -sf "$SOURCE" "$TARGET"
+echo "  linked: $TARGET → $SOURCE"

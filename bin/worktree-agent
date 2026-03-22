@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# bin/worktree-agent — create temporal worktree for agent tasks
+#
+# Usage:
+#   bin/worktree-agent <task-description> [base-branch]
+#
+# Creates worktree with naming: agent-<sanitized-task>-<timestamp>
+# Tracks with graphite automatically
+# Logs to ~/.quanbot/worktree.log
+
+set -euo pipefail
+
+TASK_DESC="${1:?Usage: bin/worktree-agent <task-description> [base-branch]}"
+BASE="${2:-HEAD}"
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+REPO_NAME="$(basename "$REPO_ROOT")"
+WORKTREE_BASE="$HOME/Desktop/${REPO_NAME}-worktrees"
+LOG_FILE="$HOME/.quanbot/worktree.log"
+
+sanitize() {
+  echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-40
+}
+
+log() {
+  mkdir -p "$(dirname "$LOG_FILE")"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+}
+
+SANITIZED=$(sanitize "$TASK_DESC")
+TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
+BRANCH="agent-${SANITIZED}-${TIMESTAMP}"
+WORKTREE_PATH="$WORKTREE_BASE/$BRANCH"
+
+mkdir -p "$WORKTREE_BASE"
+
+if [[ -d "$WORKTREE_PATH" ]]; then
+  echo "Worktree already exists at $WORKTREE_PATH"
+  log "SKIP: $BRANCH (already exists)"
+  exit 0
+fi
+
+echo "Creating temporal worktree for: $TASK_DESC"
+echo "  Branch: $BRANCH"
+echo "  Base: $BASE"
+echo "  Path: $WORKTREE_PATH"
+
+git worktree add "$WORKTREE_PATH" -b "$BRANCH" "$BASE"
+
+cd "$WORKTREE_PATH"
+
+if command -v gt &>/dev/null; then
+  PARENT_BRANCH=$(git rev-parse --abbrev-ref "$BASE")
+  if [[ "$PARENT_BRANCH" == "HEAD" ]]; then
+    PARENT_BRANCH=$(git branch --show-current)
+    cd "$REPO_ROOT"
+    PARENT_BRANCH=$(git branch --show-current)
+    cd "$WORKTREE_PATH"
+  fi
+  
+  echo "  Tracking with graphite (parent: $PARENT_BRANCH)..."
+  gt track --parent "$PARENT_BRANCH" 2>/dev/null || echo "  Warning: Could not track with graphite"
+fi
+
+log "CREATE: $BRANCH from $BASE at $WORKTREE_PATH"
+
+echo ""
+echo "✓ Agent worktree ready: $WORKTREE_PATH"
+echo ""
+echo "  Open in Cursor:      cursor $WORKTREE_PATH"
+echo "  Open in Claude Code: claude $WORKTREE_PATH"
+echo ""
+echo "  This is a TEMPORAL worktree (auto-cleanup eligible after 7 days)"
+echo "  To make permanent, rename branch to: keep-<name>"

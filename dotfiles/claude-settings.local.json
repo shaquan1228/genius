@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+<<<<<<< HEAD
+      "Bash(gh pr:*)",
+      "Bash(bundle exec:*)",
+      "Bash(ls:*)",
+      "Bash(echo:*)",
+      "Bash(grep:*)",
+      "Bash(brew list:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(bash:*)",
+      "Bash(gh api:*)"
+=======
+      "Bash(*)",
+      "Bash(bundle exec:*)",
+      "WebSearch",
+      "WebFetch(*)",
+      "Bash(bash:*)"
+>>>>>>> f98cc4e (adding gpt memories and ooda iterative approach)
+    ]
+  }
+}

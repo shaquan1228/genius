@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+# bin/worktree-cleanup — remove stale temporal worktrees
+#
+# Usage:
+#   bin/worktree-cleanup [--dry-run] [--age-days=7]
+#
+# Removes worktrees older than N days (default 7)
+# Preserves: main repo, branches with "keep-" prefix
+# Interactive confirmation before removal
+
+set -euo pipefail
+
+DRY_RUN=false
+AGE_DAYS=7
+LOG_FILE="$HOME/.quanbot/worktree.log"
+
+for arg in "$@"; do
+  case $arg in
+    --dry-run)
+      DRY_RUN=true
+      shift
+      ;;
+    --age-days=*)
+      AGE_DAYS="${arg#*=}"
+      shift
+      ;;
+    *)
+      echo "Usage: bin/worktree-cleanup [--dry-run] [--age-days=7]"
+      exit 1
+      ;;
+  esac
+done
+
+log() {
+  mkdir -p "$(dirname "$LOG_FILE")"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+}
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+REPO_NAME="$(basename "$REPO_ROOT")"
+WORKTREE_BASE="$HOME/Desktop/${REPO_NAME}-worktrees"
+
+if [[ ! -d "$WORKTREE_BASE" ]]; then
+  echo "No worktree directory found at: $WORKTREE_BASE"
+  exit 0
+fi
+
+echo "Scanning for temporal worktrees older than $AGE_DAYS days..."
+echo ""
+
+WORKTREES_TO_REMOVE=()
+CUTOFF_DATE=$(date -v-${AGE_DAYS}d '+%s' 2>/dev/null || date -d "$AGE_DAYS days ago" '+%s')
+
+while IFS= read -r line; do
+  WORKTREE_PATH=$(echo "$line" | awk '{print $1}')
+  BRANCH=$(echo "$line" | awk '{print $3}' | sed 's/\[//' | sed 's/\]//')
+  
+  if [[ "$WORKTREE_PATH" == "$REPO_ROOT" ]]; then
+    continue
+  fi
+  
+  if [[ "$BRANCH" == "keep-"* ]]; then
+    continue
+  fi
+  
+  if [[ ! "$BRANCH" =~ ^(agent-|temp-) ]]; then
+    continue
+  fi
+  
+  if [[ ! -d "$WORKTREE_PATH" ]]; then
+    continue
+  fi
+  
+  WORKTREE_AGE=$(stat -f %m "$WORKTREE_PATH" 2>/dev/null || stat -c %Y "$WORKTREE_PATH")
+  
+  if [[ $WORKTREE_AGE -lt $CUTOFF_DATE ]]; then
+    WORKTREES_TO_REMOVE+=("$WORKTREE_PATH|$BRANCH")
+  fi
+done < <(git worktree list)
+
+if [[ ${#WORKTREES_TO_REMOVE[@]} -eq 0 ]]; then
+  echo "No stale temporal worktrees found."
+  log "CLEANUP: No stale worktrees found (age threshold: $AGE_DAYS days)"
+  exit 0
+fi
+
+echo "Found ${#WORKTREES_TO_REMOVE[@]} stale temporal worktree(s):"
+echo ""
+
+for entry in "${WORKTREES_TO_REMOVE[@]}"; do
+  WORKTREE_PATH="${entry%|*}"
+  BRANCH="${entry#*|}"
+  AGE_DAYS_ACTUAL=$(( ($(date '+%s') - $(stat -f %m "$WORKTREE_PATH" 2>/dev/null || stat -c %Y "$WORKTREE_PATH")) / 86400 ))
+  echo "  • $BRANCH"
+  echo "    Path: $WORKTREE_PATH"
+  echo "    Age: $AGE_DAYS_ACTUAL days"
+  echo ""
+done
+
+if $DRY_RUN; then
+  echo "[DRY RUN] Would remove ${#WORKTREES_TO_REMOVE[@]} worktree(s)"
+  log "CLEANUP DRY-RUN: Would remove ${#WORKTREES_TO_REMOVE[@]} worktrees"
+  exit 0
+fi
+
+printf "Remove these worktrees? (y/N): "
+read -r CONFIRM
+
+if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+  echo "Cancelled"
+  log "CLEANUP: Cancelled by user"
+  exit 0
+fi
+
+echo ""
+echo "Removing worktrees..."
+
+REMOVED_COUNT=0
+for entry in "${WORKTREES_TO_REMOVE[@]}"; do
+  WORKTREE_PATH="${entry%|*}"
+  BRANCH="${entry#*|}"
+  
+  echo "  Removing: $BRANCH"
+  
+  if git worktree remove "$WORKTREE_PATH" 2>/dev/null; then
+    echo "    ✓ Removed worktree"
+    REMOVED_COUNT=$((REMOVED_COUNT + 1))
+    log "CLEANUP: Removed $BRANCH at $WORKTREE_PATH"
+  else
+    echo "    ✗ Failed to remove worktree (may have uncommitted changes)"
+    log "CLEANUP: Failed to remove $BRANCH at $WORKTREE_PATH"
+    
+    printf "    Force remove? (y/N): "
+    read -r FORCE_CONFIRM
+    
+    if [[ "$FORCE_CONFIRM" =~ ^[Yy]$ ]]; then
+      git worktree remove --force "$WORKTREE_PATH" 2>/dev/null && {
+        echo "    ✓ Force removed"
+        REMOVED_COUNT=$((REMOVED_COUNT + 1))
+        log "CLEANUP: Force removed $BRANCH at $WORKTREE_PATH"
+      } || {
+        echo "    ✗ Force remove failed"
+        log "CLEANUP: Force remove failed for $BRANCH at $WORKTREE_PATH"
+      }
+    fi
+  fi
+done
+
+echo ""
+echo "✓ Cleanup complete: removed $REMOVED_COUNT of ${#WORKTREES_TO_REMOVE[@]} worktree(s)"
+log "CLEANUP: Completed - removed $REMOVED_COUNT worktrees"

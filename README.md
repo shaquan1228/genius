@@ -1,78 +1,22 @@
-# Portable AI Toolkit
+# quanbot
 
-This folder contains a portable, language-agnostic style stack for coding agents.
-
-## What It Provides
-
-- Engineer identity and coding principles
-- Cross-language rules and workflow
-- Role prompts for planning, implementation, and review
-- A script that assembles prompts consistently
-- A lightweight preflight warning pass
+Portable dev toolkit. Bootstraps a new machine and injects engineering context into Claude Code and Cursor.
 
 ## Quickstart
 
-0) Optional local profile link (for cross-repo reuse):
+1. Clone: `git clone git@github.com:your-handle/quanbot.git`
+2. Run `bin/setup` within your cloned repo.
+3. Set your git email (not tracked) `git config --global user.email "you@example.com"`
+4. For global Cursor context, paste the printed snippet into **Cursor > Settings > Rules for AI** from within your cloned repo: `echo "@$(pwd)/identity.md @$(pwd)/rules.md @$(pwd)/docs/DEV-WORKFLOW.md @$(pwd)/docs/GIT-WORKFLOW.md @$(pwd)/docs/OODA.md" | pbcopy`
+5. Open a new shell after setup completes.
 
-```bash
-bin/setup
-```
+## Commands
 
-1) Create a task file:
-
-```text
-tmp/ai_task.txt
-```
-
-2) Add your task details and acceptance criteria.
-
-3) Run prompt assembly:
-
-```bash
-LLM_MODE=print ai/scripts/run-agent.sh implementer tmp/ai_task.txt
-```
-
-4) You can also provide task input with stdin or inline text:
-
-```bash
-cat tmp/ai_task.txt | LLM_MODE=print ai/scripts/run-agent.sh implementer -
-```
-
-```bash
-LLM_MODE=print ai/scripts/run-agent.sh implementer --text "Check this repo and suggest top improvements."
-```
-
-5) Optionally execute against a provider CLI:
-
-```bash
-export LLM_MODE=run
-export LLM_CMD='your_llm_cli_command_here'
-ai/scripts/run-agent.sh implementer tmp/ai_task.txt
-```
-
-## Files
-
-- `identity.md`: engineering identity and defaults
-- `rules.md`: language-agnostic coding and testing rules
-- `workflow.md`: task execution process
-- `checks.md`: light quality checks
-- `examples.md`: sample tasks and expected behavior
-- `prompts/`: role overlays
-- `scripts/`: prompt assembly and preflight checks
-
-## Portability Notes
-
-- This setup does not depend on persistent memory.
-- It is provider-agnostic as long as `LLM_CMD` can consume prompt text from stdin.
-- Keep task files explicit about outcomes, tests, and failure handling for best results.
-
-## Smoke Test Notes
-
-- Command:
-  - `LLM_MODE=print ai/scripts/run-agent.sh implementer tmp/ai_smoke_task.txt`
-  - `LLM_MODE=run LLM_CMD='cat' ai/scripts/run-agent.sh implementer tmp/ai_smoke_task.txt`
-- Result:
-  - Print mode and run mode both returned full assembled prompts.
-  - Output size check confirmed non-empty payloads in both modes.
-- Tuning note:
-  - Prompt quality improves when task input includes acceptance criteria, validation steps, and failure-path expectations.
+| Command                    | Description                                                                |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `bin/setup`                | Bootstrap machine: install deps, symlink dotfiles, configure Claude/Cursor |
+| `worktree <branch> [base]` | Create git worktree for parallel work                                      |
+| `worktree-agent "task"`    | Create temporal agent worktree (auto-cleanup after 7 days)                 |
+| `worktree-cleanup`         | Remove old temporal worktrees                                              |
+| `dashboard`                | Show over-tinkering monitor and system status                              |
+| `bin/teardown`             | Safely remove quanbot configuration                                        |

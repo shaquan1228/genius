@@ -1,0 +1,30 @@
+[user]
+	name = Shaquan Nelson
+	# email is intentionally omitted — set per-machine:
+	#   git config --global user.email "you@example.com"
+
+[core]
+	editor = vim
+	autocrlf = input
+	excludesfile = ~/.gitignore_global
+
+[pull]
+	rebase = true
+
+[rebase]
+	autosquash = true
+
+[push]
+	default = current
+	autoSetupRemote = true
+
+[alias]
+	lg = log --oneline --graph --decorate --all
+	st = status -sb
+	co = checkout
+[credential "https://github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential

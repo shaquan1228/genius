@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# bin/dashboard — your over-tinking monitor
+
+clear
+
+cat << 'EOF'
+╔════════════════════════════════════════════════════════════╗
+║              QUANBOT OVER-TINKING MONITOR                  ║
+╚════════════════════════════════════════════════════════════╝
+
+EOF
+
+echo "📊 tmux Session Info:"
+tmux list-windows 2>/dev/null | sed 's/^/  /'
+echo ""
+
+echo "🌳 Worktrees:"
+git worktree list 2>/dev/null | sed 's/^/  /' || echo "  No worktrees"
+echo ""
+
+echo "📦 Git Status:"
+git status -sb 2>/dev/null | head -5 | sed 's/^/  /' || echo "  Not in git repo"
+echo ""
+
+echo "🔥 Recent Activity:"
+echo "  Setup log: $(tail -1 ~/.quanbot/setup.log 2>/dev/null || echo 'No logs yet')"
+echo "  Worktree log: $(tail -1 ~/.quanbot/worktree.log 2>/dev/null || echo 'No logs yet')"
+echo ""
+
+echo "⚠️  Over-Tinking Alert:"
+echo "  Before adding tools, read: docs/dev/STOP-TINKERING.md"
+echo "  Use current setup for 2 weeks before changing anything."
+echo ""
+
+echo "🎯 Your Goals (Remember?):"
+echo "  1. Do more shit at once - ✅ tmux + worktrees"
+echo "  2. Hands on keyboard - ✅ Alt+1-9, Shift+Arrow, Ctrl+a"
+echo "  3. Tools work together - ✅ Notifications, persistence"
+echo "  4. Easy porting - ✅ bin/setup"
+echo ""
+
+echo "💡 Quick Actions:"
+echo "  wtl              - List worktrees"
+echo "  gts              - Graphite status"
+echo "  Alt+1/2/3        - Switch windows"
+echo "  bin/dashboard    - Refresh this view"
+echo ""
+
+echo "────────────────────────────────────────────────────────────"
+echo "Last updated: $(date '+%H:%M:%S')"

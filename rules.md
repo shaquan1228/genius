@@ -2,7 +2,12 @@
 
 This file is language-agnostic. Apply these defaults in Ruby, Python, and other languages unless project-local rules override them.
 
-## Coding
+- When developing, see `docs/dev/WORKFLOW.md`.
+- When performing git operations (commits, worktrees, stacks, Graphite), always apply `docs/dev/GIT-WORKFLOW.md`.
+- When making non-trivial decisions, always apply OODA loop from `docs/OODA.md`.
+- When considering when to stop working, always apply `docs/dev/STOP-TINKERING.md`. Apply a hard stop if the heuristic score exceeds 8.
+
+<!-- ## Coding
 
 - Keep methods/functions small and focused on one behavior.
 - Keep classes/modules small and composable.
@@ -18,18 +23,4 @@ This file is language-agnostic. Apply these defaults in Ruby, Python, and other 
 - Avoid over-engineering and speculative abstractions.
 - Favor dependency minimization and use platform defaults where practical.
 
-## Testing
-
-- Follow red-green-refactor.
-- Write tests for behavior and returned values before internal details.
-- Cover happy path and meaningful edge cases.
-- Keep tests fast and deterministic.
-- Avoid brittle timing-dependent tests unless strictly required.
-
-## Workflow
-
-- Clarify ambiguity early with concise questions.
-- Start with a plan for non-trivial work.
-- Implement incrementally and verify each step.
-- Run relevant lint/test checks after substantive changes.
-- Summarize outcomes and residual risks.
+ -->

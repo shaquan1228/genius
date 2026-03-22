@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# bin/tmux-init-session — initialize tmux session with workspace layout
+# Called automatically when tmux session is first created
+
+SESSION="main"
+
+# Wait a moment for session to fully initialize
+sleep 0.2
+
+# Rename first window to "work"
+tmux rename-window -t "$SESSION:1" "work"
+
+# Window 1: work (4 panes) - split carefully with correct indexing
+tmux split-window -h -t "$SESSION:work"      # Creates pane 1 on right
+tmux split-window -v -t "$SESSION:work.1"    # Split right pane (creates pane 2 below pane 1)
+tmux split-window -v -t "$SESSION:work.0"    # Split left pane (creates pane 3 below pane 0)
+
+# Now we have 4 panes: 0 (top-left), 3 (bottom-left), 1 (top-right), 2 (bottom-right)
+tmux send-keys -t "$SESSION:work.0" "# git/graphite" C-m "clear" C-m
+tmux send-keys -t "$SESSION:work.3" "# tests" C-m "clear" C-m  
+tmux send-keys -t "$SESSION:work.1" "# logs" C-m "clear" C-m
+tmux send-keys -t "$SESSION:work.2" "# misc" C-m "clear" C-m
+
+# Window 2: agents (3 panes)
+tmux new-window -t "$SESSION:2" -n "agents"
+tmux split-window -h -t "$SESSION:agents"    # Creates pane 1 on right
+tmux split-window -v -t "$SESSION:agents.0"  # Split left pane (creates pane 2 below pane 0)
+
+# Now we have 3 panes: 0 (top-left), 2 (bottom-left), 1 (right)
+tmux send-keys -t "$SESSION:agents.0" "# agent 1" C-m "clear" C-m
+tmux send-keys -t "$SESSION:agents.2" "# agent 2" C-m "clear" C-m
+tmux send-keys -t "$SESSION:agents.1" "# monitoring" C-m "clear" C-m
+
+# Window 3: dashboard (single pane)
+tmux new-window -t "$SESSION:3" -n "dashboard"
+tmux send-keys -t "$SESSION:dashboard" "~/Desktop/quanbot/bin/dashboard" C-m
+
+# Go back to work window, first pane
+tmux select-window -t "$SESSION:work"
+tmux select-pane -t "$SESSION:work.0"
