@@ -12,7 +12,6 @@ brew "redis"
 brew "imagemagick"
 brew "yarn"
 brew "tmux"         # terminal multiplexer
-tap "homebrew/cask-fonts"  # Required to install Nerd Fonts
 cask "font-meslo-lg-nerd-font"  # Required for Powerlevel10k icons
 
 cask "iterm2"       # modern terminal emulator

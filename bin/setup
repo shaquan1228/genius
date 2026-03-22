@@ -60,33 +60,11 @@ log "Dotfiles symlinked"
 CURRENT_EMAIL="$(git config --global user.email 2>/dev/null || true)"
 if [[ -n "$CURRENT_EMAIL" ]]; then
   echo "  Git email already set: $CURRENT_EMAIL"
+  log "Git email already set: $CURRENT_EMAIL"
 else
-  if command -v gh &>/dev/null; then
-    if ! gh auth status &>/dev/null 2>&1; then
-      echo "  gh not authenticated — launching gh auth login..."
-      gh auth login
-    fi
-    mapfile -t EMAILS < <(gh api user/emails --jq '.[].email' 2>/dev/null || true)
-    if [[ ${#EMAILS[@]} -gt 0 ]]; then
-      echo "  GitHub emails:"
-      for i in "${!EMAILS[@]}"; do
-        echo "    $((i+1))) ${EMAILS[$i]}"
-      done
-      printf "  Pick a number (or press Enter to skip): "
-      read -r CHOICE
-      if [[ "$CHOICE" =~ ^[0-9]+$ && "$CHOICE" -ge 1 && "$CHOICE" -le ${#EMAILS[@]} ]]; then
-        SELECTED="${EMAILS[$((CHOICE-1))]}"
-        git config --global user.email "$SELECTED"
-        echo "  Set git email: $SELECTED"
-      else
-        echo "  Skipped. Run: git config --global user.email \"you@example.com\""
-      fi
-    else
-      echo "  Could not fetch GitHub emails. Run: git config --global user.email \"you@example.com\""
-    fi
-  else
-    echo "  gh not installed — skipping email setup. Run bin/setup again after brew bundle completes."
-  fi
+  echo "  Git email not set. You can set it manually:"
+  echo "    git config --global user.email \"you@example.com\""
+  log "Git email not set, skipped"
 fi
 
 ZSHRC="$HOME/.zshrc"
@@ -105,8 +83,13 @@ ITERM2_PROFILE_DIR="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
 mkdir -p "$ITERM2_PROFILE_DIR"
 "$BIN_LINK" "$ROOT_DIR/dotfiles/iterm2-profile.json" \
             "$ITERM2_PROFILE_DIR/quanbot.json"
-echo "  iTerm2 profile imported (restart iTerm2 to see 'quanbot' profile)"
+echo "  iTerm2 profile imported"
 log "iTerm2 profile imported"
+
+# Set quanbot as default profile
+defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "quanbot-profile-guid"
+echo "  Set quanbot as default iTerm2 profile"
+log "Set quanbot as default profile"
 
 # ── 3b. Create quanbot directory ──────────────────────────────────────────────
 mkdir -p "$HOME/.quanbot"
@@ -156,9 +139,8 @@ echo "Setup complete."
 echo ""
 echo "Next steps:"
 echo "  1. Close iTerm2 (Cmd+Q) and reopen"
-echo "  2. Set quanbot profile as default in iTerm2 Preferences"
-echo "  3. Press Alt+1/2/3 to switch between work/agents/dashboard windows"
-echo "  4. Read docs/dev/STOP-TINKERING.md before adding anything new"
+echo "  2. Press Alt+1/2/3 to switch between work/agents/dashboard windows"
+echo "  3. Read docs/STOP-TINKERING.md before adding anything new"
 echo ""
 echo "Logs saved to: $LOG_FILE"
 log "Setup completed successfully"
