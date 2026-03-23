@@ -4,11 +4,16 @@
 
 SESSION="main"
 
-# Wait a moment for session to fully initialize
-sleep 0.2
+# If session already exists, just attach and exit
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  tmux attach-session -t "$SESSION"
+  exit 0
+fi
 
-# Rename first window to "work"
-tmux rename-window -t "$SESSION:1" "work"
+# Create session (detached) with first window named "work"
+tmux new-session -d -s "$SESSION" -n "work"
+
+sleep 0.2
 
 # Window 1: work (4 panes) - split carefully with correct indexing
 tmux split-window -h -t "$SESSION:work"      # Creates pane 1 on right
@@ -38,3 +43,5 @@ tmux send-keys -t "$SESSION:dashboard" "~/Desktop/quanbot/bin/dashboard" C-m
 # Go back to work window, first pane
 tmux select-window -t "$SESSION:work"
 tmux select-pane -t "$SESSION:work.0"
+
+tmux attach-session -t "$SESSION"

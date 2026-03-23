@@ -45,6 +45,18 @@ brew bundle --file="$ROOT_DIR/Brewfile" --no-upgrade
 echo "  Brewfile dependencies resolved."
 log "Brewfile dependencies resolved"
 
+# ── 2a. Graphite CLI (gt) ─────────────────────────────────────────────────────
+section "Graphite CLI (gt)"
+if ! command -v gt &>/dev/null; then
+  echo "  Installing @withgraphite/graphite-cli via npm..."
+  log "Installing Graphite CLI"
+  npm install -g @withgraphite/graphite-cli
+  log "Graphite CLI installed"
+else
+  echo "  gt already installed: $(gt --version 2>/dev/null || true)"
+  log "Graphite CLI already installed"
+fi
+
 # ── 3. Dotfiles ───────────────────────────────────────────────────────────────
 section "Dotfiles"
 log "Symlinking dotfiles"
@@ -68,6 +80,15 @@ else
 fi
 
 ZSHRC="$HOME/.zshrc"
+P10K_HOOK='source /opt/homebrew/share/powerlevel10k/powerlevel10k.zsh-theme'
+if ! grep -qF "$P10K_HOOK" "$ZSHRC"; then
+  printf '\n# Powerlevel10k\n%s\n' "$P10K_HOOK" >> "$ZSHRC"
+  echo "  Appended powerlevel10k source to ~/.zshrc"
+  log "Added powerlevel10k hook to ~/.zshrc"
+else
+  echo "  ~/.zshrc already sources powerlevel10k"
+fi
+
 ZSHRC_HOOK='[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local'
 if ! grep -qF "$ZSHRC_HOOK" "$ZSHRC"; then
   printf '\n# quanbot local overrides\n%s\n' "$ZSHRC_HOOK" >> "$ZSHRC"

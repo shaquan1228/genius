@@ -3,8 +3,9 @@
 
 # ── tmux Auto-attach (MUST BE BEFORE instant prompt) ─────────────────────────
 # Only auto-attach in iTerm2, not in Cursor or other editors
+export PATH="/opt/homebrew/bin:$PATH"
 if [[ -z "$TMUX" && -n "$ITERM_SESSION_ID" ]]; then
-  exec tmux new-session -A -s main
+  exec /Users/me/Repositories/quanbot/bin/tmux-init-session
 fi
 
 # ── Powerlevel10k ─────────────────────────────────────────────────────────────
