@@ -10,6 +10,7 @@ brew "jq"
 brew "mysql@8.0"
 brew "redis"
 brew "imagemagick"
+brew "bat"
 brew "yarn"
 brew "tmux"         # terminal multiplexer
 brew "powerlevel10k"            # zsh theme

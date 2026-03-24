@@ -1,10 +1,56 @@
 {
-  "Profiles" : [
+  "Profiles": [
     {
-      "Use Separate Colors for Light and Dark Mode" : true,
-      "Rewritable" : true,
-      "Name" : "quanbot",
-      "Guid" : "quanbot-dev-profile"
+      "Name": "quanbot",
+      "Guid": "quanbot-dev-profile",
+      "Rewritable": false,
+      "Use Separate Colors for Light and Dark Mode": false,
+
+      "Background Color": {
+        "Color Space": "sRGB",
+        "Red Component": 0.15686,
+        "Green Component": 0.15686,
+        "Blue Component": 0.15686,
+        "Alpha Component": 1
+      },
+      "Foreground Color": {
+        "Color Space": "sRGB",
+        "Red Component": 0.92157,
+        "Green Component": 0.85882,
+        "Blue Component": 0.69804,
+        "Alpha Component": 1
+      },
+      "Cursor Color": {
+        "Color Space": "sRGB",
+        "Red Component": 0.92157,
+        "Green Component": 0.85882,
+        "Blue Component": 0.69804,
+        "Alpha Component": 1
+      },
+      "Cursor Text Color": {
+        "Color Space": "sRGB",
+        "Red Component": 0.15686,
+        "Green Component": 0.15686,
+        "Blue Component": 0.15686,
+        "Alpha Component": 1
+      },
+      "Selection Color": {
+        "Color Space": "sRGB",
+        "Red Component": 0.23529,
+        "Green Component": 0.21961,
+        "Blue Component": 0.21176,
+        "Alpha Component": 1
+      },
+
+      "Normal Font": "MesloLGS-NF-Regular 14",
+      "Vertical Spacing": 1.1,
+      "Cursor Type": 1,
+      "Blinking Cursor": true,
+      "Draw Powerline Glyphs": true,
+      "Top Margin": 10,
+      "Bottom Margin": 10,
+      "Left Margin": 12,
+      "Right Margin": 12
     }
   ]
 }

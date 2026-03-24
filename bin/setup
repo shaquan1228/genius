@@ -66,6 +66,9 @@ log "Symlinking dotfiles"
 "$BIN_LINK" "$ROOT_DIR/dotfiles/p10k-lean.zsh"         "$HOME/.p10k.zsh"
 "$BIN_LINK" "$ROOT_DIR/dotfiles/claude-settings.local.json" \
             "$HOME/.claude/settings.local.json"
+mkdir -p "$HOME/.config/bat"
+"$BIN_LINK" "$ROOT_DIR/dotfiles/bat.conf" \
+            "$HOME/.config/bat/config"
 log "Dotfiles symlinked"
 
 # ── Git email ────────────────────────────────────────────────────────────────
