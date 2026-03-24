@@ -1,38 +1,27 @@
 package sections
 
 import (
-	"fmt"
 	"strings"
+
+	"github.com/me/quanbot-dashboard/util"
 )
 
-type Git struct{}
+var Git = Section{
+	Title: "Git",
+	Fetch: func() (util.Status, []string) {
+		branch := run("git", "rev-parse", "--abbrev-ref", "HEAD")
+		status := run("git", "status", "--short")
 
-func (Git) Render() {
-	branch := run("git", "rev-parse", "--abbrev-ref", "HEAD")
-	status := run("git", "status", "--short")
-
-	dotColor := faint
-	if branch != "" && status == "" {
-		dotColor = green
-	} else if branch != "" {
-		dotColor = amber
-	}
-
-	sectionHeader("Git", dotColor)
-
-	if branch == "" {
-		faint.Println("  not a git repo")
-		return
-	}
-
-	if status == "" {
-		green.Print("  " + branch)
-		faint.Println("  clean")
-	} else {
-		amber.Println("  " + branch + "  dirty")
-		lines := strings.Split(status, "\n")
-		for _, l := range lines[:min(len(lines), 5)] {
-			fmt.Println("    " + l)
+		if branch == "" {
+			return util.StatusDim, []string{"not a git repo"}
 		}
-	}
+		if status == "" {
+			return util.StatusGreen, []string{branch + "  clean"}
+		}
+
+		rows := []string{branch + "  dirty"}
+		lines := strings.Split(status, "\n")
+		rows = append(rows, lines[:min(len(lines), 5)]...)
+		return util.StatusAmber, rows
+	},
 }

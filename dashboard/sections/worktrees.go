@@ -1,28 +1,22 @@
 package sections
 
 import (
-	"fmt"
 	"strings"
+
+	"github.com/me/quanbot-dashboard/util"
 )
 
-type Worktrees struct{}
-
-func (Worktrees) Render() {
-	worktrees := run("git", "worktree", "list")
-	lines := strings.Split(strings.TrimSpace(worktrees), "\n")
-
-	dotColor := faint
-	if worktrees != "" && len(lines) > 1 {
-		dotColor = green
-	}
-
-	sectionHeader("Worktrees", dotColor)
-
-	if worktrees == "" {
-		faint.Println("  no worktrees")
-		return
-	}
-	for _, line := range lines {
-		fmt.Println("  " + line)
-	}
+var Worktrees = Section{
+	Title: "Worktrees",
+	Fetch: func() (util.Status, []string) {
+		out := run("git", "worktree", "list")
+		if out == "" {
+			return util.StatusDim, []string{"no worktrees"}
+		}
+		lines := strings.Split(strings.TrimSpace(out), "\n")
+		if len(lines) <= 1 {
+			return util.StatusDim, lines
+		}
+		return util.StatusGreen, lines
+	},
 }

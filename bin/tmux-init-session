@@ -3,6 +3,7 @@
 # Called automatically when tmux session is first created
 
 SESSION="main"
+QUANBOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # If session already exists, just attach and exit
 if tmux has-session -t "$SESSION" 2>/dev/null; then
@@ -38,7 +39,7 @@ tmux send-keys -t "$SESSION:agents.1" "# monitoring" C-m "clear" C-m
 
 # Window 3: dashboard (single pane)
 tmux new-window -t "$SESSION:3" -n "dashboard"
-tmux send-keys -t "$SESSION:dashboard" "~/Desktop/quanbot/bin/dashboard" C-m
+tmux send-keys -t "$SESSION:dashboard" "$QUANBOT_DIR/bin/dashboard-go" C-m
 
 # Go back to work window, first pane
 tmux select-window -t "$SESSION:work"

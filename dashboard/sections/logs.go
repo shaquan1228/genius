@@ -1,33 +1,31 @@
 package sections
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/me/quanbot-dashboard/util"
 )
 
-type Logs struct{}
-
-func (Logs) Render() {
-	sectionHeader("Recent Activity", faint)
-	home, _ := os.UserHomeDir()
-
-	found := false
-	for _, name := range []string{"setup.log", "worktree.log"} {
-		lines := tailFile(filepath.Join(home, ".quanbot", name), 3)
-		if len(lines) == 0 {
-			continue
+var Logs = Section{
+	Title: "Recent Activity",
+	Fetch: func() (util.Status, []string) {
+		home, _ := os.UserHomeDir()
+		var rows []string
+		for _, name := range []string{"setup.log", "worktree.log"} {
+			lines := tailFile(filepath.Join(home, ".quanbot", name), 3)
+			if len(lines) == 0 {
+				continue
+			}
+			rows = append(rows, name+":")
+			rows = append(rows, lines...)
 		}
-		found = true
-		faint.Println("  " + name)
-		for _, l := range lines {
-			fmt.Println("    " + l)
+		if len(rows) == 0 {
+			return util.StatusDim, []string{"no recent activity"}
 		}
-	}
-	if !found {
-		faint.Println("  no recent activity")
-	}
+		return util.StatusDim, rows
+	},
 }
 
 func tailFile(path string, n int) []string {

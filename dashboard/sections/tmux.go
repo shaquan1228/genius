@@ -1,27 +1,18 @@
 package sections
 
 import (
-	"fmt"
 	"strings"
+
+	"github.com/me/quanbot-dashboard/util"
 )
 
-type Tmux struct{}
-
-func (Tmux) Render() {
-	sessions := run("tmux", "list-sessions")
-
-	dotColor := faint
-	if sessions != "" {
-		dotColor = green
-	}
-
-	sectionHeader("tmux", dotColor)
-
-	if sessions == "" {
-		faint.Println("  no sessions")
-		return
-	}
-	for _, line := range strings.Split(sessions, "\n") {
-		fmt.Println("  " + line)
-	}
+var Tmux = Section{
+	Title: "tmux",
+	Fetch: func() (util.Status, []string) {
+		sessions := run("tmux", "list-sessions")
+		if sessions == "" {
+			return util.StatusDim, []string{"no sessions"}
+		}
+		return util.StatusGreen, strings.Split(sessions, "\n")
+	},
 }

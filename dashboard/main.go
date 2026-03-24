@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,40 +11,34 @@ import (
 	"github.com/me/quanbot-dashboard/util"
 )
 
-func sectionFns(cfg util.Config) []func() {
-	var fns []func()
-	for _, s := range cfg.Sections {
-		if !s.Enabled {
-			continue
-		}
-		if s.Type == "custom" {
-			cs := sections.Custom{Label: s.Label, Items: s.Items}
-			fns = append(fns, cs.Render)
-		} else if r, ok := sections.Registry[s.Type]; ok {
-			fns = append(fns, r.Render)
+func render() {
+	cfg := util.LoadConfig()
+	util.ClearScreen()
+	util.Header(cfg.Machine)
+	resolved := sections.Resolve(cfg)
+	for i, sec := range resolved {
+		fmt.Println()
+		status, rows := sec.Fetch()
+		util.RenderSection(sec.Title, status, rows)
+		if i < len(resolved)-1 {
+			fmt.Println()
+			util.Divider()
 		}
 	}
-	return fns
+	util.Footer(cfg.RefreshSeconds)
 }
 
 func main() {
-	cfg := util.LoadConfig()
-
-	// Catch Ctrl+C so we can exit cleanly.
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
-	util.Render(cfg, sectionFns(cfg))
-
-	// Re-render on every tick, or exit on signal — whichever fires first.
-	ticker := time.NewTicker(time.Duration(cfg.RefreshSeconds) * time.Second)
+	ticker := time.NewTicker(time.Duration(util.LoadConfig().RefreshSeconds) * time.Second)
 	defer ticker.Stop()
 
 	for {
+		render()
 		select {
 		case <-ticker.C:
-			cfg = util.LoadConfig()
-			util.Render(cfg, sectionFns(cfg))
 		case <-sig:
 			util.ClearScreen()
 			os.Exit(0)

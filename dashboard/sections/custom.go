@@ -1,17 +1,15 @@
 package sections
 
-type Custom struct {
-	Label string
-	Items []string
-}
+import "github.com/me/quanbot-dashboard/util"
 
-func (c Custom) Render() {
-	label := c.Label
+func NewCustom(label string, items []string) Section {
 	if label == "" {
 		label = "Custom"
 	}
-	sectionHeader(label, cyan)
-	for _, item := range c.Items {
-		amber.Println("  " + item)
+	return Section{
+		Title: label,
+		Fetch: func() (util.Status, []string) {
+			return util.StatusInfo, items
+		},
 	}
 }
