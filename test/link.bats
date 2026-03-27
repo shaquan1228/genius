@@ -1,9 +1,20 @@
 #!/usr/bin/env bats
 # Tests for bin/link — safe symlink helper
 
+BIN="$BATS_TEST_DIRNAME/../bin/link"
+
 setup() {
   TEST_DIR="$(mktemp -d)"
-  LINK_CMD="$BATS_TEST_DIRNAME/../bin/link"
+  LINK_CMD="$BIN"
+}
+
+@test "has bash shebang and set -euo pipefail" {
+  head -20 "$BIN" | grep -q '#!/usr/bin/env bash'
+  head -20 "$BIN" | grep -q 'set -euo pipefail'
+}
+
+@test "is executable" {
+  [ -x "$BIN" ]
 }
 
 teardown() {
