@@ -130,7 +130,7 @@ cat > "$HOME/.claude/CLAUDE.md" <<EOF
 @${ROOT_DIR}/rules.md
 @${ROOT_DIR}/docs/dev/WORKFLOW.md
 @${ROOT_DIR}/docs/dev/GIT-WORKFLOW.md
-@${ROOT_DIR}/docs/OODA.md
+@${ROOT_DIR}/docs/dreams/OODA.md
 @${ROOT_DIR}/docs/dreams/FIELD-GENERAL.md
 EOF
 echo "  Wrote ~/.claude/CLAUDE.md"
@@ -151,7 +151,7 @@ Use these as source of truth:
 - [rules](mdc:${ROOT_DIR}/rules.md)
 - [dev-workflow](mdc:${ROOT_DIR}/docs/dev/WORKFLOW.md)
 - [git-workflow](mdc:${ROOT_DIR}/docs/dev/GIT-WORKFLOW.md)
-- [ooda](mdc:${ROOT_DIR}/docs/OODA.md)
+- [ooda](mdc:${ROOT_DIR}/docs/dreams/OODA.md)
 - [field-general](mdc:${ROOT_DIR}/docs/dreams/FIELD-GENERAL.md)
 EOF
 echo "  Wrote .cursor/rules/quanbot.mdc"
@@ -166,7 +166,7 @@ echo ""
 echo "Next steps:"
 echo "  1. Close iTerm2 (Cmd+Q) and reopen"
 echo "  2. Press Alt+1/2/3 to switch between work/agents/dashboard windows"
-echo "  3. Read docs/STOP-TINKERING.md before adding anything new"
+echo "  3. Read docs/dreams/STOP-TINKERING.md before adding anything new"
 echo ""
 echo "Logs saved to: $LOG_FILE"
 log "Setup completed successfully"

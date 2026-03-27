@@ -200,8 +200,8 @@ You are not reacting. You are observing, positioning, and striking.
 
 ## Integration
 
-- Use with **OODA loop** (`docs/OODA.md`) for tactical decision execution
-- Use with **complexity scoring** (`docs/dev/STOP-TINKERING.md`) before adding anything
+- Use with **OODA loop** (`docs/dreams/OODA.md`) for tactical decision execution
+- Use with **complexity scoring** (`docs/dreams/STOP-TINKERING.md`) before adding anything
 - Use with **decision theory** (`docs/dreams/DECISION-THEORY.md`) for probabilistic reasoning
 
 ---
