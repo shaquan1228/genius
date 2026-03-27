@@ -5,6 +5,7 @@ This file is language-agnostic. Apply these defaults in Ruby, Python, and other 
 - When developing, see `docs/dev/WORKFLOW.md`.
 - When performing git operations (commits, worktrees, stacks, Graphite), always apply `docs/dev/GIT-WORKFLOW.md`.
 - When making non-trivial decisions, always apply OODA loop from `docs/OODA.md`.
+- When making strategic or operating decisions, apply `docs/dreams/FIELD-GENERAL.md`.
 - When considering when to stop working, always apply `docs/dev/STOP-TINKERING.md`. Apply a hard stop if the heuristic score exceeds 8.
 
 <!-- ## Coding

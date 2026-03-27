@@ -131,6 +131,7 @@ cat > "$HOME/.claude/CLAUDE.md" <<EOF
 @${ROOT_DIR}/docs/dev/WORKFLOW.md
 @${ROOT_DIR}/docs/dev/GIT-WORKFLOW.md
 @${ROOT_DIR}/docs/OODA.md
+@${ROOT_DIR}/docs/dreams/FIELD-GENERAL.md
 EOF
 echo "  Wrote ~/.claude/CLAUDE.md"
 log "Wrote ~/.claude/CLAUDE.md"
@@ -142,7 +143,7 @@ mkdir -p "$(dirname "$CURSOR_MDC")"
 cat > "$CURSOR_MDC" <<EOF
 ---
 alwaysApply: true
-description: Engineering identity, rules, dev workflow, git workflow, and OODA
+description: Engineering identity, rules, dev workflow, git workflow, OODA, and field general
 ---
 
 Use these as source of truth:
@@ -151,12 +152,13 @@ Use these as source of truth:
 - [dev-workflow](mdc:${ROOT_DIR}/docs/dev/WORKFLOW.md)
 - [git-workflow](mdc:${ROOT_DIR}/docs/dev/GIT-WORKFLOW.md)
 - [ooda](mdc:${ROOT_DIR}/docs/OODA.md)
+- [field-general](mdc:${ROOT_DIR}/docs/dreams/FIELD-GENERAL.md)
 EOF
 echo "  Wrote .cursor/rules/quanbot.mdc"
 log "Wrote .cursor/rules/quanbot.mdc"
 echo ""
 echo "  For global Cursor coverage, paste into Cursor > Settings > Rules for AI:"
-echo "    @${ROOT_DIR}/identity.md  @${ROOT_DIR}/rules.md  @${ROOT_DIR}/docs/dev/WORKFLOW.md  @${ROOT_DIR}/docs/dev/GIT-WORKFLOW.md"
+echo "    @${ROOT_DIR}/identity.md  @${ROOT_DIR}/rules.md  @${ROOT_DIR}/docs/dev/WORKFLOW.md  @${ROOT_DIR}/docs/dev/GIT-WORKFLOW.md  @${ROOT_DIR}/docs/dreams/FIELD-GENERAL.md"
 
 echo ""
 echo "Setup complete."
