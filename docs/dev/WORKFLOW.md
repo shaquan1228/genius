@@ -4,7 +4,7 @@ How to execute coding tasks using TDD and OODA.
 
 ## OODA Micro-Loop (Always On)
 
-Every non-trivial step runs through the OODA loop. See `docs/OODA.md` for detailed framework. Repeat this loop after each meaningful result (new evidence, failing test, lint/type error, review feedback).
+Every non-trivial step runs through the OODA loop. See `docs/dreams/OODA.md` for detailed framework. Repeat this loop after each meaningful result (new evidence, failing test, lint/type error, review feedback).
 
 ---
 
