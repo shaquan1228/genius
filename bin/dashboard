@@ -28,7 +28,7 @@ echo "  Worktree log: $(tail -1 ~/.quanbot/worktree.log 2>/dev/null || echo 'No 
 echo ""
 
 echo "⚠️  Over-Tinking Alert:"
-echo "  Before adding tools, read: docs/dreams/STOP-TINKERING.md"
+echo "  Before adding tools, read: docs/dev/STOP-TINKERING.md "
 echo "  Use current setup for 2 weeks before changing anything."
 echo ""
 
