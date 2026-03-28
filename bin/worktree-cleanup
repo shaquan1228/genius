@@ -2,7 +2,7 @@
 # bin/worktree-cleanup — remove stale temporal worktrees
 #
 # Usage:
-#   bin/worktree-cleanup [--dry-run] [--age-days=7]
+#   bin/worktree-cleanup [--dry-run] [--age-days=7] [--yes] [--force]
 #
 # Removes worktrees older than N days (default 7)
 # Preserves: main repo, branches with "keep-" prefix
@@ -13,6 +13,8 @@ set -euo pipefail
 DRY_RUN=false
 AGE_DAYS=7
 LOG_FILE="$HOME/.quanbot/worktree.log"
+YES=false
+FORCE_YES=false
 
 for arg in "$@"; do
   case $arg in
@@ -28,8 +30,17 @@ for arg in "$@"; do
       fi
       shift
       ;;
+    --yes|-y)
+      YES=true
+      shift
+      ;;
+    --force)
+      YES=true
+      FORCE_YES=true
+      shift
+      ;;
     *)
-      echo "Usage: bin/worktree-cleanup [--dry-run] [--age-days=7]"
+      echo "Usage: bin/worktree-cleanup [--dry-run] [--age-days=7] [--yes] [--force]"
       exit 1
       ;;
   esac
@@ -111,13 +122,14 @@ if $DRY_RUN; then
   exit 0
 fi
 
-printf "Remove these worktrees? (y/N): "
-read -r CONFIRM
-
-if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
-  echo "Cancelled"
-  log "CLEANUP: Cancelled by user"
-  exit 0
+if ! $YES; then
+  printf "Remove these worktrees? (y/N): "
+  read -r CONFIRM
+  if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+    echo "Cancelled"
+    log "CLEANUP: Cancelled by user"
+    exit 0
+  fi
 fi
 
 echo ""
@@ -138,8 +150,12 @@ for entry in "${WORKTREES_TO_REMOVE[@]}"; do
     echo "    ✗ Failed to remove worktree (may have uncommitted changes)"
     log "CLEANUP: Failed to remove $BRANCH at $WORKTREE_PATH"
     
-    printf "    Force remove? (y/N): "
-    read -r FORCE_CONFIRM
+    if $FORCE_YES; then
+      FORCE_CONFIRM="y"
+    else
+      printf "    Force remove? (y/N): "
+      read -r FORCE_CONFIRM
+    fi
     
     if [[ "$FORCE_CONFIRM" =~ ^[Yy]$ ]]; then
       if git worktree remove --force "$WORKTREE_PATH" 2>/dev/null; then
