@@ -25,6 +25,8 @@ BIN="$BATS_TEST_DIRNAME/../bin/setup"
 @test "macOS path still references iTerm2" {
   run grep -E 'iTerm2|iterm' "$BIN"
   [ "$status" -eq 0 ]
+}
+
 @test "curl has --connect-timeout flag" {
   grep -q 'connect-timeout' "$BIN"
 }
