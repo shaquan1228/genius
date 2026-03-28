@@ -22,6 +22,35 @@
 	lg = log --oneline --graph --decorate --all
 	st = status -sb
 	co = checkout
+[color]
+	ui = auto
+
+[color "status"]
+	branch    = bright cyan bold
+	added     = bright green
+	changed   = bright yellow
+	untracked = bright blue
+	deleted   = bright red
+
+[color "branch"]
+	current = bright cyan bold
+	local   = cyan
+	remote  = bright blue
+
+[color "diff"]
+	meta      = yellow bold
+	frag      = magenta bold
+	old       = bright red
+	new       = bright green
+	whitespace = red reverse
+
+[color "decorate"]
+	branch       = bright cyan bold
+	remoteBranch = bright blue
+	tag          = bright yellow bold
+	stash        = magenta
+	HEAD         = white bold
+
 [credential "https://github.com"]
 	helper = 
 	helper = !/opt/homebrew/bin/gh auth git-credential
