@@ -16,6 +16,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Validate ROOT_DIR contains only safe path characters
+if [[ ! "$ROOT_DIR" =~ ^[a-zA-Z0-9/_. -]+$ ]]; then
+  echo "Error: repo path contains unsafe characters: $ROOT_DIR" >&2
+  echo "Please clone the repo to a path with only letters, numbers, spaces, /, _, ., and -" >&2
+  exit 1
+fi
+
 BIN_LINK="$ROOT_DIR/bin/link"
 LOG_FILE="$HOME/.quanbot/setup.log"
 
