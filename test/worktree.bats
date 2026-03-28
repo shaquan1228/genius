@@ -87,3 +87,18 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"Worktree ready"* ]]
 }
+
+@test "respects QUANBOT_WORKTREE_DIR env var" {
+  run grep 'QUANBOT_WORKTREE_DIR' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "falls back to ~/Desktop when it exists" {
+  run grep 'Desktop' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "falls back to HOME when no Desktop" {
+  run grep 'HOME\b' "$BIN"
+  [ "$status" -eq 0 ]
+}

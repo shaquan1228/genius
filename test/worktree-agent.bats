@@ -61,3 +61,8 @@ teardown() {
   [ -f "$TEST_REPO/.quanbot/worktree.log" ]
   grep -q "CREATE: agent-test-logging-" "$TEST_REPO/.quanbot/worktree.log"
 }
+
+@test "respects QUANBOT_WORKTREE_DIR env var" {
+  run grep 'QUANBOT_WORKTREE_DIR' "$BIN"
+  [ "$status" -eq 0 ]
+}
