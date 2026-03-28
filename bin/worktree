@@ -9,14 +9,24 @@
 #   quanbot/bin/worktree --permanent <branch-name>    # create permanent worktree (keep- prefix)
 #
 # Repo-agnostic: derives worktree base from the repo name.
-# omar   → ~/Desktop/omar-worktrees/
-# stringer → ~/Desktop/stringer-worktrees/
+# omar   → ~/Desktop/omar-worktrees/       (macOS with Desktop)
+# stringer → ~/Desktop/stringer-worktrees/ (macOS with Desktop)
+# Set QUANBOT_WORKTREE_DIR to override the base directory (e.g. on Linux servers).
 
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 REPO_NAME="$(basename "$REPO_ROOT")"
-WORKTREE_BASE="$HOME/Desktop/${REPO_NAME}-worktrees"
+
+# Determine worktree base directory
+_default_worktree_dir() {
+  if [[ -d "$HOME/Desktop" ]]; then
+    echo "$HOME/Desktop"
+  else
+    echo "$HOME"
+  fi
+}
+WORKTREE_BASE="${QUANBOT_WORKTREE_DIR:-$(_default_worktree_dir)}/${REPO_NAME}-worktrees"
 LOG_FILE="$HOME/.quanbot/worktree.log"
 
 usage() {
@@ -26,6 +36,9 @@ usage() {
   echo "  quanbot/bin/worktree --checkout <branch-name>     # check out existing branch"
   echo "  quanbot/bin/worktree --temporal <branch-name>     # temporal (temp- prefix, auto-cleanup)"
   echo "  quanbot/bin/worktree --permanent <branch-name>    # permanent (keep- prefix)"
+  echo ""
+  echo "Env vars:"
+  echo "  QUANBOT_WORKTREE_DIR   Override worktree base directory (default: ~/Desktop or ~ on Linux)"
   exit 1
 }
 

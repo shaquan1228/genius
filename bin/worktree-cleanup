@@ -38,7 +38,16 @@ log() {
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 REPO_NAME="$(basename "$REPO_ROOT")"
-WORKTREE_BASE="$HOME/Desktop/${REPO_NAME}-worktrees"
+
+# Determine worktree base directory
+_default_worktree_dir() {
+  if [[ -d "$HOME/Desktop" ]]; then
+    echo "$HOME/Desktop"
+  else
+    echo "$HOME"
+  fi
+}
+WORKTREE_BASE="${QUANBOT_WORKTREE_DIR:-$(_default_worktree_dir)}/${REPO_NAME}-worktrees"
 
 if [[ ! -d "$WORKTREE_BASE" ]]; then
   echo "No worktree directory found at: $WORKTREE_BASE"

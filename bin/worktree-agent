@@ -7,6 +7,9 @@
 # Creates worktree with naming: agent-<sanitized-task>-<timestamp>
 # Tracks with graphite automatically
 # Logs to ~/.quanbot/worktree.log
+#
+# Env vars:
+#   QUANBOT_WORKTREE_DIR   Override worktree base directory (default: ~/Desktop or ~ on Linux)
 
 set -euo pipefail
 
@@ -15,7 +18,16 @@ BASE="${2:-HEAD}"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 REPO_NAME="$(basename "$REPO_ROOT")"
-WORKTREE_BASE="$HOME/Desktop/${REPO_NAME}-worktrees"
+
+# Determine worktree base directory
+_default_worktree_dir() {
+  if [[ -d "$HOME/Desktop" ]]; then
+    echo "$HOME/Desktop"
+  else
+    echo "$HOME"
+  fi
+}
+WORKTREE_BASE="${QUANBOT_WORKTREE_DIR:-$(_default_worktree_dir)}/${REPO_NAME}-worktrees"
 LOG_FILE="$HOME/.quanbot/worktree.log"
 
 sanitize() {
