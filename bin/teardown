@@ -79,15 +79,24 @@ remove_line_from_file() {
   local file="$1"
   local pattern="$2"
   local name="$3"
-  
+
   if [[ -f "$file" ]] && grep -qF "$pattern" "$file"; then
     if $DRY_RUN; then
       echo "  [DRY-RUN] Would remove line from: $file"
     else
-      grep -vF "$pattern" "$file" > "${file}.tmp"
-      mv "${file}.tmp" "$file"
-      echo "  Removed line from: $file"
-      log "REMOVE: $name from $file"
+      local backup="${file}.bak.$(date '+%Y%m%d%H%M%S')"
+      cp "$file" "$backup"
+      local tmpfile
+      tmpfile=$(mktemp)
+      grep -vF "$pattern" "$file" > "$tmpfile"
+      if [[ ! -s "$tmpfile" ]]; then
+        echo "  Safety: result would be empty, skipping modification of: $file" >&2
+        rm "$tmpfile"
+        return
+      fi
+      mv "$tmpfile" "$file"
+      echo "  Removed line from: $file (backup: $backup)"
+      log "REMOVE: $name from $file (backup: $backup)"
     fi
   else
     echo "  Pattern not found (skipped): $file"
