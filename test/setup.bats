@@ -19,6 +19,8 @@ BIN="$BATS_TEST_DIRNAME/../bin/setup"
 @test "does not reference docs/dev/STOP-TINKERING.md" {
   run grep 'docs/dev/STOP-TINKERING' "$BIN"
   [ "$status" -ne 0 ]
+}
+
 @test "curl has --connect-timeout flag" {
   grep -q 'connect-timeout' "$BIN"
 }
