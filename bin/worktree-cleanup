@@ -44,14 +44,9 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 REPO_NAME="$(basename "$REPO_ROOT")"
 
 # Determine worktree base directory
-_default_worktree_dir() {
-  if [[ -d "$HOME/Desktop" ]]; then
-    echo "$HOME/Desktop"
-  else
-    echo "$HOME"
-  fi
-}
-WORKTREE_BASE="${QUANBOT_WORKTREE_DIR:-$(_default_worktree_dir)}/${REPO_NAME}-worktrees"
+# Default: sibling directory of the repo (e.g. /Repositories/quanbot → /Repositories/quanbot-worktrees)
+# Override: set QUANBOT_WORKTREE_DIR to use a different base
+WORKTREE_BASE="${QUANBOT_WORKTREE_DIR:-$(dirname "$REPO_ROOT")}/${REPO_NAME}-worktrees"
 
 if [[ ! -d "$WORKTREE_BASE" ]]; then
   echo "No worktree directory found at: $WORKTREE_BASE"

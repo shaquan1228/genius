@@ -13,13 +13,13 @@ setup() {
   git init "$TEST_REPO" --initial-branch=main >/dev/null 2>&1
   git -C "$TEST_REPO" -c user.name="test" -c user.email="test@test" -c commit.gpgsign=false commit --allow-empty -m "initial" >/dev/null 2>&1
   export HOME="$TEST_REPO"
-  mkdir -p "$TEST_REPO/Desktop"
   cd "$TEST_REPO"
 }
 
 teardown() {
   cd /
   rm -rf "$TEST_REPO"
+  rm -rf "$(dirname "$TEST_REPO")/$(basename "$TEST_REPO")-worktrees" 2>/dev/null || true
 }
 
 @test "has bash shebang and set -euo pipefail" {
@@ -41,7 +41,8 @@ teardown() {
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Worktree ready"* ]]
-  [ -d "$TEST_REPO/Desktop/$(basename "$TEST_REPO")-worktrees/test-feature" ]
+  EXPECTED="$(dirname "$TEST_REPO")/$(basename "$TEST_REPO")-worktrees/test-feature"
+  [ -d "$EXPECTED" ]
 }
 
 @test "--temporal flag prefixes branch with temp-" {
@@ -49,7 +50,8 @@ teardown() {
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"TEMPORAL"* ]]
-  [ -d "$TEST_REPO/Desktop/$(basename "$TEST_REPO")-worktrees/temp-my-task" ]
+  EXPECTED="$(dirname "$TEST_REPO")/$(basename "$TEST_REPO")-worktrees/temp-my-task"
+  [ -d "$EXPECTED" ]
 }
 
 @test "--permanent flag prefixes branch with keep-" {
@@ -57,7 +59,8 @@ teardown() {
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"PERMANENT"* ]]
-  [ -d "$TEST_REPO/Desktop/$(basename "$TEST_REPO")-worktrees/keep-my-task" ]
+  EXPECTED="$(dirname "$TEST_REPO")/$(basename "$TEST_REPO")-worktrees/keep-my-task"
+  [ -d "$EXPECTED" ]
 }
 
 @test "is idempotent — skips if worktree already exists" {
@@ -93,12 +96,16 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "falls back to ~/Desktop when it exists" {
-  run grep 'Desktop' "$BIN"
+@test "uses sibling directory of repo as default worktree base" {
+  run grep 'dirname.*REPO_ROOT' "$BIN"
   [ "$status" -eq 0 ]
 }
 
-@test "falls back to HOME when no Desktop" {
-  run grep 'HOME\b' "$BIN"
+@test "worktrees go to sibling of repo, not ~/Desktop" {
+  CUSTOM_BASE="$(mktemp -d)"
+  QUANBOT_WORKTREE_DIR="$CUSTOM_BASE" run "$BIN" override-branch
+
   [ "$status" -eq 0 ]
+  [ -d "$CUSTOM_BASE/$(basename "$TEST_REPO")-worktrees/override-branch" ]
+  rm -rf "$CUSTOM_BASE"
 }

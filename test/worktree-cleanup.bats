@@ -39,6 +39,11 @@ BIN="$BATS_TEST_DIRNAME/../bin/worktree-cleanup"
   [ "$status" -eq 0 ]
 }
 
+@test "uses sibling directory of repo as default worktree base" {
+  run grep 'dirname.*REPO_ROOT' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
 # NOTE: "reports no stale worktrees when all are fresh" is skipped because
 # worktree-cleanup has a cross-platform bug: `stat -f %m` on Linux outputs
 # filesystem info instead of mtime, causing an unbound variable error.
