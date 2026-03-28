@@ -42,6 +42,8 @@ BIN="$BATS_TEST_DIRNAME/../bin/setup"
 @test "bin/setup exits before writing CLAUDE.md on invalid ROOT_DIR" {
   run grep 'exit 1' bin/setup
   [ "$status" -eq 0 ]
+}
+
 @test "curl has --connect-timeout flag" {
   grep -q 'connect-timeout' "$BIN"
 }
