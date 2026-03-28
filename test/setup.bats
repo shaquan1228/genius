@@ -30,6 +30,8 @@ BIN="$BATS_TEST_DIRNAME/../bin/setup"
 @test "bin/setup guards iTerm2 section with Darwin platform check" {
   run grep 'Darwin' "$BIN"
   [ "$status" -eq 0 ]
+}
+
 @test "curl has --connect-timeout flag" {
   grep -q 'connect-timeout' "$BIN"
 }
