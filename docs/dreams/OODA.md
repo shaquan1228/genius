@@ -172,3 +172,5 @@ Every non-trivial decision runs through the loop:
 Then repeat.
 
 Small loops. Fast iterations. Low cognitive load.
+
+For the broader operating framework, see `docs/dreams/FIELD-GENERAL.md`.

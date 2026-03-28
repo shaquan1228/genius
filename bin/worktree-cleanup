@@ -22,6 +22,10 @@ for arg in "$@"; do
       ;;
     --age-days=*)
       AGE_DAYS="${arg#*=}"
+      if [[ ! "$AGE_DAYS" =~ ^[0-9]+$ ]]; then
+        echo "Error: --age-days must be a positive integer, got: '$AGE_DAYS'" >&2
+        exit 1
+      fi
       shift
       ;;
     *)
@@ -49,7 +53,7 @@ echo "Scanning for temporal worktrees older than $AGE_DAYS days..."
 echo ""
 
 WORKTREES_TO_REMOVE=()
-CUTOFF_DATE=$(date -v-${AGE_DAYS}d '+%s' 2>/dev/null || date -d "$AGE_DAYS days ago" '+%s')
+CUTOFF_DATE=$(date -v-"${AGE_DAYS}"d '+%s' 2>/dev/null || date -d "$AGE_DAYS days ago" '+%s')
 
 while IFS= read -r line; do
   WORKTREE_PATH=$(echo "$line" | awk '{print $1}')
@@ -134,14 +138,14 @@ for entry in "${WORKTREES_TO_REMOVE[@]}"; do
     read -r FORCE_CONFIRM
     
     if [[ "$FORCE_CONFIRM" =~ ^[Yy]$ ]]; then
-      git worktree remove --force "$WORKTREE_PATH" 2>/dev/null && {
+      if git worktree remove --force "$WORKTREE_PATH" 2>/dev/null; then
         echo "    ✓ Force removed"
         REMOVED_COUNT=$((REMOVED_COUNT + 1))
         log "CLEANUP: Force removed $BRANCH at $WORKTREE_PATH"
-      } || {
+      else
         echo "    ✗ Force remove failed"
         log "CLEANUP: Force remove failed for $BRANCH at $WORKTREE_PATH"
-      }
+      fi
     fi
   fi
 done

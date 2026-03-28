@@ -4,8 +4,8 @@ description: Engineering identity, rules, dev workflow, git workflow, and OODA
 ---
 
 Use these as source of truth:
-- [identity](mdc:/Users/shaquan1228/Desktop/quanbot/identity.md)
-- [rules](mdc:/Users/shaquan1228/Desktop/quanbot/rules.md)
-- [dev-workflow](mdc:/Users/shaquan1228/Desktop/quanbot/docs/dev/WORKFLOW.md)
-- [git-workflow](mdc:/Users/shaquan1228/Desktop/quanbot/docs/dev/GIT-WORKFLOW.md)
-- [ooda](mdc:/Users/shaquan1228/Desktop/quanbot/docs/OODA.md)
+- [identity](mdc:identity.md)
+- [rules](mdc:rules.md)
+- [dev-workflow](mdc:docs/dev/WORKFLOW.md)
+- [git-workflow](mdc:docs/dev/GIT-WORKFLOW.md)
+- [ooda](mdc:docs/dreams/OODA.md)
