@@ -26,28 +26,28 @@
 	ui = auto
 
 [color "status"]
-	branch    = bright cyan bold
-	added     = bright green
-	changed   = bright yellow
-	untracked = bright blue
-	deleted   = bright red
+	branch    = brightcyan bold
+	added     = brightgreen
+	changed   = brightyellow
+	untracked = brightblue
+	deleted   = brightred
 
 [color "branch"]
-	current = bright cyan bold
+	current = brightcyan bold
 	local   = cyan
-	remote  = bright blue
+	remote  = brightblue
 
 [color "diff"]
 	meta      = yellow bold
 	frag      = magenta bold
-	old       = bright red
-	new       = bright green
+	old       = brightred
+	new       = brightgreen
 	whitespace = red reverse
 
 [color "decorate"]
-	branch       = bright cyan bold
-	remoteBranch = bright blue
-	tag          = bright yellow bold
+	branch       = brightcyan bold
+	remoteBranch = brightblue
+	tag          = brightyellow bold
 	stash        = magenta
 	HEAD         = white bold
 
