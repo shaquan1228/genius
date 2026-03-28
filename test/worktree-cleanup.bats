@@ -62,6 +62,8 @@ BIN="$BATS_TEST_DIRNAME/../bin/worktree-cleanup"
 @test "worktree-cleanup --force implies --yes" {
   run grep 'FORCE_YES\|FORCE.*YES\|force.*yes' "$BIN"
   [ "$status" -eq 0 ]
+}
+
 @test "validates --age-days is a positive integer" {
   run grep '\^\[0-9\]' bin/worktree-cleanup
   [ "$status" -eq 0 ]
