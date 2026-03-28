@@ -24,6 +24,10 @@ for arg in "$@"; do
       ;;
     --age-days=*)
       AGE_DAYS="${arg#*=}"
+      if [[ ! "$AGE_DAYS" =~ ^[0-9]+$ ]]; then
+        echo "Error: --age-days must be a positive integer, got: '$AGE_DAYS'" >&2
+        exit 1
+      fi
       shift
       ;;
     --yes|-y)
