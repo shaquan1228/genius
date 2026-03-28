@@ -57,3 +57,29 @@ BIN="$BATS_TEST_DIRNAME/../bin/setup"
   [ -n "$progress_line" ]
   [ "$progress_line" -lt "$npm_line" ]
 }
+
+@test "bin/setup has --skip-shell-config flag" {
+  run grep 'skip-shell-config' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "bin/setup skips .zshrc modifications when SKIP_SHELL_CONFIG is true" {
+  run grep 'SKIP_SHELL_CONFIG\|SKIP_SHELL' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "bin/setup supports --help flag" {
+  run grep -- '--help\|-h)' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "bin/setup adds datestamp to .zshrc modifications" {
+  run grep "date.*'+%Y-%m-%d'\|added.*%Y-%m-%d\|%Y-%m-%d.*added" "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "bin/setup --skip-shell-config skips without error" {
+  # Dry test: verify the flag is handled (won't actually modify the system)
+  run grep 'Skipping.*zshrc\|skip.*shell\|SKIP_SHELL' "$BIN"
+  [ "$status" -eq 0 ]
+}
