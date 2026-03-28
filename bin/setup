@@ -165,9 +165,14 @@ echo ""
 echo "Setup complete."
 echo ""
 echo "Next steps:"
-echo "  1. Close iTerm2 (Cmd+Q) and reopen"
-echo "  2. Press Alt+1/2/3 to switch between work/agents/dashboard windows"
-echo "  3. Read docs/dreams/STOP-TINKERING.md before adding anything new"
+if [[ "$(uname)" == "Darwin" ]]; then
+  echo "  1. Close iTerm2 (Cmd+Q) and reopen to apply shell changes"
+  echo "  2. Press Alt+1/2/3 to switch between work/agents/dashboard windows"
+else
+  echo "  1. Run: source ~/.zshrc"
+  echo "  2. Launch tmux and use Ctrl+b 1/2/3 to switch windows"
+fi
+echo "  3. Read docs/dev/STOP-TINKERING.md before adding anything new"
 echo ""
 echo "Logs saved to: $LOG_FILE"
 log "Setup completed successfully"

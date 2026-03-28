@@ -12,6 +12,21 @@ BIN="$BATS_TEST_DIRNAME/../bin/setup"
   [ -x "$BIN" ]
 }
 
+@test "has platform-conditional next steps using uname" {
+  run grep 'uname' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "Linux path includes source .zshrc instruction" {
+  run grep -E 'source.*\.zshrc|source ~/.zshrc' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "macOS path still references iTerm2" {
+  run grep -E 'iTerm2|iterm' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
 @test "curl has --connect-timeout flag" {
   grep -q 'connect-timeout' "$BIN"
 }

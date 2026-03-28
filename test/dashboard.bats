@@ -10,3 +10,8 @@ BIN="$BATS_TEST_DIRNAME/../bin/dashboard"
 @test "is executable" {
   [ -x "$BIN" ]
 }
+
+@test "shows universal tmux Ctrl+b keybinding" {
+  run grep 'Ctrl+b' "$BIN"
+  [ "$status" -eq 0 ]
+}
