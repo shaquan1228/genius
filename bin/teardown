@@ -84,7 +84,8 @@ remove_line_from_file() {
     if $DRY_RUN; then
       echo "  [DRY-RUN] Would remove line from: $file"
     else
-      local backup="${file}.bak.$(date '+%Y%m%d%H%M%S')"
+      local backup
+      backup="${file}.bak.$(date '+%Y%m%d%H%M%S')"
       cp "$file" "$backup"
       local tmpfile
       tmpfile=$(mktemp)
