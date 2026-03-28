@@ -29,9 +29,9 @@ log() {
 # ── 1. Homebrew ───────────────────────────────────────────────────────────────
 section "Homebrew"
 if ! command -v brew &>/dev/null; then
-  echo "  Installing Homebrew..."
+  echo "  Downloading and running Homebrew installer..."
   log "Installing Homebrew"
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  /bin/bash -c "$(curl --max-time 60 --connect-timeout 10 -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   log "Homebrew installed"
 else
   echo "  Homebrew already installed."
@@ -41,6 +41,7 @@ fi
 # ── 2. Dependencies ───────────────────────────────────────────────────────────
 section "Dependencies (Brewfile)"
 log "Installing dependencies from Brewfile"
+echo "  Installing dependencies from Brewfile (this may take a few minutes)..."
 brew bundle --file="$ROOT_DIR/Brewfile" --no-upgrade
 echo "  Brewfile dependencies resolved."
 log "Brewfile dependencies resolved"
@@ -48,7 +49,7 @@ log "Brewfile dependencies resolved"
 # ── 2a. Graphite CLI (gt) ─────────────────────────────────────────────────────
 section "Graphite CLI (gt)"
 if ! command -v gt &>/dev/null; then
-  echo "  Installing @withgraphite/graphite-cli via npm..."
+  echo "  Installing Graphite CLI from npm..."
   log "Installing Graphite CLI"
   npm install -g @withgraphite/graphite-cli
   log "Graphite CLI installed"
