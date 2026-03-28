@@ -38,3 +38,28 @@ BIN="$BATS_TEST_DIRNAME/../bin/worktree-cleanup"
 # worktree-cleanup has a cross-platform bug: `stat -f %m` on Linux outputs
 # filesystem info instead of mtime, causing an unbound variable error.
 # See: bin/worktree-cleanup line 74 — needs `stat -c %Y` first on Linux.
+
+@test "worktree-cleanup accepts --yes flag in argument parser" {
+  run grep -- '--yes' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "worktree-cleanup accepts -y short flag" {
+  run grep -- '-y)' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "worktree-cleanup accepts --force flag" {
+  run grep -- '--force' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "worktree-cleanup --yes flag skips main confirmation" {
+  run grep 'YES' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "worktree-cleanup --force implies --yes" {
+  run grep 'FORCE_YES\|FORCE.*YES\|force.*yes' "$BIN"
+  [ "$status" -eq 0 ]
+}
