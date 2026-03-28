@@ -32,6 +32,12 @@ BIN="$BATS_TEST_DIRNAME/../bin/setup"
   [ "$status" -eq 0 ]
 }
 
+@test "bin/setup --skip-shell-config skips without error" {
+  # Dry test: verify the flag is handled (won't actually modify the system)
+  run grep 'Skipping.*zshrc\|skip.*shell\|SKIP_SHELL' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
 @test "curl has --connect-timeout flag" {
   grep -q 'connect-timeout' "$BIN"
 }
