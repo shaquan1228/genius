@@ -39,11 +39,8 @@ tmux send-keys -t "$SESSION:agents.1" "# monitoring" C-m "clear" C-m
 
 # Window 3: dashboard (single pane)
 tmux new-window -t "$SESSION:3" -n "dashboard"
-if [[ -x "$QUANBOT_DIR/bin/dashboard-go" ]]; then
-  tmux send-keys -t "$SESSION:dashboard" "$QUANBOT_DIR/bin/dashboard-go" C-m
-else
-  tmux send-keys -t "$SESSION:dashboard" "$QUANBOT_DIR/bin/dashboard" C-m
-fi
+QUANBOT_ROOT="${QUANBOT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+tmux send-keys -t "$SESSION:dashboard" "$QUANBOT_ROOT/bin/dashboard-go" C-m
 
 # Go back to work window, first pane
 tmux select-window -t "$SESSION:work"

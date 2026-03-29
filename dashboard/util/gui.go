@@ -28,7 +28,8 @@ func Divider() {
 	fmt.Println(strings.Repeat("─", TermWidth()))
 }
 
-func RenderSection(title string, status Status, rows []string) {
+func DrawSection(title string, status Status, rows []string) {
+	fmt.Println()
 	c := map[Status]*Color{
 		StatusDim: Faint, StatusGreen: Green, StatusAmber: Amber, StatusInfo: Cyan,
 	}[status]

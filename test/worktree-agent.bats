@@ -8,13 +8,13 @@ setup() {
   git init "$TEST_REPO" --initial-branch=main >/dev/null 2>&1
   git -C "$TEST_REPO" -c user.name="test" -c user.email="test@test" -c commit.gpgsign=false commit --allow-empty -m "initial" >/dev/null 2>&1
   export HOME="$TEST_REPO"
-  mkdir -p "$TEST_REPO/Desktop"
   cd "$TEST_REPO"
 }
 
 teardown() {
   cd /
   rm -rf "$TEST_REPO"
+  rm -rf "$(dirname "$TEST_REPO")/$(basename "$TEST_REPO")-worktrees" 2>/dev/null || true
 }
 
 @test "has bash shebang and set -euo pipefail" {
@@ -40,7 +40,7 @@ teardown() {
 
   # Branch should exist with agent- prefix and sanitized name
   REPO_NAME="$(basename "$TEST_REPO")"
-  WORKTREE_DIR="$TEST_REPO/Desktop/${REPO_NAME}-worktrees"
+  WORKTREE_DIR="$(dirname "$TEST_REPO")/${REPO_NAME}-worktrees"
   ls "$WORKTREE_DIR" | grep -q "^agent-fix-login-bug-"
 }
 
@@ -49,7 +49,7 @@ teardown() {
 
   [ "$status" -eq 0 ]
   REPO_NAME="$(basename "$TEST_REPO")"
-  WORKTREE_DIR="$TEST_REPO/Desktop/${REPO_NAME}-worktrees"
+  WORKTREE_DIR="$(dirname "$TEST_REPO")/${REPO_NAME}-worktrees"
   # Should be lowercased, special chars replaced with dashes
   ls "$WORKTREE_DIR" | grep -q "^agent-fix-uppercase-special-chars-"
 }
@@ -60,4 +60,14 @@ teardown() {
   [ "$status" -eq 0 ]
   [ -f "$TEST_REPO/.quanbot/worktree.log" ]
   grep -q "CREATE: agent-test-logging-" "$TEST_REPO/.quanbot/worktree.log"
+}
+
+@test "respects QUANBOT_WORKTREE_DIR env var" {
+  run grep 'QUANBOT_WORKTREE_DIR' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "uses sibling directory of repo as default worktree base" {
+  run grep 'dirname.*REPO_ROOT' "$BIN"
+  [ "$status" -eq 0 ]
 }
