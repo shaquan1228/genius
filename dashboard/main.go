@@ -10,40 +10,36 @@ import (
 	"github.com/me/quanbot-dashboard/util"
 )
 
-func sectionFns(cfg util.Config) []func() {
-	var fns []func()
-	for _, s := range cfg.Sections {
-		if !s.Enabled {
-			continue
-		}
-		if s.Type == "custom" {
-			cs := sections.Custom{Label: s.Label, Items: s.Items}
-			fns = append(fns, cs.Render)
-		} else if r, ok := sections.Registry[s.Type]; ok {
-			fns = append(fns, r.Render)
+var (
+	cfg  util.Config
+	secs []sections.SectionRunner
+)
+
+func render() {
+	fns := make([]func(), len(secs))
+	for i, sec := range secs {
+		sec := sec
+		fns[i] = func() {
+			util.RenderSection(sec.Title(), sec.Health(), sec.Rows())
 		}
 	}
-	return fns
+	util.Render(cfg, fns)
 }
 
 func main() {
-	cfg := util.LoadConfig()
+	cfg = util.LoadConfig()
+	secs = sections.Build(cfg)
 
-	// Catch Ctrl+C so we can exit cleanly.
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
-	util.Render(cfg, sectionFns(cfg))
-
-	// Re-render on every tick, or exit on signal — whichever fires first.
 	ticker := time.NewTicker(time.Duration(cfg.RefreshSeconds) * time.Second)
 	defer ticker.Stop()
 
 	for {
+		render()
 		select {
 		case <-ticker.C:
-			cfg = util.LoadConfig()
-			util.Render(cfg, sectionFns(cfg))
 		case <-sig:
 			util.ClearScreen()
 			os.Exit(0)

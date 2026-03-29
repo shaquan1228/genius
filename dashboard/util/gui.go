@@ -22,6 +22,22 @@ func Divider() {
 	Faint.Println(strings.Repeat("─", TermWidth()))
 }
 
+//I DON'T LIKE THIS. THIS IS TEMPORARY FOR GETTING SECTIONS/ IN A SPOT THAT I LIKE.
+// RenderSection prints a single section with health-colored title and rows.
+func RenderSection(title, health string, rows []string) {
+	c := Faint
+	switch health {
+	case "ok":
+		c = Green
+	case "warn":
+		c = Amber
+	}
+	c.Printf("  ■ %s\n", title)
+	for _, row := range rows {
+		fmt.Printf("    %s\n", row)
+	}
+}
+
 func Render(cfg Config, sectionFns []func()) {
 	ClearScreen()
 
