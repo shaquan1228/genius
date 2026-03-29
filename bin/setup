@@ -17,6 +17,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_LINK="$ROOT_DIR/bin/link"
+PLATFORM="$(uname)"
 LOG_FILE="$HOME/.quanbot/setup.log"
 
 section() { echo; echo "── $1"; }
@@ -84,7 +85,8 @@ else
 fi
 
 ZSHRC="$HOME/.zshrc"
-P10K_HOOK='source /opt/homebrew/share/powerlevel10k/powerlevel10k.zsh-theme'
+BREW_PREFIX="$(brew --prefix 2>/dev/null || echo '/opt/homebrew')"
+P10K_HOOK="source ${BREW_PREFIX}/share/powerlevel10k/powerlevel10k.zsh-theme"
 if ! grep -qF "$P10K_HOOK" "$ZSHRC"; then
   printf '\n# Powerlevel10k\n%s\n' "$P10K_HOOK" >> "$ZSHRC"
   echo "  Appended powerlevel10k source to ~/.zshrc"
@@ -103,18 +105,20 @@ else
 fi
 
 # ── 3a. iTerm2 Profile ────────────────────────────────────────────────────────
-section "iTerm2 Profile"
-ITERM2_PROFILE_DIR="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
-mkdir -p "$ITERM2_PROFILE_DIR"
-"$BIN_LINK" "$ROOT_DIR/dotfiles/iterm2-profile.json" \
-            "$ITERM2_PROFILE_DIR/quanbot.json"
-echo "  iTerm2 profile imported"
-log "iTerm2 profile imported"
+if [[ "$PLATFORM" == "Darwin" ]]; then
+  section "iTerm2 Profile"
+  ITERM2_PROFILE_DIR="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
+  mkdir -p "$ITERM2_PROFILE_DIR"
+  "$BIN_LINK" "$ROOT_DIR/dotfiles/iterm2-profile.json" \
+              "$ITERM2_PROFILE_DIR/quanbot.json"
+  echo "  iTerm2 profile imported"
+  log "iTerm2 profile imported"
 
-# Set quanbot as default profile
-defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "quanbot-profile-guid"
-echo "  Set quanbot as default iTerm2 profile"
-log "Set quanbot as default profile"
+  # Set quanbot as default profile
+  defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "quanbot-profile-guid"
+  echo "  Set quanbot as default iTerm2 profile"
+  log "Set quanbot as default profile"
+fi
 
 # ── 3b. Create quanbot directory ──────────────────────────────────────────────
 mkdir -p "$HOME/.quanbot"
