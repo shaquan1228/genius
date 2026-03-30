@@ -14,9 +14,8 @@ Portable dev toolkit. Bootstraps a new machine and injects engineering context i
 
 | Command                    | Description                                                                |
 | -------------------------- | -------------------------------------------------------------------------- |
-| `bin/setup`                | Bootstrap machine: install deps, symlink dotfiles, configure Claude/Cursor |
-| `worktree <branch> [base]` | Create git worktree for parallel work                                      |
-| `worktree-agent "task"`    | Create temporal agent worktree (auto-cleanup after 7 days)                 |
+| `setup`                | Bootstrap machine: install deps, symlink dotfiles, configure Claude/Cursor |
+| `worktree <branch> [base]` | Create or checkout git worktree (smart naming, composable flags)           |
 | `worktree-cleanup`         | Remove old temporal worktrees                                              |
 | `dashboard`                | Show over-tinkering monitor and system status                              |
-| `bin/teardown`             | Safely remove quanbot configuration                                        |
+| `teardown`             | Safely remove quanbot configuration                                        |
