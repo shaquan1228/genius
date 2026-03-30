@@ -1,0 +1,6 @@
+# SC1091: Can't follow dynamically-resolved source paths
+disable=SC1091
+# SC2034: Variables in sourced libs appear unused to shellcheck
+disable=SC2034
+# SC2153: False positive for variables defined in sourced files
+disable=SC2153

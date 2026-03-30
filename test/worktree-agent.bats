@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
-# Tests for bin/worktree-agent — create temporal worktrees for agent tasks
+# Tests for bin/worktree — smart naming and --with-graphite flag
+# (replaces old worktree-agent tests)
 
-BIN="$BATS_TEST_DIRNAME/../bin/worktree-agent"
+BIN="$BATS_TEST_DIRNAME/../bin/worktree"
 
 setup() {
   TEST_REPO="$(mktemp -d)"
@@ -17,57 +18,54 @@ teardown() {
   rm -rf "$(dirname "$TEST_REPO")/$(basename "$TEST_REPO")-worktrees" 2>/dev/null || true
 }
 
-@test "has bash shebang and set -euo pipefail" {
-  head -20 "$BIN" | grep -q '#!/usr/bin/env bash'
-  head -20 "$BIN" | grep -q 'set -euo pipefail'
-}
-
-@test "is executable" {
-  [ -x "$BIN" ]
-}
-
-@test "fails with no arguments" {
-  run "$BIN"
-  [ "$status" -ne 0 ]
-}
-
-@test "creates temporal worktree with agent- prefix" {
+@test "description with spaces gets sanitized and timestamped" {
   run "$BIN" "fix login bug"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Agent worktree ready"* ]]
-  [[ "$output" == *"TEMPORAL"* ]]
-
-  # Branch should exist with agent- prefix and sanitized name
   REPO_NAME="$(basename "$TEST_REPO")"
   WORKTREE_DIR="$(dirname "$TEST_REPO")/${REPO_NAME}-worktrees"
-  ls "$WORKTREE_DIR" | grep -q "^agent-fix-login-bug-"
+  ls "$WORKTREE_DIR" | grep -q "^fix-login-bug-"
 }
 
-@test "sanitizes task description in branch name" {
+@test "clean branch name is used as-is" {
+  run "$BIN" my-feature
+
+  [ "$status" -eq 0 ]
+  REPO_NAME="$(basename "$TEST_REPO")"
+  WORKTREE_DIR="$(dirname "$TEST_REPO")/${REPO_NAME}-worktrees"
+  [ -d "$WORKTREE_DIR/my-feature" ]
+}
+
+@test "--temporal with description gets temp- prefix and sanitized name" {
+  run "$BIN" --temporal "implement user auth"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"TEMPORAL"* ]]
+  REPO_NAME="$(basename "$TEST_REPO")"
+  WORKTREE_DIR="$(dirname "$TEST_REPO")/${REPO_NAME}-worktrees"
+  ls "$WORKTREE_DIR" | grep -q "^temp-implement-user-auth-"
+}
+
+@test "sanitizes uppercase and special chars in description" {
   run "$BIN" "Fix UPPERCASE & special!chars"
 
   [ "$status" -eq 0 ]
   REPO_NAME="$(basename "$TEST_REPO")"
   WORKTREE_DIR="$(dirname "$TEST_REPO")/${REPO_NAME}-worktrees"
-  # Should be lowercased, special chars replaced with dashes
-  ls "$WORKTREE_DIR" | grep -q "^agent-fix-uppercase-special-chars-"
+  ls "$WORKTREE_DIR" | grep -q "^fix-uppercase-special-chars-"
 }
 
 @test "logs creation to ~/.quanbot/worktree.log" {
-  run "$BIN" "test logging"
+  run "$BIN" --temporal "test logging"
 
   [ "$status" -eq 0 ]
   [ -f "$TEST_REPO/.quanbot/worktree.log" ]
-  grep -q "CREATE: agent-test-logging-" "$TEST_REPO/.quanbot/worktree.log"
+  grep -q "CREATE: temp-test-logging-" "$TEST_REPO/.quanbot/worktree.log"
 }
 
-@test "respects QUANBOT_WORKTREE_DIR env var" {
-  run grep 'QUANBOT_WORKTREE_DIR' "$BIN"
-  [ "$status" -eq 0 ]
-}
+@test "--with-graphite flag is accepted" {
+  # Just verify the flag doesn't cause an error (gt may not be installed in CI)
+  run "$BIN" --temporal --with-graphite "graphite test"
 
-@test "uses sibling directory of repo as default worktree base" {
-  run grep 'dirname.*REPO_ROOT' "$BIN"
   [ "$status" -eq 0 ]
 }

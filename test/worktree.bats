@@ -54,14 +54,6 @@ teardown() {
   [ -d "$EXPECTED" ]
 }
 
-@test "--permanent flag prefixes branch with keep-" {
-  run "$BIN" --permanent my-task
-
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"PERMANENT"* ]]
-  EXPECTED="$(dirname "$TEST_REPO")/$(basename "$TEST_REPO")-worktrees/keep-my-task"
-  [ -d "$EXPECTED" ]
-}
 
 @test "is idempotent — skips if worktree already exists" {
   run "$BIN" dupe-branch
@@ -92,12 +84,14 @@ teardown() {
 }
 
 @test "respects QUANBOT_WORKTREE_DIR env var" {
-  run grep 'QUANBOT_WORKTREE_DIR' "$BIN"
+  LIB="$BATS_TEST_DIRNAME/../bin/lib/worktree-common.sh"
+  run grep 'QUANBOT_WORKTREE_DIR' "$LIB"
   [ "$status" -eq 0 ]
 }
 
 @test "uses sibling directory of repo as default worktree base" {
-  run grep 'dirname.*REPO_ROOT' "$BIN"
+  LIB="$BATS_TEST_DIRNAME/../bin/lib/worktree-common.sh"
+  run grep 'dirname.*REPO_ROOT' "$LIB"
   [ "$status" -eq 0 ]
 }
 

@@ -10,9 +10,10 @@
 
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/worktree-common.sh"
+
 DRY_RUN=false
 AGE_DAYS=7
-LOG_FILE="$HOME/.quanbot/worktree.log"
 YES=false
 FORCE_YES=false
 
@@ -45,19 +46,6 @@ for arg in "$@"; do
       ;;
   esac
 done
-
-log() {
-  mkdir -p "$(dirname "$LOG_FILE")"
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
-}
-
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-REPO_NAME="$(basename "$REPO_ROOT")"
-
-# Determine worktree base directory
-# Default: sibling directory of the repo (e.g. /Repositories/quanbot → /Repositories/quanbot-worktrees)
-# Override: set QUANBOT_WORKTREE_DIR to use a different base
-WORKTREE_BASE="${QUANBOT_WORKTREE_DIR:-$(dirname "$REPO_ROOT")}/${REPO_NAME}-worktrees"
 
 if [[ ! -d "$WORKTREE_BASE" ]]; then
   echo "No worktree directory found at: $WORKTREE_BASE"
@@ -99,7 +87,7 @@ done < <(git worktree list)
 
 if [[ ${#WORKTREES_TO_REMOVE[@]} -eq 0 ]]; then
   echo "No stale temporal worktrees found."
-  log "CLEANUP: No stale worktrees found (age threshold: $AGE_DAYS days)"
+  wt_log "CLEANUP: No stale worktrees found (age threshold: $AGE_DAYS days)"
   exit 0
 fi
 
@@ -118,7 +106,7 @@ done
 
 if $DRY_RUN; then
   echo "[DRY RUN] Would remove ${#WORKTREES_TO_REMOVE[@]} worktree(s)"
-  log "CLEANUP DRY-RUN: Would remove ${#WORKTREES_TO_REMOVE[@]} worktrees"
+  wt_log "CLEANUP DRY-RUN: Would remove ${#WORKTREES_TO_REMOVE[@]} worktrees"
   exit 0
 fi
 
@@ -127,7 +115,7 @@ if ! $YES; then
   read -r CONFIRM
   if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
     echo "Cancelled"
-    log "CLEANUP: Cancelled by user"
+    wt_log "CLEANUP: Cancelled by user"
     exit 0
   fi
 fi
@@ -145,10 +133,10 @@ for entry in "${WORKTREES_TO_REMOVE[@]}"; do
   if git worktree remove "$WORKTREE_PATH" 2>/dev/null; then
     echo "    ✓ Removed worktree"
     REMOVED_COUNT=$((REMOVED_COUNT + 1))
-    log "CLEANUP: Removed $BRANCH at $WORKTREE_PATH"
+    wt_log "CLEANUP: Removed $BRANCH at $WORKTREE_PATH"
   else
     echo "    ✗ Failed to remove worktree (may have uncommitted changes)"
-    log "CLEANUP: Failed to remove $BRANCH at $WORKTREE_PATH"
+    wt_log "CLEANUP: Failed to remove $BRANCH at $WORKTREE_PATH"
     
     if $FORCE_YES; then
       FORCE_CONFIRM="y"
@@ -161,10 +149,10 @@ for entry in "${WORKTREES_TO_REMOVE[@]}"; do
       if git worktree remove --force "$WORKTREE_PATH" 2>/dev/null; then
         echo "    ✓ Force removed"
         REMOVED_COUNT=$((REMOVED_COUNT + 1))
-        log "CLEANUP: Force removed $BRANCH at $WORKTREE_PATH"
+        wt_log "CLEANUP: Force removed $BRANCH at $WORKTREE_PATH"
       else
         echo "    ✗ Force remove failed"
-        log "CLEANUP: Force remove failed for $BRANCH at $WORKTREE_PATH"
+        wt_log "CLEANUP: Force remove failed for $BRANCH at $WORKTREE_PATH"
       fi
     fi
   fi

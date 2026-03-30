@@ -1,90 +1,109 @@
 #!/usr/bin/env bash
-# bin/worktree — create a git worktree for any repo
+# bin/worktree — create or check out a git worktree
 #
 # Usage:
-#   quanbot/bin/worktree <branch-name>                # create new branch from HEAD
-#   quanbot/bin/worktree <branch-name> <base>         # create new branch from <base>
-#   quanbot/bin/worktree --checkout <branch-name>     # check out existing branch
-#   quanbot/bin/worktree --temporal <branch-name>     # create temporal worktree (temp- prefix)
-#   quanbot/bin/worktree --permanent <branch-name>    # create permanent worktree (keep- prefix)
+#   bin/worktree <branch-or-description>           # new branch from HEAD (or checkout if exists)
+#   bin/worktree <branch-or-description> <base>    # new branch from <base>
+#   bin/worktree --temporal <description>           # temporal worktree (temp- prefix, auto-cleanup)
+#   bin/worktree --with-graphite <name>             # track with graphite after creation
 #
-# Repo-agnostic: derives worktree base from the repo's parent directory.
-# omar   → /path/to/parent/omar-worktrees/
-# stringer → /path/to/parent/stringer-worktrees/
-# Set QUANBOT_WORKTREE_DIR to override the base directory.
+# Smart naming:
+#   Clean branch name (no spaces/special chars) → used as-is
+#   Description (spaces/special chars)           → sanitized + timestamped
+#
+# Env vars:
+#   QUANBOT_WORKTREE_DIR   Override worktree base directory
 
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-REPO_NAME="$(basename "$REPO_ROOT")"
-
-# Determine worktree base directory
-# Default: sibling directory of the repo (e.g. /Repositories/quanbot → /Repositories/quanbot-worktrees)
-# Override: set QUANBOT_WORKTREE_DIR to use a different base
-WORKTREE_BASE="${QUANBOT_WORKTREE_DIR:-$(dirname "$REPO_ROOT")}/${REPO_NAME}-worktrees"
-LOG_FILE="$HOME/.quanbot/worktree.log"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/worktree-common.sh"
 
 usage() {
   echo "Usage:"
-  echo "  quanbot/bin/worktree <branch-name>                # new branch from HEAD"
-  echo "  quanbot/bin/worktree <branch-name> <base>         # new branch from <base>"
-  echo "  quanbot/bin/worktree --checkout <branch-name>     # check out existing branch"
-  echo "  quanbot/bin/worktree --temporal <branch-name>     # temporal (temp- prefix, auto-cleanup)"
-  echo "  quanbot/bin/worktree --permanent <branch-name>    # permanent (keep- prefix)"
+  echo "  bin/worktree <branch-or-description>           # create or checkout"
+  echo "  bin/worktree <branch-or-description> <base>    # from specific base"
+  echo "  bin/worktree --temporal <description>           # temp- prefix, auto-cleanup"
+  echo "  bin/worktree --with-graphite <name>             # track with graphite"
   echo ""
-  echo "Env vars:"
-  echo "  QUANBOT_WORKTREE_DIR   Override worktree base directory (default: sibling of repo parent)"
+  echo "Flags can be combined: bin/worktree --temporal --with-graphite \"implement auth\""
   exit 1
 }
 
-log() {
-  mkdir -p "$(dirname "$LOG_FILE")"
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+sanitize() {
+  echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-40
 }
 
-CHECKOUT=false
+is_clean_branch_name() {
+  [[ "$1" =~ ^[a-zA-Z0-9._/-]+$ ]]
+}
+
+# ── Parse flags ──────────────────────────────────────────────────────────────
+
 TEMPORAL=false
-PERMANENT=false
+WITH_GRAPHITE=false
 
-if [[ "${1:-}" == "--checkout" ]]; then
-  CHECKOUT=true
-  shift
-elif [[ "${1:-}" == "--temporal" ]]; then
-  TEMPORAL=true
-  shift
-elif [[ "${1:-}" == "--permanent" ]]; then
-  PERMANENT=true
-  shift
-fi
+while [[ "${1:-}" == --* ]]; do
+  case "$1" in
+    --temporal)      TEMPORAL=true;     shift ;;
+    --with-graphite) WITH_GRAPHITE=true; shift ;;
+    --help|-h)       usage ;;
+    *)               echo "Unknown flag: $1" >&2; usage ;;
+  esac
+done
 
-BRANCH="${1:?$(usage)}"
+INPUT="${1:?$(usage)}"
 BASE="${2:-HEAD}"
+
+# ── Resolve branch name ─────────────────────────────────────────────────────
+
+if is_clean_branch_name "$INPUT"; then
+  BRANCH="$INPUT"
+else
+  SANITIZED=$(sanitize "$INPUT")
+  TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
+  BRANCH="${SANITIZED}-${TIMESTAMP}"
+fi
 
 if $TEMPORAL; then
   BRANCH="temp-${BRANCH}"
-elif $PERMANENT; then
-  BRANCH="keep-${BRANCH}"
 fi
 
 WORKTREE_PATH="$WORKTREE_BASE/$BRANCH"
+
+# ── Create worktree ─────────────────────────────────────────────────────────
 
 mkdir -p "$WORKTREE_BASE"
 
 if [[ -d "$WORKTREE_PATH" ]]; then
   echo "Worktree already exists at $WORKTREE_PATH"
-  log "SKIP: $BRANCH (already exists)"
+  wt_log "SKIP: $BRANCH (already exists)"
   exit 0
 fi
 
-if $CHECKOUT || git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+if git show-ref --verify --quiet "refs/heads/$BRANCH" 2>/dev/null; then
   echo "Checking out existing branch '$BRANCH'..."
   git worktree add "$WORKTREE_PATH" "$BRANCH"
-  log "CHECKOUT: $BRANCH at $WORKTREE_PATH"
+  wt_log "CHECKOUT: $BRANCH at $WORKTREE_PATH"
 else
   echo "Creating new branch '$BRANCH' from $BASE..."
   git worktree add "$WORKTREE_PATH" -b "$BRANCH" "$BASE"
-  log "CREATE: $BRANCH from $BASE at $WORKTREE_PATH"
+  wt_log "CREATE: $BRANCH from $BASE at $WORKTREE_PATH"
 fi
+
+# ── Graphite tracking ───────────────────────────────────────────────────────
+
+if $WITH_GRAPHITE && command -v gt &>/dev/null; then
+  PARENT_BRANCH=$(git rev-parse --abbrev-ref "$BASE")
+  if [[ "$PARENT_BRANCH" == "HEAD" ]]; then
+    PARENT_BRANCH=$(cd "$REPO_ROOT" && git branch --show-current)
+  fi
+
+  echo "  Tracking with graphite (parent: $PARENT_BRANCH)..."
+  (cd "$WORKTREE_PATH" && gt track --parent "$PARENT_BRANCH" 2>/dev/null) \
+    || echo "  Warning: Could not track with graphite"
+fi
+
+# ── Output ───────────────────────────────────────────────────────────────────
 
 echo ""
 echo "✓ Worktree ready: $WORKTREE_PATH"
@@ -95,7 +114,5 @@ echo "  Open in Claude Code: claude $WORKTREE_PATH"
 if $TEMPORAL; then
   echo ""
   echo "  This is a TEMPORAL worktree (auto-cleanup eligible after 7 days)"
-elif $PERMANENT; then
-  echo ""
-  echo "  This is a PERMANENT worktree (manual cleanup only)"
+  echo "  To make permanent, rename branch to: keep-<name>"
 fi

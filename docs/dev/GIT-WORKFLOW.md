@@ -60,8 +60,7 @@ Is this completing a feature unit?
 
 **Naming patterns:**
 
-- `agent-<task>-<timestamp>` - Created by worktree-agent
-- `temp-<description>` - Manual temporal worktrees
+- `temp-<sanitized>-<timestamp>` - Created by `worktree --temporal`
 - `temp-fix-<issue>` - Quick fixes
 
 **When to use:**
@@ -74,11 +73,11 @@ Is this completing a feature unit?
 **Creation:**
 
 ```bash
-# Agent-friendly (auto-named, tracked)
-worktree-agent "implement user auth"
+# Auto-named, tracked with graphite
+worktree --temporal --with-graphite "implement user auth"
 
-# Manual temporal
-worktree temp-experiment main
+# Explicit name
+worktree --temporal fix-experiment main
 ```
 
 ### PERMANENT worktrees (manual cleanup):
@@ -111,7 +110,7 @@ worktree feature-user-dashboard main
 Starting new work?
   ↓
 Is this temporal? (< 1 week, experiment, agent task)
-  ↓ YES → worktree-agent "<task>"
+  ↓ YES → worktree --temporal --with-graphite "<task>"
   ↓ NO
 Is this long-running? (> 1 week, persistent)
   ↓ YES → worktree keep-<feature> main
