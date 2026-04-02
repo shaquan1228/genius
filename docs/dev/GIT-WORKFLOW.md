@@ -217,11 +217,12 @@ git worktree remove --force ~/Desktop/repo-worktrees/branch-name
 
 1. **Commit early, commit often** - Small commits are easier to review
 2. **Use descriptive commit messages** - Future you will thank you
-3. **Don't amend pushed commits** - Causes problems for collaborators
-4. **Clean up temporal worktrees** - Run cleanup weekly
-5. **Stay in worktree for task** - Don't switch back to main until done
-6. **Check worktree status** - Before running graphite commands
-7. **Log everything** - All worktree operations log to ~/.quanbot/worktree.log
+3. **Use `--force-with-lease`** when force pushing — never plain `--force` if cloud agents or other sources touch the branch
+4. **Don't amend pushed commits** - Causes problems for collaborators
+5. **Clean up temporal worktrees** - Run cleanup weekly
+6. **Stay in worktree for task** - Don't switch back to main until done
+7. **Check worktree status** - Before running graphite commands
+8. **Log everything** - All worktree operations log to ~/.quanbot/worktree.log
 
 ---
 
