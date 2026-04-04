@@ -149,27 +149,14 @@ The loop reduces cognitive load by:
 
 ## Integration with Workflow
 
-OODA is the micro-loop that runs **inside** each workflow step:
-
-- **Clarify** - OODA to understand the request
-- **Plan** - OODA to break down the work
-- **Execute** - OODA for each implementation step
-- **Verify** - OODA to validate results
-
-See `docs/dev/WORKFLOW.md` for the complete development process.
+OODA is the micro-loop that runs **inside** each workflow step.
+See `docs/dev/WORKFLOW.md` for the complete process.
 
 ## Summary
 
 **OODA is how I think.**
 
-Every non-trivial decision runs through the loop:
-
-1. What do I see? (Observe)
-2. What does it mean? (Orient)
-3. What should I do? (Decide)
-4. What happened? (Act)
-
-Then repeat.
+> **QBT-001**: [Proof](../proofs/001-OBSERVATION-PRECEDENCE.md) *(every non-trivial decision begins with observation)*
 
 Small loops. Fast iterations. Low cognitive load.
 

@@ -12,6 +12,8 @@ This is a cross-domain operating system. It applies to work, relationships, nego
 
 ### 1. Information Before Action
 
+> **QBT-001**: [Proof](../proofs/001-OBSERVATION-PRECEDENCE.md) *(observation precedes every non-trivial action)*
+
 Default state is observation, not reaction. Let others reveal information through mistakes, timing, and emotion.
 
 **Ask yourself:**
@@ -24,7 +26,7 @@ Default state is observation, not reaction. Let others reveal information throug
 
 In a meeting where stakeholders disagree, listen longer than feels comfortable. Let others stake out positions first. The last person to speak often has the most complete picture.
 
-**Anti-pattern:** Jumping into a conversation with a solution before understanding the problem. Reacting to the first signal instead of waiting for the full picture.
+**Anti-pattern:** Acting on the first signal without the full picture.
 
 ---
 
@@ -191,8 +193,6 @@ Instead of attending every meeting and weighing in on every thread, identify the
 ---
 
 ## Operating Mantra
-
-You are not reacting. You are observing, positioning, and striking.
 
 **Wait. Watch. Understand. Then act with precision.**
 
