@@ -4,13 +4,15 @@ How to execute coding tasks using TDD and OODA.
 
 ## OODA Micro-Loop (Always On)
 
+> **QBT-001**: [Proof](../proofs/001-OBSERVATION-PRECEDENCE.md) *(every non-trivial step begins with observation)*
+
 Every non-trivial step runs through the OODA loop. See `docs/dreams/OODA.md` for detailed framework. Repeat this loop after each meaningful result (new evidence, failing test, lint/type error, review feedback).
 
 ---
 
 ## Process Steps
 
-### 1. Clarify
+### 1. Clarify *(QBT-001)*
 
 - Restate the task in one sentence
 - Identify unknowns and ask only the critical questions
@@ -59,7 +61,7 @@ Every non-trivial step runs through the OODA loop. See `docs/dreams/OODA.md` for
 1. **Start with tests** - Red → Green → Refactor
 2. **Small steps** - Each commit should be a working checkpoint
 3. **Verify early** - Run tests after each change, not at the end
-4. **Apply OODA** - For non-trivial decisions, run the loop explicitly
+4. **Apply OODA** *(QBT-001)* - For non-trivial decisions, run the loop explicitly
 5. **Ship incrementally** - Don't wait for perfection
 
 ---
