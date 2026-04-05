@@ -38,8 +38,6 @@ A manager who sometimes pushes back on scope and sometimes accepts it — based 
 
 ### Probe-to-Commit Ratios
 
-> **QBT-001**: [Proof](../proofs/001-OBSERVATION-PRECEDENCE.md) *(observation precedes commitment)*
-
 How often should you test/explore vs. commit resources? This is the fundamental explore-exploit tradeoff.
 
 The ratio depends on your information advantage:
@@ -47,6 +45,8 @@ The ratio depends on your information advantage:
 - **Low information:** Probe more, commit less. You're still learning the landscape.
 - **High information:** Commit decisively. Probing wastes resources when you already know the answer.
 - **Uncertain information:** Mix probes and commits. Each probe should be designed to resolve a specific uncertainty.
+
+**Formula intuition:** For a given level of commitment, the frequency of exploratory actions should scale with the remaining uncertainty. As uncertainty decreases, shift toward commitment.
 
 **Example:**
 
@@ -79,7 +79,7 @@ Sacrificing decision quality for speed under pressure. The speed-quality tension
 **How it shows up:**
 
 - Committing to a direction in the first 30 seconds of a discussion
-- Skipping OODA phases (see `docs/dreams/OODA.md` Anti-Patterns)
+- Skipping the "Orient" step in OODA and jumping straight from observation to action
 - Feeling productive because you're moving fast, while making avoidable errors
 
 **Countermeasure:** Maximize decision quality per unit time, not decisions per unit time. A 5-minute pause that prevents a 2-week mistake is the best trade you'll make.

@@ -6,8 +6,6 @@ Read this when you're tempted to add complexity, optimize prematurely, or contin
 
 ## The Tinkering Test
 
-> **QBT-001**: [Proof](../proofs/001-OBSERVATION-PRECEDENCE.md) *(observation precedes action — this test is the instrument)*
-
 Before adding complexity (new tools, abstractions, optimizations, extended work):
 
 ### Score each question 0-5:
