@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bin/setup — bootstrap quanbot on a new machine.
 #
-# Usage: bin/setup [--skip-shell-config]
+# Usage: bin/setup [--no-profile]
 #
 # What it does:
 #   1. Installs Homebrew (if missing)
@@ -18,22 +18,22 @@ set -euo pipefail
 SKIP_SHELL_CONFIG=false
 for arg in "$@"; do
   case $arg in
-    --skip-shell-config)
+    --no-profile)
       SKIP_SHELL_CONFIG=true
       ;;
     --help|-h)
-      echo "Usage: bin/setup [--skip-shell-config]"
+      echo "Usage: bin/setup [--no-profile]"
       echo ""
       echo "Bootstrap quanbot on a new machine."
       echo ""
       echo "Options:"
-      echo "  --skip-shell-config   Skip modifications to ~/.zshrc"
+      echo "  --no-profile          Skip modifications to ~/.zshrc"
       echo "  --help, -h            Show this help"
       exit 0
       ;;
     *)
       echo "Unknown argument: $arg" >&2
-      echo "Usage: bin/setup [--skip-shell-config]" >&2
+      echo "Usage: bin/setup [--no-profile]" >&2
       exit 1
       ;;
   esac
@@ -111,14 +111,6 @@ fi
 ZSHRC="$HOME/.zshrc"
 BREW_PREFIX="$(brew --prefix 2>/dev/null || echo '/opt/homebrew')"
 P10K_HOOK="source ${BREW_PREFIX}/share/powerlevel10k/powerlevel10k.zsh-theme"
-if ! grep -qF "$P10K_HOOK" "$ZSHRC"; then
-  printf '\n# Powerlevel10k\n%s\n' "$P10K_HOOK" >> "$ZSHRC"
-  echo "  Appended powerlevel10k source to ~/.zshrc"
-  log "Added powerlevel10k hook to ~/.zshrc"
-else
-  echo "  ~/.zshrc already sources powerlevel10k"
-fi
-P10K_HOOK='source /opt/homebrew/share/powerlevel10k/powerlevel10k.zsh-theme'
 ZSHRC_HOOK='[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local'
 
 if ! $SKIP_SHELL_CONFIG; then
@@ -138,7 +130,7 @@ if ! $SKIP_SHELL_CONFIG; then
     echo "  ~/.zshrc already sources .zshrc.local"
   fi
 else
-  echo "  Skipping ~/.zshrc modifications (--skip-shell-config)"
+  echo "  Skipping ~/.zshrc modifications (--no-profile)"
   log "Shell config modifications skipped"
 fi
 
