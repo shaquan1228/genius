@@ -7,7 +7,7 @@ Portable dev toolkit. Bootstraps a new machine and injects engineering context i
 1. Clone: `git clone git@github.com:your-handle/quanbot.git`
 2. Run `bin/setup` within your cloned repo.
 3. Set your git email (not tracked) `git config --global user.email "you@example.com"`
-4. For global Cursor context, paste the printed snippet into **Cursor > Settings > Rules for AI** from within your cloned repo: `echo "@$(pwd)/identity.md @$(pwd)/rules.md @$(pwd)/docs/dev/WORKFLOW.md @$(pwd)/docs/dev/GIT-WORKFLOW.md @$(pwd)/docs/dreams/OODA.md" | pbcopy`
+4. For global Cursor context, paste the printed snippet into **Cursor > Settings > Rules for AI** from within your cloned repo: `echo "@$(pwd)/docs/identity.md" | pbcopy`
 5. Open a new shell after setup completes.
 
 ## Commands
