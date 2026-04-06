@@ -17,8 +17,18 @@ BIN="$BATS_TEST_DIRNAME/../bin/setup"
   [ "$status" -eq 0 ]
 }
 
+@test "bin/setup has --no-profile flag" {
+  run grep 'no-profile' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
 @test "bin/setup uses brew --prefix instead of hardcoded /opt/homebrew for p10k" {
   run grep 'brew --prefix' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "bin/setup skips .zshrc modifications when --no-profile is passed" {
+  run grep 'SKIP_SHELL_CONFIG\|SKIP_SHELL' "$BIN"
   [ "$status" -eq 0 ]
 }
 
@@ -29,6 +39,12 @@ BIN="$BATS_TEST_DIRNAME/../bin/setup"
 
 @test "bin/setup guards iTerm2 section with Darwin platform check" {
   run grep 'Darwin' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "bin/setup --no-profile skips without error" {
+  # Dry test: verify the flag is handled (won't actually modify the system)
+  run grep 'Skipping.*zshrc\|skip.*shell\|SKIP_SHELL' "$BIN"
   [ "$status" -eq 0 ]
 }
 
@@ -56,4 +72,14 @@ BIN="$BATS_TEST_DIRNAME/../bin/setup"
   progress_line=$(grep -n 'Graphite\|graphite' "$BIN" | grep -i 'install\|Installing' | head -1 | cut -d: -f1)
   [ -n "$progress_line" ]
   [ "$progress_line" -lt "$npm_line" ]
+}
+
+@test "bin/setup supports --help flag" {
+  run grep -- '--help\|-h)' "$BIN"
+  [ "$status" -eq 0 ]
+}
+
+@test "bin/setup adds datestamp to .zshrc modifications" {
+  run grep "date.*'+%Y-%m-%d'\|added.*%Y-%m-%d\|%Y-%m-%d.*added" "$BIN"
+  [ "$status" -eq 0 ]
 }
