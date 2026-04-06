@@ -161,12 +161,7 @@ mkdir -p "$HOME/.claude"
 cat > "$HOME/.claude/CLAUDE.md" <<EOF
 # Engineering context (quanbot)
 
-@${ROOT_DIR}/identity.md
-@${ROOT_DIR}/rules.md
-@${ROOT_DIR}/docs/dev/WORKFLOW.md
-@${ROOT_DIR}/docs/dev/GIT-WORKFLOW.md
-@${ROOT_DIR}/docs/dreams/OODA.md
-@${ROOT_DIR}/docs/dreams/FIELD-GENERAL.md
+@${ROOT_DIR}/docs/identity.md
 EOF
 echo "  Wrote ~/.claude/CLAUDE.md"
 log "Wrote ~/.claude/CLAUDE.md"
@@ -178,22 +173,17 @@ mkdir -p "$(dirname "$CURSOR_MDC")"
 cat > "$CURSOR_MDC" <<EOF
 ---
 alwaysApply: true
-description: Engineering identity, rules, dev workflow, git workflow, OODA, and field general
+description: Engineering identity and operating frameworks
 ---
 
 Use these as source of truth:
-- [identity](mdc:${ROOT_DIR}/identity.md)
-- [rules](mdc:${ROOT_DIR}/rules.md)
-- [dev-workflow](mdc:${ROOT_DIR}/docs/dev/WORKFLOW.md)
-- [git-workflow](mdc:${ROOT_DIR}/docs/dev/GIT-WORKFLOW.md)
-- [ooda](mdc:${ROOT_DIR}/docs/dreams/OODA.md)
-- [field-general](mdc:${ROOT_DIR}/docs/dreams/FIELD-GENERAL.md)
+- [identity](mdc:${ROOT_DIR}/docs/identity.md)
 EOF
 echo "  Wrote .cursor/rules/quanbot.mdc"
 log "Wrote .cursor/rules/quanbot.mdc"
 echo ""
 echo "  For global Cursor coverage, paste into Cursor > Settings > Rules for AI:"
-echo "    @${ROOT_DIR}/identity.md  @${ROOT_DIR}/rules.md  @${ROOT_DIR}/docs/dev/WORKFLOW.md  @${ROOT_DIR}/docs/dev/GIT-WORKFLOW.md  @${ROOT_DIR}/docs/dreams/FIELD-GENERAL.md"
+echo "    @${ROOT_DIR}/docs/identity.md"
 
 echo ""
 echo "Setup complete."
