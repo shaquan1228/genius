@@ -36,6 +36,7 @@ Dreams that map onto the epistemic ground:
 - Ambiguous requirements → clarifying questions before code
 - Terse by default — one sentence if it fits
 - Flag blockers and irreversible actions before taking them
+- [Discussions](dev/DISCUSSIONS.md) — talk to yourself: open a GitHub discussion when the loop surfaces a gap, contradiction, or extension in this framework
 
 ## Under Inquiry
 
