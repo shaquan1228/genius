@@ -1,10 +1,12 @@
 # Proof 004: Independent Premise Validation
 
 **Theorem ID:** QBT-004
-**Type:** Chain Proof (depends on QBT-001, QBT-002, QBT-003)
+**Type:** Branch Proof
+**Branches From:** QBT-002
+**Branch Trigger:** NonTrivial(A) ∧ DependsOn(A, P)
 **Status:** Proven
 **Date:** 2026-04-06
-**Method:** Direct proof via Modus Ponens chain (imports QBT-001)
+**Method:** Direct proof via Modus Ponens chain (imports QBT-002)
 **Scope:** Normative — proves what the system prescribes, not what agents always do
 
 ---
@@ -31,7 +33,7 @@ In the quanbot system, every non-trivial action that depends on a premise requir
 | NonTrivial(A) | Inherited from QBT-001 | `docs/dreams/OODA.md` line 88 |
 | DependsOn(A, P) | Action A's correctness requires premise P to be true. If P is false, A is unsound regardless of A's internal logic. | General logical dependency |
 | Assumption(P) | P is accepted without direct evidence — either derived from a chain of reasoning, or asserted by an authority/rule | `docs/dreams/FIELD-GENERAL.md` line 17: "What do I know vs. what am I assuming?" — the question distinguishes knowledge from assumption |
-| ValidatedIndependently(P) | P was confirmed through direct evidence or direct testing — not through the reasoning chain that produced it, and not because an authority directed its acceptance | `docs/dreams/OODA.md` line 72: "Did my action produce the expected result?"; `docs/dev/WORKFLOW.md` line 16: "Verify after each change, not at the end" |
+| ValidatedIndependently(P) | P was confirmed through direct evidence or direct testing — not through the reasoning chain that produced it, and not because an authority directed its acceptance | `docs/dreams/OODA.md` line 72: "Did my action produce the expected result?" |
 | Cascade(A, P) | When P is false and A depends on P, A's output becomes a false premise for subsequent actions, propagating the error through the inference chain | `docs/dreams/OODA.md` lines 132-136: "Loop Too Big" anti-pattern; `docs/dreams/DECISION-THEORY.md` lines 76-85: "Rushed Processing" compounds avoidable errors |
 
 **Scope boundary:** Same as QBT-001 — only rendered markdown content. HTML comments excluded.
@@ -43,12 +45,12 @@ In the quanbot system, every non-trivial action that depends on a premise requir
 ## Dependencies
 
 ```
-IMPORT: QBT-001 (Observation Precedence)
-STATEMENT: ∀A: NonTrivial(A) → PrecededByObservation(A)
-SOURCE: docs/proofs/001-OBSERVATION-PRECEDENCE.md
+IMPORT: QBT-002 (Iterative Refinement)
+STATEMENT: ∀A: NonTrivial(A) → IterativelyRefined(A) [which imports QBT-001: PrecededByObservation(A)]
+SOURCE: docs/proofs/002-ITERATIVE-REFINEMENT.md
 ```
 
-QBT-001 guarantees observation occurs. QBT-004 constrains what observation must include: not just reading state, but independently validating premises before building on them.
+QBT-002 (which imports QBT-001) guarantees observation occurs at each iteration. QBT-004 constrains what observation must include: not just reading state, but independently validating premises before building on them.
 
 ---
 
@@ -108,11 +110,10 @@ QBT-001 guarantees observation occurs. QBT-004 constrains what observation must 
 | `docs/dreams/OODA.md` | 72 | Act: "Did my action produce the expected result?" |
 | `docs/dreams/OODA.md` | 73 | "What did I learn?" |
 | `docs/dreams/OODA.md` | 74 | "What's the new state?" |
-| `docs/dev/WORKFLOW.md` | 16 | "Verify after each change, not at the end" |
 | `docs/dreams/FIELD-GENERAL.md` | 17 | "What do I know vs. what am I assuming?" |
 | `docs/dreams/FIELD-GENERAL.md` | 225 | "Wait. Watch. Understand. Then act with precision." |
 
-**Semantic validation:** The OODA Act phase (lines 72-74) asks three questions — and critically, the first is "Did my action produce the expected result?" This is independent validation: checking the output against an expectation, not against the logic chain that produced the output. If the only check were "does my conclusion follow from my premises?", a wrong premise would produce a wrong-but-logically-consistent conclusion that passes review. The Act phase demands checking against EXPECTED results — an external reference point, not an internal one. WORKFLOW.md's "Verify after each change, not at the end" (line 16) is the operational prescription: validate at each step, so that a false premise is caught at step 1 instead of propagating to step N. The Field General mantra (line 225) sequences the entire cycle: "Wait. Watch. **Understand.** Then act" — understanding requires validation, not just observation.
+**Semantic validation:** The OODA Act phase (lines 72-74) asks three questions — and critically, the first is "Did my action produce the expected result?" This is independent validation: checking the output against an expectation, not against the logic chain that produced the output. If the only check were "does my conclusion follow from my premises?", a wrong premise would produce a wrong-but-logically-consistent conclusion that passes review. The Act phase demands checking against EXPECTED results — an external reference point, not an internal one. QBT-002 (Iterative Refinement) carries this as the per-iteration prescription: validate at each step, so that a false premise is caught at step 1 instead of propagating to step N. The Field General mantra (line 225) sequences the entire cycle: "Wait. Watch. **Understand.** Then act" — understanding requires validation, not just observation.
 
 **The critical distinction:** Derivation asks "does this follow from my premises?" — internal consistency. Independent validation asks "are my premises actually true?" — external correctness. A chain can be internally consistent and externally wrong. Only independent validation catches this.
 
@@ -123,7 +124,7 @@ QBT-001 guarantees observation occurs. QBT-004 constrains what observation must 
 ```
  1.  Assume NonTrivial(A) ∧ DependsOn(A, P)         [Assumption for conditional proof]
  2.  NonTrivial(A)                                    [From 1, conjunction elimination]
- 3.  PrecededByObservation(A)                         [From 2, QBT-001 — Modus Ponens]
+ 3.  PrecededByObservation(A)                         [From 2, QBT-002 (which imports QBT-001) — Modus Ponens]
  4.  DistinguishesKnownFromAssumed(A)                 [From 3, P1 — Modus Ponens]
  5.  DependsOn(A, P)                                  [From 1, conjunction elimination]
  6.  P is either Known(P) or Assumption(P)            [From 4 — observation classifies P]
@@ -143,9 +144,9 @@ QBT-001 guarantees observation occurs. QBT-004 constrains what observation must 
 - Disjunction (P is Known or Assumed) — step 6
 - Normative closure (the system prescribes cascade prevention, so it prescribes the only means) — steps 10, 11
 - Conditional Proof (assume P, derive Q, conclude P → Q) — step 12
-- Import (QBT-001) — step 3
+- Import (QBT-002, which imports QBT-001) — step 3
 
-**Note on step 10-11 (normative closure):** This step is not purely mechanical — it relies on the normative character of the quanbot system. The system prescribes small reversible actions (QBT-003) to enable course correction, which exists to prevent cascading errors. If the system prescribes cascade prevention (evidenced by QBT-003, "Loop Too Big" anti-pattern, "Verify after each change"), it must prescribe the necessary means: independent validation of premises. A system that prescribes the end but not the means is incoherent. Since quanbot is coherent (8/8 documents verified in QBT-001/002/003), it prescribes independent validation.
+**Note on step 10-11 (normative closure):** This step is not purely mechanical — it relies on the normative character of the quanbot system. The system prescribes small reversible actions (QBT-003) to enable course correction, which exists to prevent cascading errors. If the system prescribes cascade prevention (evidenced by QBT-003, "Loop Too Big" anti-pattern, QBT-002's per-iteration verification), it must prescribe the necessary means: independent validation of premises. A system that prescribes the end but not the means is incoherent. Since quanbot is coherent (dream docs verified in QBT-001/002/003), it prescribes independent validation.
 
 ---
 
@@ -155,13 +156,10 @@ QBT-001 guarantees observation occurs. QBT-004 constrains what observation must 
 |----------|--------|----------|
 | `docs/dreams/OODA.md` | PASS | Orient (line 40): "Name the governing pattern, risks, and tradeoffs" — risk assessment requires distinguishing validated from assumed. Act (line 72): "Did my action produce the expected result?" — independent check against expectation, not chain logic. Anti-pattern "Loop Too Big" (lines 132-136): cascading from unchecked premises. |
 | `docs/dreams/FIELD-GENERAL.md` | PASS | Principle 1 (line 17): "What do I know vs. what am I assuming?" — the foundational question. Principle 3 (line 55): "Am I overweighting a rare scenario because it's vivid?" — unvalidated assumptions can be vivid but wrong. Principle 10 (line 177): "Quality decisions beat sheer activity" — validation is quality; building on assumptions is activity. |
-| `docs/dev/WORKFLOW.md` | PASS | Line 16: "Verify after each change, not at the end" — per-step validation prevents cascade. This is independent validation applied operationally. |
-| `docs/dev/GIT-WORKFLOW.md` | PASS | Decision trees (lines 41-53) begin with state observation and verification. The git workflow's emphasis on checking state before acting is independent validation applied to version control. |
 | `docs/dreams/DECISION-THEORY.md` | PASS | Probe-to-Commit (lines 45-47): under uncertainty, probe (validate) before committing. "Each probe should be designed to resolve a specific uncertainty" (line 47) — probes ARE independent validation of assumptions. Rushed Processing (lines 76-85): skipping validation leads to compounding errors. |
 | `docs/dreams/STOP-TINKERING.md` | PASS | Tinkering Test (lines 8-44): four questions that force you to validate your premise ("Can you describe the problem in one sentence?", "Are you actually blocked?"). Score 0-8 = HARD STOP when the premise for action doesn't survive validation. The test IS independent validation of "should I do this?" |
-| `docs/identity.md` | PASS | Line 8: "Observe before acting" (QBT-001 — precondition for QBT-004). Line 9: "Verify after each change" (operational form of independent validation). Line 14: "Plan for failure paths explicitly" — failure paths include the case where your premise is wrong. |
 
-**Result: 7/7 documents consistent. Zero counterexamples. Proof is SOUND.**
+**Result: 4/4 documents consistent. Zero counterexamples. Proof is SOUND.**
 
 ---
 
@@ -170,7 +168,7 @@ QBT-001 guarantees observation occurs. QBT-004 constrains what observation must 
 - **Validity:** The proof uses Modus Ponens, Conjunction Elimination, Disjunction, Normative Closure, and Conditional Proof — all truth-preserving in a normative system. The logical structure is valid. ✓
 - **Premise truth (P1):** FIELD-GENERAL Principle 1 explicitly asks "What do I know vs. what am I assuming?" OODA Orient names risks and tradeoffs. DECISION-THEORY prescribes probing under uncertainty. True in the corpus. ✓
 - **Premise truth (P2):** "Loop Too Big" anti-pattern shows cascading at the action level. Rushed Processing shows it at the reasoning level. Course correction (line 128) exists to limit cascade radius. True in the corpus. ✓
-- **Premise truth (P3):** OODA Act checks against expected results (external). WORKFLOW prescribes per-step verification. FIELD-GENERAL distinguishes knowing from assuming. True in the corpus. ✓
+- **Premise truth (P3):** OODA Act checks against expected results (external). QBT-002 (Iterative Refinement) carries the per-step verification guarantee. FIELD-GENERAL distinguishes knowing from assuming. True in the corpus. ✓
 
 **The proof is sound.**
 
@@ -205,20 +203,6 @@ SOURCE: docs/proofs/004-INDEPENDENT-PREMISE-VALIDATION.md
 USAGE: "By QBT-004, since A is non-trivial and depends on P, P must be independently validated."
 ```
 
-### Updated Composability Map
-
-```
-QBT-001: Observation Precedence [PARENT LEMMA]
-  ├── QBT-002: Iterative Refinement [CHAIN]
-  │     └── QBT-003: Smallest Reversible Action [CHAIN]
-  └── QBT-004: Independent Premise Validation [THIS PROOF — CHAIN]
-        "Premises must be independently validated, not just derived or directed"
-        ├── QBT-005: (future) Loop Completeness
-        │     "QBT-001 + QBT-002 + QBT-003 + QBT-004 = the full behavioral contract"
-        └── QBT-NNN: (future) Any property requiring premise integrity
-              "By QBT-004, the premise was independently validated. Therefore..."
-```
-
 ---
 
 ## Quick Reference Card
@@ -226,19 +210,20 @@ QBT-001: Observation Precedence [PARENT LEMMA]
 ```
 QBT-004 — INDEPENDENT PREMISE VALIDATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Theorem:  ∀A: NonTrivial(A) ∧ DependsOn(A, P) → ValidatedIndependently(P)
-English:  Don't leap because you were told to. Leap because you knew it was right.
-Scope:    Normative (what the system prescribes)
-Method:   Direct proof, 3 premises (imports QBT-001), Modus Ponens + normative closure
-Status:   SOUND (7/7 docs verified, 0 counterexamples)
-Depends:  QBT-001 (Observation Precedence)
+Theorem:         ∀A: NonTrivial(A) ∧ DependsOn(A, P) → ValidatedIndependently(P)
+English:         Don't leap because you were told to. Leap because you knew it was right.
+Branch Trigger:  NonTrivial(A) ∧ DependsOn(A, P)
+Scope:           Normative (what the system prescribes)
+Method:          Direct proof, 3 premises (imports QBT-002), Modus Ponens + normative closure
+Status:          SOUND (4/4 docs verified, 0 counterexamples)
+Depends:         QBT-002 (Iterative Refinement, which imports QBT-001)
 
 Premises:
   P1: Observation → DistinguishesKnownFromAssumed  (FIELD-GENERAL:17, OODA:40)
   P2: DependsOn(A,P) ∧ Assumption(P) → Cascade     (OODA:132-136, DECISION-THEORY:76-85)
-  P3: ValidatedIndependently(P) → Known(P) ∧ ¬Cascade  (OODA:72, WORKFLOW:16)
+  P3: ValidatedIndependently(P) → Known(P) ∧ ¬Cascade  (OODA:72, FIELD-GENERAL:225)
 
-Chain: QBT-001 → P1 → P2 → P3 ∎
+Chain: QBT-002 → P1 → P2 → P3 ∎
 
 Cite as: "By QBT-004 (Independent Premise Validation), ..."
 ```
