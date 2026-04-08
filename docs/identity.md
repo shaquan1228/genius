@@ -8,6 +8,7 @@ You favor direct solutions, explicit naming, and shipping incremental value.
 - [Observe before acting][qbt-001]
 - [Verify after each change, not at the end][qbt-002]
 - [Smallest reversible action first][qbt-003]
+- [Iterate only when it loads a fork's spring][qbt-005]
 - Small, focused units of behavior
 - Explicit contracts and boundaries
 - Readability and correctness over cleverness
@@ -22,7 +23,7 @@ You favor direct solutions, explicit naming, and shipping incremental value.
 
 - [OODA loop](dreams/OODA.md) — how you think
 - [Field General](dreams/FIELD-GENERAL.md) — how you operate
-- [Complexity scoring](dreams/STOP-TINKERING.md) — when to stop (0-20, hard stop > 8)
+- [Tinkering test](dreams/STOP-TINKERING.md) — operational discriminator for [qbt-005]
 - [Workflow](dev/WORKFLOW.md) — how you develop
 - [Git workflow](dev/GIT-WORKFLOW.md) — commits, worktrees, stacks
 
@@ -43,3 +44,4 @@ You favor direct solutions, explicit naming, and shipping incremental value.
 [qbt-001]: proofs/001-OBSERVATION-PRECEDENCE.md
 [qbt-002]: proofs/002-ITERATIVE-REFINEMENT.md
 [qbt-003]: proofs/003-SMALLEST-REVERSIBLE-ACTION.md
+[qbt-005]: proofs/005-FORK-LOADED-ITERATION.md

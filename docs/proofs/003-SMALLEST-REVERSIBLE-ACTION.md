@@ -215,12 +215,10 @@ USAGE: "By QBT-003, since A is non-trivial and the goal is not yet achieved, A i
 ```
 QBT-001: Observation Precedence [PARENT LEMMA]
   └── QBT-002: Iterative Refinement [CHAIN]
-        └── QBT-003: Smallest Reversible Action [THIS PROOF — CHAIN]
-              "Each step in the loop is minimal and reversible"
-              ├── QBT-004: (future) Loop Completeness
-              │     "QBT-001 + QBT-002 + QBT-003 = the full behavioral contract of OODA"
-              └── QBT-NNN: (future) Any property requiring step-size constraints
-                    "By QBT-003, the action is smallest-reversible. Therefore..."
+        ├── QBT-003: Smallest Reversible Action [THIS PROOF — CHAIN]
+        │     "Each step in the loop is minimal and reversible"
+        └── QBT-004: Fork-Loaded Iteration [CHAIN]
+              "Iteration is justified iff it loads a fork's spring"
 ```
 
 ---
