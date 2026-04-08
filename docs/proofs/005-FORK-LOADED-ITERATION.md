@@ -1,7 +1,9 @@
-# Proof 004: Fork-Loaded Iteration
+# Proof 005: Fork-Loaded Iteration
 
-**Theorem ID:** QBT-004
-**Type:** Chain Proof (depends on QBT-002)
+**Theorem ID:** QBT-005
+**Type:** Branch Proof
+**Branches From:** QBT-002
+**Branch Trigger:** Iteration(I)
 **Status:** Proven
 **Date:** 2026-04-08
 **Method:** Direct proof via Modus Ponens chain with biconditional introduction
@@ -20,7 +22,7 @@ In the quanbot system, iteration within a stable form is justified if and only i
 ∀I: Iteration(I) → (Justified(I) ↔ LoadsFork(I))
 ```
 
-**Why it matters:** QBT-001/002/003 prove the *mechanics* of the OODA loop (observe, iterate, smallest reversible step). QBT-004 proves the *gating question one level above*: when should iteration be running at all? It is the discriminator that separates preparation from tinkering.
+**Why it matters:** QBT-001/002/003 prove the *mechanics* of the OODA loop (observe, iterate, smallest reversible step). QBT-005 proves the *gating question one level above*: when should iteration be running at all? It is the discriminator that separates preparation from tinkering.
 
 ---
 
@@ -32,7 +34,7 @@ In the quanbot system, iteration within a stable form is justified if and only i
 | DwellState(I) | The interval in which I occurs — a stable form between two forks | `docs/dreams/EVOLUTION.md` line 25: "the dwell time is where the latent potential gets accumulated" |
 | Fork | A discrete branching event — the moment a lineage, form, project, or commit boundary changes shape | `docs/dreams/EVOLUTION.md` line 9: "saltative branching"; line 23: "the moment a lineage forks off something new" |
 | LoadsFork(I) | I accumulates substrate, capability, or insight that a future fork will release | `docs/dreams/EVOLUTION.md` line 25: "The dwell time loads the spring. The fork releases what the dwell time prepared." |
-| Justified(I) | I is normatively prescribed — the system says to do it | `docs/dreams/STOP-TINKERING.md` line 44 (scoring 15-20: Proceed); `docs/dev/WORKFLOW.md` line 17: "Highlight tradeoffs and any deferred work" |
+| Justified(I) | I is normatively prescribed — the system says to do it | `docs/dreams/STOP-TINKERING.md` line 44 (scoring 15-20: Proceed) |
 | Tinkering(I) | Iteration that is not justified — iteration without a clear problem, blocking concern, or reduction in cognitive load | `docs/dreams/STOP-TINKERING.md` lines 7-44 (the Tinkering Test) |
 
 **Scope boundary:** Same as QBT-001 — only rendered markdown content. HTML comments excluded.
@@ -49,7 +51,7 @@ STATEMENT: ∀A: NonTrivial(A) ∧ ¬GoalAchieved → FollowedByObservation(A)
 SOURCE: docs/proofs/002-ITERATIVE-REFINEMENT.md
 ```
 
-QBT-002 establishes that non-trivial actions iterate within an active loop — that is the formal scaffolding for "iteration." QBT-004 picks up where QBT-002 leaves off and asks the next question: granted that iteration is happening, when is it warranted?
+QBT-002 establishes that non-trivial actions iterate within an active loop — that is the formal scaffolding for "iteration." QBT-005 picks up where QBT-002 leaves off and asks the next question: granted that iteration is happening, when is it warranted?
 
 ---
 
@@ -111,9 +113,7 @@ QBT-002 establishes that non-trivial actions iterate within an active loop — t
 | `docs/dreams/EVOLUTION.md` | 85 | "Name the dwell state. Then move." — the operating mantra: name the spring, then load it |
 | `docs/dreams/FIELD-GENERAL.md` | 177 | Principle 10: "Quality decisions beat sheer activity. Fewer, better moves dominate outcomes." — volume without target = unjustified |
 | `docs/dreams/DECISION-THEORY.md` | 103-113 | Failure mode 4 (Misapplied Force): "Effort without direction is waste" — names the structural shape of unjustified iteration |
-| `docs/identity.md` | 4 | "You favor direct solutions, explicit naming, and shipping incremental value" — incremental value IS substrate accumulation toward the next fork |
-
-**Semantic validation:** The system normatively partitions iteration into two cells and assigns opposite values to them. STOP-TINKERING explicitly forbids the Tinkering cell (HARD STOP). EVOLUTION explicitly endorses the Loading cell ("Build the parallel substrate during dwell time"). Field General Principle 10 names the underlying value (precision over volume). DECISION-THEORY's Misapplied Force failure mode names the violation. Identity.md grounds it in the everyday: incremental value = loaded spring. The biconditional is not a definition imposed by this proof — it is a synthesis of the partition the system has already drawn.
+**Semantic validation:** The system normatively partitions iteration into two cells and assigns opposite values to them. STOP-TINKERING explicitly forbids the Tinkering cell (HARD STOP). EVOLUTION explicitly endorses the Loading cell ("Build the parallel substrate during dwell time"). Field General Principle 10 names the underlying value (precision over volume). DECISION-THEORY's Misapplied Force failure mode names the violation. The biconditional is not a definition imposed by this proof — it is a synthesis of the partition the system has already drawn.
 
 ---
 
@@ -149,11 +149,7 @@ QBT-002 establishes that non-trivial actions iterate within an active loop — t
 | `docs/dreams/OODA.md` | PASS | OODA is the micro-loop inside dwell time. "Iterative by design" (line 16). Each loop iteration is a unit of spring loading IF it has a goal (line 60: "Does this move me toward my goal?"). The "No Iteration" anti-pattern (lines 144-148) confirms: running once is bad, but running endlessly without a goal is also bad — the goal IS the fork. |
 | `docs/dreams/FIELD-GENERAL.md` | PASS | Principle 10 (Precision Over Volume): "Fewer, better moves dominate outcomes." Mantra (line 197): "Wait. Watch. Understand. Then act with precision." Precision = loading, volume = tinkering. |
 | `docs/dreams/DECISION-THEORY.md` | PASS | Failure mode 4 (Misapplied Force, lines 103-113): "Effort without direction is waste." This is the operational signature of `Iteration(I) ∧ ¬LoadsFork(I)` — unjustified iteration. Probe-to-Commit Ratios (lines 39-53) are the ratio between exploratory loading (probe) and committing to a fork. |
-| `docs/dev/WORKFLOW.md` | PASS | "Highlight tradeoffs and any deferred work" (line 17): deferred work IS the spring being loaded. "Clarify the task in one sentence" (line 14): naming the dwell state in dev terms. |
-| `docs/dev/GIT-WORKFLOW.md` | PASS | "Prefer amend. New commit only when crossing a logical boundary" (line 14): amend = stay in dwell, new commit = mark a fork. The amend/commit decision IS the dwell/fork decision in version control. |
-| `docs/identity.md` | PASS | "Shipping incremental value" (line 4): every increment is substrate for the next form. "Small, focused units of behavior" (line 11): small loaded units are what dwell time produces. |
-
-**Result: 8/8 documents consistent. Zero counterexamples. Proof is SOUND.**
+**Result: 5/5 documents consistent. Zero counterexamples. Proof is SOUND.**
 
 ---
 
@@ -172,17 +168,17 @@ QBT-002 establishes that non-trivial actions iterate within an active loop — t
 
 > ### Why Iteration Needs a Fork in Mind
 >
-> QBT-001/002/003 proved how the OODA loop runs: observe first, observe again, take the smallest reversible step. QBT-004 proves the question one level up: **when should you be iterating at all?**
+> QBT-001/002/003 proved how the OODA loop runs: observe first, observe again, take the smallest reversible step. QBT-005 proves the question one level up: **when should you be iterating at all?**
 >
 > The answer comes from stacking two dreams against each other. EVOLUTION says change happens at forks, and the dwell time between forks is where the latent potential gets accumulated — "Iterate carefully and you load the spring; fork well and you release it. The claim is not that iteration is wasted. The claim is that iteration is preparation, and the event you are preparing for is a fork" (`docs/dreams/EVOLUTION.md`, line 25). STOP-TINKERING says iteration without a clear problem is forbidden — score 0-8 on the Tinkering Test = HARD STOP (`docs/dreams/STOP-TINKERING.md`, line 44).
 >
 > Read together, they draw the same line from opposite sides. EVOLUTION endorses iteration that loads a spring. STOP-TINKERING forbids iteration that doesn't. The biconditional follows: **iteration is justified if and only if it loads latent potential for a future fork.**
 >
-> Every other framework converges on this. Field General Principle 10: "Fewer, better moves dominate outcomes" (`docs/dreams/FIELD-GENERAL.md`, line 177). DECISION-THEORY's Misapplied Force failure mode: "Effort without direction is waste" (`docs/dreams/DECISION-THEORY.md`, lines 103-113). Identity: "shipping incremental value" (`docs/identity.md`, line 4) — every increment is substrate for the next form. Even the git workflow encodes it: amend stays in dwell, new commit marks a fork (`docs/dev/GIT-WORKFLOW.md`, line 14).
+> Every other framework converges on this. Field General Principle 10: "Fewer, better moves dominate outcomes" (`docs/dreams/FIELD-GENERAL.md`, line 177). DECISION-THEORY's Misapplied Force failure mode: "Effort without direction is waste" (`docs/dreams/DECISION-THEORY.md`, lines 103-113).
 >
 > The operational consequence: when you feel the urge to iterate, name the fork you are preparing for. If you can name it — keep going, you are loading the spring. If you cannot — stop. You are tinkering.
 >
-> Together, QBT-001 + QBT-002 + QBT-003 + QBT-004 form the complete contract: **observe, take the smallest reversible step, observe again, repeat — but only when the iteration loads a spring you can name.**
+> Together, QBT-001 + QBT-002 + QBT-003 + QBT-005 form the complete contract: **observe, take the smallest reversible step, observe again, repeat — but only when the iteration loads a spring you can name.**
 
 ---
 
@@ -191,25 +187,10 @@ QBT-002 establishes that non-trivial actions iterate within an active loop — t
 Future proofs can import this result:
 
 ```
-IMPORT: QBT-004 (Fork-Loaded Iteration)
+IMPORT: QBT-005 (Fork-Loaded Iteration)
 STATEMENT: ∀I: Iteration(I) → (Justified(I) ↔ LoadsFork(I))
-SOURCE: docs/proofs/004-FORK-LOADED-ITERATION.md
-USAGE: "By QBT-004, since I is iteration, I is justified iff it loads a fork's spring."
-```
-
-### Updated Composability Map
-
-```
-QBT-001: Observation Precedence [PARENT LEMMA]
-  └── QBT-002: Iterative Refinement [CHAIN]
-        ├── QBT-003: Smallest Reversible Action [CHAIN]
-        │     "Each step in the loop is minimal and reversible"
-        └── QBT-004: Fork-Loaded Iteration [THIS PROOF — CHAIN]
-              "Iteration is justified iff it loads a fork's spring"
-              ├── QBT-NNN: (future) Tinkering Discriminator
-              │     "By QBT-004, the contrapositive: ¬LoadsFork → ¬Justified"
-              └── QBT-NNN: (future) Any property requiring iteration-vs-tinkering distinction
-                    "By QBT-004, the iteration loads a spring. Therefore..."
+SOURCE: docs/proofs/005-FORK-LOADED-ITERATION.md
+USAGE: "By QBT-005, since I is iteration, I is justified iff it loads a fork's spring."
 ```
 
 ---
@@ -217,25 +198,27 @@ QBT-001: Observation Precedence [PARENT LEMMA]
 ## Quick Reference Card
 
 ```
-QBT-004 — FORK-LOADED ITERATION
+QBT-005 — FORK-LOADED ITERATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Theorem:  ∀I: Iteration(I) → (Justified(I) ↔ LoadsFork(I))
-English:  Iteration is justified iff it loads latent potential for a future fork.
-Scope:    Normative (what the system prescribes)
-Method:   Direct proof, 3 premises (imports QBT-002), Modus Ponens chain
-Status:   SOUND (8/8 docs verified, 0 counterexamples)
-Depends:  QBT-002 (Iterative Refinement)
+Theorem:        ∀I: Iteration(I) → (Justified(I) ↔ LoadsFork(I))
+English:        Iteration is justified iff it loads latent potential for a future fork.
+Scope:          Normative (what the system prescribes)
+Method:         Direct proof, 3 premises (imports QBT-002), Modus Ponens chain
+Status:         SOUND (5/5 docs verified, 0 counterexamples)
+Depends:        QBT-002 (Iterative Refinement)
+Branches From:  QBT-002
+Branch Trigger: Iteration(I)
 
 Premises:
   P1: Iteration → DwellState                     (EVOLUTION.md:23, 25, 53)
   P2: DwellState → (LoadsFork ∨ Tinkering)       (EVOLUTION.md:25; STOP-TINKERING.md:7-44)
   P3: DwellState → (Justified ↔ LoadsFork)       (STOP-TINKERING.md:42, 44; EVOLUTION.md:67-85)
 
-Chain: QBT-002 → P1 → P2 → P3 ∎
+Branch: QBT-002 ⟶ [Iteration(I)] ⟶ QBT-005 ∎
 
 Operational rule: Name the fork you are preparing for.
                   If you can name it, you are loading.
                   If you cannot, you are tinkering.
 
-Cite as: "By QBT-004 (Fork-Loaded Iteration), ..."
+Cite as: "By QBT-005 (Fork-Loaded Iteration), ..."
 ```

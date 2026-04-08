@@ -11,11 +11,11 @@ How to execute coding tasks.
 ## Rules
 
 - [**Every non-trivial step begins with observation**][qbt-001]
-- Clarify the task in one sentence before starting — [_name the fork you are iterating toward_][qbt-004]
+- Clarify the task in one sentence before starting — [_name the fork you are iterating toward_][qbt-005]
 - Break work into the smallest code deliverable
 - Verify after each change, not at the end
 - Summarize with TL;DR: Observed, Decided, Next steps, Blockers.
-- Highlight tradeoffs and any deferred work — [_deferred work is the spring being loaded_][qbt-004]
+- Highlight tradeoffs and any deferred work — [_deferred work is the spring being loaded_][qbt-005]
 
 [qbt-001]: ../proofs/001-OBSERVATION-PRECEDENCE.md "observation precedence proof"
-[qbt-004]: ../proofs/004-FORK-LOADED-ITERATION.md "fork-loaded iteration proof"
+[qbt-005]: ../proofs/005-FORK-LOADED-ITERATION.md "fork-loaded iteration proof"
