@@ -8,9 +8,7 @@ Research on semi-formal structured reasoning ([arxiv 2603.01896](https://arxiv.o
 
 **Observed in practice:**
 
-<!-- INSERT: describe what raw Claude did on your vague prompt (no identity) -->
-<!-- INSERT: describe what genius-injected Claude did on the same prompt -->
-<!-- INSERT: screenshots if available -->
+Same model, same repo, same one-line prompt, bypass permissions, both left to run unattended. Without identity: Claude read the repo plainly, picked up a `tutorial-commit` instruction from a CLAUDE.md file, and executed it without questioning whether that was the right move. With identity: Claude stayed in step 2 deliberating while no-identity was already on step 5, ran independent validation before moving forward, and didn't trust its own intermediate outputs. Result: 34 min / ~$13 / ~100 fewer lines of code vs 13 min / ~$8 / more code with things to address.
 
 ## How it works
 
