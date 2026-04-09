@@ -17,9 +17,8 @@ Same model, same repo, same one-line prompt, bypass permissions, both left to ru
 ## Quickstart
 
 1. Clone: `git clone git@github.com:shaquan1228/genius.git`
-2. Run `bin/setup` from within the cloned repo
-3. Open a new shell after setup completes
-4. For Cursor: paste the printed snippet into **Cursor > Settings > Rules for AI**
+2. Run `bin/setup --no-profile` from within the cloned repo — this wires up Claude Code and Cursor without touching your shell config
+3. For Cursor: paste the printed snippet into **Cursor > Settings > Rules for AI**
 
 ## Commands
 
