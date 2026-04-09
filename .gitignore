@@ -18,3 +18,4 @@ dashboard/dashboard-go
 # Environment
 .env
 .env.*
+.claude/settings.local.json

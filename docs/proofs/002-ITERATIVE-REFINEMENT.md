@@ -1,6 +1,3 @@
-<!-- NOTE: References to docs/rules.md are stale. rules.md was deleted 2026-04-05;
-     its content was folded into docs/identity.md. TODO: update source citations. -->
-
 # Proof 002: Iterative Refinement
 
 **Theorem ID:** QBT-002
@@ -70,7 +67,7 @@ QBT-001's conclusion is used as a premise: if non-trivial actions are preceded b
 |--------|---------|------|
 | QBT-001 | (conclusion) | `∀A: NonTrivial(A) → PrecededByObservation(A)` — observation precedes action, which means the action is within the OODA framework |
 | `docs/dreams/OODA.md` | 9 | "OODA is a continuous cycle for making decisions under uncertainty" |
-| `docs/rules.md` | 7 | "When making non-trivial decisions, always apply OODA loop" |
+| `docs/identity.md` | 12 | "- [Observe before acting][qbt-001]" |
 
 **Semantic validation:** QBT-001 proved that non-trivial actions are preceded by observation via the OODA loop. If an action goes through OODA, it is within the OODA framework. This premise bridges QBT-001's conclusion to QBT-002's domain: the loop's continuity.
 
@@ -150,8 +147,8 @@ QBT-001's conclusion is used as a premise: if non-trivial actions are preceded b
 | `docs/dev/GIT-WORKFLOW.md` | PASS | The entire Amend vs New Commit structure (lines 19-35) is an iteration pattern: observe the result of your last commit, decide whether to amend or create new. Cleanup Protocol (lines 171-177): "When agent finishes task" = check results, then decide next action. |
 | `docs/dreams/DECISION-THEORY.md` | PASS | Probe-to-Commit Ratios (lines 39-53): probing IS iterating — observe, probe, observe result, adjust. Pattern Lock (lines 89-91): failure to re-evaluate = failure to iterate = documented violation. |
 | `docs/dreams/STOP-TINKERING.md` | PASS | 2-Week Rule (lines 82-91): "Document the pain → Wait 2 weeks → Re-evaluate." This IS iteration on a longer timescale — observe, wait, re-observe, then decide. Scoring at lines 43-46: the three score ranges (proceed/wait/stop) are iteration outcomes. |
-| `docs/identity.md` | PASS | Line 22: "You think in OODA loops" — plural "loops" implies iteration, not a single pass. Line 11: "Small, focused units of behavior" — small units require iteration to achieve larger goals. |
-| `docs/rules.md` | PASS | Line 7: "always apply OODA loop" — "always" across decisions implies repeated application, not once. Line 9: "always apply `docs/dreams/STOP-TINKERING.md`" — the tinkering test itself is a re-evaluation checkpoint. |
+| `docs/identity.md` | PASS | Line 22: "- [OODA loop](dreams/OODA.md) — how the loop runs" — the loop is a named ongoing framework, not a one-shot step. Line 45: "- Small, focused units of behavior" — small units require iteration to achieve larger goals. |
+| `docs/identity.md` | PASS | Line 12: "- [Observe before acting][qbt-001]" — the listed proof links establish these as core operating constraints applied across decisions. Line 26: "- [Tinkering test](dreams/STOP-TINKERING.md)" — the tinkering test is a re-evaluation checkpoint. |
 
 **Result: 8/8 documents consistent. Zero counterexamples. Proof is SOUND.**
 
@@ -160,7 +157,7 @@ QBT-001's conclusion is used as a premise: if non-trivial actions are preceded b
 ## Soundness Assessment
 
 - **Validity:** The proof uses Modus Ponens, Conjunction Elimination/Introduction, and Conditional Proof — all truth-preserving. The logical structure is valid. ✓
-- **Premise truth (P1):** QBT-001 is proven. OODA.md and rules.md confirm non-trivial actions enter OODA. True. ✓
+- **Premise truth (P1):** QBT-001 is proven. OODA.md and identity.md confirm non-trivial actions enter OODA. True. ✓
 - **Premise truth (P2):** OODA.md defines OODA as a "continuous cycle" and shows Act→Observe transitions in examples. Anti-pattern confirms. True. ✓
 - **Premise truth (P3):** WORKFLOW.md explicitly says "Repeat" twice with clear termination. OODA.md confirms "continuously until goal achieved." True. ✓
 

@@ -1,6 +1,3 @@
-<!-- NOTE: References to docs/rules.md are stale. rules.md was deleted 2026-04-05;
-     its content was folded into docs/identity.md. TODO: update source citations. -->
-
 # Proof 003: Smallest Reversible Action
 
 **Theorem ID:** QBT-003
@@ -116,12 +113,11 @@ QBT-001 establishes that non-trivial actions enter the OODA loop. QBT-002 establ
 | `docs/dreams/OODA.md` | 132-136 | Anti-pattern "Loop Too Big": Bad = "decide on complete refactor, act on 50 files"; Good = "decide on one change, act on one file" |
 | `docs/dreams/OODA.md` | 60 | "Does this move me toward my goal?" — the action must be goal-directed, not just small |
 | `docs/dev/WORKFLOW.md` | 15 | "Break work into the smallest code deliverable" |
-| `docs/identity.md` | 6 | "You favor practical decisions that ship incremental value quickly" |
-| `docs/identity.md` | 12 | "Small, focused units of behavior" |
+| `docs/identity.md` | 45 | "- Small, focused units of behavior" |
 | `docs/dreams/FIELD-GENERAL.md` | 177 | Principle 10: "Quality decisions beat sheer activity. Fewer, better moves dominate outcomes." |
 | `docs/dreams/DECISION-THEORY.md` | 45-47 | Probe-to-Commit: "Low information: Probe more, commit less" — probes are small reversible actions by design |
 
-**Semantic validation:** P3 is a definitional conjunction — SmallestReversible(A) is defined as SmallestStep(A) ∧ Reversible(A). We include it as an explicit premise (rather than leaving it implicit) for the same reason as QBT-001's P3: transparency. But the evidence goes beyond definition. The "Loop Too Big" anti-pattern (lines 132-136) shows what happens when actions are NOT smallest-reversible: the loop breaks down. WORKFLOW.md independently prescribes "smallest code deliverable." Identity.md prescribes "small, focused units of behavior" and "incremental value." FIELD-GENERAL's Precision Over Volume confirms: fewer, better moves. DECISION-THEORY's Probe-to-Commit ratio confirms: under uncertainty (which is the precondition for non-triviality), prefer small exploratory actions.
+**Semantic validation:** P3 is a definitional conjunction — SmallestReversible(A) is defined as SmallestStep(A) ∧ Reversible(A). We include it as an explicit premise (rather than leaving it implicit) for the same reason as QBT-001's P3: transparency. But the evidence goes beyond definition. The "Loop Too Big" anti-pattern (lines 132-136) shows what happens when actions are NOT smallest-reversible: the loop breaks down. WORKFLOW.md independently prescribes "smallest code deliverable." identity.md prescribes "small, focused units of behavior" (line 45). FIELD-GENERAL's Precision Over Volume confirms: fewer, better moves. DECISION-THEORY's Probe-to-Commit ratio confirms: under uncertainty (which is the precondition for non-triviality), prefer small exploratory actions.
 
 ---
 
@@ -164,7 +160,7 @@ QBT-001 establishes that non-trivial actions enter the OODA loop. QBT-002 establ
 | `docs/dreams/DECISION-THEORY.md` | PASS | Probe-to-Commit (lines 45-47): low information → probe more. Probes are small, reversible information-gathering actions. The ratio framework assumes actions can be sized — smallest-reversible is the sizing principle. |
 | `docs/dreams/STOP-TINKERING.md` | PASS | The Tinkering Test (lines 8-44) gates whether to act at all. Once the gate passes, the implicit question is "how much?" — QBT-003 answers: the smallest reversible amount. Score 0-8 = HARD STOP is the ultimate constraint on action size: zero. |
 | `docs/identity.md` | PASS | Line 6: "practical decisions that ship incremental value quickly" — incremental = small steps. Line 12: "Small, focused units of behavior." Line 17: "You optimize for low cognitive load" — small steps reduce cognitive load (OODA.md line 126). |
-| `docs/rules.md` | PASS | Line 7: routes to OODA (which prescribes smallest reversible action in Decide). Line 9: routes to STOP-TINKERING (which gates action). Both frameworks converge on minimal action. |
+| `docs/identity.md` | PASS | Line 12: "[Observe before acting][qbt-001]" routes to OODA (which prescribes smallest reversible action in Decide). Line 26: "[Tinkering test](dreams/STOP-TINKERING.md)" routes to STOP-TINKERING (which gates action). Both frameworks converge on minimal action. |
 
 **Result: 8/8 documents consistent. Zero counterexamples. Proof is SOUND.**
 

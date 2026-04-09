@@ -1,21 +1,52 @@
 # genius
 
-Portable dev toolkit. Bootstraps a new machine and injects engineering context into Claude Code and Cursor.
+Injects a structured engineering identity into Claude Code and Cursor — same reasoning instincts, every session, without re-prompting.
+
+## Why
+
+Without identity: Claude reads what's in front of it and executes the path of least resistance. With identity: it observes before acting, validates assumptions, and flags irreversible moves first.
+
+**Tested:** same model, same repo, same one-line prompt, bypass permissions, both unattended.
+
+| | no identity | genius |
+|---|---|---|
+| Time | ~13 min | ~34 min |
+| Cost | ~$8 | ~$13 |
+| Lines of code | more | ~100 fewer |
+| Behavior | read repo, executed a stale CLAUDE.md instruction | deliberated, stayed in step 2 while no-identity was on step 5, ran independent validation |
+
+Backed by research: semi-formal structured reasoning outperforms standard prompting by 8–11pp on code tasks ([arxiv 2603.01896](https://arxiv.org/html/2603.01896v1)).
 
 ## Quickstart
 
-1. Clone: `git clone git@github.com:your-handle/genius.git`
-2. Run `bin/setup` within your cloned repo.
-3. Set your git email (not tracked) `git config --global user.email "you@example.com"`
-4. For global Cursor context, paste the printed snippet into **Cursor > Settings > Rules for AI** from within your cloned repo: `echo "@$(pwd)/docs/identity.md" | pbcopy`
-5. Open a new shell after setup completes.
+```sh
+git clone git@github.com:shaquan1228/genius.git
+cd genius
+bin/setup --no-profile  # wires Claude Code + Cursor, leaves shell config alone
+```
+
+For Cursor: paste the printed snippet into **Cursor > Settings > Rules for AI**.
 
 ## Commands
 
-| Command                    | Description                                                                |
-| -------------------------- | -------------------------------------------------------------------------- |
-| `setup`                | Bootstrap machine: install deps, symlink dotfiles, configure Claude/Cursor |
-| `worktree <branch> [base]` | Create or checkout git worktree (smart naming, composable flags)           |
-| `worktree-cleanup`         | Remove old temporal worktrees                                              |
-| `dashboard`                | Show over-tinkering monitor and system status                              |
-| `teardown`             | Safely remove genius configuration                                        |
+| Command | Description |
+| ------- | ----------- |
+| `setup [--no-profile]` | Bootstrap machine: install deps, configure Claude/Cursor |
+| `worktree <branch> [base]` | Create or checkout git worktree (smart naming) |
+| `worktree-cleanup` | Remove old temporal worktrees |
+| `dashboard` | System status TUI |
+| `teardown` | Safely remove genius configuration |
+
+## How it works
+
+`bin/setup` writes `~/.claude/CLAUDE.md` — loaded by Claude Code on every session — pointing to `docs/identity.md`: a proof system that defines how the model should observe, decide, and act. Cursor gets the same via `.cursor/rules/`. No plugins, no API wrappers.
+
+## Framework
+
+Five proofs compose into a decision framework. See [`docs/identity.md`](docs/identity.md) and [`docs/proofs/`](docs/proofs/).
+
+## Extras
+
+`bin/` includes worktree management built on Graphite, a tmux workspace initializer, and `compress-memory` for summarizing Claude's memory files. Optional — the core value is the identity injection.
+
+`dashboard/` is a Go TUI that was the first thing built. Potentially overtinkered. Treat as experimental.
