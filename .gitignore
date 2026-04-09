@@ -1,1 +1,21 @@
+# macOS
+.DS_Store
+
+# Go
+bin/dashboard-go
+dashboard/dashboard-go
+
+# Logs
+*.log
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.*
 .claude/settings.local.json
