@@ -38,7 +38,7 @@ func LoadConfig() Config {
 		return defaultConfig()
 	}
 
-	data, err := os.ReadFile(filepath.Join(home, ".quanbot", "dashboard.json"))
+	data, err := os.ReadFile(filepath.Join(home, ".genius", "dashboard.json"))
 	if err != nil {
 		return defaultConfig()
 	}

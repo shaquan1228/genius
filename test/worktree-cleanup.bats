@@ -34,9 +34,9 @@ BIN="$BATS_TEST_DIRNAME/../bin/worktree-cleanup"
   rm -rf "$TEST_REPO"
 }
 
-@test "respects QUANBOT_WORKTREE_DIR env var" {
+@test "respects GENIUS_WORKTREE_DIR env var" {
   LIB="$BATS_TEST_DIRNAME/../bin/lib/worktree-common.sh"
-  run grep 'QUANBOT_WORKTREE_DIR' "$LIB"
+  run grep 'GENIUS_WORKTREE_DIR' "$LIB"
   [ "$status" -eq 0 ]
 }
 

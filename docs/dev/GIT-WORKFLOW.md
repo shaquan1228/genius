@@ -6,7 +6,7 @@ Git operations, commit guidelines, worktrees, and stack management.
 
 - [graphite][graphite-cli-docs]
 - [git][git-cli-docs]
-- [scripts in `bin/` related to worktrees][quanbot-bin]
+- [scripts in `bin/` related to worktrees][genius-bin]
 
 ## Rules
 
@@ -22,6 +22,6 @@ Git operations, commit guidelines, worktrees, and stack management.
 
 [graphite-cli-docs]: https://graphite.com/docs/command-reference "graphite cli reference"
 [git-cli-docs]: https://git-scm.com/docs/git#_git_commands "git cli reference"
-[quanbot-bin]: ../../bin/ "quanbot bin scripts folder"
+[genius-bin]: ../../bin/ genius bootstrap bin scripts folder"
 [qbt-001]: ../proofs/001-OBSERVATION-PRECEDENCE.md "observation precedence proof"
 [qbt-005]: ../proofs/005-FORK-LOADED-ITERATION.md "fork-loaded iteration proof"

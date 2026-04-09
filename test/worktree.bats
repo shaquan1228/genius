@@ -64,12 +64,12 @@ teardown() {
   [[ "$output" == *"already exists"* ]]
 }
 
-@test "logs operations to ~/.quanbot/worktree.log" {
+@test "logs operations to ~/.genius/worktree.log" {
   run "$BIN" logged-branch
 
   [ "$status" -eq 0 ]
-  [ -f "$TEST_REPO/.quanbot/worktree.log" ]
-  grep -q "CREATE: logged-branch" "$TEST_REPO/.quanbot/worktree.log"
+  [ -f "$TEST_REPO/.genius/worktree.log" ]
+  grep -q "CREATE: logged-branch" "$TEST_REPO/.genius/worktree.log"
 }
 
 @test "creates worktree from a specific base branch" {
@@ -83,9 +83,9 @@ teardown() {
   [[ "$output" == *"Worktree ready"* ]]
 }
 
-@test "respects QUANBOT_WORKTREE_DIR env var" {
+@test "respects GENIUS_WORKTREE_DIR env var" {
   LIB="$BATS_TEST_DIRNAME/../bin/lib/worktree-common.sh"
-  run grep 'QUANBOT_WORKTREE_DIR' "$LIB"
+  run grep 'GENIUS_WORKTREE_DIR' "$LIB"
   [ "$status" -eq 0 ]
 }
 
@@ -97,7 +97,7 @@ teardown() {
 
 @test "worktrees go to sibling of repo, not ~/Desktop" {
   CUSTOM_BASE="$(mktemp -d)"
-  QUANBOT_WORKTREE_DIR="$CUSTOM_BASE" run "$BIN" override-branch
+  GENIUS_WORKTREE_DIR="$CUSTOM_BASE" run "$BIN" override-branch
 
   [ "$status" -eq 0 ]
   [ -d "$CUSTOM_BASE/$(basename "$TEST_REPO")-worktrees/override-branch" ]

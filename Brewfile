@@ -1,4 +1,4 @@
-# Brewfile — quanbot bootstrap
+# Brewfile — genius bootstrap
 # Install with: brew bundle
 # Re-run safely (idempotent): brew bundle --no-upgrade
 

@@ -3,9 +3,9 @@ package sections
 import (
 	"time"
 
-	"github.com/me/quanbot-dashboard/sections/components"
-	"github.com/me/quanbot-dashboard/sections/internal" // TODO: diamond dependency (sections → internal + components → internal), resolve later
-	"github.com/me/quanbot-dashboard/util"
+	"github.com/me/genius-dashboard/sections/components"
+	"github.com/me/genius-dashboard/sections/internal" // TODO: diamond dependency (sections → internal + components → internal), resolve later
+	"github.com/me/genius-dashboard/util"
 )
 
 // SectionRunner is what the consumer sees — uniform across all section types.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bin/teardown — safely remove quanbot setup from machine
+# bin/teardown — safely remove genius setup from machine
 #
 # Usage:
 #   bin/teardown [--dry-run] [--confirm]
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LOG_FILE="$HOME/.quanbot/teardown.log"
+LOG_FILE="$HOME/.genius/teardown.log"
 DRY_RUN=true
 
 for arg in "$@"; do
@@ -113,7 +113,7 @@ if $DRY_RUN; then
 else
   echo "╔════════════════════════════════════════════════════════════════╗"
   echo "║                    TEARDOWN CONFIRMED                          ║"
-  echo "║  This will remove quanbot configuration from your system.     ║"
+  echo "║  This will remove genius configuration from your system.     ║"
   echo "╚════════════════════════════════════════════════════════════════╝"
   log "TEARDOWN: Started with --confirm"
 fi
@@ -125,7 +125,7 @@ remove_symlink "$HOME/.tmux.conf" "tmux.conf"
 remove_symlink "$HOME/.claude/settings.local.json" "claude-settings"
 
 section "iTerm2 Profile"
-remove_symlink "$HOME/Library/Application Support/iTerm2/DynamicProfiles/quanbot.json" "iTerm2 profile"
+remove_symlink "$HOME/Library/Application Support/iTerm2/DynamicProfiles/genius.json" "iTerm2 profile"
 
 section "Claude Code"
 remove_file "$HOME/.claude/CLAUDE.md" "Claude context"
@@ -138,14 +138,14 @@ for cmd in "$ROOT_DIR/commands/"*.md; do
 done
 
 section "Cursor Rules"
-remove_file "$ROOT_DIR/.cursor/rules/quanbot.mdc" "Cursor rules"
+remove_file "$ROOT_DIR/.cursor/rules/genius.mdc" "Cursor rules"
 
 section "Shell Hooks"
 ZSHRC_HOOK='[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local'
 remove_line_from_file "$HOME/.zshrc" "$ZSHRC_HOOK" "zshrc.local hook"
 
 section "Shortcuts Reference"
-remove_file "$HOME/.quanbot/shortcuts.md" "shortcuts reference"
+remove_file "$HOME/.genius/shortcuts.md" "shortcuts reference"
 
 echo ""
 echo "────────────────────────────────────────────────────────────────"
@@ -162,7 +162,7 @@ else
   echo ""
   echo "Preserved:"
   echo "  • Backup files (*.bak)"
-  echo "  • Logs (~/.quanbot/*.log)"
+  echo "  • Logs (~/.genius/*.log)"
   echo "  • Homebrew packages (run 'brew uninstall tmux graphite' manually if needed)"
   echo ""
   echo "Logs saved to: $LOG_FILE"

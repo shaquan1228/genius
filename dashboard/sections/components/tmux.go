@@ -3,7 +3,7 @@ package components
 import (
 	"strings"
 
-	"github.com/me/quanbot-dashboard/sections/internal"
+	"github.com/me/genius-dashboard/sections/internal"
 )
 
 type TmuxData struct {

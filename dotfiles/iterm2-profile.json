@@ -1,8 +1,8 @@
 {
   "Profiles": [
     {
-      "Name": "quanbot",
-      "Guid": "quanbot-dev-profile",
+      "Name": "genius",
+      "Guid": "genius-dev-profile",
       "Rewritable": false,
       "Use Separate Colors for Light and Dark Mode": false,
 

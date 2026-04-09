@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/me/quanbot-dashboard/sections/internal"
+	"github.com/me/genius-dashboard/sections/internal"
 )
 
 type LogEntry struct {
@@ -48,7 +48,7 @@ var Logs = LogsSection{
 		home, _ := os.UserHomeDir()
 		var entries []LogEntry
 		for _, name := range []string{"setup.log", "worktree.log"} {
-			if lines := tailFile(filepath.Join(home, ".quanbot", name), 3); len(lines) > 0 {
+			if lines := tailFile(filepath.Join(home, ".genius", name), 3); len(lines) > 0 {
 				entries = append(entries, LogEntry{Name: name, Lines: lines})
 			}
 		}

@@ -41,7 +41,7 @@ func RenderSection(title, health string, rows []string) {
 func Render(cfg Config, sectionFns []func()) {
 	ClearScreen()
 
-	HeavyBar("QUANBOT  ·  " + cfg.Machine + "  ·  " + time.Now().Format("15:04:05"))
+	HeavyBar("GENIUS  ·  " + cfg.Machine + "  ·  " + time.Now().Format("15:04:05"))
 	fmt.Println()
 
 	for i, fn := range sectionFns {

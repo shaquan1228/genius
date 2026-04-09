@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Tests for bin/setup — bootstrap quanbot on a new machine
+# Tests for bin/setup — bootstrap genius on a new machine
 
 BIN="$BATS_TEST_DIRNAME/../bin/setup"
 

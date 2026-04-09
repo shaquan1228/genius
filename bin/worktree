@@ -12,7 +12,7 @@
 #   Description (spaces/special chars)           → sanitized + timestamped
 #
 # Env vars:
-#   QUANBOT_WORKTREE_DIR   Override worktree base directory
+#   GENIUS_WORKTREE_DIR   Override worktree base directory
 
 set -euo pipefail
 
