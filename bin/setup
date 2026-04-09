@@ -145,7 +145,7 @@ if [[ "$PLATFORM" == "Darwin" ]]; then
   log "iTerm2 profile imported"
 
   # Set genius as default profile
-  defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "genius-profile-guid"
+  defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "genius-dev-profile"
   echo "  Set genius as default iTerm2 profile"
   log "Set genius as default profile"
 fi

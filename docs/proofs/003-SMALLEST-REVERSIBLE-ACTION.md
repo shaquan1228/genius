@@ -1,6 +1,3 @@
-<!-- NOTE: References to docs/rules.md are stale. rules.md was deleted 2026-04-05;
-     its content was folded into docs/identity.md. TODO: update source citations. -->
-
 # Proof 003: Smallest Reversible Action
 
 **Theorem ID:** QBT-003
