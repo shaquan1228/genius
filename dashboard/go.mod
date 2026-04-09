@@ -1,4 +1,4 @@
-module github.com/me/quanbot-dashboard
+module github.com/me/genius-dashboard
 
 go 1.26
 

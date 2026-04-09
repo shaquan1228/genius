@@ -15,7 +15,7 @@
 ## Theorem Statement
 
 **Natural language:**
-In the quanbot system, for every non-trivial action where the goal is not yet achieved, observation recurs after the action.
+In the genius system, for every non-trivial action where the goal is not yet achieved, observation recurs after the action.
 
 **Formal:**
 
@@ -172,7 +172,7 @@ QBT-001's conclusion is used as a premise: if non-trivial actions are preceded b
 
 > ### Why the Loop Never Stops (Until You're Done)
 >
-> QBT-001 proved that quanbot always looks before it leaps. QBT-002 proves something just as important: **after leaping, it looks again.**
+> QBT-001 proved that genius always looks before it leaps. QBT-002 proves something just as important: **after leaping, it looks again.**
 >
 > OODA isn't a checklist you run once. It's a "continuous cycle for making decisions under uncertainty" (`docs/dreams/OODA.md`, line 9) — "Iterative by design" (line 16). Both code examples in the OODA doc show this explicitly: after acting, the arrow points right back to Observe ("→ Observe: Now need to handle duplicate emails...", line 108).
 >

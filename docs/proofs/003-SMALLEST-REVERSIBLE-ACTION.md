@@ -15,7 +15,7 @@
 ## Theorem Statement
 
 **Natural language:**
-In the quanbot system, every non-trivial action within an active OODA loop is the smallest reversible step that moves toward the goal.
+In the genius system, every non-trivial action within an active OODA loop is the smallest reversible step that moves toward the goal.
 
 **Formal:**
 

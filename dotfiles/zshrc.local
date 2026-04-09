@@ -1,18 +1,18 @@
-# quanbot — portable shell additions
+# genius — portable shell additions
 # Sourced by ~/.zshrc via bin/setup hook. Safe to re-source.
 
-# ── Resolve QUANBOT_ROOT from this file's symlink target ─────────────────────
+# ── Resolve GENIUS_ROOT from this file's symlink target ─────────────────────
 if [[ -L "${HOME}/.zshrc.local" ]]; then
-  export QUANBOT_ROOT="$(cd "$(dirname "$(readlink "${HOME}/.zshrc.local")")/.." && pwd)"
+  export GENIUS_ROOT="$(cd "$(dirname "$(readlink "${HOME}/.zshrc.local")")/.." && pwd)"
 else
-  export QUANBOT_ROOT="${QUANBOT_ROOT:-${HOME}/Desktop/quanbot}"
+  export GENIUS_ROOT="${GENIUS_ROOT:-${HOME}/Desktop/genius}"
 fi
 
 # ── tmux Auto-attach (MUST BE BEFORE instant prompt) ─────────────────────────
 # Only auto-attach in iTerm2, not in Cursor or other editors
 export PATH="/opt/homebrew/bin:$PATH"
 if [[ -z "$TMUX" && -n "$ITERM_SESSION_ID" ]]; then
-  exec "$QUANBOT_ROOT/bin/tmux-init-session"
+  exec "$GENIUS_ROOT/bin/tmux-init-session"
 fi
 
 # ── Powerlevel10k ─────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ fi
 . /opt/homebrew/opt/asdf/libexec/asdf.sh
 
 # ── PATH ─────────────────────────────────────────────────────────────────────
-export PATH="$QUANBOT_ROOT/bin:$PATH"
+export PATH="$GENIUS_ROOT/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="$HOME/.yarn/bin:$PATH"
 export PATH="/opt/homebrew/opt/mysql@8.0/bin:$PATH"
@@ -47,7 +47,7 @@ alias gtl='gt log short'
 alias gtls='gt log short --show-commits'
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
-alias dash='$QUANBOT_ROOT/bin/dashboard'
+alias dash='$GENIUS_ROOT/bin/dashboard'
 
 # ── Worktree Helpers ──────────────────────────────────────────────────────────
 alias wtl='git worktree list'

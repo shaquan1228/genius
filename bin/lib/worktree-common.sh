@@ -7,10 +7,10 @@
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 REPO_NAME="$(basename "$REPO_ROOT")"
 
-# Default: sibling directory of the repo (e.g. /Repositories/quanbot → /Repositories/quanbot-worktrees)
-# Override: set QUANBOT_WORKTREE_DIR to use a different base
-WORKTREE_BASE="${QUANBOT_WORKTREE_DIR:-$(dirname "$REPO_ROOT")}/${REPO_NAME}-worktrees"
-LOG_FILE="$HOME/.quanbot/worktree.log"
+# Default: sibling directory of the repo (e.g. /Repositories/genius → /Repositories/genius-worktrees)
+# Override: set GENIUS_WORKTREE_DIR to use a different base
+WORKTREE_BASE="${GENIUS_WORKTREE_DIR:-$(dirname "$REPO_ROOT")}/${REPO_NAME}-worktrees"
+LOG_FILE="$HOME/.genius/worktree.log"
 
 wt_log() {
   mkdir -p "$(dirname "$LOG_FILE")"

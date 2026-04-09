@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Tests for bin/teardown — safe removal of quanbot setup
+# Tests for bin/teardown — safe removal of genius setup
 
 BIN="$BATS_TEST_DIRNAME/../bin/teardown"
 

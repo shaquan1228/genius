@@ -1,6 +1,6 @@
 package components
 
-import "github.com/me/quanbot-dashboard/sections/internal"
+import "github.com/me/genius-dashboard/sections/internal"
 
 type CustomData struct {
 	Items []string

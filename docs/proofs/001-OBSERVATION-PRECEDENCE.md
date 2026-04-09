@@ -15,7 +15,7 @@
 ## Theorem Statement
 
 **Natural language:**
-In the quanbot system, every non-trivial action is preceded by observation.
+In the genius system, every non-trivial action is preceded by observation.
 
 **Formal:**
 
@@ -29,7 +29,7 @@ In the quanbot system, every non-trivial action is preceded by observation.
 
 | Symbol | Meaning | Grounding |
 |--------|---------|-----------|
-| A | Any action taken within the quanbot system | — |
+| A | Any action taken within the genius system | — |
 | NonTrivial(A) | A has more than one viable approach, OR A involves uncertainty | `docs/dreams/OODA.md` line 88: "Non-trivial decisions (more than one viable option)" |
 | OODA(A) | A is processed through the Observe→Orient→Decide→Act loop | `docs/dreams/OODA.md` lines 7, 99-109 |
 | ObserveFirst(A) | The Observe phase executes before Orient, Decide, or Act for A | `docs/dreams/OODA.md` lines 7, 19-28 |
@@ -155,7 +155,7 @@ A proof is **sound** when it is valid (conclusion follows from premises) AND all
 
 > ### Why Observation Comes First for Non-Trivial Actions
 >
-> When quanbot faces a non-trivial decision — one with more than one viable approach or genuine uncertainty (`docs/dreams/OODA.md`, line 88) — one principle surfaces across every framework: **look before you leap.**
+> When genius faces a non-trivial decision — one with more than one viable approach or genuine uncertainty (`docs/dreams/OODA.md`, line 88) — one principle surfaces across every framework: **look before you leap.**
 >
 > The system's rules are explicit. Non-trivial decisions must run through the OODA loop (`docs/rules.md`, line 7). The OODA loop always starts with Observe — state the facts, identify what changed, understand the constraints (`docs/dreams/OODA.md`, lines 7, 19-28). And observation, by definition, means you've looked at the situation before doing anything about it.
 >
@@ -165,7 +165,7 @@ A proof is **sound** when it is valid (conclusion follows from premises) AND all
 >
 > Three steps. One conclusion. This is the normative foundation — what the system prescribes for every non-trivial action. When agents skip observation (as documented in "Rushed Processing," `docs/dreams/DECISION-THEORY.md`, line 78), that is a violation of this norm, not a disproof of it.
 >
-> This is the foundational claim of the entire system — and every other proof about quanbot's behavior will build on it.
+> This is the foundational claim of the entire system — and every other proof about genius's behavior will build on it.
 
 ---
 

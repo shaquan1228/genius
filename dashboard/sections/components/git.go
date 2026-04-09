@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/me/quanbot-dashboard/sections/internal"
+	"github.com/me/genius-dashboard/sections/internal"
 )
 
 type GitData struct {

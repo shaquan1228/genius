@@ -1,6 +1,6 @@
 # Proof Tree
 
-Authoritative composability map for the quanbot proof system. Edit this file when adding proofs. Do not maintain composability maps inside individual proof files.
+Authoritative composability map for the genius proof system. Edit this file when adding proofs. Do not maintain composability maps inside individual proof files.
 
 ## Tree
 

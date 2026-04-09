@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bin/setup — bootstrap quanbot on a new machine.
+# bin/setup — bootstrap genius on a new machine.
 #
 # Usage: bin/setup [--no-profile]
 #
@@ -9,7 +9,7 @@
 #   3. Symlinks dotfiles into ~ and sets git email (prompted from GitHub)
 #   4. Imports iTerm2 profile
 #   5. Writes ~/.claude/CLAUDE.md (auto-loaded by Claude Code)
-#   6. Writes .cursor/rules/quanbot.mdc (auto-loaded by Cursor)
+#   6. Writes .cursor/rules/genius.mdc (auto-loaded by Cursor)
 #
 # Safe to re-run (all steps are idempotent).
 
@@ -24,7 +24,7 @@ for arg in "$@"; do
     --help|-h)
       echo "Usage: bin/setup [--no-profile]"
       echo ""
-      echo "Bootstrap quanbot on a new machine."
+      echo "Bootstrap genius on a new machine."
       echo ""
       echo "Options:"
       echo "  --no-profile          Skip modifications to ~/.zshrc"
@@ -42,7 +42,7 @@ done
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_LINK="$ROOT_DIR/bin/link"
 PLATFORM="$(uname)"
-LOG_FILE="$HOME/.quanbot/setup.log"
+LOG_FILE="$HOME/.genius/setup.log"
 
 section() { echo; echo "── $1"; }
 
@@ -115,7 +115,7 @@ ZSHRC_HOOK='[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local'
 
 if ! $SKIP_SHELL_CONFIG; then
   if ! grep -qF "$P10K_HOOK" "$ZSHRC"; then
-    printf '\n# quanbot — powerlevel10k — added %s\n%s\n' "$(date '+%Y-%m-%d')" "$P10K_HOOK" >> "$ZSHRC"
+    printf '\n# genius — powerlevel10k — added %s\n%s\n' "$(date '+%Y-%m-%d')" "$P10K_HOOK" >> "$ZSHRC"
     echo "  Appended powerlevel10k source to ~/.zshrc"
     log "Added powerlevel10k hook to ~/.zshrc"
   else
@@ -123,7 +123,7 @@ if ! $SKIP_SHELL_CONFIG; then
   fi
 
   if ! grep -qF "$ZSHRC_HOOK" "$ZSHRC"; then
-    printf '\n# quanbot local overrides — added %s\n%s\n' "$(date '+%Y-%m-%d')" "$ZSHRC_HOOK" >> "$ZSHRC"
+    printf '\n# genius local overrides — added %s\n%s\n' "$(date '+%Y-%m-%d')" "$ZSHRC_HOOK" >> "$ZSHRC"
     echo "  Appended .zshrc.local hook to ~/.zshrc"
     log "Added .zshrc.local hook to ~/.zshrc"
   else
@@ -140,26 +140,26 @@ if [[ "$PLATFORM" == "Darwin" ]]; then
   ITERM2_PROFILE_DIR="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
   mkdir -p "$ITERM2_PROFILE_DIR"
   "$BIN_LINK" "$ROOT_DIR/dotfiles/iterm2-profile.json" \
-              "$ITERM2_PROFILE_DIR/quanbot.json"
+              "$ITERM2_PROFILE_DIR/genius.json"
   echo "  iTerm2 profile imported"
   log "iTerm2 profile imported"
 
-  # Set quanbot as default profile
-  defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "quanbot-profile-guid"
-  echo "  Set quanbot as default iTerm2 profile"
-  log "Set quanbot as default profile"
+  # Set genius as default profile
+  defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "genius-profile-guid"
+  echo "  Set genius as default iTerm2 profile"
+  log "Set genius as default profile"
 fi
 
-# ── 3b. Create quanbot directory ──────────────────────────────────────────────
-mkdir -p "$HOME/.quanbot"
-echo "  Created ~/.quanbot/ for logs"
-log "Created ~/.quanbot/ directory"
+# ── 3b. Create genius directory ──────────────────────────────────────────────
+mkdir -p "$HOME/.genius"
+echo "  Created ~/.genius/ for logs"
+log "Created ~/.genius/ directory"
 
 # ── 4. Claude Code global context ─────────────────────────────────────────────
 section "Claude Code (CLAUDE.md)"
 mkdir -p "$HOME/.claude"
 cat > "$HOME/.claude/CLAUDE.md" <<EOF
-# Engineering context (quanbot)
+# Engineering context (genius)
 
 @${ROOT_DIR}/docs/identity.md
 EOF
@@ -168,7 +168,7 @@ log "Wrote ~/.claude/CLAUDE.md"
 
 # ── 5. Cursor rules ───────────────────────────────────────────────────────────
 section "Cursor rules"
-CURSOR_MDC="$ROOT_DIR/.cursor/rules/quanbot.mdc"
+CURSOR_MDC="$ROOT_DIR/.cursor/rules/genius.mdc"
 mkdir -p "$(dirname "$CURSOR_MDC")"
 cat > "$CURSOR_MDC" <<EOF
 ---
@@ -179,8 +179,8 @@ description: Engineering identity and operating frameworks
 Use these as source of truth:
 - [identity](mdc:${ROOT_DIR}/docs/identity.md)
 EOF
-echo "  Wrote .cursor/rules/quanbot.mdc"
-log "Wrote .cursor/rules/quanbot.mdc"
+echo "  Wrote .cursor/rules/genius.mdc"
+log "Wrote .cursor/rules/genius.mdc"
 echo ""
 echo "  For global Cursor coverage, paste into Cursor > Settings > Rules for AI:"
 echo "    @${ROOT_DIR}/docs/identity.md"

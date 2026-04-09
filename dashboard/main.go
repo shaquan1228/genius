@@ -6,8 +6,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/me/quanbot-dashboard/sections"
-	"github.com/me/quanbot-dashboard/util"
+	"github.com/me/genius-dashboard/sections"
+	"github.com/me/genius-dashboard/util"
 )
 
 var (

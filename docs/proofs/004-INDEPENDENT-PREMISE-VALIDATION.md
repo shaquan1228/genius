@@ -14,7 +14,7 @@
 ## Theorem Statement
 
 **Natural language:**
-In the quanbot system, every non-trivial action that depends on a premise requires independent validation of that premise. Derivation is not validation. Direction is not validation. Only direct evidence is validation.
+In the genius system, every non-trivial action that depends on a premise requires independent validation of that premise. Derivation is not validation. Direction is not validation. Only direct evidence is validation.
 
 **Formal:**
 
@@ -146,7 +146,7 @@ QBT-002 (which imports QBT-001) guarantees observation occurs at each iteration.
 - Conditional Proof (assume P, derive Q, conclude P → Q) — step 12
 - Import (QBT-002, which imports QBT-001) — step 3
 
-**Note on step 10-11 (normative closure):** This step is not purely mechanical — it relies on the normative character of the quanbot system. The system prescribes small reversible actions (QBT-003) to enable course correction, which exists to prevent cascading errors. If the system prescribes cascade prevention (evidenced by QBT-003, "Loop Too Big" anti-pattern, QBT-002's per-iteration verification), it must prescribe the necessary means: independent validation of premises. A system that prescribes the end but not the means is incoherent. Since quanbot is coherent (dream docs verified in QBT-001/002/003), it prescribes independent validation.
+**Note on step 10-11 (normative closure):** This step is not purely mechanical — it relies on the normative character of the genius system. The system prescribes small reversible actions (QBT-003) to enable course correction, which exists to prevent cascading errors. If the system prescribes cascade prevention (evidenced by QBT-003, "Loop Too Big" anti-pattern, QBT-002's per-iteration verification), it must prescribe the necessary means: independent validation of premises. A system that prescribes the end but not the means is incoherent. Since genius is coherent (dream docs verified in QBT-001/002/003), it prescribes independent validation.
 
 ---
 
@@ -184,7 +184,7 @@ QBT-002 (which imports QBT-001) guarantees observation occurs at each iteration.
 >
 > This matters because of how errors compound. A chain of reasoning can be perfectly valid — each step follows logically from the previous one — and still be completely wrong. If the first link is false, every subsequent link inherits that falseness. Formal logic has a name for this: *ex falso quodlibet* — from falsehood, anything follows. A proof from a false premise can "prove" anything, including that working code is dead and should be deleted.
 >
-> The existing quanbot frameworks already point at this truth. FIELD-GENERAL's first question is "What do I know vs. what am I assuming?" (`docs/dreams/FIELD-GENERAL.md`, line 17). OODA's Act phase asks "Did my action produce the expected result?" (`docs/dreams/OODA.md`, line 72) — not "does my conclusion follow from my premises?" The difference is everything. Derivation checks internal consistency. Validation checks external correctness. A system can be internally consistent and externally catastrophic.
+> The existing genius frameworks already point at this truth. FIELD-GENERAL's first question is "What do I know vs. what am I assuming?" (`docs/dreams/FIELD-GENERAL.md`, line 17). OODA's Act phase asks "Did my action produce the expected result?" (`docs/dreams/OODA.md`, line 72) — not "does my conclusion follow from my premises?" The difference is everything. Derivation checks internal consistency. Validation checks external correctness. A system can be internally consistent and externally catastrophic.
 >
 > The prescription is simple: before you build on a premise, validate it yourself. Don't inherit trust from the chain that produced it. Don't accept it because an authority — a prompt rule, a senior engineer, a "best practice" — told you it was correct. Trace the chain to its root and check the root directly. If the root survives independent scrutiny, build. If it doesn't, stop — because everything downstream is already wrong, you just haven't discovered it yet.
 >

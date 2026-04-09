@@ -55,12 +55,12 @@ teardown() {
   ls "$WORKTREE_DIR" | grep -q "^fix-uppercase-special-chars-"
 }
 
-@test "logs creation to ~/.quanbot/worktree.log" {
+@test "logs creation to ~/.genius/worktree.log" {
   run "$BIN" --temporal "test logging"
 
   [ "$status" -eq 0 ]
-  [ -f "$TEST_REPO/.quanbot/worktree.log" ]
-  grep -q "CREATE: temp-test-logging-" "$TEST_REPO/.quanbot/worktree.log"
+  [ -f "$TEST_REPO/.genius/worktree.log" ]
+  grep -q "CREATE: temp-test-logging-" "$TEST_REPO/.genius/worktree.log"
 }
 
 @test "--with-graphite flag is accepted" {

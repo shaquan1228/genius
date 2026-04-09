@@ -14,7 +14,7 @@
 ## Theorem Statement
 
 **Natural language:**
-In the quanbot system, iteration within a stable form is justified if and only if it loads latent potential for a future fork.
+In the genius system, iteration within a stable form is justified if and only if it loads latent potential for a future fork.
 
 **Formal:**
 

@@ -3,7 +3,7 @@ package sections
 import (
 	"testing"
 
-	"github.com/me/quanbot-dashboard/util"
+	"github.com/me/genius-dashboard/util"
 	"github.com/stretchr/testify/assert"
 )
 
