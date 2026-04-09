@@ -23,4 +23,13 @@ Derivation would then be hypothesis. "I've reasoned through this carefully" is a
 
 ---
 
+**If this is true, the loop has two phases:**
+
+- **Probe phase** (QBT-003 + QBT-004) — smallest reversible actions that expose premises to reality. Not committing yet. Accumulating validated knowledge.
+- **Fork phase** (QBT-005) — commit once the spring is loaded. The spring loads when enough probes have converted assumptions into facts, not when the reasoning feels complete.
+
+Dwell time, in this reading, is the probe phase. The fork is justified not by elapsed time or logical confidence, but by the volume of independent observations that have passed through the loop. Tinkering (QBT-005) produces no fork because it produces no probes — it extends the chain rather than testing it.
+
+---
+
 *This is a question, not a conclusion. It sits here to influence interpretation — of proofs as they're read, of rules as they're applied. If it turns out to be wrong, something in QBT-004's grounding weakens. If it turns out to be right, the loop is more fundamental than any of the proofs built on top of it.*
