@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # bin/setup — bootstrap genius on a new machine.
 #
-# Usage: bin/setup [--no-profile]
+# Usage: bin/setup [--no-profile] [--context-only]
 #
-# What it does:
+# What it does (full setup):
 #   1. Installs Homebrew (if missing)
 #   2. Installs dependencies from Brewfile (tmux, iTerm2, Powerlevel10k font, etc.)
 #   3. Symlinks dotfiles into ~ and sets git email (prompted from GitHub)
@@ -11,29 +11,38 @@
 #   5. Writes ~/.claude/CLAUDE.md (auto-loaded by Claude Code)
 #   6. Writes .cursor/rules/genius.mdc (auto-loaded by Cursor)
 #
+# --context-only: Only writes Claude and Cursor context (steps 5-6).
+#   No Homebrew, no dotfiles, no shell changes. Safe for trying genius
+#   on an existing machine without touching anything else.
+#
 # Safe to re-run (all steps are idempotent).
 
 set -euo pipefail
 
 SKIP_SHELL_CONFIG=false
+CONTEXT_ONLY=false
 for arg in "$@"; do
   case $arg in
     --no-profile)
       SKIP_SHELL_CONFIG=true
       ;;
+    --context-only)
+      CONTEXT_ONLY=true
+      ;;
     --help|-h)
-      echo "Usage: bin/setup [--no-profile]"
+      echo "Usage: bin/setup [--no-profile] [--context-only]"
       echo ""
       echo "Bootstrap genius on a new machine."
       echo ""
       echo "Options:"
       echo "  --no-profile          Skip modifications to ~/.zshrc"
+      echo "  --context-only        Only write Claude/Cursor context files (nothing else)"
       echo "  --help, -h            Show this help"
       exit 0
       ;;
     *)
       echo "Unknown argument: $arg" >&2
-      echo "Usage: bin/setup [--no-profile]" >&2
+      echo "Usage: bin/setup [--no-profile] [--context-only]" >&2
       exit 1
       ;;
   esac
@@ -50,6 +59,8 @@ log() {
   mkdir -p "$(dirname "$LOG_FILE")"
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
 }
+
+if ! $CONTEXT_ONLY; then
 
 # ── 1. Homebrew ───────────────────────────────────────────────────────────────
 section "Homebrew"
@@ -155,6 +166,8 @@ mkdir -p "$HOME/.genius"
 echo "  Created ~/.genius/ for logs"
 log "Created ~/.genius/ directory"
 
+fi # end of full setup (skipped with --context-only)
+
 # ── 4. Claude Code global context ─────────────────────────────────────────────
 section "Claude Code (CLAUDE.md)"
 mkdir -p "$HOME/.claude"
@@ -188,10 +201,16 @@ echo "    @${ROOT_DIR}/docs/identity.md"
 echo ""
 echo "Setup complete."
 echo ""
-echo "Next steps:"
-echo "  1. Close iTerm2 (Cmd+Q) and reopen"
-echo "  2. Press Alt+1/2/3 to switch between work/agents/dashboard windows"
-echo "  3. Read docs/dreams/STOP-TINKERING.md before adding anything new"
-echo ""
-echo "Logs saved to: $LOG_FILE"
+if $CONTEXT_ONLY; then
+  echo "Next steps:"
+  echo "  1. Open a Claude Code or Cursor session — genius identity is now active"
+  echo "  2. Read docs/identity.md to understand the reasoning framework"
+else
+  echo "Next steps:"
+  echo "  1. Close iTerm2 (Cmd+Q) and reopen"
+  echo "  2. Press Alt+1/2/3 to switch between work/agents/dashboard windows"
+  echo "  3. Read docs/dreams/STOP-TINKERING.md before adding anything new"
+  echo ""
+  echo "Logs saved to: $LOG_FILE"
+fi
 log "Setup completed successfully"

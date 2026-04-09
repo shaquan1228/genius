@@ -22,16 +22,18 @@ Backed by research: semi-formal structured reasoning outperforms standard prompt
 ```sh
 git clone git@github.com:shaquan1228/genius.git
 cd genius
-bin/setup --no-profile  # wires Claude Code + Cursor, leaves shell config alone
+bin/setup --context-only  # writes Claude + Cursor context files, nothing else
 ```
 
 For Cursor: paste the printed snippet into **Cursor > Settings > Rules for AI**.
+
+`--context-only` only writes `~/.claude/CLAUDE.md` and `.cursor/rules/genius.mdc`. No Homebrew, no dotfiles, no shell changes. Use `bin/setup` (no flag) for the full environment.
 
 ## Commands
 
 | Command | Description |
 | ------- | ----------- |
-| `setup [--no-profile]` | Bootstrap machine: install deps, configure Claude/Cursor |
+| `setup [--no-profile] [--context-only]` | Bootstrap machine (or just inject context) |
 | `worktree <branch> [base]` | Create or checkout git worktree (smart naming) |
 | `worktree-cleanup` | Remove old temporal worktrees |
 | `dashboard` | System status TUI |
