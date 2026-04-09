@@ -33,7 +33,7 @@ In the genius system, every non-trivial action is preceded by observation.
 | ObserveFirst(A) | The Observe phase executes before Orient, Decide, or Act for A | `docs/dreams/OODA.md` lines 7, 19-28 |
 | PrecededByObservation(A) | Before A is executed, explicit observation of facts, signals, and constraints occurred | `docs/dreams/OODA.md` lines 22-28; `docs/dreams/FIELD-GENERAL.md` line 15 |
 
-**Scope boundary:** Only rendered markdown content counts. HTML comments (e.g., `rules.md` lines 11-27) are excluded from the corpus.
+**Scope boundary:** Only rendered markdown content counts. HTML comments (e.g., `identity.md` lines 10-16) are excluded from the corpus.
 
 **Normative scope:** This proof establishes what the system prescribes. Documented failure modes (e.g., "Rushed Processing" in `docs/dreams/DECISION-THEORY.md` lines 78-85) are violations of the norm, not counterexamples to it.
 
@@ -51,12 +51,12 @@ In the genius system, every non-trivial action is preceded by observation.
 
 | Source | Line(s) | Text |
 |--------|---------|------|
-| `docs/rules.md` | 7 | "When making non-trivial decisions, always apply OODA loop from `docs/dreams/OODA.md`" |
-| `docs/identity.md` | 22 | "You think in OODA loops: Observe → Orient → Decide → Act" |
+| `docs/identity.md` | 12 | "- [Observe before acting][qbt-001]" |
+| `docs/identity.md` | 22 | "- [OODA loop](dreams/OODA.md) — how the loop runs" |
 | `docs/dreams/OODA.md` | 88 | "Non-trivial decisions (more than one viable option)" |
 | `docs/dev/WORKFLOW.md` | 7 | "Every non-trivial step runs through the OODA loop" |
 
-**Semantic validation:** Four independent documents assert that OODA is mandatory for non-trivial actions. The qualifier "non-trivial" appears identically in the premise and the source text. The word "always" in `rules.md` and the universal quantifier in the formal premise are semantically equivalent. No interpretation gap.
+**Semantic validation:** Four independent documents assert that OODA is mandatory for non-trivial actions. The qualifier "non-trivial" appears identically in the premise and the source text. The proof in `identity.md` (line 12) and the universal quantifier in the formal premise are semantically equivalent. No interpretation gap.
 
 ---
 
@@ -129,8 +129,8 @@ The proven theorem was tested against every document in the corpus:
 | `docs/dev/GIT-WORKFLOW.md` | PASS | Decision trees (lines 41-53, 109-119) begin with state observation. Graphite protocol (line 125): "BEFORE any git operation: Check if in worktree." |
 | `docs/dreams/DECISION-THEORY.md` | PASS | Probe-to-Commit (lines 39-52): low information → probe more. 3 of 4 failure modes (lines 59-113) involve insufficient observation. "Rushed Processing" (line 78) is a documented VIOLATION, not a counterexample. |
 | `docs/dreams/STOP-TINKERING.md` | PASS | Tinkering Test (lines 8-44) forces observation (score 4 questions) before deciding to proceed. Score 0-8 = HARD STOP when observation reveals no problem. |
-| `docs/identity.md` | PASS | "You think in OODA loops" (line 22). "You optimize for readability and correctness first" (line 18) — observation-oriented values. |
-| `docs/rules.md` | PASS | "When making non-trivial decisions, always apply OODA loop" (line 7). Routes to FIELD-GENERAL and STOP-TINKERING, both of which enforce observation first. |
+| `docs/identity.md` | PASS | "[OODA loop](dreams/OODA.md)" (line 22) — the OODA loop is a named framework in the Thinking section, establishing it as a core operating model. |
+| `docs/identity.md` | PASS | "- [Observe before acting][qbt-001]" (line 12). Routes to QBT-001 which formalizes observation precedence. |
 
 **Result: 8/8 documents consistent. Zero counterexamples. Proof is SOUND.**
 
@@ -155,7 +155,7 @@ A proof is **sound** when it is valid (conclusion follows from premises) AND all
 >
 > When genius faces a non-trivial decision — one with more than one viable approach or genuine uncertainty (`docs/dreams/OODA.md`, line 88) — one principle surfaces across every framework: **look before you leap.**
 >
-> The system's rules are explicit. Non-trivial decisions must run through the OODA loop (`docs/rules.md`, line 7). The OODA loop always starts with Observe — state the facts, identify what changed, understand the constraints (`docs/dreams/OODA.md`, lines 7, 19-28). And observation, by definition, means you've looked at the situation before doing anything about it.
+> The system's rules are explicit. Non-trivial decisions must run through the OODA loop (`docs/identity.md`, line 12). The OODA loop always starts with Observe — state the facts, identify what changed, understand the constraints (`docs/dreams/OODA.md`, lines 7, 19-28). And observation, by definition, means you've looked at the situation before doing anything about it.
 >
 > This isn't just a process quirk. The Field General framework makes it Principle Number One: "Default state is observation, not reaction" (`docs/dreams/FIELD-GENERAL.md`, line 15). The development workflow starts with Clarify — which is observation applied to task execution (`docs/dev/WORKFLOW.md`, lines 15-18). Even the Tinkering Test forces you to answer four observational questions before you're allowed to touch anything (`docs/dreams/STOP-TINKERING.md`, lines 8-44).
 >
@@ -216,7 +216,7 @@ Method:   Direct proof, 3 premises, Modus Ponens chain
 Status:   SOUND (8/8 docs verified, 0 counterexamples)
 
 Premises:
-  P1: NonTrivial → OODA        (rules.md:7, OODA.md:88)
+  P1: NonTrivial → OODA        (identity.md:12, OODA.md:88)
   P2: OODA → ObserveFirst      (OODA.md:7, 19-28)
   P3: ObserveFirst → Observed   (OODA.md:22-28, FIELD-GENERAL.md:15)
 
