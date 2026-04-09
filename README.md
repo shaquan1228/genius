@@ -33,6 +33,14 @@ Research on semi-formal structured reasoning ([arxiv 2603.01896](https://arxiv.o
 | `dashboard`                | Show over-tinkering monitor and system status                              |
 | `teardown`                 | Safely remove genius configuration                                         |
 
+## Dev toolkit
+
+`bin/` includes a small toolkit that complements the identity injection: opinionated worktree management (`worktree`, `worktree-cleanup`) built on top of Graphite, a tmux workspace initializer, and `compress-memory` for summarizing Claude's memory files when context gets heavy. None of it is required — the core value is the identity injection via `bin/setup`.
+
+## Dashboard (experimental)
+
+`dashboard/` is a Go TUI that surfaces git state, worktrees, tmux sessions, and recent logs. It was the first thing built and may be overtinkering — the identity injection turned out to be the real leverage. Treat it as optional.
+
 ## Framework
 
 The identity is grounded in a proof system — five lemmas that compose into a decision framework for how to reason and act under uncertainty. See [`docs/identity.md`](docs/identity.md) for the full structure, and [`docs/proofs/`](docs/proofs/) for the derivations.
