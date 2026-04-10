@@ -32,7 +32,6 @@ Backed by research: semi-formal structured reasoning outperforms standard prompt
 ```sh
 git clone git@github.com:shaquan1228/genius.git
 cd genius
-bin/setup
 ```
 
 For Cursor: paste the printed snippet into **Cursor > Settings > Rules for AI**.
