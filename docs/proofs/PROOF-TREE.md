@@ -5,18 +5,18 @@ Authoritative composability map for the genius proof system. Edit this file when
 ## Tree
 
 ```
-QBT-001: Observation Precedence [PARENT LEMMA]
-  └── QBT-002: Iterative Refinement [BRANCH]
+GNS-001: Observation Precedence [PARENT LEMMA]
+  └── GNS-002: Iterative Refinement [BRANCH]
         ├── step-constraint fork
-        │     ├── QBT-003: Smallest Reversible Action [BRANCH]
-        │     └── QBT-004: Independent Premise Validation [BRANCH]
+        │     ├── GNS-003: Smallest Reversible Action [BRANCH]
+        │     └── GNS-004: Independent Premise Validation [BRANCH]
         └── iteration-gate fork
-              └── QBT-005: Fork-Loaded Iteration [BRANCH]
+              └── GNS-005: Fork-Loaded Iteration [BRANCH]
 ```
 
 ## Proof Types
 
-**Parent Lemma** — QBT-001 only. No imports. Establishes the root behavioral constraint from which all branches descend.
+**Parent Lemma** — GNS-001 only. No imports. Establishes the root behavioral constraint from which all branches descend.
 
 **Branch Proof** — all others. Constrains a specific property of its parent's domain. Logically independent of its siblings — applies whenever its Branch Trigger holds, without requiring traversal of sibling proofs.
 
@@ -24,16 +24,16 @@ QBT-001: Observation Precedence [PARENT LEMMA]
 
 | Proof | Trigger | Fires when |
 |-------|---------|-----------|
-| QBT-002 | `NonTrivial(A)` | Any non-trivial action |
-| QBT-003 | `NonTrivial(A)` within iteration | Taking a step within the loop |
-| QBT-004 | `NonTrivial(A) ∧ DependsOn(A, P)` | A step depends on a premise |
-| QBT-005 | `Iteration(I)` | Before starting any iteration |
+| GNS-002 | `NonTrivial(A)` | Any non-trivial action |
+| GNS-003 | `NonTrivial(A)` within iteration | Taking a step within the loop |
+| GNS-004 | `NonTrivial(A) ∧ DependsOn(A, P)` | A step depends on a premise |
+| GNS-005 | `Iteration(I)` | Before starting any iteration |
 
 ## Reading the Tree
 
-The **step-constraint fork** (QBT-003 + QBT-004) fires on every non-trivial iteration step — check both before committing a step.
+The **step-constraint fork** (GNS-003 + GNS-004) fires on every non-trivial iteration step — check both before committing a step.
 
-The **iteration-gate fork** (QBT-005) fires before iteration begins — confirm the iteration loads a fork before entering the loop.
+The **iteration-gate fork** (GNS-005) fires before iteration begins — confirm the iteration loads a fork before entering the loop.
 
 No proof requires its siblings. Each is cited by its own trigger alone.
 

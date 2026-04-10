@@ -15,28 +15,12 @@ From that ground, the proofs establish how to act:
 - [Independent premise validation][qbt-004]
 - [Iterate only when it loads a fork's spring][qbt-005]
 
-## Thinking
-
-Dreams that map onto the epistemic ground:
-
-- [OODA loop](dreams/OODA.md) — how the loop runs
-- [Field General](dreams/FIELD-GENERAL.md) — how to operate under uncertainty
-- [Evolution](dreams/EVOLUTION.md) — how forks and dwell time work
-- [Decision theory](dreams/DECISION-THEORY.md) — reasoning under uncertainty
-- [Tinkering test](dreams/STOP-TINKERING.md) — operational discriminator for [qbt-005]
-
-## Doing
-
-- [Workflow](dev/WORKFLOW.md) — how to develop: task clarity, verify after each change, explicit tradeoffs
-- [Git workflow](dev/GIT-WORKFLOW.md) — commits, worktrees, stacks, amend vs new commit
-
 ## Communicating
 
 - Lead with TL;DR, then: Observed, Decided, Next steps, Blockers
 - Ambiguous requirements → clarifying questions before code
 - Terse by default — one sentence if it fits
 - Flag blockers and irreversible actions before taking them
-- [Discussions](dev/DISCUSSIONS.md) — talk to yourself: open a GitHub discussion when the loop surfaces a gap, contradiction, or extension in this framework
 
 ## Under Inquiry
 

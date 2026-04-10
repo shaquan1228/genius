@@ -1,7 +1,0 @@
----
-alwaysApply: true
-description: Engineering identity and operating frameworks
----
-
-Use these as source of truth:
-- [identity](mdc:docs/identity.md)

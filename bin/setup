@@ -1,216 +1,41 @@
 #!/usr/bin/env bash
-# bin/setup — bootstrap genius on a new machine.
+# bin/setup — inject genius identity into Claude Code and Cursor.
 #
-# Usage: bin/setup [--no-profile] [--context-only]
+# Writes:
+#   ~/.claude/CLAUDE.md          auto-loaded by Claude Code globally
+#   .cursor/rules/genius.mdc    auto-loaded by Cursor in this repo
 #
-# What it does (full setup):
-#   1. Installs Homebrew (if missing)
-#   2. Installs dependencies from Brewfile (tmux, iTerm2, Powerlevel10k font, etc.)
-#   3. Symlinks dotfiles into ~ and sets git email (prompted from GitHub)
-#   4. Imports iTerm2 profile
-#   5. Writes ~/.claude/CLAUDE.md (auto-loaded by Claude Code)
-#   6. Writes .cursor/rules/genius.mdc (auto-loaded by Cursor)
-#
-# --context-only: Only writes Claude and Cursor context (steps 5-6).
-#   No Homebrew, no dotfiles, no shell changes. Safe for trying genius
-#   on an existing machine without touching anything else.
-#
-# Safe to re-run (all steps are idempotent).
+# Safe to re-run (idempotent).
 
 set -euo pipefail
 
-SKIP_SHELL_CONFIG=false
-CONTEXT_ONLY=false
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 for arg in "$@"; do
   case $arg in
-    --no-profile)
-      SKIP_SHELL_CONFIG=true
-      ;;
-    --context-only)
-      CONTEXT_ONLY=true
-      ;;
     --help|-h)
-      echo "Usage: bin/setup [--no-profile] [--context-only]"
-      echo ""
-      echo "Bootstrap genius on a new machine."
-      echo ""
-      echo "Options:"
-      echo "  --no-profile          Skip modifications to ~/.zshrc"
-      echo "  --context-only        Only write Claude/Cursor context files (nothing else)"
-      echo "  --help, -h            Show this help"
+      echo "Usage: bin/setup"
+      echo "Injects genius identity into Claude Code and Cursor."
       exit 0
       ;;
     *)
       echo "Unknown argument: $arg" >&2
-      echo "Usage: bin/setup [--no-profile] [--context-only]" >&2
       exit 1
       ;;
   esac
 done
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BIN_LINK="$ROOT_DIR/bin/link"
-PLATFORM="$(uname)"
-LOG_FILE="$HOME/.genius/setup.log"
-
-section() { echo; echo "── $1"; }
-
-log() {
-  mkdir -p "$(dirname "$LOG_FILE")"
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
-}
-
-if ! $CONTEXT_ONLY; then
-
-# ── 1. Homebrew ───────────────────────────────────────────────────────────────
-section "Homebrew"
-if ! command -v brew &>/dev/null; then
-  echo "  Downloading and running Homebrew installer..."
-  log "Installing Homebrew"
-  /bin/bash -c "$(curl --max-time 60 --connect-timeout 10 -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  log "Homebrew installed"
-else
-  echo "  Homebrew already installed."
-  log "Homebrew already installed"
-fi
-
-# ── 2. Dependencies ───────────────────────────────────────────────────────────
-section "Dependencies (Brewfile)"
-log "Installing dependencies from Brewfile"
-echo "  Installing dependencies from Brewfile (this may take a few minutes)..."
-brew bundle --file="$ROOT_DIR/Brewfile" --no-upgrade
-echo "  Brewfile dependencies resolved."
-log "Brewfile dependencies resolved"
-
-# ── 2a. Graphite CLI (gt) ─────────────────────────────────────────────────────
-section "Graphite CLI (gt)"
-if ! command -v gt &>/dev/null; then
-  echo "  Installing Graphite CLI from npm..."
-  log "Installing Graphite CLI"
-  npm install -g @withgraphite/graphite-cli
-  log "Graphite CLI installed"
-else
-  echo "  gt already installed: $(gt --version 2>/dev/null || true)"
-  log "Graphite CLI already installed"
-fi
-
-# ── 3. Dotfiles ───────────────────────────────────────────────────────────────
-section "Dotfiles"
-log "Symlinking dotfiles"
-"$BIN_LINK" "$ROOT_DIR/dotfiles/gitconfig"             "$HOME/.gitconfig"
-"$BIN_LINK" "$ROOT_DIR/dotfiles/zshrc.local"           "$HOME/.zshrc.local"
-"$BIN_LINK" "$ROOT_DIR/dotfiles/tmux.conf"             "$HOME/.tmux.conf"
-"$BIN_LINK" "$ROOT_DIR/dotfiles/p10k-lean.zsh"         "$HOME/.p10k.zsh"
-"$BIN_LINK" "$ROOT_DIR/dotfiles/claude-settings.local.json" \
-            "$HOME/.claude/settings.local.json"
-mkdir -p "$HOME/.config/bat"
-"$BIN_LINK" "$ROOT_DIR/dotfiles/bat.conf" \
-            "$HOME/.config/bat/config"
-log "Dotfiles symlinked"
-
-# ── Git email ────────────────────────────────────────────────────────────────
-CURRENT_EMAIL="$(git config --global user.email 2>/dev/null || true)"
-if [[ -n "$CURRENT_EMAIL" ]]; then
-  echo "  Git email already set: $CURRENT_EMAIL"
-  log "Git email already set: $CURRENT_EMAIL"
-else
-  echo "  Git email not set. You can set it manually:"
-  echo "    git config --global user.email \"you@example.com\""
-  log "Git email not set, skipped"
-fi
-
-ZSHRC="$HOME/.zshrc"
-BREW_PREFIX="$(brew --prefix 2>/dev/null || echo '/opt/homebrew')"
-P10K_HOOK="source ${BREW_PREFIX}/share/powerlevel10k/powerlevel10k.zsh-theme"
-ZSHRC_HOOK='[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local'
-
-if ! $SKIP_SHELL_CONFIG; then
-  if ! grep -qF "$P10K_HOOK" "$ZSHRC"; then
-    printf '\n# genius — powerlevel10k — added %s\n%s\n' "$(date '+%Y-%m-%d')" "$P10K_HOOK" >> "$ZSHRC"
-    echo "  Appended powerlevel10k source to ~/.zshrc"
-    log "Added powerlevel10k hook to ~/.zshrc"
-  else
-    echo "  ~/.zshrc already sources powerlevel10k"
-  fi
-
-  if ! grep -qF "$ZSHRC_HOOK" "$ZSHRC"; then
-    printf '\n# genius local overrides — added %s\n%s\n' "$(date '+%Y-%m-%d')" "$ZSHRC_HOOK" >> "$ZSHRC"
-    echo "  Appended .zshrc.local hook to ~/.zshrc"
-    log "Added .zshrc.local hook to ~/.zshrc"
-  else
-    echo "  ~/.zshrc already sources .zshrc.local"
-  fi
-else
-  echo "  Skipping ~/.zshrc modifications (--no-profile)"
-  log "Shell config modifications skipped"
-fi
-
-# ── 3a. iTerm2 Profile ────────────────────────────────────────────────────────
-if [[ "$PLATFORM" == "Darwin" ]]; then
-  section "iTerm2 Profile"
-  ITERM2_PROFILE_DIR="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
-  mkdir -p "$ITERM2_PROFILE_DIR"
-  "$BIN_LINK" "$ROOT_DIR/dotfiles/iterm2-profile.json" \
-              "$ITERM2_PROFILE_DIR/genius.json"
-  echo "  iTerm2 profile imported"
-  log "iTerm2 profile imported"
-
-  # Set genius as default profile
-  defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "genius-dev-profile"
-  echo "  Set genius as default iTerm2 profile"
-  log "Set genius as default profile"
-fi
-
-# ── 3b. Create genius directory ──────────────────────────────────────────────
-mkdir -p "$HOME/.genius"
-echo "  Created ~/.genius/ for logs"
-log "Created ~/.genius/ directory"
-
-fi # end of full setup (skipped with --context-only)
-
-# ── 4. Claude Code global context ─────────────────────────────────────────────
-section "Claude Code (CLAUDE.md)"
 mkdir -p "$HOME/.claude"
-cat > "$HOME/.claude/CLAUDE.md" <<EOF
-# Engineering context (genius)
+printf '# Engineering context (genius)\n\n@%s/docs/identity.md\n' "$ROOT_DIR" > "$HOME/.claude/CLAUDE.md"
+echo "✓ Wrote ~/.claude/CLAUDE.md"
 
-@${ROOT_DIR}/docs/identity.md
-EOF
-echo "  Wrote ~/.claude/CLAUDE.md"
-log "Wrote ~/.claude/CLAUDE.md"
-
-# ── 5. Cursor rules ───────────────────────────────────────────────────────────
-section "Cursor rules"
 CURSOR_MDC="$ROOT_DIR/.cursor/rules/genius.mdc"
 mkdir -p "$(dirname "$CURSOR_MDC")"
-cat > "$CURSOR_MDC" <<EOF
----
-alwaysApply: true
-description: Engineering identity and operating frameworks
----
-
-Use these as source of truth:
-- [identity](mdc:${ROOT_DIR}/docs/identity.md)
-EOF
-echo "  Wrote .cursor/rules/genius.mdc"
-log "Wrote .cursor/rules/genius.mdc"
-echo ""
-echo "  For global Cursor coverage, paste into Cursor > Settings > Rules for AI:"
-echo "    @${ROOT_DIR}/docs/identity.md"
+printf -- '---\nalwaysApply: true\ndescription: Engineering identity and operating principles\n---\n\n@%s/docs/identity.md\n' "$ROOT_DIR" > "$CURSOR_MDC"
+echo "✓ Wrote .cursor/rules/genius.mdc"
 
 echo ""
-echo "Setup complete."
+echo "Done. Open a new Claude Code or Cursor session — genius identity is now active."
 echo ""
-if $CONTEXT_ONLY; then
-  echo "Next steps:"
-  echo "  1. Open a Claude Code or Cursor session — genius identity is now active"
-  echo "  2. Read docs/identity.md to understand the reasoning framework"
-else
-  echo "Next steps:"
-  echo "  1. Close iTerm2 (Cmd+Q) and reopen"
-  echo "  2. Press Alt+1/2/3 to switch between work/agents/dashboard windows"
-  echo "  3. Read docs/dreams/STOP-TINKERING.md before adding anything new"
-  echo ""
-  echo "Logs saved to: $LOG_FILE"
-fi
-log "Setup completed successfully"
+echo "For global Cursor coverage, paste into Cursor > Settings > Rules for AI:"
+echo "  @${ROOT_DIR}/docs/identity.md"
