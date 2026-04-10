@@ -19,13 +19,14 @@ Backed by research: semi-formal structured reasoning outperforms standard prompt
 
 ## Quickstart
 
-**Via plugin (recommended):**
+**From the marketplace (recommended):**
 
 ```sh
 /plugin marketplace add shaquan1228/genius
 /plugin install genius@genius
-/reload-plugins
 ```
+
+Start a new session — the `SessionStart` hook loads the identity automatically.
 
 **Manually:**
 
@@ -50,5 +51,7 @@ Run `/genius:think` at any point to have Claude explicitly load and summarize th
 | Command | Description |
 | ------- | ----------- |
 | `/genius:think` | Load and summarize the genius reasoning framework |
-| `setup` | Manually inject identity into Claude Code and Cursor |
-| `teardown [--confirm]` | Remove the injection (dry-run by default) |
+| `/genius:on` | Enable genius for this and future sessions |
+| `/genius:off` | Disable genius for this and future sessions |
+| `bin/setup` | Manually inject identity into Claude Code and Cursor |
+| `bin/teardown [--confirm]` | Remove the injection (dry-run by default) |
