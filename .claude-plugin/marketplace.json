@@ -6,7 +6,10 @@
   "plugins": [
     {
       "name": "genius",
-      "source": ".",
+      "source": {
+        "source": "github",
+        "repo": "shaquan1228/genius"
+      },
       "description": "Injects a structured engineering identity into Claude — same reasoning instincts, every session, without re-prompting."
     }
   ]
