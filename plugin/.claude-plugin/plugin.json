@@ -1,0 +1,9 @@
+{
+  "name": "genius",
+  "description": "Injects a structured engineering identity into Claude — same reasoning instincts, every session, without re-prompting.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Shaquan Nelson"
+  },
+  "repository": "https://github.com/shaquan1228/genius"
+}
