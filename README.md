@@ -43,14 +43,14 @@ Once installed, a `SessionStart` hook automatically injects `docs/identity.md` i
 
 `docs/identity.md` is the only file you need to understand or customize.
 
-Run `/genius` at any point to have Claude explicitly load and summarize the reasoning framework. Use `/genius off` to disable it.
+Run `/genius:reasoning` at any point to have Claude explicitly load and summarize the reasoning framework. Use `/genius:reasoning off` to disable it.
 
 ## Commands
 
 | Command | Description |
 | ------- | ----------- |
-| `/genius` | Load the genius reasoning framework |
-| `/genius on` | Enable genius for this and future sessions |
-| `/genius off` | Disable genius for this and future sessions |
+| `/genius:reasoning` | Load the genius reasoning framework |
+| `/genius:reasoning on` | Enable genius for this and future sessions |
+| `/genius:reasoning off` | Disable genius for this and future sessions |
 | `bin/setup` | Manually inject identity into Claude Code and Cursor |
 | `bin/teardown [--confirm]` | Remove the injection (dry-run by default) |
