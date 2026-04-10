@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat \"$CLAUDE_PLUGIN_ROOT/docs/identity.md\""
+            "command": "cat ~/.genius/identity.md 2>/dev/null || true"
           }
         ]
       }
