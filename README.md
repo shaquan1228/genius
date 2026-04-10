@@ -24,7 +24,6 @@ Backed by research: semi-formal structured reasoning outperforms standard prompt
 ```sh
 /plugin marketplace add shaquan1228/genius
 /plugin install genius@genius
-bin/setup
 ```
 
 Then start a new Claude Code session — the identity will be active.
