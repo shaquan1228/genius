@@ -1,20 +1,40 @@
-# GNS-002 — Iterative Refinement
+# Proof 002: Iterative Refinement
 
-**Type:** Branch  
+**Theorem ID:** GNS-002  
+**Type:** Branch Proof  
+**Branches From:** GNS-001  
 **Status:** Proven  
-**Depends:** GNS-001  
-**Method:** Direct proof, Modus Ponens chain
+**Date:** 2026-04-04  
+**Method:** Direct proof via Modus Ponens chain  
+**Scope:** Normative — proves what the system prescribes, not what agents always do
+
+---
+
+## Theorem Statement
+
+**Natural language:**
+In the genius system, for every non-trivial action where the goal is not yet achieved, observation recurs after the action.
+
+**Formal:**
 
 ```
-Theorem:  ∀A: NonTrivial(A) ∧ ¬GoalAchieved → FollowedByObservation(A)
-English:  After every non-trivial action, if the goal isn't done, observe again.
+∀A: NonTrivial(A) ∧ ¬GoalAchieved → FollowedByObservation(A)
+```
 
+---
+
+## Proof
+
+```
 Premises:
   P1: NonTrivial(A) → OODA(A)                              [by GNS-001]
   P2: OODA(A) → Cycle(A) ∧ ActThenObserve(A)
   P3: Cycle(A) ∧ ¬GoalAchieved → FollowedByObservation(A)
 
-Chain: GNS-001 → P1 → P2 → P3 ∎
+ 1. Assume NonTrivial(A) ∧ ¬GoalAchieved
+ 2. OODA(A)                                [P1, Modus Ponens]
+ 3. Cycle(A) ∧ ActThenObserve(A)           [P2, Modus Ponens]
+ 4. FollowedByObservation(A)               [P3, Modus Ponens] ∎
 
 Cite as: "By GNS-002 (Iterative Refinement), ..."
 ```
