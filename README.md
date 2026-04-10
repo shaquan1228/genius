@@ -24,9 +24,8 @@ Backed by research: semi-formal structured reasoning outperforms standard prompt
 ```sh
 /plugin marketplace add shaquan1228/genius
 /plugin install genius@genius
+/reload-plugins
 ```
-
-Start a new session — the `SessionStart` hook loads the identity automatically.
 
 **Manually:**
 
@@ -44,7 +43,7 @@ Once installed, a `SessionStart` hook automatically injects `docs/identity.md` i
 
 `docs/identity.md` is the only file you need to understand or customize.
 
-Run `/genius:think` at any point to have Claude explicitly load and summarize the reasoning framework.
+Run `/genius` at any point to have Claude explicitly load and summarize the reasoning framework. Use `/genius off` to disable it.
 
 ## Commands
 
