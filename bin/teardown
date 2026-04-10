@@ -1,170 +1,46 @@
 #!/usr/bin/env bash
-# bin/teardown — safely remove genius setup from machine
+# bin/teardown — remove genius identity injection.
 #
-# Usage:
-#   bin/teardown [--dry-run] [--confirm]
-#
-# Removes symlinks and configuration created by bin/setup
-# Keeps backups (.bak files) and logs
-# Requires --confirm flag for actual removal (dry-run by default)
+# Usage: bin/teardown [--confirm]
+# Dry-run by default. Pass --confirm to execute.
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LOG_FILE="$HOME/.genius/teardown.log"
-DRY_RUN=true
+CONFIRM=false
 
 for arg in "$@"; do
   case $arg in
-    --dry-run)
-      DRY_RUN=true
-      shift
+    --confirm) CONFIRM=true ;;
+    --help|-h)
+      echo "Usage: bin/teardown [--confirm]"
+      echo "Removes genius identity injection. Dry-run by default."
+      exit 0
       ;;
-    --confirm)
-      DRY_RUN=false
-      shift
-      ;;
-    *)
-      echo "Usage: bin/teardown [--dry-run] [--confirm]"
-      exit 1
-      ;;
+    *) echo "Unknown argument: $arg" >&2; exit 1 ;;
   esac
 done
 
-log() {
-  mkdir -p "$(dirname "$LOG_FILE")"
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
-}
+CLAUDE_MD="$HOME/.claude/CLAUDE.md"
+CURSOR_MDC="$ROOT_DIR/.cursor/rules/genius.mdc"
 
-section() {
-  echo ""
-  echo "── $1"
-}
-
-remove_symlink() {
-  local target="$1"
-  local name="$2"
-  
-  if [[ -L "$target" ]]; then
-    if $DRY_RUN; then
-      echo "  [DRY-RUN] Would remove: $target"
-    else
-      rm "$target"
-      echo "  Removed: $target"
-      log "REMOVE: $name at $target"
-    fi
-  else
-    echo "  Not a symlink (skipped): $target"
-  fi
-}
-
-remove_file() {
-  local target="$1"
-  local name="$2"
-  
-  if [[ -f "$target" ]]; then
-    if $DRY_RUN; then
-      echo "  [DRY-RUN] Would remove: $target"
-    else
-      rm "$target"
-      echo "  Removed: $target"
-      log "REMOVE: $name at $target"
-    fi
-  else
-    echo "  Not found (skipped): $target"
-  fi
-}
-
-remove_line_from_file() {
-  local file="$1"
-  local pattern="$2"
-  local name="$3"
-
-  if [[ -f "$file" ]] && grep -qF "$pattern" "$file"; then
-    if $DRY_RUN; then
-      echo "  [DRY-RUN] Would remove line from: $file"
-    else
-      local backup
-      backup="${file}.bak.$(date '+%Y%m%d%H%M%S')"
-      cp "$file" "$backup"
-      local tmpfile
-      tmpfile=$(mktemp)
-      grep -vF "$pattern" "$file" > "$tmpfile"
-      if [[ ! -s "$tmpfile" ]]; then
-        echo "  Safety: result would be empty, skipping modification of: $file" >&2
-        rm "$tmpfile"
-        return
-      fi
-      mv "$tmpfile" "$file"
-      echo "  Removed line from: $file (backup: $backup)"
-      log "REMOVE: $name from $file (backup: $backup)"
-    fi
-  else
-    echo "  Pattern not found (skipped): $file"
-  fi
-}
-
-if $DRY_RUN; then
-  echo "╔════════════════════════════════════════════════════════════════╗"
-  echo "║                         DRY RUN MODE                           ║"
-  echo "║  No changes will be made. Run with --confirm to actually      ║"
-  echo "║  remove files.                                                 ║"
-  echo "╚════════════════════════════════════════════════════════════════╝"
+echo "Will remove:"
+if [ -f "$CLAUDE_MD" ] && grep -q "$ROOT_DIR" "$CLAUDE_MD"; then
+  echo "  ~/.claude/CLAUDE.md"
 else
-  echo "╔════════════════════════════════════════════════════════════════╗"
-  echo "║                    TEARDOWN CONFIRMED                          ║"
-  echo "║  This will remove genius configuration from your system.     ║"
-  echo "╚════════════════════════════════════════════════════════════════╝"
-  log "TEARDOWN: Started with --confirm"
+  echo "  ~/.claude/CLAUDE.md (not pointing to this repo — skip)"
+fi
+[ -f "$CURSOR_MDC" ] && echo "  .cursor/rules/genius.mdc" || echo "  .cursor/rules/genius.mdc (not found — skip)"
+
+if ! $CONFIRM; then
+  echo ""; echo "Dry run. Pass --confirm to execute."; exit 0
 fi
 
-section "Dotfiles"
-remove_symlink "$HOME/.gitconfig" "gitconfig"
-remove_symlink "$HOME/.zshrc.local" "zshrc.local"
-remove_symlink "$HOME/.tmux.conf" "tmux.conf"
-remove_symlink "$HOME/.claude/settings.local.json" "claude-settings"
-
-section "iTerm2 Profile"
-remove_symlink "$HOME/Library/Application Support/iTerm2/DynamicProfiles/genius.json" "iTerm2 profile"
-
-section "Claude Code"
-remove_file "$HOME/.claude/CLAUDE.md" "Claude context"
-
-echo ""
-echo "  Claude commands (in ~/.claude/commands/):"
-for cmd in "$ROOT_DIR/commands/"*.md; do
-  CMD_NAME=$(basename "$cmd")
-  remove_symlink "$HOME/.claude/commands/$CMD_NAME" "command: $CMD_NAME"
-done
-
-section "Cursor Rules"
-remove_file "$ROOT_DIR/.cursor/rules/genius.mdc" "Cursor rules"
-
-section "Shell Hooks"
-ZSHRC_HOOK='[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local'
-remove_line_from_file "$HOME/.zshrc" "$ZSHRC_HOOK" "zshrc.local hook"
-
-section "Shortcuts Reference"
-remove_file "$HOME/.genius/shortcuts.md" "shortcuts reference"
-
-echo ""
-echo "────────────────────────────────────────────────────────────────"
-echo ""
-
-if $DRY_RUN; then
-  echo "This was a dry run. No changes were made."
-  echo ""
-  echo "To actually remove these files, run:"
-  echo "  bin/teardown --confirm"
-  log "TEARDOWN: Dry-run completed"
-else
-  echo "✓ Teardown complete."
-  echo ""
-  echo "Preserved:"
-  echo "  • Backup files (*.bak)"
-  echo "  • Logs (~/.genius/*.log)"
-  echo "  • Homebrew packages (run 'brew uninstall tmux graphite' manually if needed)"
-  echo ""
-  echo "Logs saved to: $LOG_FILE"
-  log "TEARDOWN: Completed successfully"
+if [ -f "$CLAUDE_MD" ] && grep -q "$ROOT_DIR" "$CLAUDE_MD"; then
+  rm "$CLAUDE_MD" && echo "✓ Removed ~/.claude/CLAUDE.md"
 fi
+if [ -f "$CURSOR_MDC" ]; then
+  rm "$CURSOR_MDC" && echo "✓ Removed .cursor/rules/genius.mdc"
+fi
+
+echo ""; echo "Done. Restart Claude Code or Cursor to clear injected context."

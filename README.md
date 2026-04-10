@@ -22,33 +22,20 @@ Backed by research: semi-formal structured reasoning outperforms standard prompt
 ```sh
 git clone git@github.com:shaquan1228/genius.git
 cd genius
-bin/setup --context-only  # writes Claude + Cursor context files, nothing else
+bin/setup
 ```
 
 For Cursor: paste the printed snippet into **Cursor > Settings > Rules for AI**.
 
-`--context-only` only writes `~/.claude/CLAUDE.md` and `.cursor/rules/genius.mdc`. No Homebrew, no dotfiles, no shell changes. Use `bin/setup` (no flag) for the full environment.
+## How it works
+
+`bin/setup` writes `~/.claude/CLAUDE.md` — loaded by Claude Code on every session — pointing to `docs/identity.md`: operating principles that define how the model should observe, decide, and act. Cursor gets the same via `.cursor/rules/`. No plugins, no API wrappers.
+
+`docs/identity.md` is the only file you need to understand or customize.
 
 ## Commands
 
 | Command | Description |
 | ------- | ----------- |
-| `setup [--no-profile] [--context-only]` | Bootstrap machine (or just inject context) |
-| `worktree <branch> [base]` | Create or checkout git worktree (smart naming) |
-| `worktree-cleanup` | Remove old temporal worktrees |
-| `dashboard` | System status TUI |
-| `teardown` | Safely remove genius configuration |
-
-## How it works
-
-`bin/setup` writes `~/.claude/CLAUDE.md` — loaded by Claude Code on every session — pointing to `docs/identity.md`: a proof system that defines how the model should observe, decide, and act. Cursor gets the same via `.cursor/rules/`. No plugins, no API wrappers.
-
-## Framework
-
-Five proofs compose into a decision framework. See [`docs/identity.md`](docs/identity.md) and [`docs/proofs/`](docs/proofs/).
-
-## Extras
-
-`bin/` includes worktree management built on Graphite, a tmux workspace initializer, and `compress-memory` for summarizing Claude's memory files. Optional — the core value is the identity injection.
-
-`dashboard/` is a Go TUI that was the first thing built. Potentially overtinkered. Treat as experimental.
+| `setup` | Inject genius identity into Claude Code and Cursor |
+| `teardown [--confirm]` | Remove the injection (dry-run by default) |
