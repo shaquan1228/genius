@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # bin/setup — inject genius identity into Claude Code and Cursor.
 #
-# Writes:
-#   ~/.claude/CLAUDE.md          auto-loaded by Claude Code globally
-#   .cursor/rules/genius.mdc    auto-loaded by Cursor in this repo
+# Appends a delimited block to ~/.claude/CLAUDE.md (preserving existing content)
+# and writes .cursor/rules/genius.mdc.
 #
 # Safe to re-run (idempotent).
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLAUDE_MD="$HOME/.claude/CLAUDE.md"
+CURSOR_MDC="$ROOT_DIR/.cursor/rules/genius.mdc"
+BEGIN_MARKER="# BEGIN GENIUS"
+END_MARKER="# END GENIUS"
 
 for arg in "$@"; do
   case $arg in
@@ -25,11 +28,29 @@ for arg in "$@"; do
   esac
 done
 
+# ── Claude Code ────────────────────────────────────────────────────────────────
 mkdir -p "$HOME/.claude"
-printf '# Engineering context (genius)\n\n@%s/docs/identity.md\n' "$ROOT_DIR" > "$HOME/.claude/CLAUDE.md"
-echo "✓ Wrote ~/.claude/CLAUDE.md"
+touch "$CLAUDE_MD"
 
-CURSOR_MDC="$ROOT_DIR/.cursor/rules/genius.mdc"
+GENIUS_BLOCK="$BEGIN_MARKER
+@${ROOT_DIR}/docs/identity.md
+$END_MARKER"
+
+if grep -q "^$BEGIN_MARKER" "$CLAUDE_MD" 2>/dev/null; then
+  # Replace existing block
+  awk -v begin="$BEGIN_MARKER" -v end="$END_MARKER" -v block="$GENIUS_BLOCK" '
+    $0 == begin { in_block=1; print block; next }
+    in_block && $0 == end { in_block=0; next }
+    !in_block { print }
+  ' "$CLAUDE_MD" > "$CLAUDE_MD.tmp" && mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"
+  echo "✓ Updated genius block in ~/.claude/CLAUDE.md"
+else
+  # Append block
+  printf '\n%s\n' "$GENIUS_BLOCK" >> "$CLAUDE_MD"
+  echo "✓ Appended genius block to ~/.claude/CLAUDE.md"
+fi
+
+# ── Cursor ─────────────────────────────────────────────────────────────────────
 mkdir -p "$(dirname "$CURSOR_MDC")"
 printf -- '---\nalwaysApply: true\ndescription: Engineering identity and operating principles\n---\n\n@%s/docs/identity.md\n' "$ROOT_DIR" > "$CURSOR_MDC"
 echo "✓ Wrote .cursor/rules/genius.mdc"

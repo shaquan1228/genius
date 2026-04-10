@@ -3,10 +3,16 @@
 #
 # Usage: bin/teardown [--confirm]
 # Dry-run by default. Pass --confirm to execute.
+#
+# Removes the # BEGIN GENIUS ... # END GENIUS block from ~/.claude/CLAUDE.md
+# and removes .cursor/rules/genius.mdc. Leaves all other CLAUDE.md content intact.
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLAUDE_MD="$HOME/.claude/CLAUDE.md"
+CURSOR_MDC="$ROOT_DIR/.cursor/rules/genius.mdc"
+BEGIN_MARKER="# BEGIN GENIUS"
 CONFIRM=false
 
 for arg in "$@"; do
@@ -21,24 +27,23 @@ for arg in "$@"; do
   esac
 done
 
-CLAUDE_MD="$HOME/.claude/CLAUDE.md"
-CURSOR_MDC="$ROOT_DIR/.cursor/rules/genius.mdc"
+HAS_BLOCK=false
+grep -q "^$BEGIN_MARKER" "$CLAUDE_MD" 2>/dev/null && HAS_BLOCK=true
 
 echo "Will remove:"
-if [ -f "$CLAUDE_MD" ] && grep -q "$ROOT_DIR" "$CLAUDE_MD"; then
-  echo "  ~/.claude/CLAUDE.md"
-else
-  echo "  ~/.claude/CLAUDE.md (not pointing to this repo — skip)"
-fi
+$HAS_BLOCK && echo "  genius block from ~/.claude/CLAUDE.md" || echo "  genius block (not found in ~/.claude/CLAUDE.md — skip)"
 [ -f "$CURSOR_MDC" ] && echo "  .cursor/rules/genius.mdc" || echo "  .cursor/rules/genius.mdc (not found — skip)"
 
 if ! $CONFIRM; then
   echo ""; echo "Dry run. Pass --confirm to execute."; exit 0
 fi
 
-if [ -f "$CLAUDE_MD" ] && grep -q "$ROOT_DIR" "$CLAUDE_MD"; then
-  rm "$CLAUDE_MD" && echo "✓ Removed ~/.claude/CLAUDE.md"
+if $HAS_BLOCK; then
+  awk '/^# BEGIN GENIUS/{in_block=1; next} /^# END GENIUS/{in_block=0; next} !in_block{print}' \
+    "$CLAUDE_MD" > "$CLAUDE_MD.tmp" && mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"
+  echo "✓ Removed genius block from ~/.claude/CLAUDE.md"
 fi
+
 if [ -f "$CURSOR_MDC" ]; then
   rm "$CURSOR_MDC" && echo "✓ Removed .cursor/rules/genius.mdc"
 fi
