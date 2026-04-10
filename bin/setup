@@ -50,6 +50,11 @@ else
   echo "✓ Appended genius block to ~/.claude/CLAUDE.md"
 fi
 
+# ── genius identity cache ──────────────────────────────────────────────────────
+mkdir -p "$HOME/.genius"
+cp "$ROOT_DIR/docs/identity.md" "$HOME/.genius/identity.md"
+echo "✓ Wrote ~/.genius/identity.md"
+
 # ── Cursor ─────────────────────────────────────────────────────────────────────
 mkdir -p "$(dirname "$CURSOR_MDC")"
 printf -- '---\nalwaysApply: true\ndescription: Engineering identity and operating principles\n---\n\n@%s/docs/identity.md\n' "$ROOT_DIR" > "$CURSOR_MDC"
