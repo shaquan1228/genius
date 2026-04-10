@@ -1,4 +1,4 @@
-# QBT-001 — Observation Precedence
+# GNS-001 — Observation Precedence
 
 **Type:** Parent Lemma  
 **Status:** Proven  
@@ -15,5 +15,5 @@ Premises:
 
 Chain: P1 → P2 → P3 ∎
 
-Cite as: "By QBT-001 (Observation Precedence), ..."
+Cite as: "By GNS-001 (Observation Precedence), ..."
 ```

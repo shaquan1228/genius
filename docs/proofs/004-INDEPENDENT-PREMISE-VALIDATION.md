@@ -1,8 +1,8 @@
-# QBT-004 — Independent Premise Validation
+# GNS-004 — Independent Premise Validation
 
 **Type:** Branch  
 **Status:** Proven  
-**Depends:** QBT-002  
+**Depends:** GNS-002  
 **Method:** Direct proof, Modus Ponens + normative closure
 
 ```
@@ -14,7 +14,7 @@ Premises:
   P2: DependsOn(A, P) ∧ Assumption(P) → Cascade(A)
   P3: ValidatedIndependently(P) → Known(P) ∧ ¬Cascade(A)
 
-Chain: QBT-002 → P1 → P2 → P3 ∎
+Chain: GNS-002 → P1 → P2 → P3 ∎
 
-Cite as: "By QBT-004 (Independent Premise Validation), ..."
+Cite as: "By GNS-004 (Independent Premise Validation), ..."
 ```

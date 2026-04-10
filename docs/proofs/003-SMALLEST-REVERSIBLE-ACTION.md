@@ -1,8 +1,8 @@
-# QBT-003 — Smallest Reversible Action
+# GNS-003 — Smallest Reversible Action
 
 **Type:** Branch  
 **Status:** Proven  
-**Depends:** QBT-001, QBT-002  
+**Depends:** GNS-001, GNS-002  
 **Method:** Direct proof, Modus Ponens chain
 
 ```
@@ -14,7 +14,7 @@ Premises:
   P2: DecidePhase(A) → Smallest(A) ∧ Reversible(A)
   P3: Smallest(A) ∧ Reversible(A) → SmallestReversible(A)
 
-Chain: QBT-001 + QBT-002 → P1 → P2 → P3 ∎
+Chain: GNS-001 + GNS-002 → P1 → P2 → P3 ∎
 
-Cite as: "By QBT-003 (Smallest Reversible Action), ..."
+Cite as: "By GNS-003 (Smallest Reversible Action), ..."
 ```
