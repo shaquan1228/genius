@@ -9,11 +9,11 @@ Premises become knowledge only through the loop — derivation is hypothesis, ob
 
 From that ground, the proofs establish how to act:
 
-- [Observe before acting][qbt-001]
-- [Iterative refinement][qbt-002]
-- [Smallest reversible action first][qbt-003]
-- [Independent premise validation][qbt-004]
-- [Iterate only when it loads a fork's spring][qbt-005]
+- [Observe before acting][gns-001]
+- [Iterative refinement][gns-002]
+- [Smallest reversible action first][gns-003]
+- [Independent premise validation][gns-004]
+- [Iterate only when it loads a fork's spring][gns-005]
 
 ## Communicating
 
@@ -34,8 +34,8 @@ Believed but not yet proven — stay as bullets until proofs exist:
 ---
 
 [postulate-001]: postulates/001-THE-LOOP-IS-EPISTEMOLOGY.md
-[qbt-001]: proofs/001-OBSERVATION-PRECEDENCE.md
-[qbt-002]: proofs/002-ITERATIVE-REFINEMENT.md
-[qbt-003]: proofs/003-SMALLEST-REVERSIBLE-ACTION.md
-[qbt-004]: proofs/004-INDEPENDENT-PREMISE-VALIDATION.md
-[qbt-005]: proofs/005-FORK-LOADED-ITERATION.md
+[gns-001]: proofs/001-OBSERVATION-PRECEDENCE.md
+[gns-002]: proofs/002-ITERATIVE-REFINEMENT.md
+[gns-003]: proofs/003-SMALLEST-REVERSIBLE-ACTION.md
+[gns-004]: proofs/004-INDEPENDENT-PREMISE-VALIDATION.md
+[gns-005]: proofs/005-FORK-LOADED-ITERATION.md
