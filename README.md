@@ -50,8 +50,8 @@ Run `/genius:think` at any point to have Claude explicitly load and summarize th
 
 | Command | Description |
 | ------- | ----------- |
-| `/genius:think` | Load and summarize the genius reasoning framework |
-| `/genius:on` | Enable genius for this and future sessions |
-| `/genius:off` | Disable genius for this and future sessions |
+| `/genius` | Load the genius reasoning framework |
+| `/genius on` | Enable genius for this and future sessions |
+| `/genius off` | Disable genius for this and future sessions |
 | `bin/setup` | Manually inject identity into Claude Code and Cursor |
 | `bin/teardown [--confirm]` | Remove the injection (dry-run by default) |
