@@ -19,13 +19,14 @@ Backed by research: semi-formal structured reasoning outperforms standard prompt
 
 ## Quickstart
 
-**Via plugin (recommended):**
+**From the marketplace (recommended):**
 
 ```sh
 /plugin marketplace add shaquan1228/genius
 /plugin install genius@genius
-/reload-plugins
 ```
+
+Start a new session — the `SessionStart` hook loads the identity automatically.
 
 **Manually:**
 
