@@ -1,0 +1,13 @@
+{
+  "name": "genius",
+  "owner": {
+    "name": "Shaquan Nelson"
+  },
+  "plugins": [
+    {
+      "name": "genius",
+      "source": ".",
+      "description": "Injects a structured engineering identity into Claude — same reasoning instincts, every session, without re-prompting."
+    }
+  ]
+}
