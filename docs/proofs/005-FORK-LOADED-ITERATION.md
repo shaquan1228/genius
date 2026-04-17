@@ -26,6 +26,23 @@ In the genius system, iteration within a stable form is justified if and only if
 
 ---
 
+## Definitions
+
+| Symbol | Meaning |
+|--------|---------|
+| Iteration(I) | A sequence of non-trivial actions taken within a stable form, none of which constitutes a fork on its own |
+| DwellState(I) | The interval in which I occurs — a stable form between two forks |
+| Fork | A discrete branching event — the moment a lineage, form, project, or commit boundary changes shape |
+| LoadsFork(I) | I accumulates substrate, capability, or insight that a future fork will release |
+| Justified(I) | I is normatively prescribed — the system says to do it |
+| Tinkering(I) | Iteration that is not justified — iteration without a clear problem, blocking concern, or reduction in cognitive load |
+
+**Scope boundary:** Same as GNS-001 — only rendered markdown content. HTML comments excluded.
+
+**Normative scope:** This proof establishes what the system prescribes. The Productivity Paradox (`docs/dreams/STOP-TINKERING.md` lines 95-106) and the Pattern Lock failure mode (`docs/dreams/DECISION-THEORY.md` lines 89-99) are documented violations, not counterexamples.
+
+---
+
 ## Proof
 
 ```

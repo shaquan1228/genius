@@ -22,6 +22,22 @@ In the genius system, every non-trivial action is preceded by observation.
 
 ---
 
+## Definitions
+
+| Symbol | Meaning |
+|--------|---------|
+| A | Any action taken within the genius system |
+| NonTrivial(A) | A has more than one viable approach, OR A involves uncertainty |
+| OODA(A) | A is processed through the Observe→Orient→Decide→Act loop |
+| ObserveFirst(A) | The Observe phase executes before Orient, Decide, or Act for A |
+| PrecededByObservation(A) | Before A is executed, explicit observation of facts, signals, and constraints occurred |
+
+**Scope boundary:** Only rendered markdown content counts. HTML comments (e.g., `identity.md` lines 10-16) are excluded from the corpus.
+
+**Normative scope:** This proof establishes what the system prescribes. Documented failure modes (e.g., "Rushed Processing" in `docs/dreams/DECISION-THEORY.md` lines 78-85) are violations of the norm, not counterexamples to it.
+
+---
+
 ## Proof
 
 ```
