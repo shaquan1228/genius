@@ -26,6 +26,22 @@ In the genius system, every non-trivial action that depends on a premise require
 
 ---
 
+## Definitions
+
+| Symbol | Meaning |
+|--------|---------|
+| NonTrivial(A) | Inherited from GNS-001 |
+| DependsOn(A, P) | Action A's correctness requires premise P to be true. If P is false, A is unsound regardless of A's internal logic. |
+| Assumption(P) | P is accepted without direct evidence — either derived from a chain of reasoning, or asserted by an authority/rule |
+| ValidatedIndependently(P) | P was confirmed through direct evidence or direct testing — not through the reasoning chain that produced it, and not because an authority directed its acceptance |
+| Cascade(A, P) | When P is false and A depends on P, A's output becomes a false premise for subsequent actions, propagating the error through the inference chain |
+
+**Scope boundary:** Same as GNS-001 — only rendered markdown content. HTML comments excluded.
+
+**Normative scope:** "Rushed Processing" (`docs/dreams/DECISION-THEORY.md` lines 76-85) — skipping Orient and jumping to action — is a documented violation of this norm, not a counterexample.
+
+---
+
 ## Proof
 
 ```
