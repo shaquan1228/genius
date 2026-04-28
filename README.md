@@ -53,5 +53,6 @@ Run `/genius:reasoning` at any point to have Claude explicitly load and summariz
 | `/genius:reasoning` | Load the genius reasoning framework |
 | `/genius:reasoning on` | Enable genius for this and future sessions |
 | `/genius:reasoning off` | Disable genius for this and future sessions |
+| `/genius:preflight [task]` | Bind a 5-field contract before non-trivial action (one field per proof) |
 | `bin/setup` | Manually inject identity into Claude Code and Cursor |
 | `bin/teardown [--confirm]` | Remove the injection (dry-run by default) |
