@@ -73,11 +73,3 @@ Cite as: "By GNS-006 (Structural Enforcement of Cross-Loop Premises), ..."
 ```
 
 **The pivot:** For a premise inside your own loop, you validate by probing reality directly (GNS-003 reversible step, GNS-001 observation). For a cross-loop premise, the reality you would need to probe — the foreign loop's output — is not yet produced and not in your loop to produce. So GNS-004's requirement cannot be met in place; the only way to satisfy it is to change what P depends on. Structural enforcement is GNS-003's reversible step redirected from *probing* a premise to *dissolving* it.
-
----
-
-## Corollary (GNS-006.1): When the exogenous loop is a trusted agent, signaling is least safe exactly when it feels safest
-
-A frequent, high-stakes instance of an exogenous loop is another *agent* acting in good faith inside shared state. Trust is the friction removed from an agent's output. A distrusted agent is gated by skepticism — review, scrutiny, limited blast radius — friction that incidentally catches premises that would not hold. A *trusted* agent, competent and fast, has that friction removed by design.
-
-So a good-faith fast actor can damage a shared seam *more* than a bad actor: the trust that makes them valuable is the same trust that removes the gate, and you cannot oppose good faith socially without becoming the obstacle yourself. Bad faith is bounded and gateable; good-faith velocity is an unbounded stream of trusted-by-default output. The rule is not to distrust people — it is that **trust must never be the load-bearing gate for correctness.** That is exactly what GNS-006 enforces structurally.
