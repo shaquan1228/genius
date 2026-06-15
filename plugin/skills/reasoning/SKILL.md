@@ -1,6 +1,6 @@
 ---
-description: Toggle or load the genius engineering identity. Use when you want to turn structured reasoning on or off, or explicitly load the framework.
-argument-hint: "[on|off]"
+description: Toggle the genius engineering identity, or apply it inline to a task. Use "on"/"off" to enable/disable globally, or pass a task description to load the framework and immediately work on the task.
+argument-hint: "[on|off|task description]"
 ---
 
 If $ARGUMENTS is "off":
@@ -12,3 +12,7 @@ If $ARGUMENTS is "on", or no argument is provided:
   1. Run `claude plugin enable genius` to enable for future sessions.
   2. Read `$CLAUDE_PLUGIN_ROOT/docs/identity.md`, internalize the operating principles, and briefly summarize the five proofs (GNS-001 through GNS-005).
   3. Confirm you are now reasoning within the genius framework.
+
+If $ARGUMENTS is anything else (a task description):
+  1. Read `$CLAUDE_PLUGIN_ROOT/docs/identity.md` and internalize the operating principles. Do not summarize or announce this step.
+  2. Immediately proceed to work on the task described in $ARGUMENTS, applying the genius identity from the start.
