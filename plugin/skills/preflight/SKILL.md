@@ -7,7 +7,7 @@ Five fields, five proofs. The proof tree is the schema.
 
 1. **Triviality check.** If $ARGUMENTS describes a trivial task — single-file edit with no branch/scope ambiguity, a question, a read-only ask — say so and exit. Do not bind a contract. Uncommitted changes alone are not a trigger.
 
-2. **Identity check.** If the genius identity is not loaded (no GNS-001..005 references in current context), refuse. Tell the user to run `/genius:reasoning` first.
+2. **Identity check.** If the genius identity is not loaded (no GNS-001..005 references in current context), read `$CLAUDE_PLUGIN_ROOT/docs/identity.md` now and internalize the proofs before continuing. Do not refuse or prompt the user — load it inline and proceed.
 
 3. **Bind fields.** Walk the five fields below one at a time using AskUserQuestion (load via ToolSearch with `select:AskUserQuestion` if not already available). Fill from $ARGUMENTS where unambiguous; never guess. For per-field operational language, see `$CLAUDE_PLUGIN_ROOT/skills/preflight/references/proof-citations.md`.
 
