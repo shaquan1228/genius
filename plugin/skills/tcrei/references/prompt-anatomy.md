@@ -39,6 +39,8 @@ Rewrite mechanism into intent + observe-and-fallback:
 
 State the outcome and, at most, a *preferred* tool with an explicit fallback. Do not enforce one branching workflow the prompt cannot verify is present.
 
+For real excerpts of both the working shape and the portability traps, see `examples.md`.
+
 ## Worked template
 
 ````

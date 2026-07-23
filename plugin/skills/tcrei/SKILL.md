@@ -12,6 +12,7 @@ Turn $ARGUMENTS and the conversation into one dispatch-ready prompt for an agent
 - The reader starts cold — no shared history, no visible environment. A link or a "you know the one" will not survive.
 - This skill is governed by GNS-001 (observe before acting) and GNS-004 (independent premise validation). If they are not loaded (no GNS references in context), read `$CLAUDE_PLUGIN_ROOT/docs/identity.md` inline first.
 - The prompt's section anatomy, the TCREI → four-header mapping, the observation-first rewrite table, and a worked template all live in `$CLAUDE_PLUGIN_ROOT/skills/tcrei/references/prompt-anatomy.md`. Read it before drafting; do not restate it here.
+- `$CLAUDE_PLUGIN_ROOT/skills/tcrei/references/examples.md` holds excerpts of what works and the portability traps to rewrite — read it for calibration.
 
 ## Rules
 
