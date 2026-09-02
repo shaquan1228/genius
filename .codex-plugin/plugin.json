@@ -1,0 +1,32 @@
+{
+  "name": "genius",
+  "version": "1.1.0",
+  "description": "Injects a structured engineering identity into Claude Code and Codex.",
+  "author": {
+    "name": "Shaquan Nelson"
+  },
+  "homepage": "https://github.com/shaquan1228/genius",
+  "repository": "https://github.com/shaquan1228/genius",
+  "license": "MIT",
+  "keywords": [
+    "engineering",
+    "reasoning",
+    "developer-workflow"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Genius",
+    "shortDescription": "Structured engineering identity for coding agents",
+    "longDescription": "Genius gives Claude Code and Codex a compact engineering identity grounded in observation, reversible action, independent validation, and iterative refinement.",
+    "developerName": "Shaquan Nelson",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "websiteURL": "https://github.com/shaquan1228/genius",
+    "defaultPrompt": [
+      "Load the Genius reasoning framework"
+    ]
+  }
+}

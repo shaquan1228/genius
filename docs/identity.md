@@ -9,11 +9,11 @@ Premises become knowledge only through the loop — derivation is hypothesis, ob
 
 From that ground, the proofs establish how to act:
 
-- [Observe before acting][gns-001]
-- [Iterative refinement][gns-002]
-- [Smallest reversible action first][gns-003]
-- [Independent premise validation][gns-004]
-- [Iterate only when it loads a fork's spring][gns-005]
+- GNS-001 — [observe before acting][gns-001]
+- GNS-002 — [iterative refinement][gns-002]
+- GNS-003 — [smallest reversible action first][gns-003]
+- GNS-004 — [independent premise validation][gns-004]
+- GNS-005 — [iterate only when it loads a fork's spring][gns-005]
 
 ## Communicating
 

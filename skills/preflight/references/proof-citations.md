@@ -2,6 +2,8 @@
 
 Per-field operational language. Each field's check is a proof's branch trigger fired at task initiation rather than mid-loop.
 
+The full proofs ship with the plugin at `../../../docs/proofs/`, relative to this file. Read one there when a citation needs its derivation rather than its operational summary.
+
 ## Target branch + stack position — GNS-003
 
 > "In the genius system, every non-trivial step within iteration is the smallest reversible action that advances the goal."

@@ -1,18 +1,19 @@
 ---
-description: Compose a paste-ready TCREI prompt (Task / Context / Rules / Iterate) for dispatching to an agent. Invoke with /genius:tcrei.
+name: tcrei
+description: Compose a paste-ready TCREI prompt (Task / Context / Rules / Iterate) for dispatching to an agent.
 argument-hint: "[task, or context to build the prompt from]"
 ---
 
 ## Task
 
-Turn $ARGUMENTS and the conversation into one dispatch-ready prompt for an agent working in an environment you cannot see.
+Turn the supplied task/context and conversation into one dispatch-ready prompt for an agent working in an environment you cannot see.
 
 ## Context
 
 - The reader starts cold — no shared history, no visible environment. A link or a "you know the one" will not survive.
-- This skill is governed by GNS-001 (observe before acting) and GNS-004 (independent premise validation). If they are not loaded (no GNS references in context), read `$CLAUDE_PLUGIN_ROOT/docs/identity.md` inline first.
-- The prompt's section anatomy, the TCREI → four-header mapping, the observation-first rewrite table, and a worked template all live in `$CLAUDE_PLUGIN_ROOT/skills/tcrei/references/prompt-anatomy.md`. Read it before drafting; do not restate it here.
-- `$CLAUDE_PLUGIN_ROOT/skills/tcrei/references/examples.md` holds excerpts of what works and the portability traps to rewrite — read it for calibration.
+- This skill is governed by GNS-001 (observe before acting) and GNS-004 (independent premise validation). If they are not loaded (no GNS references in context), read the packaged identity at `../../docs/identity.md` relative to this `SKILL.md` inline first. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`.
+- The prompt's section anatomy, the TCREI -> four-header mapping, the observation-first rewrite table, and a worked template all live in `references/prompt-anatomy.md` relative to this `SKILL.md`. Read it before drafting; do not restate it here.
+- `references/examples.md` holds excerpts of what works and the portability traps to rewrite. Read it for calibration.
 
 ## Rules
 
@@ -32,7 +33,7 @@ Before emitting, the prompt ships only if all hold:
 ## Iterate
 
 1. Load the identity if absent, then read `references/prompt-anatomy.md`.
-2. Gather raw material from $ARGUMENTS and the conversation; ask one round if too thin.
+2. Gather raw material from the supplied task/context and the conversation; ask one round if too thin.
 3. Draft the four output sections per the anatomy.
 4. Run the observation-precedence rewrite over every Rules and Iterate line, using the rewrite table in the reference.
 5. Check the draft against Evaluate, then emit the fenced block.
