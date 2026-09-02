@@ -1,6 +1,6 @@
 {
   "name": "genius",
-  "version": "1.1.0+codex.20260902162512",
+  "version": "1.1.0",
   "description": "Injects a structured engineering identity into Claude Code and Codex.",
   "author": {
     "name": "Shaquan Nelson"
@@ -21,7 +21,8 @@
     "developerName": "Shaquan Nelson",
     "category": "Developer Tools",
     "capabilities": [
-      "Interactive"
+      "Interactive",
+      "Read"
     ],
     "websiteURL": "https://github.com/shaquan1228/genius",
     "defaultPrompt": [

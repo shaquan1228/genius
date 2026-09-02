@@ -51,7 +51,7 @@ For Cursor: paste the printed snippet into **Cursor > Settings > Rules for AI**.
 
 Claude Code and Codex use the same packaged reasoning skill and the identity at `plugin/docs/identity.md`. The identity defines how the model should observe, decide, and act. Cursor gets the same context via `.cursor/rules/`. Codex activates the skill when it matches a request or when you invoke `$genius:reasoning`; `bin/setup` references the same packaged identity for persistent Claude Code and Cursor injection.
 
-`plugin/docs/identity.md` is the identity file consumed by the packaged skill and setup script.
+`plugin/docs/identity.md` is the identity file consumed by the packaged skill and setup script. `docs/identity.md` is a symlink to it, so earlier `bin/setup` installs keep resolving.
 
 Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply the reasoning framework to your current task.
 
@@ -59,8 +59,9 @@ Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply 
 
 | Command | Description |
 | ------- | ----------- |
-| `/genius:reasoning` | Load the genius reasoning framework in Claude Code |
+| `/genius:reasoning [task]` | Apply the genius reasoning framework in Claude Code |
 | `$genius:reasoning` | Apply the genius reasoning framework in Codex |
 | `/genius:preflight [task]` | Bind a 5-field contract before non-trivial action (one field per proof) |
+| `/genius:tcrei [task]` | Compose a paste-ready TCREI prompt for dispatching to another agent |
 | `bin/setup` | Manually inject identity into Claude Code and Cursor |
 | `bin/teardown [--confirm]` | Remove the injection (dry-run by default) |

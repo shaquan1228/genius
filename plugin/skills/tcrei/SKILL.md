@@ -11,7 +11,7 @@ Turn the supplied task/context and conversation into one dispatch-ready prompt f
 ## Context
 
 - The reader starts cold — no shared history, no visible environment. A link or a "you know the one" will not survive.
-- This skill is governed by GNS-001 (observe before acting) and GNS-004 (independent premise validation). If they are not loaded (no GNS references in context), read the packaged identity at `../../docs/identity.md` relative to this `SKILL.md` inline first.
+- This skill is governed by GNS-001 (observe before acting) and GNS-004 (independent premise validation). If they are not loaded (no GNS references in context), read the packaged identity at `../../docs/identity.md` relative to this `SKILL.md` inline first. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`.
 - The prompt's section anatomy, the TCREI -> four-header mapping, the observation-first rewrite table, and a worked template all live in `references/prompt-anatomy.md` relative to this `SKILL.md`. Read it before drafting; do not restate it here.
 - `references/examples.md` holds excerpts of what works and the portability traps to rewrite. Read it for calibration.
 

@@ -8,9 +8,9 @@ Five fields, five proofs. The proof tree is the schema.
 
 1. **Triviality check.** If the supplied task is trivial — a single-file edit with no branch or scope ambiguity, a question, or a read-only ask — say so and exit. Do not bind a contract. Uncommitted changes alone are not a trigger.
 
-2. **Identity check.** If the Genius identity is not loaded (no GNS-001..005 references in current context), read the packaged identity at `../../docs/identity.md` relative to this `SKILL.md` and internalize the proofs before continuing. Do not refuse or prompt the user — load it inline and proceed.
+2. **Identity check.** If the Genius identity is not loaded (no GNS-001..005 references in current context), read the packaged identity at `../../docs/identity.md` relative to this `SKILL.md` — in Claude Code, `$CLAUDE_PLUGIN_ROOT/docs/identity.md` — and internalize the proofs before continuing. Do not refuse or prompt the user — load it inline and proceed.
 
-3. **Bind fields.** Walk the five fields below one at a time using the active harness's user-question tool. Fill from the supplied task where unambiguous; never guess. For per-field operational language, read `references/proof-citations.md` relative to this `SKILL.md`.
+3. **Bind fields.** Walk the five fields below one at a time. In Claude Code use `AskUserQuestion` (load via `ToolSearch` with `select:AskUserQuestion` if it is not already available); otherwise ask in plain text, one field per message. Fill from the supplied task where unambiguous; never guess. For per-field operational language, read `references/proof-citations.md` relative to this `SKILL.md`.
 
    - **Target branch + stack position** — cite GNS-003. Echo `git branch --show-current`; for Graphite, the stack position.
    - **In-scope files** — cite GNS-001. Explicit list, observed not assumed.

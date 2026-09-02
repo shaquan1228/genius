@@ -1,12 +1,12 @@
 # Proof 006: Structural Enforcement of Cross-Loop Premises
 
-**Theorem ID:** GNS-006
-**Type:** Branch Proof
-**Branches From:** GNS-004
-**Branch Trigger:** NonTrivial(A) ∧ DependsOn(A, P) ∧ DependsOn(P, Output(L)) ∧ ExogenousLoop(L)
-**Status:** Proven
-**Date:** 2026-06-08
-**Method:** Direct proof via Modus Ponens + disjunctive syllogism + normative closure
+**Theorem ID:** GNS-006  
+**Type:** Branch Proof  
+**Branches From:** GNS-004  
+**Branch Trigger:** NonTrivial(A) ∧ DependsOn(A, P) ∧ DependsOn(P, Output(L)) ∧ ExogenousLoop(L)  
+**Status:** Proven  
+**Date:** 2026-06-08  
+**Method:** Direct proof via Modus Ponens + disjunctive syllogism + normative closure  
 **Scope:** Normative — proves what the system prescribes, not what agents always do
 
 ---
