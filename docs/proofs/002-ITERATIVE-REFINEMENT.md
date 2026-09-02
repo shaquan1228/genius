@@ -22,7 +22,9 @@ In the genius system, for every non-trivial action where the goal is not yet ach
 ∀A: NonTrivial(A) ∧ ¬GoalAchieved(A) → FollowedByObservation(A)
 ```
 
-**Combined with GNS-001:** GNS-001 puts observation before the action. GNS-002 puts observation after it. Together they describe a continuous cycle rather than a one-shot sequence. The cycle itself is not derived here — it enters as P2, which unfolds the definition of the OODA loop.
+**Combined with GNS-001:** GNS-001 puts observation before the action. GNS-002 puts observation after the action. The two proofs together describe a continuous cycle. They do not describe a single sequence.
+
+This proof does not derive the cycle. P2 states it. P2 unfolds the definition of the OODA loop.
 
 ---
 
@@ -31,7 +33,7 @@ In the genius system, for every non-trivial action where the goal is not yet ach
 | Symbol | Meaning |
 |--------|---------|
 | NonTrivial(A) | Inherited from GNS-001: A has more than one viable approach, OR A involves uncertainty |
-| GoalAchieved(A) | The outcome A was taken for has been reached: acceptance criteria satisfied, decision resolved, or uncertainty reduced to the point where further iteration adds no value |
+| GoalAchieved(A) | The outcome that A aims at is reached. Three signals show this: the acceptance criteria pass, the decision is resolved, or more iteration adds no value |
 | OODA(A) | A is processed through the Observe→Orient→Decide→Act loop |
 | Cycle(A) | OODA processing of A is continuous — not a one-shot sequence |
 | ActThenObserve(A) | After the Act phase for A completes, the system returns to Observe |
@@ -39,10 +41,10 @@ In the genius system, for every non-trivial action where the goal is not yet ach
 
 **Scope boundary:** Same as GNS-001 — only rendered markdown content. HTML comments excluded.
 
-**Normative scope:** This proof establishes what the system prescribes. Two documented violations, neither a counterexample:
+**Normative scope:** This proof establishes what the system prescribes. There are two documented violations. Neither is a counterexample:
 
-- **No Iteration** — running the loop once and assuming the goal is reached.
-- **Pattern Lock** — repeating an approach that once worked, after the environment has changed.
+- **No Iteration** — the agent runs the loop one time. The agent then assumes the goal is reached.
+- **Pattern Lock** — the agent repeats an approach that worked before. The environment has since changed.
 
 ---
 

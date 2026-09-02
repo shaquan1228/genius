@@ -33,16 +33,18 @@ In the genius system, every non-trivial action that depends on a premise require
 | NonTrivial(A) | Inherited from GNS-001 |
 | PrecededByObservation(A) | Inherited from GNS-001 — explicit observation of facts, signals, and constraints occurred before A |
 | DependsOn(A, P) | Action A's correctness requires premise P to be true. If P is false, A is unsound regardless of A's internal logic. |
-| DistinguishesKnownFromAssumed(A) | The observation preceding A sorts what was seen from what was supposed — every premise A rests on is classified as one or the other |
+| DistinguishesKnownFromAssumed(A) | The observation before A sorts the facts from the suppositions. Each premise of A gets one of the two labels |
 | Assumption(P) | P is accepted without direct evidence — either derived from a chain of reasoning, or asserted by an authority/rule |
-| Direction(P) | P is accepted because an authority, rule, or request instructed its acceptance. A species of Assumption(P): direction is not validation. |
+| Direction(P) | An authority, a rule, or a request tells you to accept P. Direction is a type of Assumption(P). Direction is not validation |
 | ValidatedIndependently(P) | P was confirmed through direct evidence or direct testing — not through the reasoning chain that produced it, and not because an authority directed its acceptance |
-| Cascade(A, P) | P is false, A depends on P, and A's output has become a false premise for subsequent actions, propagating the error through the inference chain |
-| CascadeRisk(A, P) | A depends on P and P's truth is not established, so Cascade(A, P) obtains for all anyone knows. Risk, not yet damage. |
+| Cascade(A, P) | P is false and A depends on P. The output of A becomes a false premise for later actions. The error moves through the inference chain |
+| CascadeRisk(A, P) | A depends on P. The truth of P is not established. Cascade(A, P) is therefore possible. This is a risk, not damage |
 
 **Scope boundary:** Same as GNS-001 — only rendered markdown content. HTML comments excluded.
 
-**Normative scope:** Rushed Processing — skipping Orient and jumping to action, so that premises are never sorted into known and assumed — is a documented violation of this norm, not a counterexample.
+**Normative scope:** There is one documented violation. It is not a counterexample:
+
+- **Rushed Processing** — the agent skips Orient and goes straight to action. The agent never sorts the premises into known and assumed.
 
 ---
 
@@ -54,9 +56,9 @@ Premises:
   P2: DistinguishesKnownFromAssumed(A) ∧ ¬ValidatedIndependently(P) → Assumption(P)
   P3: DependsOn(A, P) ∧ Assumption(P) → CascadeRisk(A, P)
   N:  ¬CascadeRisk(A, P)
-      [normative premise: the system prescribes actions whose premises carry no cascade risk.
-       N is what makes this proof normative rather than descriptive — it states the standard,
-       and the derivation shows what the standard costs.]
+      [normative premise: the system prescribes actions with no cascade risk.
+       N makes this proof normative, not descriptive. N states the standard.
+       The derivation shows the cost of the standard.]
 
  1. Assume NonTrivial(A) ∧ DependsOn(A, P)
  2. NonTrivial(A)                               [1, ∧-Elimination]
@@ -79,4 +81,10 @@ Premises:
 Cite as: "By GNS-004 (Independent Premise Validation), ..."
 ```
 
-**On the shape of the argument:** the requirement is reached by reductio, not by reading P3 forward. Direct evidence being *sufficient* to clear the risk would not show it is *necessary* — that inference affirms the consequent. What the reductio shows is that the alternative is unavailable: hold the norm N, and ¬ValidatedIndependently(P) is contradictory. That is why the burden cannot be discharged by more reasoning. Reasoning produces Assumption(P), and Assumption(P) is exactly what steps 8–10 turn into risk.
+**On the shape of the argument:** The reductio gives the requirement. A forward read of P3 does not.
+
+P3 makes direct evidence *sufficient* to clear the risk. Sufficiency does not show necessity. That inference affirms the consequent.
+
+The reductio shows that no alternative exists. Hold the norm N. Then `¬ValidatedIndependently(P)` is a contradiction.
+
+More reasoning does not discharge the burden. Reasoning produces `Assumption(P)`. Steps 8 to 10 turn `Assumption(P)` into risk.

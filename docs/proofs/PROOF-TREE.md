@@ -23,7 +23,7 @@ GNS-001: Observation Precedence [PARENT LEMMA]
 
 ## Branch Triggers
 
-Each row is the antecedent of that proof's theorem, verbatim. If they diverge, the proof file is authoritative and this table is the bug.
+Each row holds the antecedent of that proof's theorem, word for word. If a row and a proof disagree, the proof file is correct. Then this table has the defect.
 
 | Proof | Trigger | Fires when |
 |-------|---------|-----------|
@@ -39,13 +39,19 @@ The **step-constraint fork** (GNS-003 + GNS-004) fires on every non-trivial iter
 
 The **iteration-gate fork** (GNS-005) fires before iteration begins — confirm the iteration loads a fork before entering the loop.
 
-GNS-006 sub-branches GNS-004: it fires only when a depended-on premise's truth-maker is the output of an exogenous loop — a loop you do not run (another person, team, system, the future, your future self) — resolving what "independent validation" means when the evidence lives outside your loop. It imports GNS-004 and is cited whenever its narrower trigger holds. The cross-agent case (a trusted collaborator) is its corollary GNS-006.1, stated at the foot of the GNS-006 file, not the theorem.
+GNS-006 sub-branches GNS-004. It fires only in one condition. A depended-on premise gets its truth from the output of an exogenous loop.
+
+An exogenous loop is a loop you do not run. Examples are another person, a team, a system, the future, and your future self.
+
+GNS-006 defines "independent validation" when the evidence sits outside your loop. It imports GNS-004. Cite it whenever its narrower trigger holds.
+
+The cross-agent case is a trusted collaborator. That case is corollary GNS-006.1, not the theorem. GNS-006.1 is at the end of the GNS-006 file.
 
 No proof requires its siblings. Each is cited by its own trigger alone.
 
 ## Corollaries
 
-Corollaries live in their parent proof's file, below the derivation. They are not tree nodes and have no trigger of their own — each fires whenever its parent's trigger holds and its extra conjuncts are met.
+A corollary stays in the file of its parent proof, below the derivation. A corollary is not a tree node. It has no trigger of its own. It fires when the parent trigger holds and its extra conjuncts are true.
 
 | Corollary | Parent | Adds |
 |-----------|--------|------|

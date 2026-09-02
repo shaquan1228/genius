@@ -34,7 +34,9 @@ In the genius system, every non-trivial action is preceded by observation.
 
 **Scope boundary:** Only rendered markdown content counts. HTML comments (e.g., `identity.md` lines 3-4) are excluded from the corpus.
 
-**Normative scope:** This proof establishes what the system prescribes. Rushed Processing — committing to a direction in the first seconds of a problem, before the facts are in — is a violation of the norm, not a counterexample to it.
+**Normative scope:** This proof establishes what the system prescribes. There is one documented violation. It is not a counterexample:
+
+- **Rushed Processing** — the agent commits to a direction in the first seconds. The agent does not observe the facts first.
 
 ---
 

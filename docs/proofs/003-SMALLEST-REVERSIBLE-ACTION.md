@@ -22,7 +22,14 @@ In the genius system, every non-trivial action within an active OODA loop is the
 ∀A: NonTrivial(A) ∧ InOODALoop(A) ∧ ¬GoalAchieved(A) → SmallestReversible(A)
 ```
 
-`InOODALoop(A)` is a conjunct of the antecedent, not a derived step. It is the branch trigger — GNS-003 fires on a step already inside the loop. For any non-trivial A, GNS-001's P1 (`NonTrivial(A) → OODA(A)`) and GNS-002's P2 (`OODA(A) → Cycle(A) ∧ ActThenObserve(A)`) jointly supply it. Those are the parents' premises, not their theorems, so this proof assumes the trigger rather than citing a theorem that does not yield it.
+`InOODALoop(A)` is a conjunct of the antecedent. It is not a derived step. It is the branch trigger. GNS-003 fires on a step that is already in the loop.
+
+Two parent premises supply `InOODALoop(A)` for any non-trivial A:
+
+- GNS-001 P1 — `NonTrivial(A) → OODA(A)`
+- GNS-002 P2 — `OODA(A) → Cycle(A) ∧ ActThenObserve(A)`
+
+These are premises of the parents. They are not theorems of the parents. This proof therefore assumes the trigger. It does not cite a theorem that gives no such result.
 
 ---
 
@@ -40,7 +47,9 @@ In the genius system, every non-trivial action within an active OODA loop is the
 
 **Scope boundary:** Same as GNS-001 — only rendered markdown content. HTML comments excluded.
 
-**Normative scope:** Loop Too Big — observing the entire codebase, orienting to every pattern, deciding on a complete refactor, and acting on fifty files in one pass — is a documented violation, not a counterexample.
+**Normative scope:** There is one documented violation. It is not a counterexample:
+
+- **Loop Too Big** — the agent observes the full codebase. The agent orients to every pattern. The agent decides on a complete refactor. The agent then changes fifty files in one step.
 
 ---
 
