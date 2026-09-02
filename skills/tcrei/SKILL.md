@@ -12,7 +12,7 @@ Turn the supplied task, context, and conversation into one prompt. The prompt mu
 
 - The reader starts cold. It has no shared history and no visible environment. A link or abstract signpost will not survive.
 - GNS-001 (observe before acting) and GNS-004 (independent premise validation) govern this skill.
-- If GNS-001..005 are not in context, read `../../docs/identity.md` relative to this file. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`. Load it inline. Do not prompt the user.
+- If GNS-001..006 are not in context, read `../../docs/identity.md` relative to this file. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`. Load it inline. Do not prompt the user.
 - `references/prompt-anatomy.md` holds the section anatomy, the TCREI mapping, the rewrite table, and a template. Read it before you draft. Do not restate it here.
 - `references/examples.md` holds excerpts that work and portability traps to rewrite. Read it for calibration.
 

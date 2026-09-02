@@ -3,10 +3,10 @@
 **Theorem ID:** GNS-006  
 **Type:** Branch Proof  
 **Branches From:** GNS-004  
-**Branch Trigger:** NonTrivial(A) ∧ DependsOn(A, P) ∧ DependsOn(P, Output(L)) ∧ ExogenousLoop(L)  
+**Branch Trigger:** NonTrivial(A) ∧ DependsOn₀(A, P) ∧ DependsOn₀(P, Output(L)) ∧ ExogenousLoop(L)  
 **Status:** Proven  
 **Date:** 2026-06-08  
-**Method:** Direct proof via Modus Ponens + disjunctive syllogism + normative closure  
+**Method:** Disjunctive Syllogism over an exhaustive premise, then Biconditional Introduction  
 **Scope:** Normative — proves what the system prescribes, not what agents always do
 
 ---
@@ -22,14 +22,16 @@ The genius system does not run in a vacuum. It runs inside a field of *other* lo
 ## Theorem Statement
 
 **Natural language:**
-When a non-trivial action depends on a premise whose truth depends on the output of an exogenous loop — a loop you do not drive and cannot observe in place — that premise cannot be validated by *signaling* into that loop (requesting, notifying, nudging, intending, hoping). Signaling is direction aimed at a loop you do not control, and by GNS-004 direction is not validation. Such a premise is converted to knowledge only by **structural enforcement**: altering the shared environment so the correct outcome is the path of least resistance — true by construction, no longer contingent on the foreign loop's output.
+When a non-trivial action depends on a premise whose truth depends on the output of an exogenous loop — a loop you do not drive and cannot observe in place — that premise cannot be validated by *signaling* into that loop (requesting, notifying, nudging, intending, hoping). Signaling is direction aimed at a loop you do not control, and by GNS-004 direction is not validation. Such a premise is converted to knowledge only by an act of **structural enforcement**: altering the shared environment so the correct outcome is the path of least resistance — true by construction, no longer contingent on the foreign loop's output.
 
 **Formal:**
 
 ```
-∀A,P,L: NonTrivial(A) ∧ DependsOn(A,P) ∧ DependsOn(P, Output(L)) ∧ ExogenousLoop(L)
-        → ( ValidatedIndependently(P) ↔ StructurallyEnforced(P) )
+∀A,P,L: NonTrivial(A) ∧ DependsOn₀(A,P) ∧ DependsOn₀(P, Output(L)) ∧ ExogenousLoop(L)
+        → ( ValidatedIndependently₁(P) ↔ Enforce₀₁(P) )
 ```
+
+**On the indices:** state 0 is the world before you act on P; state 1 is the world after. The subscripts are load-bearing. Enforcement is an act that *changes what P depends on*, so the dependency holds at 0 and fails at 1. Without the indices the theorem is inconsistent with its own premises: an unindexed `StructurallyEnforced(P) → ¬DependsOn(P, Output(L))` contradicts the antecedent, which forces `¬StructurallyEnforced(P)` inside the trigger and collapses the biconditional to two false sides. The remedy would then be provably unreachable. Indexing is what keeps the theorem satisfiable.
 
 **Why it matters:** You cannot probe another loop's future output from inside your own loop — it has not happened, and when it does it is produced by iterations you do not run. So a premise that depends on it stays an assumption no matter how loudly you announce it. The only validation available is to remove the dependency.
 
@@ -40,11 +42,18 @@ When a non-trivial action depends on a premise whose truth depends on the output
 | Symbol | Meaning |
 |--------|---------|
 | NonTrivial(A) | Inherited from GNS-001 |
-| DependsOn(A, P) | Inherited from GNS-004 — A's correctness requires P |
+| DependsOnₙ(A, P) | Inherited from GNS-004 — A's correctness requires P — evaluated in state n |
 | ExogenousLoop(L) | A loop whose iterations you do not drive and cannot observe in place: another person or team, an external system, a process, a market, a future state of the world, your own future self |
-| Output(L) | A result of loop L not yet produced — therefore not yet observable from any loop, including your own |
-| Signaling(P, L) | An attempt to make P true by influencing L from outside without driving its iterations — requesting, notifying, nudging, intending, hoping. The GNS-004 category "Direction," pointed at a loop you do not run |
-| StructurallyEnforced(P) | The shared environment is altered so the correct outcome obtains by default — the path of least resistance for whatever acts next — making P true by construction rather than by L's cooperation |
+| Output(L) | A result of loop L not yet produced — therefore not observable from any loop, including your own |
+| Observableₙ(X) | X is available to direct observation from inside your own loop in state n |
+| Assumptionₙ(P) | Inherited from GNS-004 — P is accepted without direct evidence, in state n |
+| Direction(P) | Inherited from GNS-004 — P is accepted because an authority, rule, or request instructed its acceptance. A species of Assumption(P). |
+| ValidatedIndependentlyₙ(P) | Inherited from GNS-004 — P was confirmed by direct evidence, not by the chain that produced it and not by direction — evaluated in state n |
+| Signaling(P, L) | An attempt to make P true by influencing L from outside without driving its iterations — requesting, notifying, nudging, intending, hoping. GNS-004's Direction(P), pointed at a loop you do not run |
+| ProbeInPlace(P) | Validating P by observing Output(L) where it is produced — a GNS-003 reversible step aimed at the foreign loop's result |
+| Enforce₀₁(P) | The act, taken between state 0 and state 1, of altering the shared environment so the correct outcome obtains by default — the path of least resistance for whatever acts next |
+| StructurallyEnforced₁(P) | The resulting state: P is true by construction rather than by L's cooperation |
+| Cascade(A, P) | Inherited from GNS-004 |
 
 **Scope boundary:** Same as GNS-001 — only rendered markdown content. HTML comments excluded.
 
@@ -56,20 +65,65 @@ When a non-trivial action depends on a premise whose truth depends on the output
 
 ```
 Premises:
-  P1: DependsOn(P, Output(L)) ∧ ExogenousLoop(L) → Assumption(P)
-  P2: Signaling(P, L) → ¬ValidatedIndependently(P)        [GNS-004: direction is not validation]
-  P3: StructurallyEnforced(P) → Known(P) ∧ ¬DependsOn(P, Output(L)) ∧ ¬Cascade(A)
+  P1: DependsOn₀(P, Output(L)) ∧ ExogenousLoop(L) → Assumption₀(P)
+  P2: Signaling(P, L) → ¬ValidatedIndependently₁(P)
+      [GNS-004: Direction(P) is not validation]
+  P3: DependsOn₀(P, Output(L)) ∧ ExogenousLoop(L) ∧ ValidatedIndependently₁(P)
+        → ( ProbeInPlace(P) ∨ Signaling(P, L) ∨ Enforce₀₁(P) )
+      [exhaustive: from inside your own loop exactly three moves bear on a cross-loop
+       premise — observe the foreign output where it is, push on the foreign loop, or
+       change what P depends on. Inaction is not a fourth move: it leaves P where P1
+       put it, an assumption, so validation cannot arrive without one of the three.]
+  P4: ProbeInPlace(P) → Observable₀(Output(L))
+  P5: ¬Observable₀(Output(L))
+      [by the definition of Output(L): not yet produced, therefore not observable
+       from any loop, including your own]
+  P6: Enforce₀₁(P) → StructurallyEnforced₁(P)
+                     ∧ ¬DependsOn₁(P, Output(L))
+                     ∧ ValidatedIndependently₁(P)
+                     ∧ ¬Cascade(A, P)
+      [truth by construction is observable in your own loop — you built it — so it
+       meets GNS-004's standard without reference to L's cooperation]
 
- 1. Assume NonTrivial(A) ∧ DependsOn(A,P) ∧ DependsOn(P, Output(L)) ∧ ExogenousLoop(L)
- 2. ValidatedIndependently(P) required                    [GNS-004, Modus Ponens]
- 3. Assumption(P)                                         [P1]
- 4. Output(L) not observable in your own loop → cannot validate in place   [P1]
- 5. Signaling cannot discharge the requirement            [P2]
- 6. Only own-loop path to validation: remove DependsOn(P, Output(L))   [from 4, 5]
- 7. StructurallyEnforced(P) does exactly that             [P3]
- 8. ValidatedIndependently(P) ↔ StructurallyEnforced(P)   [from 6, 7] ∎
+ 1. Assume NonTrivial(A) ∧ DependsOn₀(A,P) ∧ DependsOn₀(P,Output(L)) ∧ ExogenousLoop(L)
+ 2. DependsOn₀(P,Output(L)) ∧ ExogenousLoop(L)      [1, ∧-Elimination]
+ 3. Assumption₀(P)                                  [2, P1, Modus Ponens]
+ 4. ValidatedIndependently₁(P) is required          [1, GNS-004]
+ 5. ¬ProbeInPlace(P)                                [P4, P5, Modus Tollens]
+
+    → direction:
+ 6.   Assume ValidatedIndependently₁(P)
+ 7.   ProbeInPlace(P) ∨ Signaling(P,L) ∨ Enforce₀₁(P)   [2, 6, P3, Modus Ponens]
+ 8.   ¬Signaling(P, L)                              [6, P2, Modus Tollens]
+ 9.   Enforce₀₁(P)                                  [7, 5, 8, Disjunctive Syllogism ×2]
+10.  ValidatedIndependently₁(P) → Enforce₀₁(P)      [6–9, Conditional Proof]
+
+    ← direction:
+11.  Enforce₀₁(P) → ValidatedIndependently₁(P)      [P6, ∧-Elimination]
+
+12. ValidatedIndependently₁(P) ↔ Enforce₀₁(P)       [10, 11, ↔-Introduction]
+13. NonTrivial(A) ∧ DependsOn₀(A,P) ∧ DependsOn₀(P,Output(L)) ∧ ExogenousLoop(L)
+      → ( ValidatedIndependently₁(P) ↔ Enforce₀₁(P) )
+                                                    [1–12, Conditional Proof] ∎
 
 Cite as: "By GNS-006 (Structural Enforcement of Cross-Loop Premises), ..."
 ```
 
-**The pivot:** For a premise inside your own loop, you validate by probing reality directly (GNS-003 reversible step, GNS-001 observation). For a cross-loop premise, the reality you would need to probe — the foreign loop's output — is not yet produced and not in your loop to produce. So GNS-004's requirement cannot be met in place; the only way to satisfy it is to change what P depends on. Structural enforcement is GNS-003's reversible step redirected from *probing* a premise to *dissolving* it.
+**The pivot:** For a premise inside your own loop, you validate by probing reality directly (GNS-003 reversible step, GNS-001 observation). For a cross-loop premise, the reality you would need to probe — the foreign loop's output — is not yet produced and not in your loop to produce. Step 5 closes that route. Step 8 closes signaling. What remains is to change what P depends on. Structural enforcement is GNS-003's reversible step redirected from *probing* a premise to *dissolving* it.
+
+---
+
+## Corollary GNS-006.1 — the cross-agent case
+
+**Statement:** A trusted collaborator is an exogenous loop. Trust does not make their loop observable in place, so it does not open a fourth move.
+
+**Formal:**
+
+```
+∀A,P,L: [GNS-006 antecedent] ∧ Agent(L) ∧ Trusted(L)
+        → ( ValidatedIndependently₁(P) ↔ Enforce₀₁(P) )
+```
+
+**Proof:** `Agent(L) ∧ Trusted(L)` narrows the range of L but adds no conjunct that any step of the GNS-006 derivation consumes. In particular it does not weaken P5: a trusted party's future output is still not yet produced. Instantiate GNS-006 at L and conjoin. ∎
+
+**Reading:** the corollary is the narrow case, not the theorem. Asking a trusted colleague to remember something is Signaling(P, L), closed by step 8, exactly as asking an untrusted one would be. Changing the shared environment so the thing cannot be forgotten is Enforce₀₁(P). Trust changes the odds; it does not change the epistemics.

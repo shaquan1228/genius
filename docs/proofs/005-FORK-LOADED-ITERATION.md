@@ -6,7 +6,7 @@
 **Branch Trigger:** Iteration(I)  
 **Status:** Proven  
 **Date:** 2026-04-08  
-**Method:** Direct proof via Modus Ponens chain with biconditional introduction  
+**Method:** Biconditional Introduction from two grounded conditionals, discharged by Conditional Proof  
 **Scope:** Normative — proves what the system prescribes, not what agents always do
 
 ---
@@ -24,6 +24,8 @@ In the genius system, iteration within a stable form is justified if and only if
 
 **Why it matters:** GNS-001/002/003 prove the mechanics of the loop (observe, iterate, smallest reversible step). GNS-005 proves the gating question one level above: when should iteration be running at all? It is the discriminator that separates preparation from tinkering.
 
+**Sort note:** GNS-001 through GNS-004 quantify over actions A. GNS-005 quantifies over iterations I, where I is a sequence of such actions. The two sorts meet in P3a and P3b, which import GNS-002 and GNS-003 to ground each direction of the biconditional.
+
 ---
 
 ## Definitions
@@ -35,11 +37,16 @@ In the genius system, iteration within a stable form is justified if and only if
 | Fork | A discrete branching event — the moment a lineage, form, project, or commit boundary changes shape |
 | LoadsFork(I) | I accumulates substrate, capability, or insight that a future fork will release |
 | Justified(I) | I is normatively prescribed — the system says to do it |
-| Tinkering(I) | Iteration that is not justified — iteration without a clear problem, blocking concern, or reduction in cognitive load |
+| Tinkering(I) | I extends the current form without accumulating substrate for any future fork |
+
+**On detecting Tinkering:** the definition is a property of I, not a verdict on it. In practice the property shows itself when the iteration answers to no clear problem, no blocking concern, and no reduction in cognitive load. Those are symptoms used to recognise ¬LoadsFork(I); they are not what the term means. Step 10 derives the verdict; it is not built into the definition.
 
 **Scope boundary:** Same as GNS-001 — only rendered markdown content. HTML comments excluded.
 
-**Normative scope:** This proof establishes what the system prescribes. The Productivity Paradox (`docs/dreams/STOP-TINKERING.md` lines 95-106) and the Pattern Lock failure mode (`docs/dreams/DECISION-THEORY.md` lines 89-99) are documented violations, not counterexamples.
+**Normative scope:** This proof establishes what the system prescribes. Two documented violations, neither a counterexample:
+
+- **The Productivity Paradox** — sustained motion inside a stable form, mistaken for progress because it is effortful.
+- **Pattern Lock** — repeating an approach that once worked, after the environment has changed.
 
 ---
 
@@ -47,17 +54,33 @@ In the genius system, iteration within a stable form is justified if and only if
 
 ```
 Premises:
-  P1: Iteration(I) → DwellState(I)
-  P2: DwellState(I) → LoadsFork(I) ∨ Tinkering(I)
-  P3: DwellState(I) → (Justified(I) ↔ LoadsFork(I))
+  P1:  Iteration(I) → DwellState(I)
+  P2:  DwellState(I) → (LoadsFork(I) ⊻ Tinkering(I))
+       [exhaustive and disjoint: within a dwell state, iteration either accumulates
+        substrate for a future fork or it does not; there is no third state]
+  P3a: DwellState(I) ∧ LoadsFork(I) → Justified(I)
+       [by GNS-002: iteration toward a goal not yet achieved is prescribed.
+        The fork is what the dwell state's goal resolves to.]
+  P3b: DwellState(I) ∧ ¬LoadsFork(I) → ¬Justified(I)
+       [by GNS-003: a prescribed step is the smallest step that moves toward the goal.
+        A step that moves toward no fork is not a smaller step toward it — it is not
+        a step toward it at all, so it fails the constraint GNS-003 imposes.]
 
  1. Assume Iteration(I)
- 2. DwellState(I)                          [P1, Modus Ponens]
- 3. LoadsFork(I) ∨ Tinkering(I)            [P2, Modus Ponens]
- 4. Justified(I) ↔ LoadsFork(I)            [P3, Modus Ponens]
- 5. Iteration(I) → (Justified(I) ↔ LoadsFork(I))  [1–4, Conditional Proof] ∎
+ 2. DwellState(I)                                 [1, P1, Modus Ponens]
+ 3. LoadsFork(I) → Justified(I)                   [2, P3a, Exportation]
+ 4. ¬LoadsFork(I) → ¬Justified(I)                 [2, P3b, Exportation]
+ 5. Justified(I) → LoadsFork(I)                   [4, Contraposition]
+ 6. Justified(I) ↔ LoadsFork(I)                   [3, 5, ↔-Introduction]
+ 7. Iteration(I) → (Justified(I) ↔ LoadsFork(I))  [1–6, Conditional Proof] ∎
 
-Operational rule:
+Corollary 005.1 — Tinkering is never justified:
+
+ 8. LoadsFork(I) ⊻ Tinkering(I)                   [2, P2, Modus Ponens]
+ 9. Tinkering(I) → ¬LoadsFork(I)                  [8, Exclusive Disjunction]
+10. Tinkering(I) → ¬Justified(I)                  [9, 4, Hypothetical Syllogism] ∎
+
+Operational rule (Corollary 005.1, contraposed):
   Name the fork you are preparing for.
   If you can name it → you are loading → continue.
   If you cannot    → you are tinkering → stop.

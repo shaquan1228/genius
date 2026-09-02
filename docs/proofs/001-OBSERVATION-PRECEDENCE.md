@@ -32,9 +32,9 @@ In the genius system, every non-trivial action is preceded by observation.
 | ObserveFirst(A) | The Observe phase executes before Orient, Decide, or Act for A |
 | PrecededByObservation(A) | Before A is executed, explicit observation of facts, signals, and constraints occurred |
 
-**Scope boundary:** Only rendered markdown content counts. HTML comments (e.g., `identity.md` lines 10-16) are excluded from the corpus.
+**Scope boundary:** Only rendered markdown content counts. HTML comments (e.g., `identity.md` lines 3-4) are excluded from the corpus.
 
-**Normative scope:** This proof establishes what the system prescribes. Documented failure modes (e.g., "Rushed Processing" in `docs/dreams/DECISION-THEORY.md` lines 78-85) are violations of the norm, not counterexamples to it.
+**Normative scope:** This proof establishes what the system prescribes. Rushed Processing — committing to a direction in the first seconds of a problem, before the facts are in — is a violation of the norm, not a counterexample to it.
 
 ---
 

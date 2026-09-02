@@ -8,7 +8,7 @@ Tool names below are examples from one stack. The field names the outcome. The e
 
 ## Target branch + stack position (GNS-003)
 
-> "In the genius system, every non-trivial step within iteration is the smallest reversible action that advances the goal."
+> "In the genius system, every non-trivial action within an active OODA loop is the smallest reversible step that moves toward the goal."
 
 A wrong-branch commit is not reversible without recovery (stash, detach, restack). Confirm the branch before the first edit. That keeps the step reversible. If a stacking tool is in use, the stack position matters too. An amend on the wrong branch in a stack invalidates downstream restacks.
 
@@ -34,13 +34,13 @@ Example (C++ repo): two files each define their own `BACKOFF_DOUBLING` constant.
 
 ## Output shape (GNS-002)
 
-> "In the genius system, non-trivial actions are refined through iteration toward the goal."
+> "In the genius system, for every non-trivial action where the goal is not yet achieved, observation recurs after the action."
 
 Iteration without a target shape produces output that overruns the budget (the report's 500-token failures). Name the shape up front: diff, numbered list, file path + summary, or score-first. The shape is the success criterion. Reaching it is how iteration stops.
 
 ## Verification gate (GNS-004)
 
-> "A non-trivial step that depends on a premise requires independent validation of that premise."
+> "Every non-trivial action that depends on a premise requires independent validation of that premise."
 
 The chain says "the refactor is done." That is a premise. Independent validation is a check not derived from the chain. Examples: a passing spec, a clean type check, a `git diff --stat` that matches the in-scope list. Until that check runs and returns the expected signal, "done" is a hypothesis.
 
