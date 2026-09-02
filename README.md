@@ -49,9 +49,9 @@ For Cursor: paste the printed snippet into **Cursor > Settings > Rules for AI**.
 
 ## How it works
 
-Claude Code and Codex use the same packaged reasoning skill and the identity at `plugin/docs/identity.md`. The identity defines how the model should observe, decide, and act. Cursor gets the same context via `.cursor/rules/`. Codex activates the skill when it matches a request or when you invoke `$genius:reasoning`; `bin/setup` references the same packaged identity for persistent Claude Code and Cursor injection.
+Claude Code and Codex install this repository as the plugin and read the same identity at `docs/identity.md`. The identity defines how the model should observe, decide, and act. Cursor gets the same context via `.cursor/rules/`. Codex activates the skill when it matches a request or when you invoke `$genius:reasoning`; `bin/setup` reads the same file for persistent Claude Code and Cursor injection.
 
-`plugin/docs/identity.md` is the identity file consumed by the packaged skill and setup script. `docs/identity.md` is a symlink to it, so earlier `bin/setup` installs keep resolving.
+`docs/identity.md` is the only file you need to understand or customize. It links the postulate and the five proofs in `docs/`, which ship with the plugin.
 
 Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply the reasoning framework to your current task.
 

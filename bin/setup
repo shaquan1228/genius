@@ -9,7 +9,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-IDENTITY_DOC="$ROOT_DIR/plugin/docs/identity.md"
+IDENTITY_DOC="$ROOT_DIR/docs/identity.md"
 CLAUDE_MD="$HOME/.claude/CLAUDE.md"
 CURSOR_MDC="$ROOT_DIR/.cursor/rules/genius.mdc"
 BEGIN_MARKER="# BEGIN GENIUS"
