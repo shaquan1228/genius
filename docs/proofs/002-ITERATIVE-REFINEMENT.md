@@ -3,9 +3,10 @@
 **Theorem ID:** GNS-002  
 **Type:** Branch Proof  
 **Branches From:** GNS-001  
+**Branch Trigger:** NonTrivial(A) ∧ ¬GoalAchieved(A)  
 **Status:** Proven  
 **Date:** 2026-04-04  
-**Method:** Direct proof via Modus Ponens chain  
+**Method:** Direct proof via Modus Ponens chain, discharged by Conditional Proof  
 **Scope:** Normative — proves what the system prescribes, not what agents always do
 
 ---
@@ -18,10 +19,12 @@ In the genius system, for every non-trivial action where the goal is not yet ach
 **Formal:**
 
 ```
-∀A: NonTrivial(A) ∧ ¬GoalAchieved → FollowedByObservation(A)
+∀A: NonTrivial(A) ∧ ¬GoalAchieved(A) → FollowedByObservation(A)
 ```
 
-**Combined with GNS-001:** Observation before action (GNS-001) + observation after action (GNS-002) = continuous cycle. This proves OODA is a loop, not a one-shot sequence.
+**Combined with GNS-001:** GNS-001 puts observation before the action. GNS-002 puts observation after the action. The two proofs together describe a continuous cycle. They do not describe a single sequence.
+
+This proof does not derive the cycle. P2 states it. P2 unfolds the definition of the OODA loop.
 
 ---
 
@@ -30,7 +33,7 @@ In the genius system, for every non-trivial action where the goal is not yet ach
 | Symbol | Meaning |
 |--------|---------|
 | NonTrivial(A) | Inherited from GNS-001: A has more than one viable approach, OR A involves uncertainty |
-| GoalAchieved | The desired outcome has been reached: acceptance criteria satisfied, decision resolved, or uncertainty reduced to the point where further iteration adds no value |
+| GoalAchieved(A) | The outcome that A aims at is reached. Three signals show this: the acceptance criteria pass, the decision is resolved, or more iteration adds no value |
 | OODA(A) | A is processed through the Observe→Orient→Decide→Act loop |
 | Cycle(A) | OODA processing of A is continuous — not a one-shot sequence |
 | ActThenObserve(A) | After the Act phase for A completes, the system returns to Observe |
@@ -38,7 +41,10 @@ In the genius system, for every non-trivial action where the goal is not yet ach
 
 **Scope boundary:** Same as GNS-001 — only rendered markdown content. HTML comments excluded.
 
-**Normative scope:** This proof establishes what the system prescribes. The "No Iteration" anti-pattern (`docs/dreams/OODA.md` lines 144-148) and "Pattern Lock" failure mode (`docs/dreams/DECISION-THEORY.md` lines 89-91) are documented violations, not counterexamples.
+**Normative scope:** This proof establishes what the system prescribes. There are two documented violations. Neither is a counterexample:
+
+- **No Iteration** — the agent runs the loop one time. The agent then assumes the goal is reached.
+- **Pattern Lock** — the agent repeats an approach that worked before. The environment has since changed.
 
 ---
 
@@ -46,14 +52,19 @@ In the genius system, for every non-trivial action where the goal is not yet ach
 
 ```
 Premises:
-  P1: NonTrivial(A) → OODA(A)                              [by GNS-001]
+  P1: NonTrivial(A) → OODA(A)                                          [by GNS-001]
   P2: OODA(A) → Cycle(A) ∧ ActThenObserve(A)
-  P3: Cycle(A) ∧ ¬GoalAchieved → FollowedByObservation(A)
+  P3: Cycle(A) ∧ ActThenObserve(A) ∧ ¬GoalAchieved(A) → FollowedByObservation(A)
 
- 1. Assume NonTrivial(A) ∧ ¬GoalAchieved
- 2. OODA(A)                                [P1, Modus Ponens]
- 3. Cycle(A) ∧ ActThenObserve(A)           [P2, Modus Ponens]
- 4. FollowedByObservation(A)               [P3, Modus Ponens] ∎
+ 1. Assume NonTrivial(A) ∧ ¬GoalAchieved(A)
+ 2. NonTrivial(A)                                    [1, ∧-Elimination]
+ 3. ¬GoalAchieved(A)                                 [1, ∧-Elimination]
+ 4. OODA(A)                                          [2, P1, Modus Ponens]
+ 5. Cycle(A) ∧ ActThenObserve(A)                     [4, P2, Modus Ponens]
+ 6. Cycle(A) ∧ ActThenObserve(A) ∧ ¬GoalAchieved(A)  [5, 3, ∧-Introduction]
+ 7. FollowedByObservation(A)                         [6, P3, Modus Ponens]
+ 8. NonTrivial(A) ∧ ¬GoalAchieved(A) → FollowedByObservation(A)
+                                                     [1–7, Conditional Proof] ∎
 
 Cite as: "By GNS-002 (Iterative Refinement), ..."
 ```

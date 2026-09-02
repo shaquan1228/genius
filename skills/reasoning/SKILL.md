@@ -6,11 +6,11 @@ argument-hint: "[task description]"
 
 ## Task
 
-Apply the five proofs to the supplied task from the first action. Do not announce setup.
+Apply the proofs to the supplied task from the first action. Do not announce setup.
 
 ## Context
 
-- If GNS-001..005 are not in context, read `../../docs/identity.md` relative to this file. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`. Load it inline. Do not prompt the user.
+- If GNS-001..006 are not in context, read `../../docs/identity.md` relative to this file. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`. Load it inline. Do not prompt the user.
 - `references/trigger-map.md` states when each proof fires and the question it asks. Read it before the first step.
 - `references/worked-example.md` traces one task through all five proofs. It then shows the same task done without them. Read it for calibration.
 

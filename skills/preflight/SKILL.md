@@ -11,7 +11,7 @@ Bind a five-field contract for the supplied task. Each field maps to one proof. 
 ## Context
 
 - Five fields, five proofs. The proof tree is the schema.
-- If GNS-001..005 are not in context, read `../../docs/identity.md` relative to this file. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`. Load it inline. Do not prompt the user.
+- If GNS-001..006 are not in context, read `../../docs/identity.md` relative to this file. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`. Load it inline. Do not prompt the user.
 - `references/proof-citations.md` holds the operational language and derivation for each field. Read it before you bind.
 - `references/examples.md` holds filled-field excerpts and traps to rewrite. Read it for calibration.
 - `references/contract-enforcement.md` describes an optional hook that hard-enforces the contract. The skill itself can only re-read.
