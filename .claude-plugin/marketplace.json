@@ -1,6 +1,6 @@
 {
   "name": "genius",
-  "description": "A structured engineering identity for Claude Code and Codex.",
+  "description": "A structured engineering identity for coding agents.",
   "owner": {
     "name": "Shaquan Nelson"
   },
@@ -11,7 +11,7 @@
         "source": "github",
         "repo": "shaquan1228/genius"
       },
-      "description": "Injects a structured engineering identity into Claude Code and Codex when invoked, with optional persistent setup for Claude Code and Cursor."
+      "description": "Injects a structured engineering identity when invoked. Includes optional persistent setup."
     }
   ]
 }

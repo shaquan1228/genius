@@ -63,5 +63,6 @@ Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply 
 | `$genius:reasoning` | Apply the genius reasoning framework in Codex |
 | `/genius:preflight [task]` | Bind a 5-field contract before non-trivial action (one field per proof) |
 | `/genius:tcrei [task]` | Compose a paste-ready TCREI prompt for dispatching to another agent |
+| `/genius:bayesian [decision]` | Analyze a decision under uncertainty — options, Bayesian update, bounded verdict, counter-math |
 | `bin/setup` | Manually inject identity into Claude Code and Cursor |
 | `bin/teardown [--confirm]` | Remove the injection (dry-run by default) |
