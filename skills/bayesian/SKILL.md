@@ -14,6 +14,8 @@ Frame the decision as a game. Name each option. Price each option as an interval
 - An offer, a negotiation, a bid, a hire, a ship date, and "what are my options" are all forks.
 - If GNS-001..006 are not in context, read `../../docs/identity.md` relative to this file. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`. Load it inline. Do not prompt the user.
 - GNS-001 governs the frame. GNS-004 governs the counter-math. GNS-002 governs the loop after a probe returns.
+- The full proofs ship with the plugin at `../../docs/proofs/`, relative to this file. Read one there when you need the derivation, not the citation.
+- `../../docs/proofs/PROOF-TREE.md` says when each proof fires. Read it if a citation here is unclear.
 - There are two depths. Scan answers "what are my options" in ten lines. Solve does the full analysis.
 - `references/method.md` gives both output shapes, the game frame, the tree, and reactive parties. Read it first.
 - `references/bayes.md` gives the update. Read it when another party has already acted.

@@ -141,4 +141,5 @@ The signal is simple. **The probability moves when your action moves.** `p(they 
 - **Change what they can observe.** In a repeated game a predictable action gets priced in by the other side. If you always concede under pressure, pressure becomes free for them.
 - **Deviate only on what you observed.** An estimate from watching a party is worth money. An estimate from a story you told yourself is the most costly habit here.
 - It is better to remove a branch than to price it. Use a written deadline, a floor, a deposit, or a milestone payment. A converted premise is true by construction (GNS-006).
+- GNS-006 covers a premise that another party's loop owns. The derivation is at `../../../docs/proofs/006-STRUCTURAL-ENFORCEMENT-CROSS-LOOP.md`.
 - Do not model an opponent who is not one. A market price, a queue, and the weather do not react to you. Treat them as chance.

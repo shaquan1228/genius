@@ -31,6 +31,8 @@ An example. An option is worth $95k at the low end of adoption and $140k at the 
 
 This is not a hedge. A crossing is a specific result. It says the decision is indeterminate on current evidence. It also names the one fact that settles it.
 
+A crossing means no option yet loads a fork. GNS-005 is the proof. The derivation is at `../../../docs/proofs/005-FORK-LOADED-ITERATION.md`.
+
 **When a deadline blocks the probe**, you must still decide. Use the midpoint. Say the confidence is low. Say what you would have measured. Then set a review date for when the fact arrives on its own.
 
 ## 4. Count only what decides the result
