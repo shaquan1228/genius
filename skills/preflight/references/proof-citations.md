@@ -4,11 +4,15 @@ Per-field operational language. Each field's check is a proof's branch trigger f
 
 The full proofs ship with the plugin at `../../../docs/proofs/`, relative to this file. Read one there when a citation needs its derivation rather than its operational summary.
 
+Tool names below appear only as examples from one stack. The field itself names the outcome; the executing agent observes which tool provides it.
+
 ## Target branch + stack position — GNS-003
 
 > "In the genius system, every non-trivial step within iteration is the smallest reversible action that advances the goal."
 
-Wrong-branch commits are non-reversible without recovery (stash → detach → restack). Confirming the branch *before* the first edit keeps the step reversible. The Graphite stack position matters because amending the wrong branch in a stack invalidates downstream restacks.
+Wrong-branch commits are non-reversible without recovery (stash → detach → restack). Confirming the branch *before* the first edit keeps the step reversible. If a stacking tool is in use, the stack position matters too: amending the wrong branch in a stack invalidates downstream restacks.
+
+Example (author's stack): `git branch --show-current`, then `gt log short` when Graphite is authenticated.
 
 ## In-scope files — GNS-001
 
@@ -20,7 +24,9 @@ Wrong-branch commits are non-reversible without recovery (stash → detach → r
 
 > "Iteration within a stable form is justified if and only if it loads latent potential for a future fork."
 
-Packwerk fixes, lint sweeps, and adjacent refactors do not load *this task's* fork. Naming them as off-limits is the operational form of the GNS-005 question: "name the fork you are preparing for." If the cleanup loads no fork for the current task, it's tinkering — exclude it.
+Boundary-tool fixes, lint sweeps, and adjacent refactors do not load *this task's* fork. Naming them as off-limits is the operational form of the GNS-005 question: "name the fork you are preparing for." If the cleanup loads no fork for the current task, it's tinkering — exclude it.
+
+Example (author's stack): Packwerk violations surfaced by the change but unrelated to it.
 
 ## Output shape — GNS-002
 
@@ -32,4 +38,6 @@ Iteration without a target shape produces output that overruns the budget (the r
 
 > "A non-trivial step that depends on a premise requires independent validation of that premise."
 
-The chain says "the refactor is done." That's a premise. Independent validation = something not derived from the chain: a passing spec, a clean `srb tc`, a `git diff --stat` confirming the LOC matches the intent. Until that runs and returns the expected signal, "done" is hypothesis, not knowledge.
+The chain says "the refactor is done." That's a premise. Independent validation = something not derived from the chain: a passing spec, a clean type check, a `git diff --stat` confirming the touched files match the in-scope list. Until that runs and returns the expected signal, "done" is hypothesis, not knowledge.
+
+Example (author's stack): `bundle exec rspec <spec>`, `srb tc`, `bin/packwerk check`. In another repo the same gate reads `pytest`, `mypy`, or `npm test` — observe which is present.
