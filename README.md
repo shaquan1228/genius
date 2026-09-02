@@ -35,7 +35,7 @@ codex plugin marketplace add shaquan1228/genius
 codex plugin add genius@genius
 ```
 
-Start a new Codex thread, then invoke `$reasoning` or describe the Genius reasoning framework in your prompt. Codex uses the shared skill package and does not automatically inject the identity into every session.
+Start a new Codex thread, then invoke `$genius:reasoning` or describe the Genius reasoning framework in your prompt. Codex uses the shared skill package and does not automatically inject the identity into every session.
 
 **Manually:**
 
@@ -49,20 +49,18 @@ For Cursor: paste the printed snippet into **Cursor > Settings > Rules for AI**.
 
 ## How it works
 
-Claude Code and Codex use the same packaged reasoning skill and the identity at `plugin/docs/identity.md`. The identity defines how the model should observe, decide, and act. Cursor gets the same context via `.cursor/rules/`. Codex activates the skill when it matches a request or when you invoke `$reasoning`; `bin/setup` references the same packaged identity for persistent Claude Code and Cursor injection.
+Claude Code and Codex use the same packaged reasoning skill and the identity at `plugin/docs/identity.md`. The identity defines how the model should observe, decide, and act. Cursor gets the same context via `.cursor/rules/`. Codex activates the skill when it matches a request or when you invoke `$genius:reasoning`; `bin/setup` references the same packaged identity for persistent Claude Code and Cursor injection.
 
 `plugin/docs/identity.md` is the identity file consumed by the packaged skill and setup script.
 
-Run `/genius:reasoning` in Claude Code or `$reasoning` in Codex to load and summarize the reasoning framework. Use the corresponding `off` argument to stop applying it for the current session.
+Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply the reasoning framework to your current task.
 
 ## Commands
 
 | Command | Description |
 | ------- | ----------- |
 | `/genius:reasoning` | Load the genius reasoning framework in Claude Code |
-| `$reasoning` | Load the genius reasoning framework in Codex |
-| `... on` | Load Genius for the current session |
-| `... off` | Stop applying Genius for the current session |
+| `$genius:reasoning` | Apply the genius reasoning framework in Codex |
 | `/genius:preflight [task]` | Bind a 5-field contract before non-trivial action (one field per proof) |
 | `bin/setup` | Manually inject identity into Claude Code and Cursor |
 | `bin/teardown [--confirm]` | Remove the injection (dry-run by default) |
