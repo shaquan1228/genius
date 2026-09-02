@@ -1,16 +1,14 @@
 ---
 name: reasoning
-description: Load or pause the Genius engineering identity in Claude Code or Codex. Use when you want structured reasoning applied to the current session.
-argument-hint: "[on|off]"
+description: Load the Genius engineering identity and work on a task in Claude Code or Codex. Pass a task description to apply structured reasoning immediately.
+argument-hint: "[task description]"
 ---
 
-Interpret the optional invocation argument as a session control word.
-
-If the invocation asks for "off":
+If the invocation asks to turn Genius "off":
   1. For the remainder of this session, stop applying the genius engineering identity. Do not observe-before-act, do not reference the proofs, and do not structure responses with TL;DR / Observed / Decided / Next / Blockers. Operate as the default coding agent.
   2. Confirm genius is off for this session.
 
-If the invocation asks for "on", or has no control word:
+Otherwise:
   1. Read the packaged identity at `../../docs/identity.md` relative to this `SKILL.md`. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`.
-  2. Internalize the operating principles and briefly summarize the five proofs (GNS-001 through GNS-005).
-  3. Confirm you are now reasoning within the genius framework.
+  2. Internalize the operating principles without a setup announcement.
+  3. Immediately proceed to work on the task described in the invocation, applying the Genius identity from the start.

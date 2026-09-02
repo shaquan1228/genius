@@ -63,5 +63,6 @@ Run `/genius:reasoning` in Claude Code or `$reasoning` in Codex to load and summ
 | `$reasoning` | Load the genius reasoning framework in Codex |
 | `... on` | Load Genius for the current session |
 | `... off` | Stop applying Genius for the current session |
+| `/genius:preflight [task]` | Bind a 5-field contract before non-trivial action (one field per proof) |
 | `bin/setup` | Manually inject identity into Claude Code and Cursor |
 | `bin/teardown [--confirm]` | Remove the injection (dry-run by default) |
