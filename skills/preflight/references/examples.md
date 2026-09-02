@@ -46,6 +46,11 @@ Excerpts from contracts that held through a session — the one line worth copyi
 
   Assumes Graphite is authenticated here. → "Open the PR with whatever branch tooling is present; gate is specs green and diff-stat matches scope."
 
+- **Test runner carried over from the last repo.**
+  > Gate: `bundle exec rspec` green.
+
+  This repo has no Gemfile. It has a `Makefile` with a `tests` target and doctest. → Observe the build file first. Name the target you saw: `make tests FILTER=sizing_policy`.
+
 - **Scope drift mid-task, patched in place.**
   > Updated in-scope to also include the config loader.
 
@@ -77,3 +82,23 @@ Branch is assumed. In-scope has no paths. Gate names tools not yet observed in t
 - Gate: bundle exec rspec spec/payments/client_spec.rb green (runner observed
   in Gemfile); git diff --stat touches only in-scope files                    — GNS-004
 ```
+
+## A second fixed contract, C++ repo
+
+Task: "Add a `KellyFraction` sizing policy." The repo is header-only C++ with a hand-written Makefile. Nothing autoloads, so the in-scope list includes the umbrella include.
+
+```
+## Preflight Contract
+- Branch: feat/kelly-sizing (git branch --show-current); no stacking tool present     — GNS-003
+- In scope: src/primitives/sizing_policy/generics/kelly_fraction.hpp (new);
+  src/primitives/sizing_policy/sizing_policies.hpp:6-11 (umbrella include, read);
+  tests/primitives/sizing_policy/sizing_policies.cpp (read)                          — GNS-001
+- Off-limits: the duplicated BACKOFF constants in composition/events/publisher.cpp
+  and consumer.cpp; the TODO in cli/capabilities.hpp:63                              — GNS-005
+- Output: diff + 5-bullet summary                                                    — GNS-002
+- Gate: make tests FILTER=sizing_policy green (target observed in Makefile:72);
+  make lint clean (clang-tidy caps function size at 25 lines, .clang-tidy);
+  git diff --stat touches only in-scope files                                        — GNS-004
+```
+
+The sibling to copy is `generics/fixed_fraction.hpp:11`. Its constructor validates and throws. Match that, not a new pattern.

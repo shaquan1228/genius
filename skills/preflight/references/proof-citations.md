@@ -14,6 +14,8 @@ Wrong-branch commits are non-reversible without recovery (stash → detach → r
 
 Example (author's stack): `git branch --show-current`, then `gt log short` when Graphite is authenticated.
 
+Example (C++ repo, no stacking tool): `git branch --show-current` only. Do not mention stack position.
+
 ## In-scope files — GNS-001
 
 > "In the genius system, every non-trivial action is preceded by observation."
@@ -28,6 +30,8 @@ Boundary-tool fixes, lint sweeps, and adjacent refactors do not load *this task'
 
 Example (author's stack): Packwerk violations surfaced by the change but unrelated to it.
 
+Example (C++ repo): two files each define their own `BACKOFF_DOUBLING` constant. Merging them loads no fork for a sizing-policy task. Leave them.
+
 ## Output shape — GNS-002
 
 > "In the genius system, non-trivial actions are refined through iteration toward the goal."
@@ -40,4 +44,6 @@ Iteration without a target shape produces output that overruns the budget (the r
 
 The chain says "the refactor is done." That's a premise. Independent validation = something not derived from the chain: a passing spec, a clean type check, a `git diff --stat` confirming the touched files match the in-scope list. Until that runs and returns the expected signal, "done" is hypothesis, not knowledge.
 
-Example (author's stack): `bundle exec rspec <spec>`, `srb tc`, `bin/packwerk check`. In another repo the same gate reads `pytest`, `mypy`, or `npm test` — observe which is present.
+Example (author's stack): `bundle exec rspec <spec>`, `srb tc`, `bin/packwerk check`.
+
+Example (C++ repo): `make tests FILTER=<suite>`, `make lint`, `make test-san`. The targets were read from the Makefile, not assumed. In a Python repo the same gate reads `pytest` and `mypy`. Observe which is present.

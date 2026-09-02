@@ -14,6 +14,11 @@ Excerpts distilled from prompts that shipped a real result — the one line wort
 
   Verified pointers plus a search strategy beat a prose description the agent cannot act on.
 
+- **Context names the build file and the sibling, not the language convention.**
+  > Build is a hand-written `Makefile`; tests are doctest via `make tests FILTER=<suite>`. Copy `sizing_policy/generics/fixed_fraction.hpp:11` and add the include to `sizing_policies.hpp:6-11`. Nothing autoloads.
+
+  A header-only C++ repo needs the umbrella-include edit spelled out. A Rails reader would assume autoloading.
+
 - **Rules fence scope explicitly.**
   > She means the copy in that one settings component folder only — not any other folder.
 
@@ -47,6 +52,11 @@ Each of these shipped fine on the author's own machine, then broke the moment th
   > Never stop because of the git host — unset the token and retry.
 
   A fix for one machine's quirk, shipped to every future reader as law. → Leave environment fixes to the environment; the prompt states intent, not local workarounds.
+
+- **Test runner assumed from the language.**
+  > Run the specs with rspec before committing.
+
+  The target repo was C++. → "Run the repo's test target for the touched suite; the gate is green output. Observe the build file for the command."
 
 - **A tool named where an outcome belongs.**
   > plan → work → review → submit (as a chain of specific skill invocations)
