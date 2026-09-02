@@ -2,7 +2,7 @@
 
 A party who has acted has told you something. Price against the hypotheses their action leaves. Do not price against the hypotheses they held before it.
 
-This is the most common error in decision analysis. When the action is costly or aggressive, the error runs one way. It makes the answer too optimistic.
+This is the most common error in decision analysis. Which way it runs depends on the action. Take the direction from the likelihoods, not from a rule of thumb. A costly demand often means they are committed elsewhere. It can also mean they are engaged. Write both likelihoods down and let them decide.
 
 ## The move
 
@@ -45,7 +45,9 @@ Here is the inversion error. `P(a hard demand | they already chose someone else)
 
 Before you update, ask what the other hypothesis looks like. If it looks the same, you learned nothing.
 
-Use this scale for the ratio. **Below 3 is weak. 3 to 10 is a real update. Above 10 is strong.** One weak observation does not collapse a hypothesis set. Several independent weak ones can. Check that they are independent first. Correlated views of one fact are one observation.
+**Extreme readings regress.** A glowing reference, a record quarter, and a very loud demand are all drawn from noisy sources. The next reading sits closer to the average. Their likelihood ratios are smaller than they feel.
+
+Use this scale for the ratio. **Below 3 is weak. 3 to 10 is a real update. Above 10 is strong.** Treat "weak" with care in a decision. A ratio of 2.5 still moves an even prior to about 71%, which changes plenty of calls. One weak observation does not collapse a hypothesis set. Several independent weak ones can. Check that they are independent first. Correlated views of one fact are one observation.
 
 ## 3. Build categories that hold
 
@@ -54,7 +56,7 @@ Use this scale for the ratio. **Below 3 is weak. 3 to 10 is a real update. Above
 - Split them by **what decides the result**. Do not split them by what is interesting.
 - For a deal, split into: it closes, it closes later or smaller, and it does not close.
 - For a party, split into: they are committed to you, they are undecided, and they are committed elsewhere.
-- Keep a bucket for **the story you have not thought of**. Give it 5% to 10%.
+- Keep a bucket for **the story you have not thought of**. Give it 5% to 10%. It has no likelihood, so it cannot update. Let it grow against any hypothesis the evidence keeps failing to fit.
 
 ## 4. What you hold changes what they can hold
 
@@ -70,7 +72,7 @@ A delay, an email with no reply, a skipped meeting, and a passed deadline are ob
 
 A party who wants to say yes usually says yes quickly. Put silence through the same three columns. Do not treat "nothing happened" as "nothing changed".
 
-Silence cuts the other way from a costly action. A quiet party is more often a cool party. Update toward the pessimistic hypothesis, not the optimistic one.
+A quiet party is usually a cool party, but write the likelihood rather than assuming it. Silence during a known freeze means something else entirely.
 
 ## 6. Two failures to check
 

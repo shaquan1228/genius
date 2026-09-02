@@ -17,16 +17,18 @@ Read the bad answers first. Each one is fluent, confident, and wrong.
 > Finalist means roughly even odds. Half of $700k beats a $300k build, and the integration is reusable for other accounts anyway. Build it.
 
 - "Roughly even" is the prior. The demand is new evidence and it points one way.
-- Reusable elsewhere does not decide this contract. It is not an out.
-- No hurdle is stated. The build needs about 43%, from `300 / 700`.
+- Reusable elsewhere may be real, but the answer never says whether other accounts are inside the boundary. Decide that first, then count it or drop it.
+- No hurdle is stated, and the hurdle is not what it looks like. See below.
 
 **Good**
 
-> **Do not build.** The hurdle is `300 / 700`, so about 43%.
+> **Do not build.** It is a clear call, but a thin one, so read the last line.
+>
+> **The hurdle.** Refusing the demand does not remove you from the bid. It leaves you with a worse chance, not no chance. So the build must lift your chance by `300 / 700`, about 43 points. It does not have to reach 43%. It has to *add* 43. If refusing still leaves you a one in ten shot, building has to clear 53%.
 >
 > A buyer who means to pick you does not need $300k of free engineering first. That demand comes far more often from buyers already committed elsewhere. Before it, most finalists in this position are live. After it, few are.
 >
-> Update on the demand and your chance lands somewhere in the mid twenties to low forties. The hurdle sits at or above the top of that. It fails at both ends, so the verdict is robust.
+> Update on the demand and your chance lands somewhere in the mid twenties to low forties. The hurdle sits above the top of that, though only by about a point. Call it **thin**, not robust. It is a fold, but it is not a rout, and the lift test above is what makes it comfortable.
 >
 > **Do not know.** How often this buyer runs a real competition. Ask your channel contact who won their last three. That is one call. If the incumbent always renews, stop bidding the account, not just this deal.
 
@@ -34,7 +36,7 @@ Read the bad answers first. Each one is fluent, confident, and wrong.
 
 ## 2. Two pair against a large shove
 
-**Decision.** You hold two pair. The board allows both a flush and a straight. They shove three times the pot.
+**Decision.** You hold two pair on the turn, so one card is left. The board allows both a flush and a straight. They shove three times the pot.
 
 **Bad**
 
@@ -48,9 +50,9 @@ Read the bad answers first. Each one is fluent, confident, and wrong.
 
 > **Fold.** A shove that large comes from hands that already beat you. The part of their range you beat folds instead of shoving.
 >
-> Only a full house wins. Four cards do that, which is under 10%. The price needs about 43%.
+> Only a full house wins. Four cards do that, and with one card to come that is under 10%. The price needs about 43%. On the flop, with two cards to come, the same four outs are nearer 17%. The street matters.
 >
-> For the call to work, they would need to shove this size as a bluff around half the time. Almost nobody does at three times the pot.
+> For the call to work, they need to be bluffing often. How often depends on what their bluffs are. Pure air, and it is about 37%. Bluffs with a draw, and it is above half, because those still win sometimes. Either way it is far more bluffing than three times the pot usually carries.
 >
 > **Do not know.** Their shove size with a bluff. It costs nothing to watch for and three pots to buy. Collect it. Do not pay for it.
 
@@ -167,7 +169,7 @@ There are no numbers and the ask is the option set. Use Scan. Ten lines. No tree
 
 | Trap | It looks like | The fix |
 |---|---|---|
-| One optimistic number | A single estimate from the good end | Use an interval. Decide at the low end |
+| One optimistic number | A single estimate from the good end | Use an interval. Then propagate it |
 | Pricing the prior | "We are a finalist", after they made a demand | Update first. Then price what is left |
 | Non-decisive outcomes | Counting results that improve and still lose | Count only outcomes that decide the result |
 | A win that loses | Winning below the cost of winning | Count outcomes where you win and it pays |
@@ -187,6 +189,6 @@ There are no numbers and the ask is the option set. Use Scan. Ten lines. No tree
 | Closed-game thinking | Optimal under exactly today's rules | Prefer options robust across rule changes you can name |
 | Average over an ending | Positive EV with a branch that ends the game | Use survival. Cap the commitment. Then price again |
 | Values added late | "The math says A, but I would regret it" | Put non-money payoffs in the unit at the start |
-| Every input at its low end | A pessimistic answer to every question | Vary one input at a time |
+| Every input at its low end | A pessimistic answer to every question | Sample the inputs. Do not stack their ends |
 | False accuracy | A five-level tree from three known numbers | Stop where the evidence stops |
 | Interrogation | Twelve questions before any analysis | Ask only for inputs that change the ranking |

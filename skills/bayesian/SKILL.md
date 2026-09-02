@@ -34,12 +34,16 @@ Frame the decision as a game. Name each option. Price each option as an interval
 - List each live option before you price it. Add the options the user did not name.
 - Test these four options every time: wait, do nothing, a mix, and buy information.
 - Adding an unnamed option is in scope. Replacing the user's decision with a different one is not.
+- Find the reference class and its base rate before you form a view of this case.
 - Give an interval for each uncertain quantity. Do not give one number.
-- The low end is a defensible pessimistic reading, near a tenth percentile. It is not the worst case.
-- Set the low end input by input. Do not put every input at its low end at the same time.
-- Make the verdict at the low end of the input that drives it. Size the commitment there too.
-- If the verdict changes between the two ends, the verdict is "not yet".
-- Then name the fact to learn and its cost. If a deadline blocks the probe, decide at the midpoint and say the confidence is low.
+- Widen any interval you marked `assumed`. A stated ninety percent interval holds the truth about half the time.
+- Do not solve the tree once per input end and call the pair an interval. That is interval arithmetic.
+- With two or more assumed inputs, sample them and run the tree on each draw. Report P10, P50, and P90.
+- Report the probability that the best option beats the next one. Give a number a reader can score.
+- Decide on expected value, after the survival check has removed any option that can end the game.
+- Do not decide at a percentile. It hides a large risk aversion and it punishes an option for a wide interval.
+- If the better option changes across the interval, compute the value of information. Do not answer "not yet".
+- Then either buy the probe or act now on expected value. Say which, and say why.
 - If another party has acted, update the hypothesis set before you price it.
 - Count only the outcomes that decide the result. An outcome that improves your position and still loses is not decisive.
 - Ask what must be true for the other party to still be here. Then price what is left.
@@ -47,7 +51,7 @@ Frame the decision as a game. Name each option. Price each option as an interval
 - Show the arithmetic. Then give the answer in plain words.
 - Say when EV is the wrong test. A branch that ends the game is a survival question.
 - End each answer with the fact you do not know that moves the answer most. Give its cost.
-- Say what to re-price after the probe returns (GNS-002).
+- Say what to re-price after the probe returns (GNS-002). Say whether the answer fell inside your interval.
 - Do not build a tree if one option is clearly best, or if nothing is at stake (GNS-005). Say so and stop.
 - Do not run this on a routine technical choice that has a conventional default.
 - Price the decision the user gives. Do not judge the user.
@@ -63,8 +67,11 @@ Both depths ship only if all of these hold:
 
 Solve also requires all of these:
 
+- A reference class or base rate anchors each interval, or the answer says why none exists.
 - Each uncertain quantity has an interval and a source mark. No single number stands alone.
-- The verdict says which end decided it. A verdict that changes between the ends says "not yet".
+- The output gives the probability that the best option beats the next one.
+- The verdict rests on expected value under the survival cap, not on one end of an interval.
+- A crossing verdict carries a value-of-information number, not a refusal to answer.
 - The posterior sits next to the prior wherever another party has acted.
 - Only decisive outcomes are in the count. Discounted outcomes are marked as discounted.
 - The probabilities at each chance node sum to 1. Each price line shows its arithmetic.
@@ -78,7 +85,7 @@ Solve also requires all of these:
 2. **Gate.** Confirm two or more live options and an uncertain result. If one option is clearly best, say so and stop (GNS-005). Then select Scan or Solve.
 3. **Frame.** Name the game and where the accounting stops. List each live option (GNS-001). Scan stops after step 6.
 4. **Update.** If another party has acted, use `references/bayes.md`. Put the prior next to the posterior.
-5. **Set the intervals.** Use `references/bounds.md`. Count only decisive outcomes. Set the unit and the horizon.
-6. **Price both ends.** Build the tree. Solve it at the low end. Solve it again at the high end.
+5. **Set the intervals.** Use `references/bounds.md`. Anchor on a base rate, then widen. Count only decisive outcomes. Set the unit and the horizon.
+6. **Propagate.** Build the tree. Sample the assumed inputs and run the tree on each draw. Report P10, P50, P90, and the probability the best option wins.
 7. **Counter-math.** Solve each breakeven. Rank the inputs. Run the survival check. Price the cheapest probe (GNS-003, GNS-004).
 8. **Report.** Use the output shape for the depth. Check the answer against Evaluate.

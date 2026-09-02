@@ -42,7 +42,8 @@ Select the depth before you write. A Scan in the Solve shape hides the answer. A
 <indented; □ is a decision, ○ is chance; p and payoff at each leaf>
 
 **Price**
-- <Option>: <arithmetic at the low end> = <value>   [high end: <value>]
+- <Option>: <arithmetic> = <expected value>   [P10 / P90: <value> / <value>]
+- P(<best option> beats <next best>) = <value>
 
 **Verdict**
 <one or two lines, in plain words>
@@ -121,7 +122,9 @@ The maximum rule is easy to break. A branch that reads like a bad result is ofte
 
 The maximum rule is also where option value comes from. An option that keeps a later decision open is worth the best branch of that decision. For the same reason, a failed negotiation prices at the next best option. It never prices at zero.
 
-Solve the tree two times. Solve it at the low end and at the high end. The pair of results is the answer.
+Solving the tree once per input end is not an interval on the result. It is interval arithmetic, and it only finds the true extremes when the result moves one way with every input. A decision node breaks that, because the maximum makes the result bend.
+
+With two or more `assumed` inputs, propagate instead. Sample each input from its interval. Run the tree on each draw. Report P10, P50, P90, and the probability the best option wins. See `bounds.md` §2. With one uncertain input, solve once per end and call the pair a sensitivity range.
 
 Two exclusions and one inclusion:
 

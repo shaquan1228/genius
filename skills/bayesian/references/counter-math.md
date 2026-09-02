@@ -32,7 +32,9 @@ Put one of those three words in the TL;DR.
 
 ## 3. Rank the inputs
 
-Move one input across its interval. Hold the others. Record how much the gap moves. Rank the inputs by that movement.
+Move one input across its interval. Hold the others at their midpoints, and say so. Record how much the gap moves. Rank the inputs by that movement.
+
+This tests one input at a time, so it misses a pair that only matters together. With three or more inputs, also check whether the top two move the gap more together than apart.
 
 The top of the list is the number to go and find. That ranking is often more useful than the verdict. It states one question in place of a vague worry. Name the inputs that move the gap very little. They stop taking attention.
 
@@ -44,8 +46,12 @@ A branch ends the game if it takes you out. Examples are insolvency, no runway, 
 
 - One branch ends the game. Then the test is **survival, not the average**. Say that the test changed. A positive-EV option that can end the game loses to a lower-EV option that cannot.
 - The normal fix is to cap the commitment until no branch ends the game. EV then applies to the capped version.
-- Size a repeated commitment with the Kelly fraction. Pay `m` per unit of value, with success probability `p`. Then `f = (p − m) / (1 − m)` of the budget.
-- Commit a quarter or a half of `f`. Compute `f` at the **low** end of `p`. Full Kelly on an overestimated edge is the normal way to lose a method that works.
+- Kelly sizes a **repeated, divisible commitment against a bankroll you reinvest**. Pay `m` per unit of value, with success probability `p`. Then `f = (p − m) / (1 − m)` of the budget.
+- Do not use Kelly for a one-shot, lumpy commitment. A hire, a single bid, and a ship date are none of those three things. Use the survival cap plus §5 instead.
+- Compute `f` at the **posterior mean** of `p`. Then take **one** haircut, and name its reason. Under log growth, uncertainty in `p` alone does not move the optimum. A haircut needs a reason of its own.
+- Two reasons are good. You only commit when the estimate looks good, so the ones you act on are the flattering ones (`bounds.md` §5). And most people are more risk averse than log growth assumes.
+- A half or a quarter of `f` is a normal haircut. State the fraction you used.
+- Do not also compute at a pessimistic `p`. That charges twice for one worry. It lands near a ninth of Kelly, which nobody chose.
 - The same leaf ends the game for one party and not for another. Runway, dependents, and reserves change the answer. Ask when it matters.
 
 ## 5. Check n
@@ -64,11 +70,13 @@ Each answer ends here. A probe turns an assumed input into an observed one. Pric
 VOI = the value of deciding after you learn − the value of deciding now
 ```
 
-Compute both sides. Compare them to the cost of the probe. If the value wins, **buy the information**. Put that option in the tree with the others.
+Compute both sides. Compare them to the cost of the probe, including the cost of the delay. If the value wins, **buy the information**. Put that option in the tree with the others. If it does not win, act now on expected value and say what would have changed it.
+
+Only reducible uncertainty carries value here. Split the two kinds. You cannot buy out the roll of the dice, but you can buy out not knowing the odds. A probe aimed at the first kind returns nothing.
 
 These probes usually beat their cost. One call to a person who has done it. One week of instrumented data. A paid pilot at 1% of the commitment. One more interview round. A small commitment before a large one. One direct question you have avoided. This is the smallest reversible step (GNS-003).
 
-Do three things. Say **which input** the probe resolves. A probe aimed at the bottom of the §3 rank is not worth buying. Say **if you must wait for it**. You can start some options now and learn later. Say **what to re-price when it returns**. The probe starts a new loop, so observe again after it lands (GNS-002).
+Do four things. Say **which input** the probe resolves. A probe aimed at the bottom of the §3 rank is not worth buying. Say **if you must wait for it**. You can start some options now and learn later. Say **what to re-price when it returns**. The probe starts a new loop, so observe again after it lands (GNS-002). And say **whether the answer fell inside your interval**. If it did not, your intervals are too narrow. Widen the next ones. This is the only calibration check available inside one session.
 
 ## 7. Optionality and reversibility
 
