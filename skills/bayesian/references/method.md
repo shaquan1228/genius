@@ -92,7 +92,7 @@ Use one unit and one time window. Convert each payoff into them. State both.
 - Put non-money payoffs in at the start. Price them. A value added after the arithmetic makes the arithmetic wrong.
 - Match the horizon to the decision. A four-year vest is not a four-year horizon if the user can leave in one year.
 - After about three years, discount the value. Or use a shorter horizon and say so.
-- Convert headline numbers to totals. Base salary is not total comp. List price is not margin. A contract value is not the margin on it.
+- Convert headline numbers to totals. An asking price is not the total cost. List price is not margin. A contract value is not the margin on it.
 
 ## 4. Tree notation
 

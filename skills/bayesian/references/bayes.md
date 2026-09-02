@@ -41,7 +41,7 @@ Here is the inversion error. `P(a hard demand | they already chose someone else)
 | Observation | P(obs \| A) | P(obs \| B) | Ratio | Value |
 |---|---|---|---|---|
 | "This offer expires Friday". A is a real deadline. B is pressure. | 0.90 | 0.95 | 0.95 | none, both say it |
-| A revised offer in two hours. A is first choice. B is the backup. | 0.70 | 0.15 | 4.7 | a real update |
+| A revised quote in two hours. A is they want the deal. B is they are filling a pipeline. | 0.70 | 0.15 | 4.7 | a real update |
 
 Before you update, ask what the other hypothesis looks like. If it looks the same, you learned nothing.
 

@@ -58,27 +58,27 @@ Read the bad answers first. Each one is fluent, confident, and wrong.
 
 ## 3. An offer with a deadline
 
-**Decision.** An offer at $185k, answer due in five days. You earn $210k now, but your team is being reorganized. You want to counter at $215k.
+**Decision.** A private seller lists a used van at $18k. They say another buyer is coming Saturday. You want to counter at $16k.
 
 **Bad**
 
-> Counter and they might move, hold, or pull the offer. If they pull it you get nothing. Averaged out that sits below what you earn today. Do not counter.
+> Counter and they might take it, hold at $18k, or sell to the other buyer. If they sell it you get nothing out of this. Averaged out that is worse than paying the asking price. Pay the $18k before Saturday.
 
-- A withdrawn offer is not zero. You still have your job.
-- "They hold" is treated as a result. It is a decision. You can still stay.
-- Staying is priced as certain. The reorg is the reason the question exists.
+- "You get nothing" prices that branch at zero. You keep your money and keep looking.
+- "They hold" is treated as a result. It is a decision. You can still pay $18k or walk.
+- It never prices walking away. How often a comparable van lists is the whole question.
 
 **Good**
 
-> **Counter today.**
+> **Counter.**
 >
-> Two of those branches are decisions, not results. If they hold, you choose between $185k and staying. If they withdraw, you stay. Price each branch at its better half, not at the half that reads worst. Forcing them inverts the answer.
+> Two of those branches are decisions, not results. If they hold at $18k, you still choose between paying it and walking. If they sell to someone else, you keep looking. Price each branch at its better half, not at the half that reads worst. Forcing them inverts the answer.
 >
-> Staying is worth less as the reorg risk rises. Countering wins once that risk clears the high single digits. Your honest interval starts well above that. It wins across the whole interval.
+> Walking is worth less the rarer these vans are. The counter wins unless a comparable listing is genuinely scarce. If one appears most months, it wins easily.
 >
-> "This offer expires Friday" tells you nothing. A real deadline and a pressure tactic both produce that sentence. Ask for one more week instead. A real deadline usually cannot move and a manufactured one usually can. That question separates them. Asking for it in writing does not.
+> "Another buyer is coming Saturday" tells you nothing. A real second buyer and a pressure tactic both produce that sentence. Offer a deposit to hold it until Sunday instead. A real competing buyer refuses that for a specific reason. A fabricated one usually folds. That question separates them. Asking whether the other buyer is real does not.
 >
-> **Do not know.** The reorg risk. It moves this more than any other input. One conversation this week. It does not gate the counter. Re-price only the accept-or-stay choice after it lands.
+> **Do not know.** How often a comparable van lists near you. Ten minutes of listing history answers it. It does not gate the counter. Re-price only the pay-or-walk choice after.
 
 ---
 
@@ -180,7 +180,7 @@ There are no numbers and the ask is the option set. Use Scan. Ten lines. No tree
 | Undiagnostic probe | Asking for a claim in writing | Ask for what only one hypothesis can give |
 | False choice of two | Two options, both named by the user | Add wait, do nothing, a mix, and buy information |
 | Risk against zero | "Waiting is safer" | Price the cost of waiting too |
-| Headline number | Base salary, list price, contract value | Convert to the unit over the full horizon |
+| Headline number | Asking price, list price, contract value | Convert to the unit over the full horizon |
 | Sunk cost in a branch | "We already put six months into this" | It is equal on each option. It cancels |
 | Fixed counterparty | A constant probability for a party who reacts | Write it as a function of your action |
 | Wrong boundary | Pricing the deal when the account is the game | State where the accounting stops. Price inside it |
