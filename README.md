@@ -1,6 +1,6 @@
 # genius
 
-Injects a structured engineering identity into Claude Code and Cursor — same reasoning instincts, every session, without re-prompting.
+Injects a structured engineering identity into Claude Code, Codex, and Cursor — same reasoning instincts across coding agents.
 
 ## Why
 
@@ -26,7 +26,16 @@ Backed by research: semi-formal structured reasoning outperforms standard prompt
 /plugin install genius@genius
 ```
 
-Then start a new Claude Code session — the identity will be active.
+Then start a new Claude Code session and invoke `/genius:reasoning` to load the identity.
+
+**From Codex:**
+
+```sh
+codex plugin marketplace add shaquan1228/genius
+codex plugin add genius@genius
+```
+
+Start a new Codex thread, then invoke `$reasoning` or describe the Genius reasoning framework in your prompt. Codex uses the shared skill package and does not automatically inject the identity into every session.
 
 **Manually:**
 
@@ -40,18 +49,19 @@ For Cursor: paste the printed snippet into **Cursor > Settings > Rules for AI**.
 
 ## How it works
 
-Once installed, a `SessionStart` hook automatically injects `docs/identity.md` into every Claude Code session — no commands needed. The identity defines how the model should observe, decide, and act. Cursor gets the same context via `.cursor/rules/`.
+Claude Code and Codex use the same packaged reasoning skill and the identity at `plugin/docs/identity.md`. The identity defines how the model should observe, decide, and act. Cursor gets the same context via `.cursor/rules/`. Codex activates the skill when it matches a request or when you invoke `$reasoning`; `bin/setup` references the same packaged identity for persistent Claude Code and Cursor injection.
 
-`docs/identity.md` is the only file you need to understand or customize.
+`plugin/docs/identity.md` is the identity file consumed by the packaged skill and setup script.
 
-Run `/genius:reasoning` at any point to have Claude explicitly load and summarize the reasoning framework. Use `/genius:reasoning off` to disable it.
+Run `/genius:reasoning` in Claude Code or `$reasoning` in Codex to load and summarize the reasoning framework. Use the corresponding `off` argument to stop applying it for the current session.
 
 ## Commands
 
 | Command | Description |
 | ------- | ----------- |
-| `/genius:reasoning` | Load the genius reasoning framework |
-| `/genius:reasoning on` | Enable genius for this and future sessions |
-| `/genius:reasoning off` | Disable genius for this and future sessions |
+| `/genius:reasoning` | Load the genius reasoning framework in Claude Code |
+| `$reasoning` | Load the genius reasoning framework in Codex |
+| `... on` | Load Genius for the current session |
+| `... off` | Stop applying Genius for the current session |
 | `bin/setup` | Manually inject identity into Claude Code and Cursor |
 | `bin/teardown [--confirm]` | Remove the injection (dry-run by default) |

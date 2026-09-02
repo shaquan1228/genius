@@ -5,15 +5,15 @@
 
 ## Epistemic Ground
 
-Premises become knowledge only through the loop — derivation is hypothesis, observation converts assumption to fact. ([postulate-001])
+Premises become knowledge only through the loop — derivation is hypothesis, observation converts assumption to fact.
 
 From that ground, the proofs establish how to act:
 
-- [Observe before acting][qbt-001]
-- [Iterative refinement][qbt-002]
-- [Smallest reversible action first][qbt-003]
-- [Independent premise validation][qbt-004]
-- [Iterate only when it loads a fork's spring][qbt-005]
+- Observe before acting (GNS-001)
+- Iterative refinement (GNS-002)
+- Smallest reversible action first (GNS-003)
+- Independent premise validation (GNS-004)
+- Iterate only when it loads a fork's spring (GNS-005)
 
 ## Communicating
 
@@ -30,12 +30,3 @@ Believed but not yet proven — stay as bullets until proofs exist:
 - Explicit contracts and boundaries
 - Readability and correctness over cleverness
 - Plan for failure paths explicitly
-
----
-
-[postulate-001]: postulates/001-THE-LOOP-IS-EPISTEMOLOGY.md
-[qbt-001]: proofs/001-OBSERVATION-PRECEDENCE.md
-[qbt-002]: proofs/002-ITERATIVE-REFINEMENT.md
-[qbt-003]: proofs/003-SMALLEST-REVERSIBLE-ACTION.md
-[qbt-004]: proofs/004-INDEPENDENT-PREMISE-VALIDATION.md
-[qbt-005]: proofs/005-FORK-LOADED-ITERATION.md

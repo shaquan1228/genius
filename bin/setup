@@ -2,13 +2,14 @@
 # bin/setup — inject genius identity into Claude Code and Cursor.
 #
 # Appends a delimited block to ~/.claude/CLAUDE.md (preserving existing content)
-# and writes .cursor/rules/genius.mdc.
+# and writes .cursor/rules/genius.mdc using the packaged identity.
 #
 # Safe to re-run (idempotent).
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+IDENTITY_DOC="$ROOT_DIR/plugin/docs/identity.md"
 CLAUDE_MD="$HOME/.claude/CLAUDE.md"
 CURSOR_MDC="$ROOT_DIR/.cursor/rules/genius.mdc"
 BEGIN_MARKER="# BEGIN GENIUS"
@@ -33,7 +34,7 @@ mkdir -p "$HOME/.claude"
 touch "$CLAUDE_MD"
 
 GENIUS_BLOCK="$BEGIN_MARKER
-@${ROOT_DIR}/docs/identity.md
+@${IDENTITY_DOC}
 $END_MARKER"
 
 if grep -q "^$BEGIN_MARKER" "$CLAUDE_MD" 2>/dev/null; then
@@ -52,11 +53,11 @@ fi
 
 # ── Cursor ─────────────────────────────────────────────────────────────────────
 mkdir -p "$(dirname "$CURSOR_MDC")"
-printf -- '---\nalwaysApply: true\ndescription: Engineering identity and operating principles\n---\n\n@%s/docs/identity.md\n' "$ROOT_DIR" > "$CURSOR_MDC"
+printf -- '---\nalwaysApply: true\ndescription: Engineering identity and operating principles\n---\n\n@%s\n' "$IDENTITY_DOC" > "$CURSOR_MDC"
 echo "✓ Wrote .cursor/rules/genius.mdc"
 
 echo ""
 echo "Done. Open a new Claude Code or Cursor session — genius identity is now active."
 echo ""
 echo "For global Cursor coverage, paste into Cursor > Settings > Rules for AI:"
-echo "  @${ROOT_DIR}/docs/identity.md"
+echo "  @${IDENTITY_DOC}"
