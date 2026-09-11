@@ -8,7 +8,7 @@ Excerpts from contracts that held through a session. Each shows the one line to 
   > Option A: `src/strategies/parity.hpp:40-58` (read). Seam: strategy boundary. Blast radius: one strategy, no engine change.
   > Option B: `src/engines/paper.hpp`, `src/ledgers/ledger.hpp`, plus seven callers (grepped). Seam: engine to ledger. Blast radius: every domain that runs paper.
 
-  Two of three options die here. Nobody implemented anything.
+  Two of three options fall here. Nothing was implemented.
 
 - **Reject reasons are the user's words.**
   > Rejected B: "unnecessary indirection". Rejected C: "patches the symptom".
@@ -45,7 +45,7 @@ Excerpts from contracts that held through a session. Each shows the one line to 
 - **Implementing to compare.**
   > I built option B so you can see how it feels.
 
-  A build is not the smallest reversible step. Rewrite: show the shape. If the shape does not settle it, offer a disposable diff of one option and say it will be reverted.
+  A build is not the smallest reversible step. Rewrite: show the shape. If the shape does not settle it, offer a disposable diff of one option. Say it will be reverted.
 
 - **Fork skipped because the agent had a favourite.**
   > Went with the guard, it is obviously simpler.
@@ -79,7 +79,7 @@ Excerpts from contracts that held through a session. Each shows the one line to 
 
 ## A fork check that held
 
-Task: "Stop the parity strategy from trading when the minimum edge is unset." Two approaches were viable. The agent asked with one `AskUserQuestion` call, one option per shape, the three lines in each option's preview.
+Task: "Stop the parity strategy from trading when the minimum edge is unset." Two approaches were viable. The agent asked with one `AskUserQuestion` call. Each option was one shape. The three lines sat in the option's preview.
 
 ```
 ## Fork Check

@@ -10,11 +10,13 @@ Tool names below are examples from one stack. The field names the outcome. The e
 
 > "In the genius system, every non-trivial action within an active OODA loop is the smallest reversible step that moves toward the goal."
 
-A full implementation of one option, built to see if the user likes it, is not the smallest step. The smallest step that resolves the uncertainty is a shape: files touched, seam crossed, blast radius. A shape costs a minute. A revert of a wrong implementation costs a session. By GNS-001 the shape is also observation. It names files that were read or grepped, so the user chooses from what is there, not from a description.
+A full implementation built to test the user's taste is not the smallest step. The smallest step that resolves the uncertainty is a shape. A shape is files touched, seam crossed, and blast radius. A shape costs a minute. A revert of a wrong implementation costs a session.
 
-Two of three options usually fall at the shape. When one still cannot be judged, the next smallest step is a disposable diff of that one option. It is reversible by construction. It is reverted before the contract binds.
+By GNS-001 the shape is also observation. It names files that were read or grepped. The user chooses from what is there, not from a description.
 
-Example (author's stack): "Option A touches `client.rb` and its spec; seam is the retry helper; blast radius is one class. Option B threads a config through four callers; blast radius is the whole payments module."
+Two of three options usually fall at the shape. When one option still cannot be judged, the next smallest step is a disposable diff of that option. It is reversible by construction. Revert it before the contract binds.
+
+Example (author's stack): "Option A touches `client.rb` and its spec. Seam: the retry helper. Blast radius: one class. Option B threads a config through four callers. Blast radius: the whole payments module."
 
 Example (C++ repo): a guard at the strategy boundary versus a schema field threaded through the engine. The guard is one file. The thread is nine files across two rungs of the ladder.
 
