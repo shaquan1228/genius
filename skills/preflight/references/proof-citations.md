@@ -6,6 +6,20 @@ The full proofs ship with the plugin at `../../../docs/proofs/`, relative to thi
 
 Tool names below are examples from one stack. The field names the outcome. The executing agent observes which tool provides it.
 
+## Fork check (GNS-003, GNS-001)
+
+> "In the genius system, every non-trivial action within an active OODA loop is the smallest reversible step that moves toward the goal."
+
+A full implementation built to test the user's taste is not the smallest step. The smallest step that resolves the uncertainty is a shape. A shape is files touched, seam crossed, and blast radius. A shape costs a minute. A revert of a wrong implementation costs a session.
+
+By GNS-001 the shape is also observation. It names files that were read or grepped. The user chooses from what is there, not from a description.
+
+Two of three options usually fall at the shape. When one option still cannot be judged, the next smallest step is a disposable diff of that option. It is reversible by construction. Revert it before the contract binds.
+
+Example (author's stack): "Option A touches `client.rb` and its spec. Seam: the retry helper. Blast radius: one class. Option B threads a config through four callers. Blast radius: the whole payments module."
+
+Example (C++ repo): a guard at the strategy boundary versus a schema field threaded through the engine. The guard is one file. The thread is nine files across two rungs of the ladder.
+
 ## Target branch + stack position (GNS-003)
 
 > "In the genius system, every non-trivial action within an active OODA loop is the smallest reversible step that moves toward the goal."
