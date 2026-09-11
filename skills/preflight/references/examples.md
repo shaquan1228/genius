@@ -4,6 +4,17 @@ Excerpts from contracts that held through a session. Each shows the one line to 
 
 ## Keep doing
 
+- **Fork options are shapes, not code.**
+  > Option A: `src/strategies/parity.hpp:40-58` (read). Seam: strategy boundary. Blast radius: one strategy, no engine change.
+  > Option B: `src/engines/paper.hpp`, `src/ledgers/ledger.hpp`, plus seven callers (grepped). Seam: engine to ledger. Blast radius: every domain that runs paper.
+
+  Two of three options die here. Nobody implemented anything.
+
+- **Reject reasons are the user's words.**
+  > Rejected B: "unnecessary indirection". Rejected C: "patches the symptom".
+
+  The reject reason is the taste being learned. A paraphrase loses it.
+
 - **Branch field echoes an observed branch, not a wished one.**
   > Target branch: `fix/retry-payment-client` (observed via `git branch --show-current`). Not stacked. (GNS-003)
 
@@ -31,6 +42,16 @@ Excerpts from contracts that held through a session. Each shows the one line to 
 
 ## Traps (rewrite before binding)
 
+- **Implementing to compare.**
+  > I built option B so you can see how it feels.
+
+  A build is not the smallest reversible step. Rewrite: show the shape. If the shape does not settle it, offer a disposable diff of one option and say it will be reverted.
+
+- **Fork skipped because the agent had a favourite.**
+  > Went with the guard, it is obviously simpler.
+
+  "Obviously" is unobserved. Rewrite: list the other viable option as a shape. Let the user reject it. Record the reason.
+
 - **Guessed branch.**
   > Target branch: probably `main`.
 
@@ -55,6 +76,21 @@ Excerpts from contracts that held through a session. Each shows the one line to 
   > Updated in-scope to also include the config loader.
 
   A silent field edit is how scope expands. Rewrite: return to step 3. Bind a fresh contract. Say why.
+
+## A fork check that held
+
+Task: "Stop the parity strategy from trading when the minimum edge is unset." Two approaches were viable. The agent asked with one `AskUserQuestion` call, one option per shape, the three lines in each option's preview.
+
+```
+## Fork Check
+- Chosen: A. Guard at the strategy boundary.
+  Files: src/strategies/parity.hpp:40-58 (read). Seam: strategy boundary. Blast radius: one strategy.
+- Rejected: B. Thread min_edge through the engine schema.
+  Files: 9 across engines/ and ledgers/ (grepped). Seam: engine to ledger. Blast radius: every paper run.
+  Reason: "conservative guard only, do not thread the schema".
+```
+
+The contract that followed listed only option A's files in scope. Option B's files went under off-limits.
 
 ## One rejected-then-fixed contract
 
