@@ -55,6 +55,11 @@ Claude Code and Codex install this repository as the plugin and read the same id
 
 Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply the reasoning framework to your current task.
 
+## Evaluations
+
+Run repeatable baseline/Genius comparisons with `python3 evals/run.py`.
+See [evals/README.md](evals/README.md) for smoke tests, agent adapters, and saved results.
+
 ## Commands
 
 | Command | Description |
