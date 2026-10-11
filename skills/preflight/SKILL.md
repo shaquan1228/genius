@@ -18,11 +18,11 @@ Bind a five-field contract for the supplied task. Each field maps to one proof. 
 
 ## Rules
 
-- Fill each field from observation or a user answer. Do not guess. If a field needs speculation, observe first.
+- Fill known fields from the task and observations. Ask together only for missing choices that affect scope or risk. Do not guess.
 - Do not name a tool you did not observe. Say "the branch tool this repo uses" until you have seen it. The same applies to the test runner and type checker.
 - Do not bind a contract for a trivial task. A trivial task is a single-file edit with no scope ambiguity, a question, or a read-only ask. Uncommitted changes alone are not a trigger.
 - The contract block is the binding artifact. Do not edit fields in place. A scope change requires a fresh contract.
-- A fork is two or more viable approaches to the task. At a fork, do not implement to compare. Show each option as a shape. Then ask. A shape is the files touched, the seam crossed, and one sentence of blast radius. No code.
+- A fork is two or more viable approaches to the task. Use an observed repo convention for routine choices within scope. Ask when the choice changes scope or risk, or depends on an unstated user preference. Show options as shapes, not code: files touched, the seam crossed, and one sentence of blast radius.
 - A disposable diff is the last resort at a fork. It is the smallest diff that shows one shape. Label it disposable. Revert it before you bind.
 
 ## Evaluate
@@ -41,11 +41,11 @@ The contract ships only if all of these hold:
 2. **Identity check.** Load the identity if absent. Read `references/proof-citations.md`.
 3. **Fork check.** Ask: is there more than one viable approach? If not, say "no fork" and continue.
    - Write two or three options as shapes. A shape is three lines: files touched (observed), the seam crossed, blast radius in one sentence. No code.
-   - In Claude Code, put the options in one `AskUserQuestion` call. Load it with `ToolSearch` (`select:AskUserQuestion`) if absent. One option per shape. The three lines go in the option's `preview`.
-   - Outside Claude Code, ask in plain text. One numbered option per paragraph.
+   - If the choice needs the user, ask once with all missing choices that affect scope or risk. In Claude Code, use `AskUserQuestion`; otherwise use plain text.
+   - If a repo convention resolves the choice within scope, use it and cite the observation.
    - If the user cannot choose from shapes, offer a disposable diff for one option. Keep it smaller than the smallest full change. Revert it once the user has seen it.
-   - Record the choice in a fenced `## Fork Check` block. List the chosen option. List each rejected option with the reject reason in the user's words. Do not paraphrase. The reject reasons are the user's taste log.
-4. **Bind fields.** Walk the five fields one at a time. In Claude Code, use `AskUserQuestion`. Otherwise ask in plain text, one field per message. Fill from the supplied task where unambiguous.
+   - Record the choice in a fenced `## Fork Check` block. List the chosen option and rejected options with their reasons. Quote user reasons exactly when supplied. For a routine choice, cite the observed repo convention; do not invent user preferences.
+4. **Bind fields.** Fill the five fields from the task and observations. Ask together only for missing choices that affect scope or risk.
    - **Target branch + stack position** (GNS-003). Echo the current branch with the branch tool present here. If a stacking tool is authenticated, echo the stack position.
    - **In-scope files** (GNS-001). Give an explicit list. Each file is named, read, or grep-confirmed. Do not assume.
    - **Off-limits** (GNS-005). Name boundary-tool fixes, lint sweeps, adjacent refactors, and "while I'm here" cleanup.
