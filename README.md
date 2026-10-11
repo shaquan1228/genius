@@ -57,8 +57,22 @@ Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply 
 
 ## Evaluations
 
-Run repeatable baseline/Genius comparisons with `python3 evals/run.py`.
-See [evals/README.md](evals/README.md) for smoke tests, agent adapters, and saved results.
+Use [Inspect AI](https://inspect.aisi.org.uk/) for repeated baseline/Genius comparisons.
+Run the offline checks, strict typing, coverage, and CRAP gate:
+
+```sh
+make -C evals check
+```
+
+Run both profiles with Claude Code, Docker, and a pinned model ID:
+
+```sh
+uv run --project evals inspect eval evals/genius_evals/tasks.py \
+  --model 'anthropic/<pinned-model-id>' --epochs 3 --max-samples 1 \
+  --log-dir evals/results/live
+```
+
+See [evals/README.md](evals/README.md) for setup, Codex, reports, and automated runs.
 
 ## Commands
 

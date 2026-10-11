@@ -1,78 +1,126 @@
 # Genius evals
 
-Run the same tasks with and without Genius. No evaluation framework or Python package is required.
+[Inspect AI](https://inspect.aisi.org.uk/) runs repeated baseline/Genius comparisons.
+[Inspect SWE](https://meridianlabs-ai.github.io/inspect_swe/) supplies Claude Code and Codex integrations.
+Both frameworks use the MIT license. Model calls and compute can cost money.
 
-## Quick start
+Inspect owns execution, repeats, model calls, limits, scoring, and logs.
+This package supplies task data, instruction profiles, agent settings, and graders.
 
-Requires Python 3.10+, Git, and macOS or Linux. Test the runner without calling a model:
+## Check the harness offline
 
-```sh
-python3 -m unittest discover -s evals/tests -p 'test_*.py' -v
-python3 evals/run.py --smoke --repeats 2
-```
-
-Smoke mode uses a deterministic test double. Its passes say the runner works, not that Genius improves a model.
-
-For real trials, install and authenticate Claude Code. Use a version supporting `--bare` and an exact model ID:
+Install Python 3.12+, [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, and Make.
+From the repository root:
 
 ```sh
-python3 evals/run.py \
-  --agent-command 'python3 evals/adapters/claude.py --model <pinned-model-id> --effort medium' \
-  --repeats 3 --timeout 300
+make -C evals check
 ```
 
-Replace `<pinned-model-id>` with the model you want to compare. Four tasks and three repeats create 24 model sessions.
-The adapter caps each session at 20 turns and $2 estimated API cost. Override its flags inside `--agent-command`.
-The provider's cost cap is approximate. Calls use your provider account.
+This installs locked dependencies, checks strict typing, runs tests, and enforces CRAP ≤5.
+Tests exercise Inspect's real engine with its mock model and scripted test agents.
+They use temporary local sandboxes, requiring no Docker or API keys.
+Scripted passes verify the harness; they do not measure Genius performance.
 
-Results are saved to a new temporary directory printed at the end. Use `--output evals/results/run-001` to keep them locally.
-The output directory must not exist. Use `--genius-root /path/to/other/checkout` to test another instruction version.
+Reports and native offline logs are saved under `evals/results/`.
 
-## What runs automatically
+## Compare real agents
 
-- Copy each task into a fresh Git repo on branch `eval` for every trial.
-- Shuffle task and variant order using a saved seed. Both variants run once per repeat.
-- Keep the model, tools, effort, and limits fixed. Add the selected Genius skill only to its variant.
-- Run held-out correctness checks after the agent returns. Detect edits outside each task's allowed files.
-- Keep a separate instruction copy for each Genius trial. Fail the trial if those instructions change.
-- Save inputs, agent output and traces, grading output, individual records, and `results.jsonl`.
-- Write `summary.json` with pass counts, paired results, runtime, and provider-reported cost.
+Install Docker with Compose and start its daemon.
+Set `ANTHROPIC_API_KEY` for Claude or `OPENAI_API_KEY` for Codex.
+Inspect SWE downloads the pinned agent binary inside each Docker sandbox.
+Its model bridge uses Inspect credentials, rather than existing agent subscription sessions.
 
-The manifest covers clear-task completion, known preflight fields, a small numeric choice, and a decision review after one loss.
-Task prompts and fixtures are in `cases.json` and `fixtures/`. Held-out checks live in `checks.py`, outside agent workspaces.
-The suite, instruction bundle, and runner have saved content hashes. Adapter output records CLI version and reported models.
-Check reported models for unexpected fallback before comparing results.
+Install dependencies from the repository root:
 
-## Agent adapter contract
-
-`--agent-command` starts a command without a shell. It receives one JSON request on stdin:
-
-```json
-{"task_id":"clear-task","prompt":"...","workspace":"/absolute/path","skill_path":null}
+```sh
+uv sync --project evals --locked
 ```
 
-Start a fresh agent session in `workspace`. When `skill_path` is supplied, load that skill and its referenced instructions.
-Disable existing Genius injections, global instructions, memory, plugins, and other session carryover in both variants.
-The included Claude adapter uses [bare mode](https://code.claude.com/docs/en/cli-reference), which skips automatic discovery.
-Add another adapter for Codex or Cursor without changing task definitions or scoring.
+Run both profiles with Claude Code:
 
-Return one JSON object on stdout; put diagnostics on stderr:
-
-```json
-{"text":"final answer","metrics":{"cost_usd":null,"input_tokens":null,"output_tokens":null,"clarification_tool_calls":null},"metadata":{"agent":"name","model_requested":"pinned-id"}}
+```sh
+uv run --project evals inspect eval evals/genius_evals/tasks.py \
+  --model 'anthropic/<pinned-model-id>' --epochs 3 --max-samples 1 \
+  --log-dir evals/results/live
 ```
 
-Extra fields such as `trace` are preserved in the saved output. Missing metrics remain `null`, not zero.
-Exit nonzero on provider, permission, or budget failure. Timeouts kill the adapter's process group.
-The runner exits nonzero if any trial fails. Failed trials remain in the results and summary.
+Replace the model placeholder with an exact provider model ID.
+Four tasks, two profiles, and three epochs create 24 agent sessions.
+Claude Code defaults to version `2.1.278`; override it with `-T version=<exact-version>`.
 
-## What still needs review
+Run the same tasks with Codex:
 
-Correctness and file scope are checked in code. Question quality, useful reasoning, and decision explanations require human review.
-`clarification_tool_calls` counts actual question-tool calls, not every question and not whether a question was unnecessary.
-Each result has an empty review field. Use the saved answer and trace; do not count question marks as questions.
+```sh
+uv run --project evals inspect eval evals/genius_evals/tasks.py \
+  --model 'openai/<pinned-model-id>' -T agent=codex -T version=0.137.0 \
+  --epochs 3 --max-samples 1 --log-dir evals/results/live
+```
 
-These are small regression tasks, not evidence that Genius is better overall. Add representative tasks before drawing broad conclusions.
-Repeated runs share one provider account; caching and service load can affect time and cost. Small samples carry substantial noise.
-Fresh directories separate task files, not operating-system access. Run agent commands in a disposable container when you need containment.
-The Claude adapter permits its fixed file and shell tools; it does not enable a blanket permission bypass.
+Both profiles share the selected model, agent version, effort, tools, and limits.
+Every sample and epoch starts with fresh task files and a fresh agent session.
+Agent retries and model-response caching are disabled. Provider transport retries retain Inspect defaults.
+Each session allows 40 messages, 50,000 tokens, and 300 seconds.
+Task metadata records agent versions and hashes of instructions, fixtures, and the manifest.
+Inspect logs record model usage, sample events, answers, errors, and scores.
+
+Open the reports:
+
+```sh
+uv run --project evals inspect view --log-dir evals/results/live
+```
+
+Compare each task across profiles; require both correctness and scope to pass.
+Inspect reports each score separately. Scores are not inferred from agent claims.
+
+## Module boundaries
+
+| Module | Responsibility |
+| --- | --- |
+| `cases.py` | Validate manifest fields and task identifiers |
+| `profiles.py` | Build sample files, prompts, and content hashes |
+| `agents.py` | Configure native Inspect SWE integrations |
+| `tasks.py` | Register profiles, shared limits, and metadata |
+| `workspace.py` | Initialize sandboxes and detect changed files |
+| `answers.py` | Validate strict decision output schemas |
+| `scoring.py` | Combine independent correctness and scope checks |
+| `verifiers/` | Check code against held-out expectations |
+| `tests/` | Exercise graders and the native Inspect engine offline |
+
+Code verifiers enter the sandbox only after the agent finishes.
+They run agent-produced code inside that sandbox, never on the grading host.
+Scope checks compare the final worktree against its original commit.
+They detect agent commits, untracked files, ignored files, and changed instructions.
+
+The four cases cover clear-task completion, known preflight fields, numeric choice, and hindsight after one loss.
+Task prompts and fixtures live in `cases.json` and `fixtures/`.
+Decision schemas check selected conclusions and bounded explanations, not explanation quality.
+Question usefulness and reasoning quality require human review of saved traces.
+These small regression tasks do not establish that Genius improves performance overall.
+
+## Enforce CRAP ≤5
+
+The standard [CRAP formula](https://pypi.org/project/pytest-crap/) is:
+
+```text
+CRAP = complexity² × (1 − coverage)³ + complexity
+```
+
+`make check` requires 100% statement and branch coverage using coverage.py.
+Xenon's rank-A gate requires every function's cyclomatic complexity to be at most five.
+At full coverage, CRAP equals complexity, so those gates enforce CRAP ≤5.
+Radon exports measured complexity to `results/complexity.json`.
+
+Coverage and complexity include all authored runtime code, verifiers, tests, and scripted helpers.
+Pre-existing buggy fixture data is excluded from the quality gate.
+Strict typing checks the same authored modules without type-ignore exceptions.
+
+## Automate runs
+
+[The GitHub Actions workflow](../.github/workflows/evals.yml) runs offline checks on relevant pull requests and main updates.
+It uploads coverage, complexity, test reports, and native offline evaluation logs.
+
+For real comparisons, manually dispatch **Genius evals** with an agent, exact model ID, version, and epoch count.
+Configure the matching repository secret: `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`.
+The comparison job starts after quality checks and uploads native logs even after failures.
+Its total runtime limit is 45 minutes; individual sessions retain the limits above.
+Model calls run only through manual dispatch, using the configured provider account.
