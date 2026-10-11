@@ -41,7 +41,7 @@ Each of these worked on the author's own machine. Each broke when the same promp
 - **Hardcoded branch tooling.**
   > Use Graphite; all PRs off main, submitted as drafts.
 
-  This assumes Graphite is authenticated here. Where it is not, the step fails until the agent improvises. Rewrite: state the intent ("open the PR off main as a draft"). Name a preferred tool with a fallback.
+  This assumes Graphite is authenticated here. Where it is not, the step fails until the agent improvises. Rewrite: state the intent ("open the PR off main as a draft") and describe the available branch tooling without assuming a preference.
 
 - **Hardcoded working directory or host.**
   > Run in a worktree from the repo folder on your Desktop using the symlinked worktree command.
@@ -61,4 +61,4 @@ Each of these worked on the author's own machine. Each broke when the same promp
 - **A tool named where an outcome belongs.**
   > plan → work → review → submit (as a chain of specific skill invocations)
 
-  Fine as a hint. A trap as a mandate. A reader without those skills is stuck. Rewrite: name the outcome of each step. Offer the skill as the preferred path, not the only one.
+  Fine as a hint. A trap as a mandate. A reader without those skills is stuck. Rewrite: name the outcome of each step. Offer the skill as a possible path, not the only one.

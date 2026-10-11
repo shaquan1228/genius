@@ -34,10 +34,10 @@ Rewrite mechanism into intent plus observe-and-fallback:
 |---|---|
 | `gt checkout native-billing-pay-failure-error` | Get onto branch `native-billing-pay-failure-error` with the branch tooling present here. |
 | `gt sync && gt restack` | Rebase onto latest `main`. Resolve conflicts. |
-| `gt submit --no-verify` | Open or update the PR. Prefer Graphite if authenticated. Otherwise use `git push` + `gh pr create`. |
+| `gt submit --no-verify` | Open or update the PR with the tooling available here (for example, `git push` + `gh pr create`). |
 | `git checkout -b fix/foo` | Create branch `fix/foo` off `main` with the repo's branch tooling. |
 
-State the outcome. Name at most one preferred tool with an explicit fallback. Do not enforce a branching workflow the prompt cannot verify is present.
+State the outcome. Do not enforce a branching workflow the prompt cannot verify is present.
 
 For real excerpts of the working shape and the portability traps, see `examples.md`.
 
@@ -62,7 +62,7 @@ Rules
 
 Iterate
 1. Read <reference> to confirm the pattern.
-2. Get onto branch <branch> with the branch tooling this environment has (prefer Graphite if authenticated; else git + gh). Rebase onto latest main.
+2. Get onto branch <branch> with the branch tooling this environment has. Rebase onto latest main.
 3. Apply the change. Add a regression test at <path>.
 4. Review the diff against: <criterion>, <criterion>.
 5. Evaluate: run <specific specs/lint>. The gate is <what passing means>. Open or update the PR only once it passes.
