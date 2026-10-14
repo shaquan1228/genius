@@ -23,53 +23,46 @@ Scripted passes verify the harness; they do not measure Genius performance.
 
 Reports and native offline logs are saved under `evals/results/`.
 
-## Compare real agents
+## Run live comparisons on Hugging Face
 
-Install Docker with Compose and start its daemon.
-Set `ANTHROPIC_API_KEY` for Claude or `OPENAI_API_KEY` for Codex.
-Inspect SWE downloads the pinned agent binary inside each Docker sandbox.
-Its model bridge uses Inspect credentials, rather than existing agent subscription sessions.
+Create a [Hugging Face account](https://huggingface.co/join) with a positive Jobs
+credit balance. Authenticate from the shared workspace with
+`uvx --from huggingface_hub==2.2.0 hf auth login`; the browser login keeps the
+token out of chat. Set the provider API key in your shell or secret manager.
+A ChatGPT or Claude subscription does not supply an API key for Inspect.
 
-Install dependencies from the repository root:
-
-```sh
-uv sync --project evals --locked
-```
-
-Run both profiles with Claude Code:
+From the repository root, select your Hugging Face namespace and an exact model ID:
 
 ```sh
-uv run --project evals inspect eval evals/tasks.py \
-  --model 'anthropic/<pinned-model-id>' --epochs 5 --max-samples 1 \
-  --log-dir evals/results/live
+export HF_NAMESPACE='your-username'
+export EVAL_MODEL='openai/<pinned-model-id>'
+# Set OPENAI_API_KEY in your shell or secret manager.
+sh evals/hf_host.sh
 ```
 
-Replace the model placeholder with an exact provider model ID.
-Four tasks, two profiles, and five epochs create 40 independent agent sessions.
-The agent's `attempts=1` prevents retries after a failed submission within one session;
-epochs provide independent attempts for estimating pass rates.
-Claude Code defaults to version `2.1.278`; override it with `-T version=<exact-version>`.
+For Claude, use `anthropic/<pinned-model-id>` and `ANTHROPIC_API_KEY`.
+The script selects Codex for OpenAI models and Claude Code for Anthropic models;
+set `EVAL_AGENT` and `EVAL_VERSION` to override the agent or its pinned version.
+The first run defaults to one epoch (eight agent sessions) to test the hosted
+path. Set `EVAL_EPOCHS=5` for the full 40-session comparison.
 
-Run the same tasks with Codex:
-
-```sh
-uv run --project evals inspect eval evals/tasks.py \
-  --model 'openai/<pinned-model-id>' -T agent=codex -T version=0.137.0 \
-  --epochs 5 --max-samples 1 --log-dir evals/results/live
-```
+`hf_host.sh` creates a private dataset repository containing the evaluation
+source, a private results bucket, and a detached Hugging Face Job. The Job
+runs Inspect and launches a dedicated Hugging Face Sandbox VM for each sample.
+Only task files and the selected skill enter that VM; held-out checks stay in
+the Job and run against the VM after the agent finishes. The script prints the
+Job ID. Watch it at `https://huggingface.co/jobs/<namespace>/<job-id>` or with
+`uvx --from huggingface_hub==2.2.0 hf jobs logs -f <job-id>`.
+Native Inspect logs are saved to `hf://buckets/<namespace>/genius-eval-results/live/`.
 
 Both profiles share the selected model, agent version, effort, tools, and limits.
 Every sample and epoch starts with fresh task files and a fresh agent session.
+The agent's `attempts=1` prevents retries after a failed submission within one
+session; epochs provide independent attempts for estimating pass rates.
 Agent retries and model-response caching are disabled. Provider transport retries retain Inspect defaults.
 Each session allows 40 messages, 50,000 tokens, and 300 seconds.
 Task metadata records agent versions and hashes of instructions, fixtures, and the manifest.
 Inspect logs record model usage, sample events, answers, errors, and scores.
-
-Open the reports:
-
-```sh
-uv run --project evals inspect view --log-dir evals/results/live
-```
 
 Compare each task across profiles; require both correctness and scope to pass.
 Inspect reports each score separately. Scores are not inferred from agent claims.
@@ -85,6 +78,8 @@ Inspect reports each score separately. Scores are not inferred from agent claims
 | `workspace.py` | Initialize sandboxes and detect changed files |
 | `answers.py` | Validate strict decision output schemas |
 | `scoring.py` | Combine independent correctness and scope checks |
+| `hf_job.py` | Run both profiles in a hosted Hugging Face Job |
+| `hf_sandbox.py` | Give each sample a dedicated Hugging Face Sandbox VM |
 | `heldout/` | Check code against expectations after the agent finishes |
 | `tests/` | Exercise graders and the native Inspect engine offline |
 
@@ -117,14 +112,3 @@ Radon exports measured complexity to `results/complexity.json`.
 Coverage and complexity include all authored runtime code, held-out checks, tests, and scripted helpers.
 Pre-existing buggy fixture data is excluded from the quality gate.
 Strict typing checks the same authored modules without type-ignore exceptions.
-
-## Automate runs
-
-[The GitHub Actions workflow](../.github/workflows/evals.yml) runs offline checks on relevant pull requests and main updates.
-It uploads coverage, complexity, test reports, and native offline evaluation logs.
-
-For real comparisons, manually dispatch **Genius evals** with an agent, exact model ID, version, and epoch count.
-Configure the matching repository secret: `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`.
-The comparison job starts after quality checks and uploads native logs even after failures.
-Its total runtime limit is 45 minutes; individual sessions retain the limits above.
-Model calls run only through manual dispatch, using the configured provider account.

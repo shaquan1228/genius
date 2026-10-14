@@ -64,15 +64,16 @@ Run the offline checks, strict typing, coverage, and CRAP gate:
 make -C evals check
 ```
 
-Run both profiles with Claude Code, Docker, and a pinned model ID:
+Run both profiles on Hugging Face Jobs with a pinned model ID:
 
 ```sh
-uv run --project evals inspect eval evals/tasks.py \
-  --model 'anthropic/<pinned-model-id>' --epochs 5 --max-samples 1 \
-  --log-dir evals/results/live
+export HF_NAMESPACE='your-username'
+export EVAL_MODEL='anthropic/<pinned-model-id>'
+# Set ANTHROPIC_API_KEY in your shell or secret manager.
+sh evals/hf_host.sh
 ```
 
-See [evals/README.md](evals/README.md) for setup, Codex, reports, and automated runs.
+See [evals/README.md](evals/README.md) for account setup, Codex, reports, and repeated runs.
 
 ## Commands
 
