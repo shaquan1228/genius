@@ -55,6 +55,30 @@ Claude Code and Codex install this repository as the plugin and read the same id
 
 Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply the reasoning framework to your current task.
 
+## Evaluations
+
+Use [Inspect AI](https://inspect.aisi.org.uk/) for repeated baseline/Genius comparisons.
+The scaffolding layer contains dependency locks and hosting setup; the stacked
+fixture PR supplies the runtime. Check this layer with
+`make -C evals check-scaffolding`. With the completed stack, run the offline
+checks, strict typing, coverage, and CRAP gate:
+
+```sh
+make -C evals check
+```
+
+From a checkout of this PR branch (or `main` after merge), launch a one-epoch
+smoke test on Hugging Face Jobs after adding a positive credit balance:
+
+```sh
+uvx --from huggingface_hub==2.2.0 hf auth whoami
+export HF_NAMESPACE='shaquan1228'
+export EVAL_MODEL='hf-inference-providers/openai/gpt-oss-20b'
+sh evals/hf_host.sh
+```
+
+See [evals/README.md](evals/README.md) for the full run, logs, and results.
+
 ## Commands
 
 | Command | Description |
