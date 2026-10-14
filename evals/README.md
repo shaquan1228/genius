@@ -28,21 +28,25 @@ Reports and native offline logs are saved under `evals/results/`.
 Create a [Hugging Face account](https://huggingface.co/join) with a positive Jobs
 credit balance. Authenticate from the shared workspace with
 `uvx --from huggingface_hub==2.2.0 hf auth login`; the browser login keeps the
-token out of chat. Set the provider API key in your shell or secret manager.
-A ChatGPT or Claude subscription does not supply an API key for Inspect.
+token out of chat. A Hugging Face Inference Providers model needs only that
+Hugging Face token. OpenAI and Anthropic models need their own provider API keys;
+a ChatGPT or Claude subscription does not supply an API key for Inspect.
 
 From the repository root, select your Hugging Face namespace and an exact model ID:
 
 ```sh
 export HF_NAMESPACE='your-username'
-export EVAL_MODEL='openai/<pinned-model-id>'
-# Set OPENAI_API_KEY in your shell or secret manager.
+export EVAL_MODEL='hf-inference-providers/openai/gpt-oss-20b'
 sh evals/hf_host.sh
 ```
 
-For Claude, use `anthropic/<pinned-model-id>` and `ANTHROPIC_API_KEY`.
-The script selects Codex for OpenAI models and Claude Code for Anthropic models;
-set `EVAL_AGENT` and `EVAL_VERSION` to override the agent or its pinned version.
+That first example runs the Codex harness against a Hugging Face hosted model.
+To evaluate the target Codex or Claude models, use `openai/<pinned-model-id>`
+with `OPENAI_API_KEY` or `anthropic/<pinned-model-id>` with `ANTHROPIC_API_KEY`.
+Set the matching key in your shell or secret manager before launching the Job.
+The script selects Codex for Hugging Face and OpenAI models, and Claude Code for
+Anthropic models. Set `EVAL_AGENT` and `EVAL_VERSION` to override the agent or
+its pinned version.
 The first run defaults to one epoch (eight agent sessions) to test the hosted
 path. Set `EVAL_EPOCHS=5` for the full 40-session comparison.
 

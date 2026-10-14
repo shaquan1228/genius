@@ -68,8 +68,7 @@ Run both profiles on Hugging Face Jobs with a pinned model ID:
 
 ```sh
 export HF_NAMESPACE='your-username'
-export EVAL_MODEL='anthropic/<pinned-model-id>'
-# Set ANTHROPIC_API_KEY in your shell or secret manager.
+export EVAL_MODEL='hf-inference-providers/openai/gpt-oss-20b'
 sh evals/hf_host.sh
 ```
 

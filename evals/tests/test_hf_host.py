@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from huggingface_hub import SandboxCommandResult
+from inspect_ai.model import get_model
 from inspect_ai.util import SandboxUserUnsupportedError
 
 from evals.cases import REPO_ROOT
@@ -124,3 +125,32 @@ def test_host_script_launches_job_without_exposing_key(
     assert "hf://datasets/example/genius-evals:/source:ro" in commands
     assert "hf://buckets/example/genius-eval-results:/results:rw" in commands
     assert "private-test-key" not in commands
+
+
+def test_host_script_uses_hf_model_without_provider_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    launcher = tmp_path / "uvx"
+    launcher.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$HF_CALLS"\n')
+    launcher.chmod(0o755)
+    calls = tmp_path / "calls.txt"
+    monkeypatch.setenv("HF_CALLS", str(calls))
+    monkeypatch.setenv("HF_NAMESPACE", "example")
+    monkeypatch.setenv("EVAL_MODEL", "hf-inference-providers/openai/gpt-oss-20b")
+    monkeypatch.delenv("EVAL_AGENT", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+
+    result = subprocess.run(
+        ["sh", "evals/hf_host.sh"], cwd=REPO_ROOT, env=os.environ.copy(), capture_output=True
+    )
+    commands = calls.read_text()
+    assert result.returncode == 0
+    assert "--secrets HF_TOKEN --env EVAL_AGENT=codex" in commands
+    assert "OPENAI_API_KEY" not in commands
+
+
+def test_hf_inference_provider_initializes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HF_TOKEN", "hf_test")
+    model = get_model("hf-inference-providers/openai/gpt-oss-20b")
+    assert model.name == "openai/gpt-oss-20b"

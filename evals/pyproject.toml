@@ -2,7 +2,12 @@
 name = "genius-evals"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["huggingface-hub==2.2.0", "inspect-ai==0.3.278", "inspect-swe==0.2.71"]
+dependencies = [
+  "huggingface-hub==2.2.0",
+  "inspect-ai==0.3.278",
+  "inspect-swe==0.2.71",
+  "openai>=3.4,<4",
+]
 
 [project.optional-dependencies]
 dev = [
