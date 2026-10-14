@@ -29,7 +29,7 @@ hf repos create "$source_repo" --repo-type dataset --private --exist-ok
 hf buckets create "$results_bucket" --private --exist-ok
 hf upload "$source_repo" "$snapshot_dir" . --repo-type dataset \
   --delete 'evals/.coverage' --delete 'evals/.pytest_cache/**' \
-  --delete 'evals/.ruff_cache/**' \
+  --delete 'evals/.ruff_cache/**' --delete 'evals/genius_evals.egg-info/**' \
   --commit-message 'Update Genius evaluation source'
 
 set -- --secrets HF_TOKEN
