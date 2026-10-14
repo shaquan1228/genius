@@ -50,8 +50,10 @@ its pinned version.
 The first run defaults to one epoch (eight agent sessions) to test the hosted
 path. Set `EVAL_EPOCHS=5` for the full 40-session comparison.
 
-`hf_host.sh` creates a private dataset repository containing the evaluation
-source, a private results bucket, and a detached Hugging Face Job. The Job
+`hf_host.sh` uploads only tracked files from the current Git commit, so commit
+changes before running it. It creates a private dataset repository containing
+the evaluation source, a private results bucket, and a detached Hugging Face Job.
+The Job
 runs Inspect and launches a dedicated Hugging Face Sandbox VM for each sample.
 Only task files and the selected skill enter that VM; held-out checks stay in
 the Job and run against the VM after the agent finishes. The script prints the
