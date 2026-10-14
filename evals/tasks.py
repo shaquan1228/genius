@@ -3,14 +3,14 @@
 from inspect_ai import Task, task
 from inspect_ai.model import GenerateConfig
 
-from genius_evals.agents import DEFAULT_VERSIONS, AgentKind, coding_agent
-from genius_evals.cases import EVALS_ROOT, Profile
-from genius_evals.profiles import content_hash, directory_files, instruction_files, samples
-from genius_evals.scoring import correctness, scope
-from genius_evals.workspace import prepare
+from evals.agents import DEFAULT_VERSIONS, AgentKind, coding_agent
+from evals.cases import EVALS_ROOT, Profile
+from evals.profiles import content_hash, directory_files, instruction_files, samples
+from evals.scoring import correctness, scope
+from evals.workspace import prepare
 
 
-def build_task(profile: Profile, agent: AgentKind, version: str) -> Task:
+def build_task(profile: Profile, *, agent: AgentKind, version: str) -> Task:
     agent_version = version or DEFAULT_VERSIONS[agent]
     return Task(
         name=profile,
@@ -20,7 +20,7 @@ def build_task(profile: Profile, agent: AgentKind, version: str) -> Task:
         scorer=[correctness(), scope()],
         sandbox=("docker", str(EVALS_ROOT / "Dockerfile")),
         config=GenerateConfig(cache=False),
-        epochs=3,
+        epochs=5,
         message_limit=40,
         token_limit=50_000,
         time_limit=300,
@@ -37,9 +37,9 @@ def build_task(profile: Profile, agent: AgentKind, version: str) -> Task:
 
 @task
 def baseline(agent: AgentKind = "claude", version: str = "") -> Task:
-    return build_task("baseline", agent, version)
+    return build_task("baseline", agent=agent, version=version)
 
 
 @task
 def genius(agent: AgentKind = "claude", version: str = "") -> Task:
-    return build_task("genius", agent, version)
+    return build_task("genius", agent=agent, version=version)

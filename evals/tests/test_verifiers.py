@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from genius_evals.cases import EVALS_ROOT
-from genius_evals.verifiers import preflight, receipt
-from tests.scenarios import EDITS
+from evals.cases import EVALS_ROOT
+from evals.heldout import preflight, receipt
+from evals.tests.scenarios import SOLUTIONS
 
 
 def test_receipt_seed_is_incorrect(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -17,7 +17,7 @@ def test_receipt_seed_is_incorrect(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
 
 def test_receipt_fix_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    (tmp_path / "receipt.py").write_text(EDITS["clear-task"]["receipt.py"])
+    (tmp_path / "receipt.py").write_text((SOLUTIONS / "clear-task/receipt.py").read_text())
     monkeypatch.chdir(tmp_path)
     assert receipt.verify()
 
@@ -52,7 +52,9 @@ def test_preflight_defaults_and_overrides(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     (tmp_path / "config.py").write_text(f"TIMEOUT_SECONDS = {config}\n")
-    source = EDITS["known-preflight"]["client.py"].replace("= 30", f"= {client}")
+    source = (SOLUTIONS / "known-preflight/client.py").read_text().replace(
+        "= 30", f"= {client}"
+    )
     (tmp_path / "client.py").write_text(source.replace("return value", override))
     monkeypatch.chdir(tmp_path)
     assert preflight.verify() == (config == 30 and client == 30 and override == "return value")

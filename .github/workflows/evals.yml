@@ -25,7 +25,7 @@ on:
       epochs:
         description: Repeats per task and profile
         type: number
-        default: 3
+        default: 5
         required: true
 
 permissions:
@@ -69,7 +69,7 @@ jobs:
       - run: uv sync --project evals --locked
       - name: Compare baseline and Genius
         run: |
-          uv run --project evals inspect eval evals/genius_evals/tasks.py \
+          uv run --project evals inspect eval evals/tasks.py \
             --model "$EVAL_MODEL" -T "agent=$EVAL_AGENT" -T "version=$EVAL_VERSION" \
             --epochs "$EVAL_EPOCHS" --max-samples 1 --log-dir evals/results/live
       - uses: actions/upload-artifact@v4

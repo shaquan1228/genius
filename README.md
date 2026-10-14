@@ -67,8 +67,8 @@ make -C evals check
 Run both profiles with Claude Code, Docker, and a pinned model ID:
 
 ```sh
-uv run --project evals inspect eval evals/genius_evals/tasks.py \
-  --model 'anthropic/<pinned-model-id>' --epochs 3 --max-samples 1 \
+uv run --project evals inspect eval evals/tasks.py \
+  --model 'anthropic/<pinned-model-id>' --epochs 5 --max-samples 1 \
   --log-dir evals/results/live
 ```
 

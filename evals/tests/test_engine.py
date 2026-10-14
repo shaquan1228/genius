@@ -1,0 +1,60 @@
+"""Check Inspect scoring, repeated runs, and saved logs."""
+
+from pathlib import Path
+
+import pytest
+from inspect_ai.log import read_eval_log
+from inspect_ai.scorer import CORRECT, INCORRECT
+
+from evals.tasks import baseline, genius
+from evals.tests.scenarios import Mode
+from evals.tests.support import offline_run, results
+
+
+def test_complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
+    logs = offline_run([baseline(), genius()], "pass", tmp_path, epochs=2)
+    expected = [
+        (case, CORRECT, CORRECT)
+        for case in ["clear-task", "known-preflight", "small-decision", "decision-review"]
+    ] * 2
+    assert [(log.status, sorted(results(log))) for log in logs] == [
+        ("success", sorted(expected))
+    ] * 2
+
+
+def test_logs_reopen_with_scores_and_model_calls(tmp_path: Path) -> None:
+    log = offline_run([baseline()], "pass", tmp_path)[0]
+    saved = read_eval_log(str(log.location))
+    assert (saved.status, len(saved.samples or []), set(saved.stats.model_usage)) == (
+        "success",
+        4,
+        {"mockllm/model"},
+    )
+
+
+@pytest.mark.parametrize("mode", ["extra", "committed-extra", "instructions"])
+def test_scope_rejects_extra_committed_and_instruction_edits(mode: Mode, tmp_path: Path) -> None:
+    logs = offline_run([baseline(), genius()], mode, tmp_path)
+    assert [[scope for _, _, scope in results(log)] for log in logs] == [[INCORRECT] * 4] * 2
+
+
+def test_untouched_seeded_bugs_fail(tmp_path: Path) -> None:
+    log = offline_run([baseline()], "untouched", tmp_path)[0]
+    assert results(log) == sorted(
+        [
+            ("clear-task", INCORRECT, CORRECT),
+            ("known-preflight", INCORRECT, CORRECT),
+            ("small-decision", CORRECT, CORRECT),
+            ("decision-review", CORRECT, CORRECT),
+        ]
+    )
+
+
+def test_invalid_answers_fail(tmp_path: Path) -> None:
+    log = offline_run([baseline()], "bad-answer", tmp_path)[0]
+    assert {case: correct for case, correct, _ in results(log)} == {
+        "clear-task": CORRECT,
+        "known-preflight": CORRECT,
+        "small-decision": INCORRECT,
+        "decision-review": INCORRECT,
+    }

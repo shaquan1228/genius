@@ -6,7 +6,7 @@ from pathlib import Path
 
 from inspect_ai.dataset import Sample
 
-from genius_evals.cases import EVALS_ROOT, REPO_ROOT, Case, Profile, load_cases
+from evals.cases import EVALS_ROOT, REPO_ROOT, Case, Profile, load_cases
 
 
 def directory_files(root: Path, destination: str) -> dict[str, str]:

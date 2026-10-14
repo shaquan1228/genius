@@ -6,15 +6,15 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from genius_evals.answers import grade_answer, unfence
-from genius_evals.cases import CaseId, load_cases, state_case
-from genius_evals.profiles import content_hash, files_for, prompt_for, samples
-from tests.scenarios import ANSWERS
+from evals.answers import grade_answer, unfence
+from evals.cases import Case, load_cases
+from evals.profiles import content_hash, files_for, prompt_for, samples
+from evals.tests.scenarios import SOLUTIONS
 
 
 def test_manifest_roundtrip() -> None:
     cases = load_cases()
-    assert [state_case({"case": case.model_dump()}) for case in cases] == cases
+    assert [Case.model_validate(case.model_dump()) for case in cases] == cases
 
 
 def test_invalid_manifest_is_rejected(tmp_path: Path) -> None:
@@ -22,6 +22,30 @@ def test_invalid_manifest_is_rejected(tmp_path: Path) -> None:
     path.write_text('[{"id":"unknown"}]')
     with pytest.raises(ValidationError):
         load_cases(path)
+
+
+def test_new_code_case_needs_no_registry_entry() -> None:
+    case = Case(
+        id="new-case",
+        skill="reasoning",
+        fixture="new-case",
+        allowed_files=["answer.py"],
+        prompt="Fix answer.py",
+        heldout_test="answer.py",
+    )
+    assert (case.id, case.heldout_test) == ("new-case", "answer.py")
+
+
+def test_heldout_path_cannot_escape_its_directory() -> None:
+    with pytest.raises(ValidationError):
+        Case(
+            id="new-case",
+            skill="reasoning",
+            fixture="new-case",
+            allowed_files=[],
+            prompt="Fix it",
+            heldout_test="../outside.py",
+        )
 
 
 def test_profiles_share_fixture_files() -> None:
@@ -61,8 +85,8 @@ def test_hash_tracks_contents_and_ignores_mapping_order(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("case_id", ["small-decision", "decision-review"])
-def test_correct_decision_outputs(case_id: CaseId) -> None:
-    assert grade_answer(case_id, ANSWERS[case_id])
+def test_correct_decision_outputs(case_id: str) -> None:
+    assert grade_answer(case_id, (SOLUTIONS / case_id / "answer.txt").read_text())
 
 
 @pytest.mark.parametrize(

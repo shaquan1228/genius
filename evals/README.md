@@ -39,21 +39,23 @@ uv sync --project evals --locked
 Run both profiles with Claude Code:
 
 ```sh
-uv run --project evals inspect eval evals/genius_evals/tasks.py \
-  --model 'anthropic/<pinned-model-id>' --epochs 3 --max-samples 1 \
+uv run --project evals inspect eval evals/tasks.py \
+  --model 'anthropic/<pinned-model-id>' --epochs 5 --max-samples 1 \
   --log-dir evals/results/live
 ```
 
 Replace the model placeholder with an exact provider model ID.
-Four tasks, two profiles, and three epochs create 24 agent sessions.
+Four tasks, two profiles, and five epochs create 40 independent agent sessions.
+The agent's `attempts=1` prevents retries after a failed submission within one session;
+epochs provide independent attempts for estimating pass rates.
 Claude Code defaults to version `2.1.278`; override it with `-T version=<exact-version>`.
 
 Run the same tasks with Codex:
 
 ```sh
-uv run --project evals inspect eval evals/genius_evals/tasks.py \
+uv run --project evals inspect eval evals/tasks.py \
   --model 'openai/<pinned-model-id>' -T agent=codex -T version=0.137.0 \
-  --epochs 3 --max-samples 1 --log-dir evals/results/live
+  --epochs 5 --max-samples 1 --log-dir evals/results/live
 ```
 
 Both profiles share the selected model, agent version, effort, tools, and limits.
@@ -83,11 +85,13 @@ Inspect reports each score separately. Scores are not inferred from agent claims
 | `workspace.py` | Initialize sandboxes and detect changed files |
 | `answers.py` | Validate strict decision output schemas |
 | `scoring.py` | Combine independent correctness and scope checks |
-| `verifiers/` | Check code against held-out expectations |
+| `heldout/` | Check code against expectations after the agent finishes |
 | `tests/` | Exercise graders and the native Inspect engine offline |
 
-Code verifiers enter the sandbox only after the agent finishes.
-They run agent-produced code inside that sandbox, never on the grading host.
+The manifest names each coding case's held-out check. The same runner executes
+every check inside the sandbox after the agent finishes; adding a case needs no
+new scorer branch or verifier registry entry. The checks run agent-produced code
+inside that sandbox, never on the grading host.
 Scope checks compare the final worktree against its original commit.
 They detect agent commits, untracked files, ignored files, and changed instructions.
 
@@ -110,7 +114,7 @@ Xenon's rank-A gate requires every function's cyclomatic complexity to be at mos
 At full coverage, CRAP equals complexity, so those gates enforce CRAP ≤5.
 Radon exports measured complexity to `results/complexity.json`.
 
-Coverage and complexity include all authored runtime code, verifiers, tests, and scripted helpers.
+Coverage and complexity include all authored runtime code, held-out checks, tests, and scripted helpers.
 Pre-existing buggy fixture data is excluded from the quality gate.
 Strict typing checks the same authored modules without type-ignore exceptions.
 

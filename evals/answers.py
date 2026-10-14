@@ -4,8 +4,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, StrictBool, ValidationError, field_validator
 
-from genius_evals.cases import CaseId
-
 
 class Answer(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
@@ -42,7 +40,7 @@ class ReviewAnswer(Answer):
         return value
 
 
-ANSWER_MODELS: dict[CaseId, type[Answer]] = {
+ANSWER_MODELS: dict[str, type[Answer]] = {
     "small-decision": DecisionAnswer,
     "decision-review": ReviewAnswer,
 }
@@ -55,7 +53,7 @@ def unfence(text: str) -> str:
     return answer
 
 
-def grade_answer(case_id: CaseId, text: str) -> bool:
+def grade_answer(case_id: str, text: str) -> bool:
     try:
         ANSWER_MODELS[case_id].model_validate_json(unfence(text), strict=True)
     except ValidationError:

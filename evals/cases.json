@@ -3,6 +3,7 @@
     "id": "clear-task",
     "skill": "reasoning",
     "fixture": "clear-task",
+    "heldout_test": "receipt.py",
     "allowed_files": ["receipt.py"],
     "prompt": "Fix receipt.total so each item's quantity contributes to the total. Change only receipt.py. Verify with python3 -m unittest -v. Complete the change and summarize it."
   },
@@ -10,6 +11,7 @@
     "id": "known-preflight",
     "skill": "preflight",
     "fixture": "known-preflight",
+    "heldout_test": "preflight.py",
     "allowed_files": ["config.py", "client.py"],
     "prompt": "On branch eval, increase the default timeout from 15 to 30 seconds in config.py and client.py. Only those two files are in scope. Keep tests and other behavior unchanged. Deliver the diff and a brief summary. Verify with python3 -m unittest -v. Complete the change."
   },
