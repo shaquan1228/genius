@@ -32,10 +32,13 @@ token out of chat. A Hugging Face Inference Providers model needs only that
 Hugging Face token. OpenAI and Anthropic models need their own provider API keys;
 a ChatGPT or Claude subscription does not supply an API key for Inspect.
 
-From the repository root, select your Hugging Face namespace and an exact model ID:
+Run from a checkout of the `automated-evals` PR branch, or `main` after this PR
+merges. The private source repository and results bucket already exist for
+`shaquan1228`; the launch script safely reuses them. From the repository root:
 
 ```sh
-export HF_NAMESPACE='your-username'
+uvx --from huggingface_hub==2.2.0 hf auth whoami
+export HF_NAMESPACE='shaquan1228'
 export EVAL_MODEL='hf-inference-providers/openai/gpt-oss-20b'
 sh evals/hf_host.sh
 ```
@@ -48,7 +51,8 @@ The script selects Codex for Hugging Face and OpenAI models, and Claude Code for
 Anthropic models. Set `EVAL_AGENT` and `EVAL_VERSION` to override the agent or
 its pinned version.
 The first run defaults to one epoch (eight agent sessions) to test the hosted
-path. Set `EVAL_EPOCHS=5` for the full 40-session comparison.
+path. After checking its results, run `EVAL_EPOCHS=5 sh evals/hf_host.sh` for
+the full 40-session comparison.
 
 `hf_host.sh` uploads only tracked files from the current Git commit, so commit
 changes before running it. It creates a private dataset repository containing
@@ -57,9 +61,17 @@ The Job
 runs Inspect and launches a dedicated Hugging Face Sandbox VM for each sample.
 Only task files and the selected skill enter that VM; held-out checks stay in
 the Job and run against the VM after the agent finishes. The script prints the
-Job ID. Watch it at `https://huggingface.co/jobs/<namespace>/<job-id>` or with
-`uvx --from huggingface_hub==2.2.0 hf jobs logs -f <job-id>`.
-Native Inspect logs are saved to `hf://buckets/<namespace>/genius-eval-results/live/`.
+Job ID. Watch it at `https://huggingface.co/jobs/shaquan1228/<job-id>` or with:
+
+```sh
+uvx --from huggingface_hub==2.2.0 hf jobs logs -f <job-id>
+uvx --from huggingface_hub==2.2.0 hf jobs inspect <job-id>
+```
+
+The logs command streams output; use `jobs inspect` to confirm the final status.
+Native Inspect logs are saved to the private
+[`genius-eval-results` bucket](https://huggingface.co/buckets/shaquan1228/genius-eval-results)
+under `live/`.
 
 Both profiles share the selected model, agent version, effort, tools, and limits.
 Every sample and epoch starts with fresh task files and a fresh agent session.

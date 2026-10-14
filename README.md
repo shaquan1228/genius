@@ -64,15 +64,17 @@ Run the offline checks, strict typing, coverage, and CRAP gate:
 make -C evals check
 ```
 
-Run both profiles on Hugging Face Jobs with a pinned model ID:
+From a checkout of this PR branch (or `main` after merge), launch a one-epoch
+smoke test on Hugging Face Jobs after adding a positive credit balance:
 
 ```sh
-export HF_NAMESPACE='your-username'
+uvx --from huggingface_hub==2.2.0 hf auth whoami
+export HF_NAMESPACE='shaquan1228'
 export EVAL_MODEL='hf-inference-providers/openai/gpt-oss-20b'
 sh evals/hf_host.sh
 ```
 
-See [evals/README.md](evals/README.md) for account setup, Codex, reports, and repeated runs.
+See [evals/README.md](evals/README.md) for the full run, logs, and results.
 
 ## Commands
 
