@@ -1,0 +1,53 @@
+[project]
+name = "genius-evals"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "huggingface-hub==2.2.0",
+  "inspect-ai==0.3.278",
+  "inspect-swe==0.2.71",
+  "openai>=3.4,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy==1.19.1",
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "radon==6.0.1",
+  "ruff==0.17.0",
+  "xenon==0.9.3",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "PLR0917"]
+
+[tool.ruff.lint.pylint]
+max-positional-args = 2
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR0917"]
+
+[tool.mypy]
+strict = true
+files = ["."]
+exclude = ["fixtures", "tests/solutions"]
+mypy_path = ".."
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = [".."]
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = ["fixtures/*", "tests/solutions/*"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
