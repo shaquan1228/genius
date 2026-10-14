@@ -1,12 +1,4 @@
-# Genius eval scaffolding
-
-This branch contains the non-Python scaffolding extracted from PR #81: dependency
-locks, container setup, hosting scripts, and documentation. The stacked OCaml
-fixture PR supplies the Inspect adapter, task data, graders, and tests.
-
-Validate this layer with `make -C evals check-scaffolding`. The full `check` and
-hosted launcher require the runtime from the stacked PR and fail clearly until
-it is present. The launch instructions below describe the completed stack.
+# Genius evals
 
 [Inspect AI](https://inspect.aisi.org.uk/) runs repeated baseline/Genius comparisons.
 [Inspect SWE](https://meridianlabs-ai.github.io/inspect_swe/) supplies Claude Code and Codex integrations.
@@ -17,7 +9,7 @@ This package supplies task data, instruction profiles, agent settings, and grade
 
 ## Check the harness offline
 
-Install Python 3.12+, [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, and Make.
+Install OCaml 4.13+ (`ocamlc`), Python 3.12+, [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, and Make.
 From the repository root:
 
 ```sh
@@ -40,8 +32,8 @@ token out of chat. A Hugging Face Inference Providers model needs only that
 Hugging Face token. OpenAI and Anthropic models need their own provider API keys;
 a ChatGPT or Claude subscription does not supply an API key for Inspect.
 
-Run from a checkout of the completed eval stack branch, or `main` after this PR
-merges. The private source repository and results bucket already exist for
+Run from a checkout of the completed eval stack, or `main` after both PRs
+merge. The private source repository and results bucket already exist for
 `shaquan1228`; the launch script safely reuses them. From the repository root:
 
 ```sh
@@ -83,6 +75,8 @@ under `live/`.
 
 Both profiles share the selected model, agent version, effort, tools, and limits.
 Every sample and epoch starts with fresh task files and a fresh agent session.
+Codex configuration and session state live under `/tmp/genius-codex`, outside
+the measured repository, so harness bookkeeping does not count as agent edits.
 The agent's `attempts=1` prevents retries after a failed submission within one
 session; epochs provide independent attempts for estimating pass rates.
 Agent retries and model-response caching are disabled. Provider transport retries retain Inspect defaults.
@@ -108,6 +102,34 @@ Inspect reports each score separately. Scores are not inferred from agent claims
 | `hf_sandbox.py` | Give each sample a dedicated Hugging Face Sandbox VM |
 | `heldout/` | Check code against expectations after the agent finishes |
 | `tests/` | Exercise graders and the native Inspect engine offline |
+
+Coding fixtures, visible tests, scripted solutions, and held-out checks are OCaml.
+The Inspect adapter remains Python. Both Docker and Hugging Face sample sandboxes
+install Debian's `ocaml-nox`; local offline checks require `ocamlc` on `PATH`.
+
+Each case lists ordered `fixtures` layers in `cases.json`. For example,
+`["ocaml", "clear-task"]` combines the shared compiler runner and typed example
+helpers with receipt-specific source and visible tests. Later layers override
+files at the same path, so a variant can reuse a scenario and replace only its
+different files. Decision cases use only the empty layer. `sources` lists coding
+modules in dependency order; `allowed_files` separately defines edit scope.
+
+Run visible checks in a coding workspace with, for example:
+
+```sh
+sh check.sh examples.ml receipt.ml test_receipt.ml
+```
+
+The shared runner compiles fresh copies in a temporary directory and cleans up
+after success or failure, leaving no compiler artifacts in the measured worktree.
+`examples.ml` supplies polymorphic tables of inputs and expected outputs plus
+invalid-input checks. The held-out grader uses the host's trusted copies of this
+runner and helper, sends the private OCaml assertions through standard input,
+and compiles them with the agent's modules inside the sample sandbox. It does
+not trust the agent's visible tests or copies of the shared tools. Compile errors,
+uncaught exceptions, failed assertions, and exits before the private completion
+marker produce incorrect scores. Each grading run gets a fresh unpredictable
+marker, emitted only after every assertion completes.
 
 The manifest names each coding case's held-out check. The same runner executes
 every check inside the sandbox after the agent finishes; adding a case needs no
@@ -135,6 +157,10 @@ Xenon's rank-A gate requires every function's cyclomatic complexity to be at mos
 At full coverage, CRAP equals complexity, so those gates enforce CRAP ≤5.
 Radon exports measured complexity to `results/complexity.json`.
 
-Coverage and complexity include all authored runtime code, held-out checks, tests, and scripted helpers.
+Python coverage and complexity include all adapter runtime code, harness tests,
+and scripted helpers. OCaml checks are verified by compiling and executing the
+seeds, solved fixtures, partial fixes, malformed code, and visible test commands;
+they are not included in Python coverage or the Python CRAP calculation.
 Pre-existing buggy fixture data is excluded from the quality gate.
-Strict typing checks the same authored modules without type-ignore exceptions.
+Strict mypy checks the Python modules without type-ignore exceptions; `ocamlc`
+type-checks fixture modules and assertions on every execution.

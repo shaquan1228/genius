@@ -1,0 +1,1 @@
+{"decision_was_supported":true,"change_rule":false,"reason":"One loss does not change known odds."}

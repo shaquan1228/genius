@@ -3,6 +3,8 @@
 # With full statement/branch coverage, CRAP equals cyclomatic complexity.
 # Xenon's A rank requires every function to have complexity <= 5.
 check: check-scaffolding
+	@command -v ocamlc >/dev/null || { echo "Install OCaml 4.13+ (ocamlc) for fixture checks." >&2; exit 1; }
+	sh -n fixtures/ocaml/check.sh
 	@test -f tasks.py || { echo "Eval runtime is supplied by the stacked fixture PR." >&2; exit 1; }
 	uv sync --extra dev --locked
 	uv run ruff check *.py heldout tests --exclude tests/solutions

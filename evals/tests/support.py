@@ -1,0 +1,41 @@
+"""Run scripted agents through Inspect for integration tests."""
+
+import shutil
+from pathlib import Path
+
+from inspect_ai import Task, eval
+from inspect_ai.log import EvalLog, EvalSample
+from inspect_ai.model import get_model
+
+from evals.cases import EVALS_ROOT
+from evals.tests.scenarios import Mode, echo_model, scripted
+
+
+def offline_run(tasks: list[Task], mode: Mode, directory: Path, epochs: int = 1) -> list[EvalLog]:
+    model = get_model("mockllm/model", custom_outputs=echo_model)
+    logs = eval(
+        tasks,
+        model=model,
+        solver=scripted(mode),
+        sandbox="local",
+        epochs=epochs,
+        max_samples=1,
+        log_dir=str(directory),
+        display="none",
+        log_format="json",
+        ctl_server=False,
+    )
+    archive = EVALS_ROOT / "results/offline"
+    archive.mkdir(parents=True, exist_ok=True)
+    for log in logs:
+        shutil.copy2(str(log.location), archive)
+    return logs
+
+
+def sample_result(sample: EvalSample) -> tuple[str, object, object]:
+    assert sample.scores is not None
+    return (str(sample.id), sample.scores["correctness"].value, sample.scores["scope"].value)
+
+
+def results(log: EvalLog) -> list[tuple[str, object, object]]:
+    return sorted(sample_result(sample) for sample in log.samples or [])

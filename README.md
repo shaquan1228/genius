@@ -58,16 +58,14 @@ Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply 
 ## Evaluations
 
 Use [Inspect AI](https://inspect.aisi.org.uk/) for repeated baseline/Genius comparisons.
-The scaffolding layer contains dependency locks and hosting setup; the stacked
-fixture PR supplies the runtime. Check this layer with
-`make -C evals check-scaffolding`. With the completed stack, run the offline
-checks, strict typing, coverage, and CRAP gate:
+Coding fixtures and held-out checks use OCaml, with reusable fixture layers.
+Install OCaml 4.13+ and run the offline checks, strict typing, coverage, and CRAP gate:
 
 ```sh
 make -C evals check
 ```
 
-From a checkout of this PR branch (or `main` after merge), launch a one-epoch
+From a checkout of the completed eval stack (or `main` after merge), launch a one-epoch
 smoke test on Hugging Face Jobs after adding a positive credit balance:
 
 ```sh
