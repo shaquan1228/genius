@@ -1,5 +1,26 @@
-(* Eval primitives: type definitions only. Criterion, Reference, and Case hold the
-   validating constructors; Fixture, Response, and Verifier keep their own interfaces. *)
+(* Shared immutable domain types. Operation signatures live in .mli files;
+   constructors, validation, and evaluation live in their corresponding .ml files. *)
+
+(* Fixture: immutable initial files. The map implementation belongs to Fixture.
+   https://inspect.aisi.org.uk/datasets.html#sample-files
+   https://docs.harborframework.com/tasks/environment *)
+type fixture = string Map.Make(String).t
+
+(* Response: named scalar values shared by expectations and reference replies.
+   https://huggingface.co/docs/lighteval/main/en/package_reference/models_outputs
+   https://developers.openai.com/api/docs/guides/evals *)
+type response_value = String of string | Bool of bool
+type response = (string * response_value) list
+type content = Inline of string | Resource of string
+
+type verifier = {
+  inputs : string list;
+  files : (string * content) list;
+  tools : (string * content) list;
+  command : string list;
+  stdin : string;
+  timeout_seconds : int;
+}
 
 (* Instruction: task input describing the requested behavior. This prompt-only value
    maps to Hugging Face's instruction/query and OpenAI eval inputs.
@@ -17,15 +38,15 @@ type text_rule = { field : string; min_words : int; max_words : int }
    the candidate. The code/structured-response distinction is this repository's design.
    https://developers.openai.com/api/docs/guides/evals
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
-type answer = { expected : Response.t; text_rule : text_rule option }
-type criterion = Code of Verifier.t | Answer of answer
+type answer = { expected : response; text_rule : text_rule option }
+type criterion = Code of verifier | Answer of answer
 
 (* Reference: reference output used for offline validation, distinct from a
    criterion's expected fields. Combining file edits and a completion is our mapping.
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
    https://evalscope.readthedocs.io/en/latest/advanced_guides/custom_dataset/llm.html *)
-type completion = Plain of string | Structured of Response.t
-type reference = { edits : Fixture.t; completion : completion }
+type completion = Plain of string | Structured of response
+type reference = { edits : fixture; completion : completion }
 
 (* Case: one test specification combining instruction, initial state, criteria, and reference.
    Mapping follows Anthropic's task/test case and Hugging Face's sample, rather than an
@@ -34,7 +55,7 @@ type reference = { edits : Fixture.t; completion : completion }
    https://huggingface.co/docs/lighteval/main/en/package_reference/doc *)
 type case = {
   id : string;
-  fixture : Fixture.t;
+  fixture : fixture;
   instruction : instruction;
   criterion : criterion;
   allowed_files : string list;
@@ -60,3 +81,25 @@ type outcome = { changed_files : string list; verification : verification }
    https://developers.openai.com/api/docs/guides/graders
    https://evalscope.readthedocs.io/en/latest/get_started/basic_usage.html *)
 type score = (string * bool) list
+
+(* Public case inputs exclude private verifier and reference material. *)
+type public_case = { id : string; skill : string; prompt : string; files : (string * content) list }
+type profile = { name : string; preamble : string; instructions : string list }
+
+type experiment = {
+  profiles : profile list;
+  epochs : int;
+  message_limit : int;
+  token_limit : int;
+  time_limit : int;
+  cache : bool;
+}
+
+(* Dataset provenance is independent of execution providers. *)
+type dataset_info = {
+  source : string;
+  revision : string;
+  sha256 : string;
+  count : int;
+  attributes : (string * string) list;
+}

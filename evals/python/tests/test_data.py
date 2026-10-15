@@ -11,9 +11,11 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import transport
-from evals.python.contracts import CaseQuery, GradeRequest, Verification
+from evals.python.contracts import GradeRequest, Verification
 from evals.python.integrations.datasets.catalog import (
-    case_by_id,
+    case as catalog_case,
+)
+from evals.python.integrations.datasets.catalog import (
     experiment,
     load_cases,
     reference,
@@ -67,8 +69,8 @@ def grade(case_id: str, *, text: str, suite: Path | None = None) -> bool:
             response=text,
             changed_files=(),
             verification=Verification(status="unchecked"),
-            selection=SUITE if suite is None else suite,
-        )
+        ),
+        selection=SUITE if suite is None else suite,
     )["correctness"]
 
 
@@ -129,7 +131,7 @@ def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
     cases = load_cases(selection=suite)
     assert len(cases) == 200
     assert (
-        reference(query=CaseQuery(case_id=cases[199].id, selection=suite)).solution["config.ml"]
+        reference(cases[199].id, selection=suite).solution["config.ml"]
         == "let timeout_seconds = 229\n"
     )
     assert [path.name for path in tmp_path.iterdir()] == ["suite.ml"]
@@ -170,19 +172,19 @@ let cases = [{ c with instruction = { c.instruction with prompt = text } }]
 
 
 def test_cases_are_immutable() -> None:
-    case = case_by_id(query=CaseQuery(case_id="clear-task"))
+    case = catalog_case("clear-task")
     with pytest.raises(ValidationError):
         case.id = "changed"
     with pytest.raises(TypeError):
         case.files["receipt.ml"] = "changed"  # type: ignore[index]
     with pytest.raises(TypeError):
-        reference(query=CaseQuery(case_id=case.id)).solution["receipt.ml"] = "changed"  # type: ignore[index]
-    checks = verifier(query=CaseQuery(case_id=case.id))
+        reference(case.id).solution["receipt.ml"] = "changed"  # type: ignore[index]
+    checks = verifier(case.id)
     assert checks is not None
     with pytest.raises(ValidationError):
         checks.stdin = "changed"
     assert isinstance(checks.inputs, tuple)
-    assert case_by_id(query=CaseQuery(case_id="clear-task")) is case
+    assert catalog_case("clear-task") is case
 
 
 def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> None:
@@ -196,12 +198,7 @@ def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> Non
         assert compiler.call_count == 3
         changed = ocaml_choice_case(case_id="cache", a=4, b=8)
         suite.write_text(f"let cases = [{changed}]\n")
-        assert (
-            json.loads(reference(query=CaseQuery(case_id="cache", selection=suite)).answer)[
-                "choice"
-            ]
-            == "A"
-        )
+        assert json.loads(reference("cache", selection=suite).answer)["choice"] == "A"
         assert compiler.call_count == 7
 
 
@@ -217,7 +214,7 @@ def test_generic_python_case_exports_without_language_restriction(tmp_path: Path
       ~reference:{ Ast.edits = Fixture.empty; completion = Plain "done" }]
 """)
     case = load_cases(selection=suite)[0]
-    checks = verifier(query=CaseQuery(case_id=case.id, selection=suite))
+    checks = verifier(case.id, selection=suite)
     assert checks is not None
     assert checks.model_dump() == {
         "inputs": ("solution.py",),
@@ -257,14 +254,13 @@ def test_record_updates_cannot_bypass_kernel_validation(
     suite.write_text(f"let c = {expression}\nlet cases = [{{c with fixture = Fixture.empty}}]\n")
     request = GradeRequest(
         case_id="updated",
-        selection=suite,
         response="",
         changed_files=(),
         verification=Verification(status="unchecked"),
     )
     operation: Callable[[], object]
     if grade_only:
-        operation = partial(kernel_grade, request=request)
+        operation = partial(kernel_grade, request=request, selection=suite)
     else:
         operation = partial(load_cases, selection=suite)
     with pytest.raises(subprocess.CalledProcessError):

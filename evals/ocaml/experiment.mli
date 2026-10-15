@@ -1,15 +1,4 @@
-type profile = { name : string; preamble : string; instructions : string list }
-
-type t = private {
-  profiles : profile list;
-  epochs : int;
-  message_limit : int;
-  token_limit : int;
-  time_limit : int;
-  cache : bool;
-}
-
-val default : t
+val default : Ast.experiment
 
 val resolve :
   ?epochs:int ->
@@ -18,4 +7,4 @@ val resolve :
   ?time_limit:int ->
   ?cache:bool ->
   unit ->
-  t
+  Ast.experiment

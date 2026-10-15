@@ -10,7 +10,7 @@ from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
 from inspect_ai.util import sandbox
 
-from evals.python.contracts import CaseQuery, Reference
+from evals.python.contracts import Reference
 from evals.python.integrations.datasets.catalog import reference
 from evals.python.integrations.inspect.workspace import GIT_IDENTITY, execute
 
@@ -91,10 +91,8 @@ class Scripted:
 
     async def __call__(self, state: TaskState, generate: Generate) -> TaskState:  # noqa: PLR0917 - Inspect calls solvers positionally
         case = reference(
-            query=CaseQuery(
-                case_id=str(state.metadata["case_id"]),
-                selection=cast(str, state.metadata.get("dataset", "smoke")),
-            )
+            str(state.metadata["case_id"]),
+            selection=cast(str, state.metadata.get("dataset", "smoke")),
         )
         for step in self.scenario.steps:
             await step(case)

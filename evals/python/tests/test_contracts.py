@@ -9,7 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import transport
-from evals.python.contracts import CaseQuery, GradeRequest, RunOverrides, Verification
+from evals.python.contracts import GradeRequest, RunOverrides, Verification
 from evals.python.integrations.datasets import catalog
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.integrations.inspect.tasks import TaskRequest, build_task
@@ -29,9 +29,8 @@ def third_dataset(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     return "third"
 
 
-def third_request(dataset: str, *, case_id: str = "third-case") -> GradeRequest:
+def third_request(*, case_id: str = "third-case") -> GradeRequest:
     return GradeRequest(
-        selection=dataset,
         case_id=case_id,
         response='{"choice":"A","reason":"Less"}',
         changed_files=(),
@@ -44,7 +43,7 @@ def test_third_dataset_requires_only_adapter_and_declarations(third_dataset: str
     assert cases[0].id == "third-case"
     task = build_task(request=TaskRequest(profile="baseline", agent="codex", dataset="third"))
     assert task.dataset[0].id == "third-case"
-    assert catalog.grade(request=third_request(third_dataset)) == {
+    assert catalog.grade(request=third_request(), selection=third_dataset) == {
         "correctness": True,
         "scope": True,
     }
@@ -59,11 +58,11 @@ def test_default_sandbox_is_local() -> None:
 def test_third_dataset_imports_and_grades_records(third_dataset: str) -> None:
     imported = catalog.compile_records(sources=catalog.sources("third"), records=("new-case",))
     with patch.object(catalog, "_selected", return_value=imported):
-        assert catalog.grade(request=third_request(third_dataset, case_id="new-case"))[
+        assert catalog.grade(request=third_request(case_id="new-case"), selection=third_dataset)[
             "correctness"
         ]
-        assert catalog.reference(query=CaseQuery(case_id="new-case", selection="third")).answer
-        assert catalog.verifier(query=CaseQuery(case_id="new-case", selection="third")) is None
+        assert catalog.reference("new-case", selection="third").answer
+        assert catalog.verifier("new-case", selection="third") is None
 
 
 def test_public_projection_contains_no_private_material() -> None:
@@ -79,8 +78,8 @@ def test_public_projection_includes_visible_tools() -> None:
 
 
 def test_all_contract_collections_are_immutable() -> None:
-    query = CaseQuery(case_id="clear-task")
-    reference = catalog.reference(query=query)
+    case_id = "clear-task"
+    reference = catalog.reference(case_id)
     info = catalog.dataset_info("humanevalplus")
     assert info is not None
     with pytest.raises(TypeError):
@@ -148,18 +147,18 @@ def test_transport_rejects_duplicate_export_ids() -> None:
 
 
 def test_verifier_projection_is_cached_but_grading_is_not() -> None:
-    query = CaseQuery(case_id="clear-task")
-    checks = catalog.verifier(query=query)
+    case_id = "clear-task"
+    checks = catalog.verifier(case_id)
     request = GradeRequest(
-        case_id=query.case_id,
+        case_id=case_id,
         response="",
         changed_files=(),
         verification=Verification(status="passed"),
     )
     with patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as process:
         assert (
-            catalog.verifier(query=query),
-            catalog.verifier(query=query),
+            catalog.verifier(case_id),
+            catalog.verifier(case_id),
             process.call_count,
         ) == (
             checks,

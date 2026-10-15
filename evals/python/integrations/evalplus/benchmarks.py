@@ -11,7 +11,7 @@ from typing import Literal, assert_never
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 from pydantic import BaseModel, ConfigDict
 
-from evals.python.contracts import Case, CaseQuery, ExecutableChecks
+from evals.python.contracts import Case, ExecutableChecks
 from evals.python.integrations.datasets.catalog import dataset_info, load_cases, reference, verifier
 from evals.python.integrations.inspect.verification import Verifier
 
@@ -37,8 +37,7 @@ def benchmark_info() -> BenchmarkInfo:
 
 
 async def validate_case(case: Case) -> dict[str, object]:
-    query = CaseQuery(case_id=case.id, selection="humanevalplus")
-    match verifier(query=query):
+    match verifier(case.id, selection="humanevalplus"):
         case ExecutableChecks() as checks:
             pass
         case None:
@@ -48,7 +47,7 @@ async def validate_case(case: Case) -> dict[str, object]:
     agent = LocalSandboxEnvironment()
     try:
         await agent.exec(["mkdir", "workspace"])
-        for name, contents in reference(query=query).solution.items():
+        for name, contents in reference(case.id, selection="humanevalplus").solution.items():
             await agent.write_file(f"workspace/{name}", contents)
         evidence, metadata = await Verifier(checks=checks, agent=agent).verify()
         return {"case_id": case.id, **evidence.model_dump(), "metadata": metadata}

@@ -33,6 +33,7 @@ OCAML_ROOT: Final = EVALS_ROOT / "ocaml"
 LIBRARY: Final = tuple(
     OCAML_ROOT / name
     for name in (
+        "ast.ml",
         "experiment.mli",
         "experiment.ml",
         "response.mli",
@@ -41,19 +42,16 @@ LIBRARY: Final = tuple(
         "fixture.ml",
         "verifier.mli",
         "verifier.ml",
-        "ast.ml",
-        "case.mli",
-        "case.ml",
         "criterion.mli",
         "criterion.ml",
+        "case.mli",
+        "case.ml",
         "reference.mli",
         "reference.ml",
         "grader.mli",
         "grader.ml",
         "fixtures.ml",
         "scenarios.ml",
-        "dataset_spec.mli",
-        "dataset_spec.ml",
         "projection.mli",
         "projection.ml",
         "codec.ml",
@@ -222,7 +220,7 @@ def reference(*, sources: Sources, case_id: str, record: str | None = None) -> R
 def grade(
     *, sources: Sources, request: GradeRequest, record: str | None = None
 ) -> Mapping[str, bool]:
-    payload = {"version": VERSION, **request.model_dump(exclude={"selection"})}
+    payload = {"version": VERSION, **request.model_dump()}
     result = GradingResult.model_validate_json(
         invoke(
             sources=sources,

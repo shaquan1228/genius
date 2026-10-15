@@ -8,9 +8,16 @@ from unittest.mock import patch
 
 import pytest
 
-from evals.python.contracts import CaseQuery, ExecutableChecks, GradeRequest, Sources, Verification
+from evals.python.contracts import ExecutableChecks, GradeRequest, Sources, Verification
 from evals.python.integrations.datasets import catalog
-from evals.python.integrations.datasets.catalog import case_by_id, cases_hash, grade, load_cases
+from evals.python.integrations.datasets.catalog import (
+    case as catalog_case,
+)
+from evals.python.integrations.datasets.catalog import (
+    cases_hash,
+    grade,
+    load_cases,
+)
 from evals.python.integrations.evalplus.benchmarks import (
     benchmark_info,
 )
@@ -83,16 +90,16 @@ def test_dataset_selector_grades_one_trusted_record() -> None:
     case = import_records((raw,))[0]
     compiled = catalog.compile_records(sources=catalog.sources("humanevalplus"), records=(raw,))
     with patch("evals.python.integrations.datasets.catalog._selected", return_value=compiled):
-        assert case_by_id(query=CaseQuery(case_id=case.id, selection="humanevalplus")) == case
+        assert catalog_case(case.id, selection="humanevalplus") == case
         assert load_cases(selection="humanevalplus") == (case,)
         assert grade(
             request=GradeRequest(
                 case_id=case.id,
-                selection="humanevalplus",
                 response="",
                 changed_files=("workspace/solution.py",),
                 verification=Verification(status="passed"),
-            )
+            ),
+            selection="humanevalplus",
         ) == {"correctness": True, "scope": True}
         samples = load_profile(name="baseline").samples(dataset="humanevalplus")
     assert samples[0].metadata == {
@@ -142,7 +149,7 @@ def test_import_cache_tracks_verifier_source(
         lambda selection="smoke": Sources(modules=original(selection).modules, resources=updated),
     )
     second = load_cases(selection="humanevalplus")[0]
-    checks = catalog.verifier(query=CaseQuery(case_id=second.id, selection="humanevalplus"))
+    checks = catalog.verifier(second.id, selection="humanevalplus")
     assert isinstance(checks, ExecutableChecks)
     assert checks.files["verifier.py"] == (dict(resources)["verifier.py"] + "\n")
 
@@ -191,9 +198,9 @@ def test_imported_dataset_grade_uses_cached_record(synthetic_dataset: None) -> N
     assert grade(
         request=GradeRequest(
             case_id="humaneval-0",
-            selection="humanevalplus",
             response="",
             changed_files=(),
             verification=Verification(status="passed"),
-        )
+        ),
+        selection="humanevalplus",
     ) == {"correctness": True, "scope": True}

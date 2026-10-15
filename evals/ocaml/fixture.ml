@@ -4,9 +4,7 @@
    https://docs.harborframework.com/tasks/environment *)
 module Files = Map.Make (String)
 
-type t = string Files.t
-
-let empty = Files.empty
+let empty : Ast.fixture = Files.empty
 
 let add ~path ~contents fixture =
   if Files.mem path fixture then invalid_arg ("Duplicate fixture path: " ^ path);

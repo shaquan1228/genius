@@ -16,7 +16,6 @@ FROZEN: Final = ConfigDict(strict=True, extra="forbid", frozen=True)
 FileName = Annotated[str, Field(pattern=r"^[a-zA-Z_][a-zA-Z0-9_.-]*$")]
 Files = Annotated[Mapping[FileName, str], AfterValidator(MappingProxyType), PlainSerializer(dict)]
 Attributes = Annotated[Mapping[str, str], AfterValidator(MappingProxyType), PlainSerializer(dict)]
-Selection = str | Path
 
 
 class Case(BaseModel):
@@ -82,12 +81,6 @@ class RunOverrides(BaseModel):
     cache: bool | None = None
 
 
-class CaseQuery(BaseModel):
-    model_config = FROZEN
-    case_id: str
-    selection: Selection = "smoke"
-
-
 VerificationStatus = Literal[
     "unchecked", "passed", "failed", "invalid_submission", "timed_out", "harness_error"
 ]
@@ -99,7 +92,9 @@ class Verification(BaseModel):
     detail: str = ""
 
 
-class GradeRequest(CaseQuery):
+class GradeRequest(BaseModel):
+    model_config = FROZEN
+    case_id: str
     response: str
     changed_files: tuple[str, ...]
     verification: Verification

@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python.contracts import CaseQuery, GradeRequest, Verification
+from evals.python.contracts import GradeRequest, Verification
 from evals.python.integrations.datasets.catalog import (
     RUNNER,
     grade,
@@ -26,8 +26,8 @@ def judgment(*, response: str, suite: Path = SUITE) -> bool:
             response=response,
             changed_files=(),
             verification=Verification(status="unchecked"),
-            selection=suite,
-        )
+        ),
+        selection=suite,
     )["correctness"]
 
 
@@ -177,8 +177,8 @@ def test_additional_named_scores_cross_bridge_without_decoder_changes() -> None:
 def test_reference_channels_export_independently_and_escape(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
     suite.write_text(r"""let fields = Response.of_fields [
-      "state", Response.String "quote\" \\ \n é";
-      "safe", Response.Bool true]
+      "state", Ast.String "quote\" \\ \n é";
+      "safe", Ast.Bool true]
 let cases = [Case.make ~id:"reference" ~fixture:Fixture.empty
   ~instruction:{ Ast.skill = "reasoning"; prompt = "fields" }
   ~criterion:(Criterion.answer ~expected:fields ()) ~allowed_files:["result.txt"]
@@ -186,9 +186,8 @@ let cases = [Case.make ~id:"reference" ~fixture:Fixture.empty
     completion = Structured fields }]
 """)
     case = load_cases(selection=suite)[0]
-    query = CaseQuery(case_id=case.id, selection=suite)
-    expected = reference(query=query)
-    assert verifier(query=query) is None
+    expected = reference(case.id, selection=suite)
+    assert verifier(case.id, selection=suite) is None
     assert dict(expected.solution) == {"result.txt": "result"}
     assert json.loads(expected.answer) == {"state": 'quote" \\ \n é', "safe": True}
     assert grade(
@@ -197,8 +196,8 @@ let cases = [Case.make ~id:"reference" ~fixture:Fixture.empty
             response=expected.answer,
             changed_files=(),
             verification=Verification(status="unchecked"),
-            selection=suite,
-        )
+        ),
+        selection=suite,
     )["correctness"]
 
 

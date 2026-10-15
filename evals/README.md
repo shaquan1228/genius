@@ -22,7 +22,8 @@ flowchart TB
 
 | Boundary | Owns |
 | --- | --- |
-| `ocaml/ast.ml`, primitive modules and interfaces | Case, Instruction, Criterion, Reference, Response, Outcome and Score; validation and pure grading |
+| `ocaml/ast.ml` | Shared immutable domain type definitions; compiles without domain-module dependencies |
+| Primitive `.mli` / `.ml` files | Public operation signatures / executable constructors, validation and pure grading |
 | `ocaml/projection.mli` | Separate public case, trusted verifier, and offline reference projections |
 | `ocaml/experiment.mli` | Immutable defaults and validated launch overrides |
 | `ocaml/dataset.mli`, `ocaml/datasets/` | Common adapter interface; dataset-specific records and provenance |
@@ -56,6 +57,13 @@ CI and local launchers supply overrides; OCaml resolves them into one immutable 
 The HF launcher deliberately requests one epoch by default for its smoke run; direct job invocation uses the kernel default when no override is supplied.
 The generic Inspect task builder accepts a sandbox selection and defaults to local execution; only the HF integration registers and selects the HF provider.
 SDK clients, credentials and operational state stay in integrations.
+
+Shared domain types are defined once in `ast.ml`; public `.mli` files declare functions using those types, and `.ml` files implement them.
+Dataset-record and codec helper types remain private to their implementations.
+Raw Ast records are validated at case projection and grading boundaries, including nested criteria, verifier contracts and reference fields.
+
+Catalog lookup is explicit: `catalog.case(case_id, selection=dataset)` and `catalog.reference(case_id, selection=dataset)` return immutable `Case` and `Reference` values.
+Dataset selection stays out of the grading observation DTO; scoring uses the case ID it already has.
 
 Primitive modules have no codec or SDK dependencies. Only transport compiles/invokes the kernel; the standalone verifier compiles candidate OCaml in its isolated grading workspace.
 Domain DTOs are nonrecursive, while recursive JSON trees are confined to the codec implementation.

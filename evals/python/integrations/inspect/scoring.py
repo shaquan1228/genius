@@ -7,8 +7,8 @@ from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accurac
 from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
 
-from evals.python.contracts import CaseQuery, ExecutableChecks, GradeRequest, Verification
-from evals.python.integrations.datasets.catalog import case_by_id, grade, verifier
+from evals.python.contracts import ExecutableChecks, GradeRequest, Verification
+from evals.python.integrations.datasets.catalog import grade, verifier
 from evals.python.integrations.inspect.verification import Verifier
 from evals.python.integrations.inspect.workspace import changed_files
 
@@ -27,10 +27,10 @@ async def score_sample(state: TaskState, target: Target) -> Score:  # noqa: PLR0
     # A crashed agent is graded on its workspace, like an agent that stopped early.
     failure = state.metadata.get("agent_failure")
     dataset = cast(str, state.metadata.get("dataset", "smoke"))
-    case = case_by_id(query=CaseQuery(case_id=str(state.metadata["case_id"]), selection=dataset))
+    case_id = str(state.metadata["case_id"])
     completion = state.output.completion
     changed = tuple(sorted(await changed_files(state)))
-    match verifier(query=CaseQuery(case_id=case.id, selection=dataset)):
+    match verifier(case_id, selection=dataset):
         case ExecutableChecks() as checks:
             evidence, metadata = await Verifier(checks=checks, agent=sandbox()).verify()
             explanation = evidence.detail
@@ -43,12 +43,9 @@ async def score_sample(state: TaskState, target: Target) -> Score:  # noqa: PLR0
         raise RuntimeError(f"Verification harness error: {evidence.detail}")
     scores = grade(
         request=GradeRequest(
-            case_id=case.id,
-            response=completion,
-            changed_files=changed,
-            verification=evidence,
-            selection=dataset,
-        )
+            case_id=case_id, response=completion, changed_files=changed, verification=evidence
+        ),
+        selection=dataset,
     )
     return Score(
         value=score_values(scores=scores),

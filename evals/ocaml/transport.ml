@@ -14,8 +14,8 @@ let exact_fields expected value =
   fields
 
 let resource = function
-  | Verifier.Inline text -> text
-  | Verifier.Resource name ->
+  | Ast.Inline text -> text
+  | Ast.Resource name ->
       if not (Verifier.valid_path name) then invalid_arg "Invalid verifier resource";
       let channel = open_in_bin (Filename.concat (Filename.dirname Sys.executable_name) name) in
       Fun.protect
@@ -55,10 +55,7 @@ let reference case =
     | Ast.Plain text -> text
     | Ast.Structured fields ->
         let field (name, value) =
-          ( name,
-            match value with
-            | Response.String text -> `String text
-            | Response.Bool flag -> `Bool flag )
+          (name, match value with Ast.String text -> `String text | Ast.Bool flag -> `Bool flag)
         in
         Codec.encode (`Assoc (List.map field (Response.fields fields)))
   in
@@ -66,7 +63,7 @@ let reference case =
 
 let describe = function
   | None -> `Null
-  | Some (info : Dataset_spec.t) ->
+  | Some (info : Ast.dataset_info) ->
       `Assoc
         [
           ("source", `String info.source);
@@ -107,7 +104,7 @@ let experiment value =
       ?cache
       ()
   in
-  let profile (value : Experiment.profile) =
+  let profile (value : Ast.profile) =
     `Assoc
       [
         ("name", `String value.name);
@@ -157,8 +154,8 @@ let candidate text =
   let field (name, value) =
     ( name,
       match value with
-      | `String text -> Response.String text
-      | `Bool value -> Response.Bool value
+      | `String text -> Ast.String text
+      | `Bool value -> Ast.Bool value
       | _ -> invalid_arg "Response fields must be strings or booleans" )
   in
   try

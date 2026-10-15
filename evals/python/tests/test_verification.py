@@ -11,7 +11,7 @@ from inspect_ai.util import ExecResult
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 from pydantic import ValidationError
 
-from evals.python.contracts import CaseQuery, ExecutableChecks, GradeRequest, Verification
+from evals.python.contracts import ExecutableChecks, GradeRequest, Verification
 from evals.python.integrations.datasets.catalog import grade, load_cases, verifier
 from evals.python.integrations.inspect.verification import (
     Completion,
@@ -233,7 +233,7 @@ def test_kernel_refuses_harness_error() -> None:
 def test_private_artifacts_are_excluded_from_public_files() -> None:
 
     for case in load_cases():
-        checks = verifier(query=CaseQuery(case_id=case.id))
+        checks = verifier(case.id)
         if isinstance(checks, ExecutableChecks):
             assert not checks.files.keys() & case.files.keys()
 

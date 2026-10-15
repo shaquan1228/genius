@@ -40,7 +40,7 @@ let make problem ~stdin =
       (Ast.Code
          (Verifier.make
             ~inputs:[ "solution.py" ]
-            ~files:[ ("verifier.py", Verifier.Resource "verifier.py") ]
+            ~files:[ ("verifier.py", Ast.Resource "verifier.py") ]
             ~tools:[]
             ~command:[ "python3"; "-I"; "verifier.py"; "evalplus" ]
             ~stdin
@@ -52,7 +52,7 @@ let make problem ~stdin =
 
 let info =
   Some
-    Dataset_spec.
+    Ast.
       {
         source;
         revision;

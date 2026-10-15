@@ -80,13 +80,33 @@ def test_only_codec_uses_json_library() -> None:
     assert "Jsonm" in (OCAML_ROOT / "codec.ml").read_text()
 
 
-def test_integration_entry_points_take_named_requests() -> None:
-    expected = {"grade", "case_by_id", "load_cases", "download", "build_task"}
-    paths = ("datasets/catalog.py", "datasets/download.py", "inspect/tasks.py")
+def test_integration_entry_points_use_explicit_catalog_selection() -> None:
+    expected = {"case": (1, 1), "reference": (1, 1), "verifier": (1, 1), "grade": (0, 2)}
     signatures = {
-        node.name: (len(node.args.args), len(node.args.kwonlyargs), node.args.kwarg)
-        for name in paths
-        for node in nodes(PYTHON_ROOT / "integrations" / name, kind=ast.FunctionDef)
+        node.name: (len(node.args.args), len(node.args.kwonlyargs))
+        for node in nodes(PYTHON_ROOT / "integrations/datasets/catalog.py", kind=ast.FunctionDef)
         if node.name in expected
     }
-    assert signatures == dict.fromkeys(expected, (0, 1, None))
+    assert signatures == expected
+
+
+def test_shared_domain_types_live_in_ast() -> None:
+    operations = (
+        "fixture",
+        "response",
+        "verifier",
+        "criterion",
+        "case",
+        "reference",
+        "grader",
+        "experiment",
+        "projection",
+    )
+    bodies = [(OCAML_ROOT / f"{name}.ml").read_text() for name in operations]
+    assert not any(re.search(r"^type ", body, re.M) for body in bodies)
+    assert not re.search(r"^let |^module ", (OCAML_ROOT / "ast.ml").read_text(), re.M)
+
+
+def test_public_interfaces_only_declare_operations() -> None:
+    interfaces = [path.read_text() for path in OCAML_ROOT.glob("*.mli")]
+    assert not any(re.search(r"^type ", body, re.M) for body in interfaces)

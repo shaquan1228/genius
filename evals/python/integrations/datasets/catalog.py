@@ -13,7 +13,6 @@ from evals.python.contracts import (
     FROZEN,
     Attributes,
     Case,
-    CaseQuery,
     DatasetInfo,
     ExecutableChecks,
     Experiment,
@@ -22,11 +21,12 @@ from evals.python.contracts import (
     Program,
     Reference,
     RunOverrides,
-    Selection,
     Sources,
 )
 from evals.python.integrations.datasets.download import Download, cache_path, download
 from evals.python.paths import EVALS_ROOT
+
+Selection = str | Path
 
 ADAPTER_ROOT = EVALS_ROOT / "ocaml/datasets"
 RUNNER = EVALS_ROOT / "ocaml/check.sh"
@@ -91,26 +91,26 @@ def load_cases(*, selection: Selection = "smoke") -> tuple[Case, ...]:
     return tuple(_selected(selection).cases.values())
 
 
-def case_by_id(*, query: CaseQuery) -> Case:
-    return _selected(query.selection).cases[query.case_id]
+def case(case_id: str, *, selection: Selection = "smoke") -> Case:
+    return _selected(selection).cases[case_id]
 
 
-def verifier(*, query: CaseQuery) -> ExecutableChecks | None:
-    catalog = _selected(query.selection)
+def verifier(case_id: str, *, selection: Selection = "smoke") -> ExecutableChecks | None:
+    catalog = _selected(selection)
     return transport.verifier(
-        sources=catalog.sources, case_id=query.case_id, record=catalog.records.get(query.case_id)
+        sources=catalog.sources, case_id=case_id, record=catalog.records.get(case_id)
     )
 
 
-def reference(*, query: CaseQuery) -> Reference:
-    catalog = _selected(query.selection)
+def reference(case_id: str, *, selection: Selection = "smoke") -> Reference:
+    catalog = _selected(selection)
     return transport.reference(
-        sources=catalog.sources, case_id=query.case_id, record=catalog.records.get(query.case_id)
+        sources=catalog.sources, case_id=case_id, record=catalog.records.get(case_id)
     )
 
 
-def grade(*, request: GradeRequest) -> Mapping[str, bool]:
-    catalog = _selected(request.selection)
+def grade(*, request: GradeRequest, selection: Selection = "smoke") -> Mapping[str, bool]:
+    catalog = _selected(selection)
     return transport.grade(
         sources=catalog.sources, request=request, record=catalog.records.get(request.case_id)
     )

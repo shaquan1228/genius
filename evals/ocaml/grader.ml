@@ -64,16 +64,17 @@ let answer (criterion : Ast.answer) response =
         | Some rule ->
             let valid =
               match List.assoc_opt rule.field fields with
-              | Some (Response.String text) ->
+              | Some (Ast.String text) ->
                   let words = word_count text in
                   rule.min_words <= words && words <= rule.max_words
-              | Some (Response.Bool _) | None -> false
+              | Some (Ast.Bool _) | None -> false
             in
             (List.remove_assoc rule.field fields, valid)
       in
       text_valid && List.sort compare exact = List.sort compare (Response.fields criterion.expected)
 
 let grade (case : Ast.case) ~response ~(outcome : Ast.outcome) =
+  let case = Case.validate case in
   let correctness =
     match case.criterion with
     | Ast.Code _ -> (

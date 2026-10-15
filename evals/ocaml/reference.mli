@@ -1,1 +1,1 @@
-val edits : Fixture.t -> Ast.reference
+val edits : Ast.fixture -> Ast.reference

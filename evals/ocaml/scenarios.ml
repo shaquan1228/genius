@@ -106,14 +106,10 @@ module Decision = struct
     }
 
   let reason_rule = { Ast.field = "reason"; min_words = 1; max_words = 40 }
-
-  let choice_fields choice =
-    [ ("choice", Response.String (match choice with A -> "A" | B -> "B")) ]
+  let choice_fields choice = [ ("choice", Ast.String (match choice with A -> "A" | B -> "B")) ]
 
   let review_fields ~supported ~change_rule =
-    [
-      ("decision_was_supported", Response.Bool supported); ("change_rule", Response.Bool change_rule);
-    ]
+    [ ("decision_was_supported", Ast.Bool supported); ("change_rule", Ast.Bool change_rule) ]
 
   let criterion fields =
     Criterion.answer ~text_rule:reason_rule ~expected:(Response.of_fields fields) ()
@@ -124,7 +120,7 @@ module Decision = struct
   let reply fields ~reason =
     {
       Ast.edits = Fixture.empty;
-      completion = Structured (Response.of_fields (fields @ [ ("reason", Response.String reason) ]));
+      completion = Structured (Response.of_fields (fields @ [ ("reason", Ast.String reason) ]));
     }
 
   let choice_reference expected ~reason = reply (choice_fields expected) ~reason

@@ -8,8 +8,14 @@ from pathlib import Path
 import pytest
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
-from evals.python.contracts import Case, CaseQuery, ExecutableChecks, Selection
-from evals.python.integrations.datasets.catalog import RUNNER, load_cases, reference, verifier
+from evals.python.contracts import Case, ExecutableChecks
+from evals.python.integrations.datasets.catalog import (
+    RUNNER,
+    Selection,
+    load_cases,
+    reference,
+    verifier,
+)
 from evals.python.integrations.inspect.verification import Verifier
 from evals.python.tests.support import ocaml_timeout_case
 
@@ -21,7 +27,7 @@ def snapshot(directory: Path) -> dict[str, bytes]:
 
 
 def verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> bool:
-    checks = verifier(query=CaseQuery(case_id=case.id, selection=selection))
+    checks = verifier(case.id, selection=selection)
     assert isinstance(checks, ExecutableChecks)
 
     async def execute() -> bool:
@@ -56,7 +62,7 @@ def seed(case_id: str, *, directory: Path) -> Case:
 def test_seeds_fail_and_solutions_pass(*, case_id: str, tmp_path: Path) -> None:
     case = seed(case_id, directory=tmp_path)
     assert not verify(case, directory=tmp_path)
-    write_files(tmp_path, files=reference(query=CaseQuery(case_id=case.id)).solution)
+    write_files(tmp_path, files=reference(case.id).solution)
     before = snapshot(tmp_path)
     assert verify(case, directory=tmp_path)
     assert snapshot(tmp_path) == before
@@ -92,7 +98,7 @@ def test_preflight_defaults_overrides_and_validation(
     case = seed("known-preflight", directory=tmp_path)
     (tmp_path / "config.ml").write_text(f"let timeout_seconds = {config}\n")
     source = (
-        reference(query=CaseQuery(case_id=case.id))
+        reference(case.id)
         .solution["client.ml"]
         .replace("= 30", f"= {client}")
         .replace("      value\n", f"      {override}\n")
@@ -184,5 +190,5 @@ def test_family_variants_generate_working_seeds_and_solutions(
     work.mkdir()
     write_files(work, files=case.files)
     assert not verify(case, directory=work, selection=suite)
-    write_files(work, files=reference(query=CaseQuery(case_id=case.id, selection=suite)).solution)
+    write_files(work, files=reference(case.id, selection=suite).solution)
     assert verify(case, directory=work, selection=suite)

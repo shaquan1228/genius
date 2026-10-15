@@ -1,15 +1,4 @@
-type profile = { name : string; preamble : string; instructions : string list }
-
-type t = {
-  profiles : profile list;
-  epochs : int;
-  message_limit : int;
-  token_limit : int;
-  time_limit : int;
-  cache : bool;
-}
-
-let default =
+let default : Ast.experiment =
   {
     profiles =
       [
@@ -41,4 +30,4 @@ let resolve ?(epochs = default.epochs) ?(message_limit = default.message_limit)
       ("token_limit", token_limit);
       ("time_limit", time_limit);
     ];
-  { profiles = default.profiles; epochs; message_limit; token_limit; time_limit; cache }
+  { Ast.profiles = default.profiles; epochs; message_limit; token_limit; time_limit; cache }
