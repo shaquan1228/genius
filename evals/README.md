@@ -22,17 +22,15 @@ The OCaml kernel owns eval definitions and pure grading. Primitive definitions i
 
 | Module | Owns |
 | --- | --- |
+| `ast.ml` | Type definitions only: instruction, text rule, criterion, reference, case, outcome, and score |
 | `fixture.mli` / `fixture.ml` | Immutable initial files, duplicate detection, explicit overlays |
-| `instruction.ml` | Instructions supplied to the agent |
 | `response.mli` / `response.ml` | Immutable typed string/boolean fields shared by expectations and reference replies |
 | `verifier.mli` / `verifier.ml` | Executable commands, declared inputs, private artifacts, public tools, and deadlines |
-| `criterion.ml` | Declarative expected fields, optional text bounds, and executable verifier contracts |
+| `criterion.ml` | Validating constructors for answer criteria and executable OCaml verifier contracts |
 | `humaneval.ml` | Pinned benchmark provenance and typed HumanEval+ case construction |
-| `reference.ml` | Reference edits and replies for offline validation |
+| `reference.ml` | Shared constructor for reference edits used in offline validation |
 | `case.ml` | Explicit case assembly and file-containment validation |
-| `outcome.ml` | Changed files and explicit verification outcomes, including harness errors |
-| `score.mli` / `score.ml` | Immutable named boolean results |
-| `grader.ml` | Pure response comparison, text constraints, and allowed-file judgment |
+| `grader.mli` / `grader.ml` | Pure response comparison, text constraints, and allowed-file judgment |
 | `fixtures.ml` / `scenarios.ml` | Parameterized starting projects and scenario-specific constructors |
 | `suite.ml` | Pure case declarations |
 | `experiment.ml` | Profiles, prompts, instruction folders, and run limits |
@@ -255,13 +253,15 @@ let cases = List.init 200 timeout_case
 
 A new starting project belongs in `ocaml/fixtures.ml`. Scenario instructions, assertions,
 and reference outputs belong in `scenarios.ml`. Add a reusable success condition to
-`criterion.ml` and its pure evaluation to `grader.ml`. Case IDs have no matching directory
+`ast.ml`, its validating constructor to `criterion.ml`, and its pure evaluation to
+`grader.ml`. Case IDs have no matching directory
 or Python registry entry.
 
 For a new structured answer, use `Response.of_fields` to declare string/boolean values
-and `Criterion.answer` for its expectation. An optional `Criterion.text_rule` declares
-a named string field and inclusive word bounds. A field named `reason` has no special
-meaning unless the criterion declares it. Reference replies use `Reference.Structured`.
+and `Criterion.answer` for its expectation. An optional `Ast.text_rule` record declares
+a named string field and inclusive word bounds; `Criterion.answer` validates it. A field
+named `reason` has no special meaning unless the criterion declares it. Reference replies
+use `Ast.Structured`.
 Adding answer fields does not require Python or transport changes.
 
 ## Execution boundary

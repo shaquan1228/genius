@@ -180,10 +180,10 @@ def test_reference_channels_export_independently_and_escape(tmp_path: Path) -> N
       "state", Response.String "quote\" \\ \n é";
       "safe", Response.Bool true]
 let cases = [Case.make ~id:"reference" ~fixture:Fixture.empty
-  ~instruction:(Instruction.make ~skill:"reasoning" ~prompt:"fields")
+  ~instruction:{ Ast.skill = "reasoning"; prompt = "fields" }
   ~criterion:(Criterion.answer ~expected:fields ()) ~allowed_files:["result.txt"]
-  ~reference:(Reference.make ~edits:(Fixture.of_files ["result.txt", "result"])
-    (Structured fields))]
+  ~reference:{ Ast.edits = Fixture.of_files ["result.txt", "result"];
+    completion = Structured fields }]
 """)
     case = load_cases(selection=suite)[0]
     assert case.checks is None

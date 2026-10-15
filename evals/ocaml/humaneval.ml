@@ -30,13 +30,14 @@ let make problem ~stdin =
     ~id:(id problem)
     ~fixture:(Fixture.of_files [ ("solution.py", problem.prompt) ])
     ~instruction:
-      (Instruction.make
-         ~skill:"reasoning"
-         ~prompt:
-           "Implement the specified function in solution.py. Preserve its signature and edit only \
-            solution.py.")
+      {
+        Ast.skill = "reasoning";
+        prompt =
+          "Implement the specified function in solution.py. Preserve its signature and edit only \
+           solution.py.";
+      }
     ~criterion:
-      (Criterion.Code
+      (Ast.Code
          (Verifier.make
             ~inputs:[ "solution.py" ]
             ~files:[ ("verifier.py", Verifier.Resource "verifier.py") ]

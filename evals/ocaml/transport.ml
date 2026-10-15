@@ -86,11 +86,11 @@ let response value =
   in
   `Assoc (List.map field (Response.fields value))
 
-let reference (reference : Reference.t) =
+let reference (reference : Ast.reference) =
   let completion =
     match reference.completion with
-    | Reference.Plain text -> text
-    | Reference.Structured fields -> Json.encode (response fields)
+    | Ast.Plain text -> text
+    | Ast.Structured fields -> Json.encode (response fields)
   in
   (files (Fixture.files reference.edits), completion)
 
@@ -106,7 +106,7 @@ let resource = function
 let artifacts values = files (List.map (fun (name, content) -> (name, resource content)) values)
 
 let criterion = function
-  | Criterion.Code verifier ->
+  | Ast.Code verifier ->
       `Assoc
         [
           ("inputs", strings verifier.inputs);
@@ -116,9 +116,9 @@ let criterion = function
           ("stdin", `String verifier.stdin);
           ("timeout_seconds", `Float (float_of_int verifier.timeout_seconds));
         ]
-  | Criterion.Answer _ -> `Null
+  | Ast.Answer _ -> `Null
 
-let case (case : Case.t) =
+let case (case : Ast.case) =
   let case = Case.validate case in
   let solution, answer = reference case.reference in
   `Assoc
@@ -153,19 +153,8 @@ let experiment =
       ("cache", `Bool spec.cache);
     ]
 
-let trim text =
-  let rec bounds index first last =
-    if index = String.length text then
-      match first with None -> "" | Some start -> String.sub text start (last - start)
-    else
-      let width = Grader.whitespace_width text index in
-      if width > 0 then bounds (index + width) first last
-      else bounds (index + 1) (match first with None -> Some index | some -> some) (index + 1)
-  in
-  bounds 0 None 0
-
 let unfence text =
-  let text = trim text in
+  let text = Grader.trim text in
   let length = String.length text in
   if length >= 12 && String.sub text 0 8 = "```json\n" && String.sub text (length - 4) 4 = "\n```"
   then String.sub text 8 (length - 12)
@@ -211,29 +200,26 @@ let request ?(cases = Suite.cases) value =
     if List.sort compare (List.map fst fields) <> [ "detail"; "status" ] then invalid ();
     let detail = string (List.assoc "detail" fields) in
     match string (List.assoc "status" fields) with
-    | "unchecked" -> Outcome.Unchecked
-    | "passed" -> Outcome.Passed
-    | "failed" -> Outcome.Failed
-    | "invalid_submission" -> Outcome.Invalid_submission
-    | "timed_out" -> Outcome.Timed_out
-    | "harness_error" -> Outcome.Harness_error detail
+    | "unchecked" -> Ast.Unchecked
+    | "passed" -> Ast.Passed
+    | "failed" -> Ast.Failed
+    | "invalid_submission" -> Ast.Invalid_submission
+    | "timed_out" -> Ast.Timed_out
+    | "harness_error" -> Ast.Harness_error detail
     | _ -> invalid ()
   in
   let case =
-    match List.find_opt (fun (case : Case.t) -> case.id = id) cases with
+    match List.find_opt (fun (case : Ast.case) -> case.id = id) cases with
     | Some case -> Case.validate case
     | None -> invalid_arg ("Unknown case: " ^ id)
   in
   let score =
-    Grader.grade
-      case
-      ~response:(candidate text)
-      ~outcome:(Outcome.make ~changed_files ~verification)
+    Grader.grade case ~response:(candidate text) ~outcome:{ Ast.changed_files; verification }
   in
   `Assoc
     [
       ("version", `Float 2.0);
-      ("scores", `Assoc (List.map (fun (name, value) -> (name, `Bool value)) (Score.fields score)));
+      ("scores", `Assoc (List.map (fun (name, value) -> (name, `Bool value)) score));
     ]
 
 let humaneval_info =
@@ -272,7 +258,7 @@ let humaneval_record raw =
 let humaneval_cases = function
   | `List records ->
       let cases = List.map (fun raw -> humaneval_record (json_string raw)) records in
-      let ids = List.map (fun (case : Case.t) -> case.id) cases in
+      let ids = List.map (fun (case : Ast.case) -> case.id) cases in
       if List.length (List.sort_uniq compare ids) <> List.length ids then
         invalid_arg "Duplicate HumanEval task ID";
       cases

@@ -201,11 +201,12 @@ def test_generic_python_case_exports_without_language_restriction(tmp_path: Path
     suite = tmp_path / "suite.ml"
     suite.write_text("""let cases = [Case.make ~id:"python-case"
       ~fixture:(Fixture.of_files ["solution.py", "print(42)"])
-      ~instruction:(Instruction.make ~skill:"reasoning" ~prompt:"Return 42")
-      ~criterion:(Criterion.Code (Verifier.make ~inputs:["solution.py"]
+      ~instruction:{ Ast.skill = "reasoning"; prompt = "Return 42" }
+      ~criterion:(Ast.Code (Verifier.make ~inputs:["solution.py"]
         ~files:["grader.py", Inline "trusted"] ~tools:[]
         ~command:["python3"; "grader.py"] ~stdin:"private" ~timeout_seconds:5))
-      ~allowed_files:["solution.py"] ~reference:(Reference.make (Plain "done"))]
+      ~allowed_files:["solution.py"]
+      ~reference:{ Ast.edits = Fixture.empty; completion = Plain "done" }]
 """)
     case = load_cases(selection=suite)[0]
     assert case.checks is not None
