@@ -68,13 +68,16 @@ async def run_verifier(
     for name, contents in artifacts.items():
         await environment.write_file(f"workspace/{name}", contents)
     marker = token_hex(32)
-    result = await environment.exec(
-        list(checks.command),
-        input=checks.stdin,
-        cwd="workspace",
-        env={"GENIUS_VERIFIER_MARKER": marker},
-        timeout=checks.timeout_seconds,
-    )
+    try:
+        result = await environment.exec(
+            list(checks.command),
+            input=checks.stdin,
+            cwd="workspace",
+            env={"GENIUS_VERIFIER_MARKER": marker},
+            timeout=checks.timeout_seconds,
+        )
+    except TimeoutError as error:
+        return Verification(status="timed_out", detail=str(error)), {}
     return completion(result, marker=marker)
 
 
@@ -123,8 +126,6 @@ async def verify(
     except asyncio.CancelledError:
         interrupted = True
         raise
-    except TimeoutError as error:
-        return Verification(status="timed_out", detail=str(error)), {}
     except Exception as error:
         return Verification(status="harness_error", detail=str(error)), {}
     finally:

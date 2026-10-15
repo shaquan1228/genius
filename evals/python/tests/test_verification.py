@@ -133,9 +133,7 @@ def test_cleanup_runs_when_verifier_fails(error: Exception) -> None:
                 ),
             ):
                 result, _ = await verify(checks(), agent=agent)
-            assert result.status == (
-                "timed_out" if isinstance(error, TimeoutError) else "harness_error"
-            )
+            assert result.status == "harness_error"
             cleanup.assert_awaited_once()
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
@@ -276,5 +274,66 @@ def test_missing_file_check_works_for_remote_read_implementations() -> None:
         result, _ = await verify(checks(), agent=agent)
         assert result.status == "invalid_submission"
         agent.read_file.assert_not_awaited()
+
+    asyncio.run(execute())
+
+
+@pytest.mark.parametrize("stage", ["read", "provision", "transfer"])
+def test_infrastructure_timeouts_are_harness_errors(stage: str) -> None:
+    async def execute() -> None:
+        agent = LocalSandboxEnvironment()
+        environment = AsyncMock(spec=LocalSandboxEnvironment)
+        environment.exec.return_value = output(stdout="")
+        failures = {
+            "read": patch.object(agent, "read_file", side_effect=TimeoutError("read")),
+            "provision": patch.object(
+                LocalSandboxEnvironment, "sample_init", side_effect=TimeoutError("provision")
+            ),
+            "transfer": patch.object(
+                environment, "write_file", side_effect=TimeoutError("transfer")
+            ),
+        }
+        try:
+            await agent.exec(["mkdir", "workspace"])
+            await agent.write_file("workspace/solution.py", "print(42)")
+            with (
+                patch.object(
+                    LocalSandboxEnvironment, "sample_init", return_value={"default": environment}
+                ),
+                patch.object(LocalSandboxEnvironment, "sample_cleanup"),
+                failures[stage],
+            ):
+                result, _ = await verify(checks(), agent=agent)
+            assert result.status == "harness_error"
+        finally:
+            await LocalSandboxEnvironment.sample_cleanup(
+                "test", None, {"default": agent}, interrupted=False
+            )
+
+    asyncio.run(execute())
+
+
+def test_verifier_execution_deadline_is_preserved() -> None:
+    async def execute() -> None:
+        agent = LocalSandboxEnvironment()
+        environment = AsyncMock(spec=LocalSandboxEnvironment)
+        environment.exec.side_effect = [output(stdout=""), TimeoutError("command deadline")]
+        try:
+            with (
+                patch.object(
+                    LocalSandboxEnvironment, "sample_init", return_value={"default": environment}
+                ),
+                patch.object(LocalSandboxEnvironment, "sample_cleanup") as finish,
+                patch(
+                    "evals.python.verification.candidate_files", return_value={"solution.py": b""}
+                ),
+            ):
+                result, _ = await verify(checks(), agent=agent)
+            assert result.status == "timed_out"
+            finish.assert_awaited_once()
+        finally:
+            await LocalSandboxEnvironment.sample_cleanup(
+                "test", None, {"default": agent}, interrupted=False
+            )
 
     asyncio.run(execute())
