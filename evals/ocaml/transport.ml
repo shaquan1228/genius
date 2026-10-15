@@ -94,9 +94,29 @@ let reference (reference : Reference.t) =
   in
   (files (Fixture.files reference.edits), completion)
 
+let resource = function
+  | Verifier.Inline text -> text
+  | Verifier.Resource name ->
+      if not (Verifier.valid_path name) then invalid_arg "Invalid verifier resource";
+      let channel = open_in_bin (Filename.concat (Filename.dirname Sys.executable_name) name) in
+      Fun.protect
+        ~finally:(fun () -> close_in channel)
+        (fun () -> really_input_string channel (in_channel_length channel))
+
+let artifacts values = files (List.map (fun (name, content) -> (name, resource content)) values)
+
 let criterion = function
-  | Criterion.Code { sources; program } ->
-      `Assoc [ ("sources", strings sources); ("program", `String program) ]
+  | Criterion.Code verifier ->
+      `Assoc
+        [
+          ("kind", `String "executable");
+          ("inputs", strings verifier.inputs);
+          ("files", artifacts verifier.files);
+          ("tools", artifacts verifier.tools);
+          ("command", strings verifier.command);
+          ("stdin", `String verifier.stdin);
+          ("timeout_seconds", `Float (float_of_int verifier.timeout_seconds));
+        ]
   | Criterion.Answer _ -> `Null
 
 let case (case : Case.t) =
@@ -156,27 +176,42 @@ let request value =
   let invalid () = invalid_arg "Invalid grading request" in
   let fields = match value with `Assoc fields -> fields | _ -> invalid () in
   let names = List.sort compare (List.map fst fields) in
-  if names <> [ "case_id"; "changed_files"; "code_passed"; "response"; "version" ] then invalid ();
+  if names <> [ "case_id"; "changed_files"; "response"; "verification"; "version" ] then invalid ();
   let get name = List.assoc name fields in
-  if get "version" <> `Float 1.0 then invalid ();
+  if get "version" <> `Float 2.0 then invalid ();
   let string = function `String text -> text | _ -> invalid () in
   let id = string (get "case_id") in
   let text = string (get "response") in
   let changed_files =
     match get "changed_files" with `List values -> List.map string values | _ -> invalid ()
   in
-  let code_passed = match get "code_passed" with `Bool value -> value | _ -> invalid () in
+  let verification =
+    let fields = match get "verification" with `Assoc fields -> fields | _ -> invalid () in
+    if List.sort compare (List.map fst fields) <> [ "detail"; "status" ] then invalid ();
+    let detail = string (List.assoc "detail" fields) in
+    match string (List.assoc "status" fields) with
+    | "unchecked" -> Outcome.Unchecked
+    | "passed" -> Outcome.Passed
+    | "failed" -> Outcome.Failed
+    | "invalid_submission" -> Outcome.Invalid_submission
+    | "timed_out" -> Outcome.Timed_out
+    | "harness_error" -> Outcome.Harness_error detail
+    | _ -> invalid ()
+  in
   let case =
     match List.find_opt (fun (case : Case.t) -> case.id = id) Suite.cases with
     | Some case -> case
     | None -> invalid_arg ("Unknown case: " ^ id)
   in
   let score =
-    Grader.grade case ~response:(candidate text) ~outcome:(Outcome.make ~changed_files ~code_passed)
+    Grader.grade
+      case
+      ~response:(candidate text)
+      ~outcome:(Outcome.make ~changed_files ~verification)
   in
   `Assoc
     [
-      ("version", `Float 1.0);
+      ("version", `Float 2.0);
       ("scores", `Assoc (List.map (fun (name, value) -> (name, `Bool value)) (Score.fields score)));
     ]
 

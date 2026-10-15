@@ -1,7 +1,11 @@
-(* Outcome: observed environment result, distinct from claims in a response.
-   Changed paths and trusted code execution status are this harness's observation subset.
-   https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
-   https://docs.harborframework.com/tasks/verifier *)
-type t = { changed_files : string list; code_passed : bool }
+type verification =
+  | Unchecked
+  | Passed
+  | Failed
+  | Invalid_submission
+  | Timed_out
+  | Harness_error of string
 
-let make ~changed_files ~code_passed = { changed_files; code_passed }
+type t = { changed_files : string list; verification : verification }
+
+let make ~changed_files ~verification = { changed_files; verification }

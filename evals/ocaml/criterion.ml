@@ -8,7 +8,7 @@
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
 type text_rule = { field : string; min_words : int; max_words : int }
 type answer = { expected : Response.t; text_rule : text_rule option }
-type t = Code of { sources : string list; program : string } | Answer of answer
+type t = Code of Verifier.t | Answer of answer
 
 let text_rule ~field ~min_words ~max_words =
   if field = "" || min_words < 0 || max_words < min_words then invalid_arg "Invalid text rule";
@@ -29,4 +29,11 @@ let answer ?text_rule ~expected () =
 let ocaml ~sources ~assertions =
   if sources = [] || assertions = [] then invalid_arg "OCaml checks need sources and assertions";
   let assertions = List.map (fun condition -> "assert (" ^ condition ^ ")") assertions in
-  Code { sources; program = "let () =\n  " ^ String.concat ";\n  " assertions ^ "\n" }
+  Code
+    (Verifier.make
+       ~inputs:sources
+       ~files:[ ("ocaml_verifier.py", Verifier.Resource "ocaml_verifier.py") ]
+       ~tools:[ ("check.sh", Verifier.Resource "check.sh") ]
+       ~command:([ "python3"; "ocaml_verifier.py" ] @ sources)
+       ~stdin:("let () =\n  " ^ String.concat ";\n  " assertions ^ "\n")
+       ~timeout_seconds:30)

@@ -1,6 +1,7 @@
 """Check Inspect scoring, repeated runs, and saved logs."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from inspect_ai.log import read_eval_log
@@ -9,6 +10,7 @@ from inspect_ai.scorer import CORRECT, INCORRECT
 from evals.python.tasks import baseline, genius
 from evals.python.tests.scenarios import Mode
 from evals.python.tests.support import offline_run, results
+from evals.python.transport import Verification
 
 
 def test_complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
@@ -72,3 +74,14 @@ def test_early_exit_cannot_skip_heldout_assertions(tmp_path: Path) -> None:
     scores = {case: (correct, scope) for case, correct, scope in results(log)}
     assert scores["clear-task"] == (INCORRECT, CORRECT)
     assert scores["known-preflight"] == (INCORRECT, CORRECT)
+
+
+def test_verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
+    with patch(
+        "evals.python.scoring.verify",
+        return_value=(Verification(status="harness_error", detail="grader failed to import"), {}),
+    ):
+        log = offline_run([baseline()], mode="pass", directory=tmp_path)[0]
+    assert log.status == "error"
+    assert log.error is not None
+    assert "grader failed to import" in log.error.message

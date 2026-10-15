@@ -22,11 +22,16 @@ let make ~id ~fixture ~instruction ~criterion ~allowed_files ~reference =
         invalid_arg (Printf.sprintf "Case %s: %s: %s" id problem (String.concat ", " missing))
   in
   (match criterion with
-  | Criterion.Code { sources; _ } ->
+  | Criterion.Code verifier ->
       require
         ~problem:"criteria read files missing from the fixture"
         ~within:(paths fixture)
-        sources
+        verifier.Verifier.inputs;
+      if
+        List.exists
+          (fun (name, _) -> List.mem name (paths fixture))
+          (verifier.files @ verifier.tools)
+      then invalid_arg ("Case " ^ id ^ ": verifier artifacts overlap fixture")
   | Criterion.Answer _ -> ());
   require
     ~problem:"reference edits files outside allowed_files"

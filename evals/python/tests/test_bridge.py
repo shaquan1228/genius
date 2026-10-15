@@ -8,13 +8,17 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python.transport import LIBRARY, RUNNER, grade, load_cases
+from evals.python.transport import LIBRARY, RUNNER, SUITE, Verification, grade, load_cases
 
 
-def judgment(*, response: str) -> bool:
-    return grade("small-decision", response=response, changed_files=(), code_passed=False)[
-        "correctness"
-    ]
+def judgment(*, response: str, suite: Path = SUITE) -> bool:
+    return grade(
+        "small-decision",
+        response=response,
+        changed_files=(),
+        verification=Verification(status="unchecked"),
+        suite=suite,
+    )["correctness"]
 
 
 def test_kernel_grades_response_and_scope() -> None:
@@ -22,7 +26,7 @@ def test_kernel_grades_response_and_scope() -> None:
         "small-decision",
         response='{"choice":"B","reason":"Lower cost."}',
         changed_files=(),
-        code_passed=False,
+        verification=Verification(status="unchecked"),
     )
     assert dict(scores) == {"correctness": True, "scope": True}
     with pytest.raises(TypeError):
@@ -33,11 +37,11 @@ def test_kernel_grades_response_and_scope() -> None:
     "response",
     [
         "version-missing",
-        '{"version":2,"scores":{"correctness":true,"scope":true}}',
+        '{"version":1,"scores":{"correctness":true,"scope":true}}',
         '{"version":true,"scores":{"correctness":true,"scope":true}}',
-        '{"version":1,"scores":{"correctness":1,"scope":true}}',
-        '{"version":1,"scores":{"correctness":true,"scope":"true"}}',
-        '{"version":1,"scores":{"correctness":true,"scope":true},"extra":1}',
+        '{"version":2,"scores":{"correctness":1,"scope":true}}',
+        '{"version":2,"scores":{"correctness":true,"scope":"true"}}',
+        '{"version":2,"scores":{"correctness":true,"scope":true},"extra":1}',
     ],
 )
 def test_invalid_kernel_output_is_a_harness_error(response: str) -> None:
@@ -57,7 +61,7 @@ def test_unknown_kernel_score_names_are_rejected() -> None:
     with (
         patch(
             "evals.python.transport.subprocess.run",
-            return_value=subprocess.CompletedProcess([], 0, stdout='{"version":1,"scores":{}}'),
+            return_value=subprocess.CompletedProcess([], 0, stdout='{"version":2,"scores":{}}'),
         ),
         pytest.raises(ValueError, match="score names"),
     ):
@@ -66,7 +70,12 @@ def test_unknown_kernel_score_names_are_rejected() -> None:
 
 def test_unknown_case_is_a_harness_error() -> None:
     with pytest.raises(subprocess.CalledProcessError):
-        grade("unknown", response="{}", changed_files=(), code_passed=False)
+        grade(
+            "unknown",
+            response="{}",
+            changed_files=(),
+            verification=Verification(status="unchecked"),
+        )
 
 
 @pytest.mark.parametrize("error", [TimeoutError("timeout"), subprocess.CalledProcessError(1, [])])
@@ -135,12 +144,17 @@ def test_candidate_duplicate_keys_keep_last_value() -> None:
 
 def test_additional_named_scores_cross_bridge_without_decoder_changes() -> None:
     judgment(response="{}")
-    response = '{"version":1,"scores":{"correctness":true,"scope":false,"new_metric":true}}'
+    response = '{"version":2,"scores":{"correctness":true,"scope":false,"new_metric":true}}'
     with patch(
         "evals.python.transport.subprocess.run",
         return_value=subprocess.CompletedProcess([], 0, stdout=response),
     ):
-        scores = grade("small-decision", response="{}", changed_files=(), code_passed=False)
+        scores = grade(
+            "small-decision",
+            response="{}",
+            changed_files=(),
+            verification=Verification(status="unchecked"),
+        )
     assert dict(scores) == {"correctness": True, "scope": False, "new_metric": True}
 
 
@@ -160,7 +174,11 @@ let cases = [Case.make ~id:"reference" ~fixture:Fixture.empty
     assert dict(case.solution) == {"result.txt": "result"}
     assert json.loads(case.answer) == {"state": 'quote" \\ \n é', "safe": True}
     assert grade(
-        "reference", response=case.answer, changed_files=(), code_passed=False, suite=suite
+        "reference",
+        response=case.answer,
+        changed_files=(),
+        verification=Verification(status="unchecked"),
+        suite=suite,
     )["correctness"]
 
 
@@ -174,3 +192,17 @@ let cases = [Case.make ~id:"reference" ~fixture:Fixture.empty
 )
 def test_nonstandard_json_is_an_incorrect_candidate(response: str) -> None:
     assert not judgment(response=response)
+
+
+def test_kernel_cache_tracks_trusted_python_runtime(tmp_path: Path) -> None:
+    judgment(response="{}")
+    runtime = tmp_path / "python"
+    runtime.mkdir()
+    for source in (RUNNER.parent.parent / "python").glob("*_verifier.py"):
+        (runtime / source.name).write_text(source.read_text() + "\n")
+    with (
+        patch("evals.python.transport.EVALS_ROOT", tmp_path),
+        patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as process,
+    ):
+        assert judgment(response='{"choice":"B","reason":"Cheap"}')
+        assert process.call_count == 2

@@ -1,13 +1,16 @@
 """Compile real OCaml fixtures and reject seeds, partial fixes, and invalid code."""
 
+import asyncio
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
+from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
 from evals.python.tests.support import ocaml_timeout_case
-from evals.python.transport import RUNNER, Case, heldout_check, load_cases
+from evals.python.transport import RUNNER, Case, ExecutableChecks, load_cases
+from evals.python.verification import verify as execute_verifier
 
 CASES = {case.id: case for case in load_cases()}
 
@@ -17,18 +20,23 @@ def snapshot(directory: Path) -> dict[str, bytes]:
 
 
 def verify(case: Case, *, directory: Path) -> bool:
-    assert case.checks is not None
-    command, script, marker = heldout_check(case.checks)
-    result = subprocess.run(
-        command,
-        check=False,
-        input=script,
-        cwd=directory,
-        text=True,
-        capture_output=True,
-        timeout=30,
-    )
-    return result.returncode == 0 and marker in result.stdout.splitlines()
+    checks = case.checks
+    assert isinstance(checks, ExecutableChecks)
+
+    async def execute() -> bool:
+        agent = LocalSandboxEnvironment()
+        try:
+            await agent.exec(["mkdir", "workspace"])
+            for name, data in snapshot(directory).items():
+                await agent.write_file(f"workspace/{name}", data)
+            result, _ = await execute_verifier(checks, agent=agent)
+            return result.status == "passed"
+        finally:
+            await LocalSandboxEnvironment.sample_cleanup(
+                "test", None, {"default": agent}, interrupted=False
+            )
+
+    return asyncio.run(execute())
 
 
 def write_files(directory: Path, *, files: Mapping[str, str]) -> None:

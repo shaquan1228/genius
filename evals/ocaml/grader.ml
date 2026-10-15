@@ -69,7 +69,11 @@ let answer (criterion : Criterion.answer) response =
 let grade (case : Case.t) ~response ~(outcome : Outcome.t) =
   let correctness =
     match case.criterion with
-    | Criterion.Code _ -> outcome.code_passed
+    | Criterion.Code _ -> (
+        match outcome.verification with
+        | Outcome.Harness_error detail -> invalid_arg ("Verification harness error: " ^ detail)
+        | Outcome.Passed -> true
+        | _ -> false)
     | Criterion.Answer criterion -> answer criterion response
   in
   let allowed = List.map (fun path -> "workspace/" ^ path) case.allowed_files in

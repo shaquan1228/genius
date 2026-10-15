@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from evals.python.profiles import BASELINE, GENIUS, content_hash
 from evals.python.tests.support import ocaml_choice_case, ocaml_timeout_case
-from evals.python.transport import case_by_id, decode, load_cases
+from evals.python.transport import Verification, case_by_id, decode, load_cases
 from evals.python.transport import grade as kernel_grade
 
 
@@ -48,8 +48,15 @@ def test_generated_paths_are_validated(*, field: str, value: object) -> None:
         decode(encode([data]))
 
 
-def grade(case_id: str, *, text: str) -> bool:
-    return kernel_grade(case_id, response=text, changed_files=(), code_passed=False)["correctness"]
+def grade(case_id: str, *, text: str, suite: Path | None = None) -> bool:
+    arguments = {} if suite is None else {"suite": suite}
+    return kernel_grade(
+        case_id,
+        response=text,
+        changed_files=(),
+        verification=Verification(status="unchecked"),
+        **arguments,
+    )["correctness"]
 
 
 def test_profiles_share_fixture_files() -> None:
@@ -165,3 +172,39 @@ def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> Non
         suite.write_text(f"let cases = [{changed}]\n")
         assert json.loads(load_cases(suite)[0].answer)["choice"] == "A"
         assert compiler.call_count == 4
+
+
+def test_generic_python_case_exports_without_language_restriction(tmp_path: Path) -> None:
+    suite = tmp_path / "suite.ml"
+    suite.write_text("""let cases = [Case.make ~id:"python-case"
+      ~fixture:(Fixture.of_files ["solution.py", "print(42)"])
+      ~instruction:(Instruction.make ~skill:"reasoning" ~prompt:"Return 42")
+      ~criterion:(Criterion.Code (Verifier.make ~inputs:["solution.py"]
+        ~files:["grader.py", Inline "trusted"] ~tools:[]
+        ~command:["python3"; "grader.py"] ~stdin:"private" ~timeout_seconds:5))
+      ~allowed_files:["solution.py"] ~reference:(Reference.make (Plain "done"))]
+""")
+    case = load_cases(suite)[0]
+    assert case.checks.model_dump() == {
+        "kind": "executable",
+        "inputs": ("solution.py",),
+        "files": {"grader.py": "trusted"},
+        "tools": {},
+        "command": ("python3", "grader.py"),
+        "stdin": "private",
+        "timeout_seconds": 5,
+    }
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"files": {}},
+        {"files": {"receipt.ml": "seed", "ocaml_verifier.py": "bad"}},
+        {"solution": {"extra.py": "bad"}},
+    ],
+)
+def test_decoded_case_parts_must_agree(updates: dict[str, object]) -> None:
+    data = {**load_cases()[0].model_dump(), **updates}
+    with pytest.raises(ValidationError):
+        decode(encode([data]))

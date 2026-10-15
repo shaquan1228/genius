@@ -4,7 +4,8 @@ from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accurac
 from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
 
-from evals.python.transport import CodeChecks, case_by_id, grade, heldout_check
+from evals.python.transport import ExecutableChecks, Verification, case_by_id, grade
+from evals.python.verification import verify
 from evals.python.workspace import changed_files
 
 
@@ -12,29 +13,23 @@ def verdict(*, passed: bool, explanation: str | None) -> Score:
     return Score(value=CORRECT if passed else INCORRECT, explanation=explanation)
 
 
-async def score_code(checks: CodeChecks) -> Score:
-    command, program, marker = heldout_check(checks)
-    result = await sandbox().exec(command, input=program, cwd="workspace", timeout=30)
-    return verdict(
-        passed=result.success and marker in result.stdout.splitlines(),
-        explanation=(result.stdout + result.stderr)[-2000:] or "Held-out checks did not complete.",
-    )
-
-
 async def score_correctness(state: TaskState, target: Target) -> Score:  # noqa: PLR0917 - Inspect calls scorers positionally
     case = case_by_id(str(state.metadata["case_id"]))
     completion = state.output.completion
-    code = None if case.checks is None else await score_code(case.checks)
-    scores = grade(
-        case.id,
-        response=completion,
-        changed_files=(),
-        code_passed=code is not None and code.value == CORRECT,
+    evidence, metadata = (
+        await verify(case.checks, agent=sandbox())
+        if isinstance(case.checks, ExecutableChecks)
+        else (Verification(status="unchecked"), {})
     )
-    return verdict(
+    if evidence.status == "harness_error":
+        raise RuntimeError(f"Verification harness error: {evidence.detail}")
+    scores = grade(case.id, response=completion, changed_files=(), verification=evidence)
+    result = verdict(
         passed=scores["correctness"],
-        explanation=code.explanation if code is not None else completion,
+        explanation=evidence.detail if isinstance(case.checks, ExecutableChecks) else completion,
     )
+    result.metadata = {"verification": evidence.model_dump(), "verifier_metadata": metadata}
+    return result
 
 
 async def score_scope(state: TaskState, target: Target) -> Score:  # noqa: PLR0917 - Inspect calls scorers positionally
@@ -44,7 +39,7 @@ async def score_scope(state: TaskState, target: Target) -> Score:  # noqa: PLR09
         case.id,
         response=state.output.completion,
         changed_files=changed,
-        code_passed=False,
+        verification=Verification(status="unchecked"),
     )
     return verdict(passed=scores["scope"], explanation=f"Changed files: {list(changed)}")
 
