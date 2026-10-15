@@ -1,5 +1,5 @@
 let find id = List.find (fun (case : Case.t) -> case.id = id) Suite.cases
-let no_changes = Outcome.make ~changed_files:[] ~code_passed:false
+let no_changes = Outcome.make ~changed_files:[] ~verification:Outcome.Unchecked
 
 let scores ?(outcome = no_changes) ~response case =
   Score.fields (Grader.grade case ~response ~outcome)
@@ -103,7 +103,9 @@ let () =
     (fun changed_files ->
       List.iter
         (fun code_passed ->
-          let outcome = Outcome.make ~changed_files ~code_passed in
+          let outcome =
+            Outcome.make ~changed_files ~verification:(if code_passed then Passed else Failed)
+          in
           assert (
             scores ~outcome ~response:None receipt
             = [
@@ -209,3 +211,22 @@ let () =
   List.iter
     (fun fields -> assert (not (correct ~fields note)))
     [ []; [ ("note", Response.Bool true) ]; [ ("note", Response.String "word") ] ]
+
+let () =
+  let case =
+    Case.make
+      ~id:"new-choice"
+      ~fixture:Fixture.empty
+      ~instruction:(Scenarios.Decision.cheaper ~a:4 ~b:8)
+      ~criterion:(Scenarios.Decision.choice A)
+      ~allowed_files:[]
+      ~reference:(Scenarios.Decision.choice_reference A ~reason:"Cheaper.")
+  in
+  (match case.reference.completion with
+  | Reference.Structured reply -> assert (correct ~fields:(Response.fields reply) case)
+  | Reference.Plain _ -> assert false);
+  assert (
+    not
+      (correct
+         ~fields:[ ("choice", Response.String "B"); ("reason", Response.String "Cheaper.") ]
+         case))

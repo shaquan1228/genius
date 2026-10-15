@@ -109,7 +109,6 @@ let criterion = function
   | Criterion.Code verifier ->
       `Assoc
         [
-          ("kind", `String "executable");
           ("inputs", strings verifier.inputs);
           ("files", artifacts verifier.files);
           ("tools", artifacts verifier.tools);

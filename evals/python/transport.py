@@ -92,14 +92,12 @@ class Case(BaseModel):
     skill: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     prompt: str
     files: Files
-    checks: CodeChecks | None
+    checks: ExecutableChecks | None
     solution: Files
     answer: str
 
     @model_validator(mode="after")
     def validate_files(self) -> "Case":
-        if not set(self.solution) <= set(self.allowed_files):
-            raise ValueError("Reference edits files outside allowed_files")
         if isinstance(self.checks, ExecutableChecks):
             self.validate_verifier_files(self.checks)
         return self

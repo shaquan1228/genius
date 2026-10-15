@@ -50,8 +50,9 @@ ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
   ocamlc $(OCAML_FLAGS) -o test $(notdir $(1)) && ./test
 
 test-ocaml:
+	$(call ocaml_test,verifier.mli verifier.ml tests/test_verifier.ml)
 	$(call ocaml_test,fixture.mli fixture.ml fixtures.ml tests/test_fixture.ml)
-	$(call ocaml_test,response.mli response.ml criterion.ml tests/test_criterion.ml)
+	$(call ocaml_test,response.mli response.ml verifier.mli verifier.ml criterion.ml tests/test_criterion.ml)
 	$(call ocaml_test,response.mli response.ml fixture.mli fixture.ml instruction.ml reference.ml tests/test_reference.ml)
 	$(call ocaml_test,$(KERNEL) tests/test_kernel.ml)
 

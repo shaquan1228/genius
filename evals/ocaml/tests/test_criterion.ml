@@ -7,9 +7,9 @@ let rejected construct =
 
 let () =
   (match Criterion.ocaml ~sources:[ "receipt.ml" ] ~assertions:[ "Receipt.total [] = 0." ] with
-  | Criterion.Code { sources; program } ->
-      assert (sources = [ "receipt.ml" ]);
-      assert (String.length program > 0)
+  | Criterion.Code verifier ->
+      assert (verifier.inputs = [ "receipt.ml" ]);
+      assert (String.length verifier.stdin > 0)
   | Criterion.Answer _ -> assert false);
   rejected (fun () -> Criterion.ocaml ~sources:[] ~assertions:[ "true" ]);
   rejected (fun () -> Criterion.ocaml ~sources:[ "a.ml" ] ~assertions:[])

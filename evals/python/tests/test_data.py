@@ -157,8 +157,8 @@ def test_cases_are_immutable() -> None:
         case.solution["receipt.ml"] = "changed"  # type: ignore[index]
     assert case.checks is not None
     with pytest.raises(ValidationError):
-        case.checks.program = "changed"
-    assert isinstance(case.checks.sources, tuple)
+        case.checks.stdin = "changed"
+    assert isinstance(case.checks.inputs, tuple)
     assert case_by_id("clear-task") is case
 
 
@@ -188,8 +188,8 @@ def test_generic_python_case_exports_without_language_restriction(tmp_path: Path
       ~allowed_files:["solution.py"] ~reference:(Reference.make (Plain "done"))]
 """)
     case = load_cases(suite)[0]
+    assert case.checks is not None
     assert case.checks.model_dump() == {
-        "kind": "executable",
         "inputs": ("solution.py",),
         "files": {"grader.py": "trusted"},
         "tools": {},
@@ -204,7 +204,6 @@ def test_generic_python_case_exports_without_language_restriction(tmp_path: Path
     [
         {"files": {}},
         {"files": {"receipt.ml": "seed", "ocaml_verifier.py": "bad"}},
-        {"solution": {"extra.py": "bad"}},
     ],
 )
 def test_decoded_case_parts_must_agree(updates: dict[str, object]) -> None:

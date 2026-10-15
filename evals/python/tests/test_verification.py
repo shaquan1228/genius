@@ -31,7 +31,6 @@ print(json.dumps({'marker': os.environ['GENIUS_VERIFIER_MARKER'],
 def checks(**updates: object) -> ExecutableChecks:
     return ExecutableChecks.model_validate(
         {
-            "kind": "executable",
             "inputs": ("solution.py",),
             "files": {"grader.py": DRIVER},
             "tools": {"visible.py": "raise Exception()"},
