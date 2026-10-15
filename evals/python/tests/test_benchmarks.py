@@ -1,6 +1,5 @@
 """Offline reference validation makes no provider or model requests."""
 
-import argparse
 import asyncio
 import json
 import os
@@ -14,11 +13,8 @@ import pytest
 from evals.python import benchmarks
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.test_humaneval import record
-from evals.python.transport import Verification, import_humaneval, load_cases
-
-
-def options(**updates: object) -> argparse.Namespace:
-    return argparse.Namespace(limit=1, trusted_macos_memory_workaround=False, **updates)
+from evals.python.transport import Verification, import_records, load_cases
+from evals.python.verification import Verifier
 
 
 def test_info(capsys: pytest.CaptureFixture[str]) -> None:
@@ -28,7 +24,7 @@ def test_info(capsys: pytest.CaptureFixture[str]) -> None:
 
 @pytest.mark.parametrize("status", ["passed", "failed", "harness_error"])
 def test_validate_reports_real_status(*, status: str, capsys: pytest.CaptureFixture[str]) -> None:
-    case = import_humaneval((record(),))[0]
+    case = import_records((record(),))[0]
     with (
         patch.object(benchmarks, "load_cases", return_value=(case,)),
         patch.object(benchmarks, "validate_case", new=AsyncMock(return_value={"status": status})),
@@ -44,9 +40,9 @@ def test_invalid_limit() -> None:
 
 def test_memory_workaround_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("EVALPLUS_MAX_MEMORY_BYTES", raising=False)
-    benchmarks.configure_memory(options())
+    benchmarks.configure_memory(benchmarks.Options())
     assert "EVALPLUS_MAX_MEMORY_BYTES" not in os.environ
-    args = argparse.Namespace(trusted_macos_memory_workaround=True)
+    args = benchmarks.Options(trusted_macos_memory_workaround=True)
     with (
         patch.object(platform, "system", return_value="Linux"),
         pytest.raises(ValueError, match="macOS"),
@@ -58,9 +54,9 @@ def test_memory_workaround_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_reference_workspace_cleanup() -> None:
-    case = import_humaneval((record(),))[0]
+    case = import_records((record(),))[0]
     with patch.object(
-        benchmarks,
+        Verifier,
         "verify",
         new=AsyncMock(return_value=(Verification(status="passed"), {"test": True})),
     ):

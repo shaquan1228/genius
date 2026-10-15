@@ -39,9 +39,9 @@ let make problem ~stdin =
       (Criterion.Code
          (Verifier.make
             ~inputs:[ "solution.py" ]
-            ~files:[ ("evalplus_verifier.py", Verifier.Resource "evalplus_verifier.py") ]
+            ~files:[ ("verifier.py", Verifier.Resource "verifier.py") ]
             ~tools:[]
-            ~command:[ "python3"; "-I"; "evalplus_verifier.py" ]
+            ~command:[ "python3"; "-I"; "verifier.py"; "evalplus" ]
             ~stdin
             ~timeout_seconds:180))
     ~allowed_files:[ "solution.py" ]

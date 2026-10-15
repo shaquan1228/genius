@@ -44,6 +44,20 @@ A grading request sends a protocol version, case ID, raw response text, changed 
 
 `python/transport.py` builds a cached host executable from trusted source contents and invokes it with isolated, uncached requests. It returns frozen execution projections and score data. Code cases expose their runtime verifier inputs; answer cases expose no checks, because the kernel grades their replies. References and private verifier programs stay in the host index, outside agent files and sample metadata.
 
+Python modules are organized by responsibility, with no dataset-specific Python modules:
+
+- `transport.py` owns dataset downloads, content-keyed kernel/catalog caches, and typed requests.
+- `verifier.py` is the standalone trusted driver for OCaml and EvalPlus execution.
+- `verification.py` provisions a fresh grading environment and authenticates driver evidence.
+- `benchmarks.py` provides free reference validation; `scoring.py`, `profiles.py`, and `tasks.py` adapt Inspect.
+
+Requests use named fields on frozen types (`CaseQuery`, `GradeRequest`, and `TaskRequest`).
+Dataset selection is a built-in dataset name or a local suite path.
+Closed variants use `match` and `assert_never`; strict mypy enables `exhaustive-match`.
+Adding a variant requires updating its matches. Coverage excludes only the statically unreachable
+`assert_never` guard branches. Public requests and driver evidence are validated at their boundaries. Benchmark payloads retain
+the original pinned private JSON; malformed driver input becomes a harness error.
+
 Python retains Git observation, trusted held-out runner and completion-marker handling, sandbox lifecycle, profile packaging, agent integrations, Inspect adapters, limits, logging, and metrics. Invalid replies, candidate compilation failures, and failed tests receive explicit unsuccessful outcomes; provisioning, transfer, driver, and protocol failures remain harness errors. Source changes invalidate the executable and manifest caches. Historical logs are unchanged; old exported manifests have no compatibility shim.
 
 Only `transport.ml` handles JSON in OCaml, using Jsonm for JSON decoding and encoding. Only `python/transport.py` compiles or invokes the kernel. Domain modules are independent of codecs and Inspect. `python/tests/test_boundary.py` enforces these boundaries.

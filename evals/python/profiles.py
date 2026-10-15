@@ -12,14 +12,6 @@ from evals.python.paths import REPO_ROOT
 from evals.python.transport import Case, Dataset, load_cases, workspace_files
 
 
-def directory_files(root: Path, *, destination: str) -> dict[str, str]:
-    return {
-        f"{destination}/{path.relative_to(root).as_posix()}": str(path)
-        for path in sorted(root.rglob("*"))
-        if path.is_file()
-    }
-
-
 def inline_file(contents: str) -> str:
     return "data:text/plain;base64," + base64.b64encode(contents.encode()).decode()
 
@@ -42,11 +34,10 @@ class Profile:
 
     def instruction_files(self) -> dict[str, str]:
         return {
-            name: path
+            f"instructions/{folder}/{path.relative_to(REPO_ROOT / folder).as_posix()}": str(path)
             for folder in self.instructions
-            for name, path in directory_files(
-                REPO_ROOT / folder, destination=f"instructions/{folder}"
-            ).items()
+            for path in sorted((REPO_ROOT / folder).rglob("*"))
+            if path.is_file()
         }
 
     def prompt(self, case: Case) -> str:
@@ -54,9 +45,14 @@ class Profile:
 
     def files(self, case: Case) -> dict[str, str]:
         workspace = {
-            f"workspace/{name}": inline_file(text) for name, text in workspace_files(case).items()
+            f"workspace/{name}": inline_file(contents=text)
+            for name, text in workspace_files(case).items()
         }
-        return {"workspace/.gitkeep": inline_file(""), **workspace, **self.instruction_files()}
+        return {
+            "workspace/.gitkeep": inline_file(contents=""),
+            **workspace,
+            **self.instruction_files(),
+        }
 
     def samples(self, *, dataset: Dataset = "smoke") -> list[Sample]:
         return [
@@ -66,7 +62,7 @@ class Profile:
                 files=self.files(case),
                 metadata={"case_id": case.id, "profile": self.name, "dataset": dataset},
             )
-            for case in load_cases(dataset=dataset)
+            for case in load_cases(selection=dataset)
         ]
 
 

@@ -78,7 +78,7 @@ def test_early_exit_cannot_skip_heldout_assertions(tmp_path: Path) -> None:
 
 def test_verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
     with patch(
-        "evals.python.scoring.verify",
+        "evals.python.scoring.Verifier.verify",
         return_value=(Verification(status="harness_error", detail="grader failed to import"), {}),
     ):
         log = offline_run([baseline()], mode="pass", directory=tmp_path)[0]

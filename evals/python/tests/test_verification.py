@@ -13,12 +13,17 @@ from pydantic import ValidationError
 
 from evals.python.transport import (
     ExecutableChecks,
+    GradeRequest,
     Verification,
     grade,
     load_cases,
     workspace_files,
 )
-from evals.python.verification import cleanup, completion, run_verifier, verify
+from evals.python.verification import (
+    Completion,
+    Verifier,
+    completion,
+)
 
 DRIVER = """import json, os, subprocess, sys
 result = subprocess.run([sys.executable, 'solution.py'], capture_output=True, text=True)
@@ -64,7 +69,7 @@ def test_python_inputs_execute_in_fresh_workspace(source: str) -> None:
                 "sample_init",
                 wraps=LocalSandboxEnvironment.sample_init,
             ) as create:
-                result, metadata = await verify(checks(), agent=agent)
+                result, metadata = await Verifier(checks=checks(), agent=agent).verify()
             assert result.status == ("passed" if source == "print(42)" else "failed")
             assert metadata == {"raw": "42\n" if source == "print(42)" else "0\n"}
             assert create.call_count == 1
@@ -92,13 +97,17 @@ def test_python_inputs_execute_in_fresh_workspace(source: str) -> None:
     ],
 )
 def test_invalid_completion_is_harness_error(*, stdout: str, code: int) -> None:
-    result, metadata = completion(output(stdout=stdout, code=code), marker="secret")
+    result, metadata = completion(
+        request=Completion(result=output(stdout=stdout, code=code), marker="secret")
+    )
     assert result.status == "harness_error"
     assert metadata == {}
 
 
 def test_valid_completion_allows_prior_stdout() -> None:
-    result, metadata = completion(output(stdout="candidate output\n" + envelope()), marker="secret")
+    result, metadata = completion(
+        request=Completion(result=output(stdout="candidate output\n" + envelope()), marker="secret")
+    )
     assert result == Verification(status="passed")
     assert metadata == {}
 
@@ -106,8 +115,9 @@ def test_valid_completion_allows_prior_stdout() -> None:
 def test_missing_candidate_is_invalid_submission() -> None:
     async def execute() -> None:
         agent = AsyncMock(spec=LocalSandboxEnvironment)
+        agent.exec.return_value = output(stdout="")
         agent.read_file.side_effect = FileNotFoundError("solution.py")
-        result, _ = await verify(checks(), agent=agent)
+        result, _ = await Verifier(checks=checks(), agent=agent).verify()
         assert result.status == "invalid_submission"
 
     asyncio.run(execute())
@@ -128,10 +138,11 @@ def test_cleanup_runs_when_verifier_fails(error: Exception) -> None:
                 ),
                 patch.object(LocalSandboxEnvironment, "sample_cleanup") as cleanup,
                 patch(
-                    "evals.python.verification.candidate_files", return_value={"solution.py": b""}
+                    "evals.python.verification.Verifier.candidate_files",
+                    return_value={"solution.py": b""},
                 ),
             ):
-                result, _ = await verify(checks(), agent=agent)
+                result, _ = await Verifier(checks=checks(), agent=agent).verify()
             assert result.status == "harness_error"
             cleanup.assert_awaited_once()
         finally:
@@ -147,7 +158,9 @@ def test_workspace_creation_failure_is_reported() -> None:
         environment = AsyncMock(spec=LocalSandboxEnvironment)
         environment.exec.return_value = output(stdout="", code=1)
         with pytest.raises(RuntimeError, match="create verifier workspace"):
-            await run_verifier(checks(), environment=environment, inputs={})
+            await Verifier(
+                checks=checks(), agent=environment, environments={"default": environment}
+            ).run_verifier(inputs={})
 
     asyncio.run(execute())
 
@@ -166,11 +179,12 @@ def test_cancellation_cleans_created_environment() -> None:
                 ),
                 patch.object(LocalSandboxEnvironment, "sample_cleanup") as cleanup,
                 patch(
-                    "evals.python.verification.candidate_files", return_value={"solution.py": b""}
+                    "evals.python.verification.Verifier.candidate_files",
+                    return_value={"solution.py": b""},
                 ),
                 pytest.raises(asyncio.CancelledError),
             ):
-                await verify(checks(), agent=agent)
+                await Verifier(checks=checks(), agent=agent).verify()
             assert cleanup.call_args.kwargs["interrupted"]
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
@@ -201,10 +215,12 @@ def test_invalid_executable_contract_is_rejected(updates: dict[str, object]) -> 
 )
 def test_typed_status_reaches_kernel(status: str) -> None:
     scores = grade(
-        "clear-task",
-        response="",
-        changed_files=(),
-        verification=Verification.model_validate({"status": status}),
+        request=GradeRequest(
+            case_id="clear-task",
+            response="",
+            changed_files=(),
+            verification=Verification.model_validate({"status": status}),
+        )
     )
     assert scores["correctness"] == (status == "passed")
 
@@ -213,10 +229,12 @@ def test_kernel_refuses_harness_error() -> None:
 
     with pytest.raises(subprocess.CalledProcessError):
         grade(
-            "clear-task",
-            response="",
-            changed_files=(),
-            verification=Verification(status="harness_error", detail="server failed"),
+            request=GradeRequest(
+                case_id="clear-task",
+                response="",
+                changed_files=(),
+                verification=Verification(status="harness_error", detail="server failed"),
+            )
         )
 
 
@@ -231,7 +249,7 @@ def test_candidate_inspection_failure_is_harness_error() -> None:
     async def execute() -> None:
         agent = AsyncMock(spec=LocalSandboxEnvironment)
         agent.exec.return_value = output(stdout="", code=2)
-        result, _ = await verify(checks(), agent=agent)
+        result, _ = await Verifier(checks=checks(), agent=agent).verify()
         assert result.status == "harness_error"
 
     asyncio.run(execute())
@@ -251,7 +269,9 @@ def test_cleanup_finishes_when_cancelled() -> None:
         try:
             with patch.object(LocalSandboxEnvironment, "sample_cleanup", side_effect=finish):
                 pending = asyncio.create_task(
-                    cleanup(agent, environments={"default": agent}, interrupted=False)
+                    Verifier(
+                        checks=checks(), agent=agent, environments={"default": agent}
+                    ).cleanup()
                 )
                 await started.wait()
                 pending.cancel()
@@ -270,7 +290,7 @@ def test_missing_file_check_works_for_remote_read_implementations() -> None:
     async def execute() -> None:
         agent = AsyncMock(spec=LocalSandboxEnvironment)
         agent.exec.return_value = output(stdout="", code=1)
-        result, _ = await verify(checks(), agent=agent)
+        result, _ = await Verifier(checks=checks(), agent=agent).verify()
         assert result.status == "invalid_submission"
         agent.read_file.assert_not_awaited()
 
@@ -302,7 +322,7 @@ def test_infrastructure_timeouts_are_harness_errors(stage: str) -> None:
                 patch.object(LocalSandboxEnvironment, "sample_cleanup"),
                 failures[stage],
             ):
-                result, _ = await verify(checks(), agent=agent)
+                result, _ = await Verifier(checks=checks(), agent=agent).verify()
             assert result.status == "harness_error"
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
@@ -324,10 +344,11 @@ def test_verifier_execution_deadline_is_preserved() -> None:
                 ),
                 patch.object(LocalSandboxEnvironment, "sample_cleanup") as finish,
                 patch(
-                    "evals.python.verification.candidate_files", return_value={"solution.py": b""}
+                    "evals.python.verification.Verifier.candidate_files",
+                    return_value={"solution.py": b""},
                 ),
             ):
-                result, _ = await verify(checks(), agent=agent)
+                result, _ = await Verifier(checks=checks(), agent=agent).verify()
             assert result.status == "timed_out"
             finish.assert_awaited_once()
         finally:

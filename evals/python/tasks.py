@@ -4,6 +4,7 @@ import hashlib
 
 from inspect_ai import Task, task
 from inspect_ai.model import GenerateConfig
+from pydantic import BaseModel, ConfigDict
 
 import evals.python.hf_sandbox  # noqa: F401 - registers the Hugging Face Sandbox provider
 from evals.python.agents import DEFAULT_VERSIONS, AgentKind, coding_agent
@@ -14,15 +15,28 @@ from evals.python.transport import (
     LIBRARY,
     RUNNER,
     Dataset,
-    humaneval_info,
+    benchmark_metadata,
     load_cases,
 )
 from evals.python.workspace import prepare
 
 
-def build_task(
-    profile: Profile, *, agent: AgentKind, version: str, dataset: Dataset = "smoke"
-) -> Task:
+class TaskRequest(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    profile: Profile
+    agent: AgentKind
+    version: str = ""
+    dataset: Dataset = "smoke"
+
+
+def build_task(*, request: TaskRequest) -> Task:
+    profile, agent, version, dataset = (
+        request.profile,
+        request.agent,
+        request.version,
+        request.dataset,
+    )
     agent_version = version or DEFAULT_VERSIONS[agent]
     return Task(
         name=profile.name,
@@ -39,29 +53,33 @@ def build_task(
         metadata={
             "profile": profile.name,
             "dataset": dataset,
-            "benchmark": humaneval_info().model_dump() if dataset == "humanevalplus" else {},
+            "benchmark": benchmark_metadata(dataset=dataset),
             "agent": agent,
             "agent_version": agent_version,
-            "instructions_sha256": content_hash(GENIUS.instruction_files()),
+            "instructions_sha256": content_hash(files=GENIUS.instruction_files()),
             "fixtures_sha256": content_hash(
-                {path.name: str(path) for path in (*LIBRARY, EXPORTER, RUNNER)}
+                files={path.name: str(path) for path in (*LIBRARY, EXPORTER, RUNNER)}
             ),
-            "cases_sha256": cases_hash(dataset),
+            "cases_sha256": cases_hash(dataset=dataset),
         },
     )
 
 
 def cases_hash(dataset: Dataset) -> str:
     return hashlib.sha256(
-        "".join(case.model_dump_json() for case in load_cases(dataset=dataset)).encode()
+        "".join(case.model_dump_json() for case in load_cases(selection=dataset)).encode()
     ).hexdigest()
 
 
 @task
 def baseline(*, agent: AgentKind = "claude", version: str = "", dataset: Dataset = "smoke") -> Task:
-    return build_task(BASELINE, agent=agent, version=version, dataset=dataset)
+    return build_task(
+        request=TaskRequest(profile=BASELINE, agent=agent, version=version, dataset=dataset)
+    )
 
 
 @task
 def genius(*, agent: AgentKind = "claude", version: str = "", dataset: Dataset = "smoke") -> Task:
-    return build_task(GENIUS, agent=agent, version=version, dataset=dataset)
+    return build_task(
+        request=TaskRequest(profile=GENIUS, agent=agent, version=version, dataset=dataset)
+    )

@@ -10,7 +10,7 @@ from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
 from evals.python.tests.support import ocaml_timeout_case
 from evals.python.transport import RUNNER, Case, ExecutableChecks, load_cases
-from evals.python.verification import verify as execute_verifier
+from evals.python.verification import Verifier
 
 CASES = {case.id: case for case in load_cases()}
 
@@ -29,7 +29,7 @@ def verify(case: Case, *, directory: Path) -> bool:
             await agent.exec(["mkdir", "workspace"])
             for name, data in snapshot(directory).items():
                 await agent.write_file(f"workspace/{name}", data)
-            result, _ = await execute_verifier(checks, agent=agent)
+            result, _ = await Verifier(checks=checks, agent=agent).verify()
             return result.status == "passed"
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
@@ -176,7 +176,7 @@ def test_family_variants_generate_working_seeds_and_solutions(
 ) -> None:
     suite = tmp_path / "suite.ml"
     suite.write_text(f"let cases = [{expression}]\n")
-    case = load_cases(suite)[0]
+    case = load_cases(selection=suite)[0]
     assert fragment in case.files[filename]
     work = tmp_path / "workspace"
     work.mkdir()

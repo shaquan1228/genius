@@ -5,15 +5,19 @@ builds the OCaml runner inputs that grade a workspace. No other Python module
 reads OCaml sources or writes OCaml code.
 """
 
+import gzip
+import hashlib
 import json
+import os
 import subprocess
+import urllib.request
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from types import MappingProxyType
-from typing import Annotated, Final, Literal, TypedDict, Unpack
+from typing import Annotated, Final, Literal, assert_never
 
 from pydantic import (
     AfterValidator,
@@ -25,7 +29,6 @@ from pydantic import (
     model_validator,
 )
 
-from evals.python.datasets import cache_path, download
 from evals.python.paths import EVALS_ROOT
 
 OCAML_ROOT: Final = EVALS_ROOT / "ocaml"
@@ -79,6 +82,12 @@ class ExecutableChecks(BaseModel):
             raise ValueError("Verifier command arguments cannot be empty")
         return self
 
+    def validate_fixture(self, files: Files) -> None:
+        if not set(self.inputs) <= files.keys():
+            raise ValueError("Verifier inputs missing from fixture")
+        if (self.files.keys() | self.tools.keys()) & files.keys():
+            raise ValueError("Verifier artifacts overlap fixture")
+
 
 class Case(BaseModel):
     """One exported case. Every field is read-only, so cached cases are safe to share.
@@ -98,15 +107,14 @@ class Case(BaseModel):
 
     @model_validator(mode="after")
     def validate_files(self) -> "Case":
-        if isinstance(self.checks, ExecutableChecks):
-            self.validate_verifier_files(self.checks)
+        match self.checks:
+            case ExecutableChecks() as checks:
+                checks.validate_fixture(files=self.files)
+            case None:
+                pass
+            case _ as unreachable:
+                assert_never(unreachable)
         return self
-
-    def validate_verifier_files(self, checks: ExecutableChecks) -> None:
-        if not set(checks.inputs) <= self.files.keys():
-            raise ValueError("Verifier inputs missing from fixture")
-        if (checks.files.keys() | checks.tools.keys()) & self.files.keys():
-            raise ValueError("Verifier artifacts overlap fixture")
 
 
 def decode(data: str) -> tuple[Case, ...]:
@@ -116,28 +124,92 @@ def decode(data: str) -> tuple[Case, ...]:
     return cases
 
 
+Dataset = Literal["smoke", "humanevalplus"]
+
+
+Selection = Dataset | Path
+SELECTION_ADAPTER = TypeAdapter(Selection)
+
+
+class CaseQuery(BaseModel):
+    model_config = FROZEN
+
+    case_id: str
+    selection: Selection = "smoke"
+
+
+@dataclass(frozen=True, kw_only=True)
+class Sources:
+    modules: tuple[tuple[str, str], ...]
+    resources: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True, kw_only=True)
+class KernelRequest:
+    arguments: tuple[str, ...] = ()
+    data: str | None = None
+
+
 @dataclass(frozen=True)
 class _Kernel:
     directory: TemporaryDirectory[str]
 
-    def run(self, *arguments: str, data: str | None = None) -> str:
+    def run(self, request: KernelRequest) -> str:
         return subprocess.run(
-            [str(Path(self.directory.name) / "kernel"), *arguments],
-            input=data,
+            [str(Path(self.directory.name) / "kernel"), *request.arguments],
+            input=request.data,
             check=True,
             stdout=subprocess.PIPE,
             text=True,
             timeout=30,
         ).stdout
 
+    def import_records(self, records: tuple[str, ...]) -> tuple[Case, ...]:
+        cases = tuple(
+            case
+            for start in range(0, len(records), 16)
+            for case in decode(
+                data=self.run(
+                    request=KernelRequest(
+                        arguments=("--import-humaneval",),
+                        data=json.dumps(records[start : start + 16]),
+                    )
+                )
+            )
+        )
+        if len({case.id for case in cases}) != len(cases):
+            raise ValueError("Dataset task IDs must be unique")
+        return cases
+
+    def import_benchmark(self) -> "Catalog":
+        info = BenchmarkInfo.model_validate_json(
+            self.run(request=KernelRequest(arguments=("--humaneval-info",)))
+        )
+        records = tuple(
+            download(
+                request=Download(
+                    source=info.source,
+                    sha256=info.sha256,
+                    destination=cache_path(sha256=info.sha256),
+                )
+            )
+            .decode()
+            .splitlines()
+        )
+        cases = self.import_records(records=records)
+        if len(cases) != info.count:
+            raise ValueError("Dataset count mismatch")
+        return Catalog(
+            cases=MappingProxyType({case.id: case for case in cases}),
+            records=MappingProxyType(dict(zip((case.id for case in cases), records, strict=True))),
+        )
+
 
 @lru_cache(maxsize=1)
-def _kernel(
-    sources: tuple[tuple[str, str], ...], *, resources: tuple[tuple[str, str], ...]
-) -> _Kernel:
+def _kernel(*, sources: Sources) -> _Kernel:
     directory = TemporaryDirectory(prefix="genius-kernel-")
     try:
-        for name, contents in (*sources, *resources):
+        for name, contents in (*sources.modules, *sources.resources):
             (Path(directory.name) / name).write_text(contents)
         subprocess.run(
             [
@@ -148,7 +220,7 @@ def _kernel(
                 "-linkpkg",
                 "-o",
                 "kernel",
-                *(name for name, _ in sources),
+                *(name for name, _ in sources.modules),
             ],
             cwd=directory.name,
             check=True,
@@ -160,32 +232,32 @@ def _kernel(
     return _Kernel(directory)
 
 
-@lru_cache(maxsize=1)
-def _export(sources: tuple[tuple[str, str], ...], *, resources: tuple[tuple[str, str], ...]) -> str:
-    return _kernel(sources, resources=resources).run()
-
-
-@lru_cache(maxsize=1)
-def _index(data: str) -> Mapping[str, Case]:
-    return MappingProxyType({case.id: case for case in decode(data)})
-
-
-def _sources(suite: Path) -> tuple[tuple[str, str], ...]:
-    return (
-        *((path.name, path.read_text()) for path in LIBRARY),
-        (SUITE.name, suite.read_text()),
-        (EXPORTER.name, EXPORTER.read_text()),
+def _sources(selection: Selection = "smoke") -> Sources:
+    selection = SELECTION_ADAPTER.validate_python(selection, strict=True)
+    match selection:
+        case Path() as suite:
+            pass
+        case "smoke" | "humanevalplus":
+            suite = SUITE
+        case _ as unreachable:
+            assert_never(unreachable)
+    return Sources(
+        modules=(
+            *((path.name, path.read_text()) for path in LIBRARY),
+            (SUITE.name, suite.read_text()),
+            (EXPORTER.name, EXPORTER.read_text()),
+        ),
+        resources=_resources(),
     )
 
 
-def _suite_index(suite: Path) -> Mapping[str, Case]:
-    return _index(_export(_sources(suite), resources=_resources()))
+def _resources() -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (path.name, path.read_text()) for path in (RUNNER, EVALS_ROOT / "python/verifier.py")
+    )
 
 
-Dataset = Literal["smoke", "humanevalplus"]
-
-
-class HumanEvalInfo(BaseModel):
+class BenchmarkInfo(BaseModel):
     model_config = FROZEN
 
     source: str
@@ -197,76 +269,112 @@ class HumanEvalInfo(BaseModel):
     psutil_version: str
 
 
-def humaneval_info() -> HumanEvalInfo:
-    kernel = _kernel(_sources(SUITE), resources=_resources())
-    return HumanEvalInfo.model_validate_json(kernel.run("--humaneval-info"))
-
-
-def import_humaneval(records: tuple[str, ...]) -> tuple[Case, ...]:
-    return _import_humaneval(records, kernel=_kernel(_sources(SUITE), resources=_resources()))
-
-
-def _import_humaneval(records: tuple[str, ...], *, kernel: _Kernel) -> tuple[Case, ...]:
-    cases = tuple(
-        case
-        for start in range(0, len(records), 16)
-        for case in decode(
-            kernel.run("--import-humaneval", data=json.dumps(records[start : start + 16]))
-        )
+def benchmark_info() -> BenchmarkInfo:
+    kernel = _kernel(sources=_sources())
+    return BenchmarkInfo.model_validate_json(
+        kernel.run(request=KernelRequest(arguments=("--humaneval-info",)))
     )
-    if len({case.id for case in cases}) != len(cases):
-        raise ValueError("HumanEval task IDs must be unique")
-    return cases
+
+
+def benchmark_metadata(dataset: Dataset) -> dict[str, object]:
+    match dataset:
+        case "smoke":
+            return {}
+        case "humanevalplus":
+            return benchmark_info().model_dump()
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+@dataclass(frozen=True, kw_only=True)
+class Download:
+    source: str
+    sha256: str
+    destination: Path
+
+
+def cache_path(sha256: str) -> Path:
+    root = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache")))
+    return root / "genius-evals" / f"{sha256}.jsonl"
+
+
+def download(*, request: Download) -> bytes:
+    if request.destination.exists():
+        data = request.destination.read_bytes()
+    else:
+        with urllib.request.urlopen(request.source, timeout=60) as response:
+            data = gzip.decompress(response.read())
+    if hashlib.sha256(data).hexdigest() != request.sha256:
+        raise ValueError("Dataset checksum mismatch")
+    if not request.destination.exists():
+        request.destination.parent.mkdir(parents=True, exist_ok=True)
+        with NamedTemporaryFile(dir=request.destination.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            try:
+                stream.write(data)
+                stream.close()
+                temporary.replace(request.destination)
+            finally:
+                temporary.unlink(missing_ok=True)
+    return data
+
+
+def import_records(records: tuple[str, ...]) -> tuple[Case, ...]:
+    return _kernel(sources=_sources()).import_records(records=records)
+
+
+@dataclass(frozen=True, kw_only=True)
+class Catalog:
+    cases: Mapping[str, Case]
+    records: Mapping[str, str]
+
+
+@dataclass(frozen=True, kw_only=True)
+class CatalogRequest:
+    selection: Selection
+    sources: Sources
 
 
 @lru_cache(maxsize=1)
-def _humaneval_data(
-    sources: tuple[tuple[str, str], ...], *, resources: tuple[tuple[str, str], ...]
-) -> tuple[Mapping[str, str], Mapping[str, Case]]:
-    kernel = _kernel(sources, resources=resources)
-    info = HumanEvalInfo.model_validate_json(kernel.run("--humaneval-info"))
-    data = download(source=info.source, sha256=info.sha256, destination=cache_path(info.sha256))
-    records = tuple(data.decode().splitlines())
-    cases = _import_humaneval(records, kernel=kernel)
-    if len(cases) != info.count:
-        raise ValueError("HumanEval dataset count mismatch")
-    return (
-        MappingProxyType(dict(zip((case.id for case in cases), records, strict=True))),
-        MappingProxyType({case.id: case for case in cases}),
+def _catalog(request: CatalogRequest) -> Catalog:
+    kernel = _kernel(sources=request.sources)
+    match request.selection:
+        case "smoke" | Path():
+            cases = decode(data=kernel.run(request=KernelRequest()))
+        case "humanevalplus":
+            return kernel.import_benchmark()
+        case _ as unreachable:
+            assert_never(unreachable)
+    return Catalog(
+        cases=MappingProxyType({case.id: case for case in cases}), records=MappingProxyType({})
     )
 
 
-def _humaneval_records() -> Mapping[str, str]:
-    return _humaneval_data(_sources(SUITE), resources=_resources())[0]
+def _selected(selection: Selection) -> Catalog:
+    return _catalog(
+        request=CatalogRequest(
+            selection=selection,
+            sources=_sources(selection=selection),
+        )
+    )
 
 
-def _humaneval_index() -> Mapping[str, Case]:
-    return _humaneval_data(_sources(SUITE), resources=_resources())[1]
+def load_cases(*, selection: Selection = "smoke") -> tuple[Case, ...]:
+    return tuple(_selected(selection=selection).cases.values())
 
 
-def dataset_index(*, suite: Path = SUITE, dataset: Dataset = "smoke") -> Mapping[str, Case]:
-    return _humaneval_index() if dataset == "humanevalplus" else _suite_index(suite)
-
-
-def load_cases(suite: Path = SUITE, *, dataset: Dataset = "smoke") -> tuple[Case, ...]:
-    return tuple(dataset_index(suite=suite, dataset=dataset).values())
-
-
-def case_by_id(case_id: str, *, dataset: Dataset = "smoke") -> Case:
-    return dataset_index(dataset=dataset)[case_id]
+def case_by_id(*, query: CaseQuery) -> Case:
+    return _selected(selection=query.selection).cases[query.case_id]
 
 
 def workspace_files(case: Case) -> Mapping[str, str]:
-    """Starting files plus any tools the case's checks give the agent."""
-    tools = {} if case.checks is None else case.checks.tools
-    return MappingProxyType({**case.files, **tools})
-
-
-def _resources() -> tuple[tuple[str, str], ...]:
-    return tuple(
-        (path.name, path.read_text())
-        for path in (RUNNER, *(EVALS_ROOT / "python").glob("*_verifier.py"))
-    )
+    match case.checks:
+        case ExecutableChecks(tools=tools):
+            return MappingProxyType({**case.files, **tools})
+        case None:
+            return case.files
+        case _ as unreachable:
+            assert_never(unreachable)
 
 
 VerificationStatus = Literal[
@@ -297,33 +405,35 @@ class _GradingResult(BaseModel):
     scores: Scores
 
 
-class DatasetOptions(TypedDict, total=False):
-    dataset: Dataset
+class GradeRequest(CaseQuery):
+    response: str
+    changed_files: tuple[str, ...]
+    verification: Verification
 
 
-def grade(
-    case_id: str,
-    *,
-    response: str,
-    changed_files: tuple[str, ...],
-    verification: Verification,
-    suite: Path = SUITE,
-    **options: Unpack[DatasetOptions],
-) -> Mapping[str, bool]:
-    """Apply private kernel criteria to observed evidence, without caching candidate results."""
-    request: dict[str, object] = {
+def grade(*, request: GradeRequest) -> Mapping[str, bool]:
+    payload: dict[str, object] = {
         "version": 2,
-        "case_id": case_id,
-        "response": response,
-        "changed_files": changed_files,
-        "verification": verification.model_dump(),
+        "case_id": request.case_id,
+        "response": request.response,
+        "changed_files": request.changed_files,
+        "verification": request.verification.model_dump(),
     }
-    kernel = _kernel(_sources(suite), resources=_resources())
-    operation = "--grade"
-    if options.get("dataset", "smoke") == "humanevalplus":
-        operation = "--grade-humaneval"
-        request = {"record": _humaneval_records()[case_id], "request": request}
-    result = _GradingResult.model_validate_json(kernel.run(operation, data=json.dumps(request)))
+    match request.selection:
+        case "smoke" | Path():
+            operation = "--grade"
+        case "humanevalplus":
+            operation = "--grade-humaneval"
+            payload = {
+                "record": _selected(selection=request.selection).records[request.case_id],
+                "request": payload,
+            }
+        case _ as unreachable:
+            assert_never(unreachable)
+    kernel = _kernel(sources=_sources(selection=request.selection))
+    result = _GradingResult.model_validate_json(
+        kernel.run(request=KernelRequest(arguments=(operation,), data=json.dumps(payload)))
+    )
     if not {"correctness", "scope"} <= result.scores.keys():
         raise ValueError("Kernel omitted required score names")
     return result.scores

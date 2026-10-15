@@ -38,6 +38,7 @@ max-positional-args = 1
 
 [tool.mypy]
 strict = true
+enable_error_code = ["exhaustive-match"]
 files = ["python"]
 mypy_path = ".."
 
@@ -53,6 +54,7 @@ source = ["python"]
 [tool.coverage.report]
 fail_under = 100
 show_missing = true
+exclude_also = ["case _ as unreachable:"]
 
 [[tool.uv.dependency-metadata]]
 name = "evalplus"

@@ -37,8 +37,7 @@ def harness_references() -> dict[str, set[str]]:
 def test_only_python_transport_reads_ocaml_or_runs_compilers() -> None:
     references = harness_references()
     assert references.pop("transport.py")
-    for name in ("ocaml_verifier.py", "evalplus_verifier.py"):
-        references.pop(name)
+    references.pop("verifier.py")
     assert "scoring.py" in references
     assert references == dict.fromkeys(references, frozenset())
 
@@ -53,3 +52,14 @@ def test_only_ocaml_transport_encodes_or_prints() -> None:
     domain = {path.name: path.read_text() for path in (*LIBRARY, SUITE)}
     assert {name for name, text in domain.items() if re.search(r"Jsonm|print_", text)} == set()
     assert "Jsonm" in EXPORTER.read_text()
+
+
+def test_core_entry_points_take_one_named_request() -> None:
+    expected = {"grade", "case_by_id", "load_cases", "download", "build_task"}
+    signatures = {
+        node.name: (len(node.args.args), len(node.args.kwonlyargs), node.args.kwarg)
+        for name in ("transport.py", "tasks.py")
+        for node in nodes(PYTHON_ROOT / name, kind=ast.FunctionDef)
+        if node.name in expected
+    }
+    assert signatures == dict.fromkeys(expected, (0, 1, None))

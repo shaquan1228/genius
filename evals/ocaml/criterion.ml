@@ -32,8 +32,8 @@ let ocaml ~sources ~assertions =
   Code
     (Verifier.make
        ~inputs:sources
-       ~files:[ ("ocaml_verifier.py", Verifier.Resource "ocaml_verifier.py") ]
+       ~files:[ ("verifier.py", Verifier.Resource "verifier.py") ]
        ~tools:[ ("check.sh", Verifier.Resource "check.sh") ]
-       ~command:([ "python3"; "-I"; "ocaml_verifier.py" ] @ sources)
+       ~command:([ "python3"; "-I"; "verifier.py"; "ocaml" ] @ sources)
        ~stdin:("let () =\n  " ^ String.concat ";\n  " assertions ^ "\n")
        ~timeout_seconds:30)

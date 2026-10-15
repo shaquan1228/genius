@@ -6,22 +6,29 @@ import json
 import os
 import platform
 from collections.abc import Sequence
+from typing import Literal, assert_never
 
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
+from pydantic import BaseModel, ConfigDict
 
-from evals.python.transport import Case, ExecutableChecks, humaneval_info, load_cases
-from evals.python.verification import verify
+from evals.python.transport import Case, ExecutableChecks, benchmark_info, load_cases
+from evals.python.verification import Verifier
 
 
 async def validate_case(case: Case) -> dict[str, object]:
-    if not isinstance(case.checks, ExecutableChecks):
-        raise ValueError("Reference validation requires executable checks")
+    match case.checks:
+        case ExecutableChecks() as checks:
+            pass
+        case None:
+            raise ValueError("Reference validation requires executable checks")
+        case _ as unreachable:
+            assert_never(unreachable)
     agent = LocalSandboxEnvironment()
     try:
         await agent.exec(["mkdir", "workspace"])
         for name, contents in case.solution.items():
             await agent.write_file(f"workspace/{name}", contents)
-        evidence, metadata = await verify(case.checks, agent=agent)
+        evidence, metadata = await Verifier(checks=checks, agent=agent).verify()
         return {"case_id": case.id, **evidence.model_dump(), "metadata": metadata}
     finally:
         await LocalSandboxEnvironment.sample_cleanup(
@@ -41,7 +48,15 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
-def configure_memory(arguments: argparse.Namespace) -> None:
+class Options(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    command: Literal["info", "validate"] = "validate"
+    limit: int | None = None
+    trusted_macos_memory_workaround: bool = False
+
+
+def configure_memory(arguments: Options) -> None:
     if not arguments.trusted_macos_memory_workaround:
         return
     if platform.system() != "Darwin":
@@ -49,24 +64,28 @@ def configure_memory(arguments: argparse.Namespace) -> None:
     os.environ["EVALPLUS_MAX_MEMORY_BYTES"] = "-1"
 
 
-def validate(arguments: argparse.Namespace) -> int:
+def validate(arguments: Options) -> int:
     if arguments.limit is not None and arguments.limit < 1:
         raise ValueError("--limit must be positive")
-    configure_memory(arguments)
+    configure_memory(arguments=arguments)
     results = [
-        asyncio.run(validate_case(case))
-        for case in load_cases(dataset="humanevalplus")[: arguments.limit]
+        asyncio.run(validate_case(case=case))
+        for case in load_cases(selection="humanevalplus")[: arguments.limit]
     ]
-    print(json.dumps({"provenance": humaneval_info().model_dump(), "results": results}, indent=2))
+    print(json.dumps({"provenance": benchmark_info().model_dump(), "results": results}, indent=2))
     return int(any(result["status"] != "passed" for result in results))
 
 
 def main(arguments: Sequence[str] | None = None) -> int:
-    options = parser().parse_args(arguments)
-    if options.command == "info":
-        print(json.dumps(humaneval_info().model_dump(), indent=2))
-        return 0
-    return validate(options)
+    options = Options.model_validate(vars(parser().parse_args(arguments)))
+    match options.command:
+        case "info":
+            print(json.dumps(benchmark_info().model_dump(), indent=2))
+            return 0
+        case "validate":
+            return validate(arguments=options)
+        case _ as unreachable:
+            assert_never(unreachable)
 
 
 if __name__ == "__main__":
