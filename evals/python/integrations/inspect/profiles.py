@@ -7,15 +7,9 @@ from pathlib import Path
 
 from inspect_ai.dataset import Sample
 
+from evals.python.contracts import Case, Experiment, ProfileSpec
+from evals.python.integrations.datasets.catalog import experiment, load_cases
 from evals.python.paths import REPO_ROOT
-from evals.python.transport import (
-    Case,
-    Dataset,
-    ProfileSpec,
-    experiment,
-    load_cases,
-    workspace_files,
-)
 
 
 def inline_file(contents: str) -> str:
@@ -46,8 +40,7 @@ class Profile(ProfileSpec):
 
     def files(self, case: Case) -> dict[str, str]:
         workspace = {
-            f"workspace/{name}": inline_file(contents=text)
-            for name, text in workspace_files(case).items()
+            f"workspace/{name}": inline_file(contents=text) for name, text in case.files.items()
         }
         return {
             "workspace/.gitkeep": inline_file(contents=""),
@@ -55,7 +48,7 @@ class Profile(ProfileSpec):
             **self.instruction_files(),
         }
 
-    def samples(self, *, dataset: Dataset = "smoke") -> list[Sample]:
+    def samples(self, *, dataset: str = "smoke") -> list[Sample]:
         return [
             Sample(
                 id=case.id,
@@ -67,6 +60,6 @@ class Profile(ProfileSpec):
         ]
 
 
-def load_profile(name: str) -> Profile:
-    spec = {value.name: value for value in experiment().profiles}[name]
-    return Profile.model_validate(spec.model_dump())
+def load_profile(name: str, *, spec: Experiment | None = None) -> Profile:
+    profile = {value.name: value for value in (spec or experiment()).profiles}[name]
+    return Profile.model_validate(profile.model_dump())

@@ -14,10 +14,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from evals.python import verifier as driver
+from evals.python.integrations.evalplus.benchmarks import benchmark_info
+from evals.python.integrations.verifiers import verifier as driver
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.test_humaneval import record
-from evals.python.transport import benchmark_info
 
 
 def payload() -> driver.Payload:
@@ -41,7 +41,12 @@ def test_official_checker(*, tmp_path: Path, source: str, status: str) -> None:
         "EVALPLUS_MAX_MEMORY_BYTES": "-1",
     }
     result = subprocess.run(
-        [sys.executable, "-I", str(EVALS_ROOT / "python/verifier.py"), "evalplus"],
+        [
+            sys.executable,
+            "-I",
+            str(EVALS_ROOT / "python/integrations/verifiers/verifier.py"),
+            "evalplus",
+        ],
         input=json.dumps(payload()),
         text=True,
         capture_output=True,
@@ -265,7 +270,9 @@ def test_driver_entrypoint(
         patch.object(sys, "stdin", io.StringIO("invalid JSON")),
         patch.object(sys, "argv", ["verifier", "evalplus"]),
     ):
-        runpy.run_path(str(EVALS_ROOT / "python/verifier.py"), run_name="__main__")
+        runpy.run_path(
+            str(EVALS_ROOT / "python/integrations/verifiers/verifier.py"), run_name="__main__"
+        )
     evidence = json.loads(capsys.readouterr().out)
     assert evidence["status"] == "harness_error"
     assert evidence["marker"] == "entrypoint"

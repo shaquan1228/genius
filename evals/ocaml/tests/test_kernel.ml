@@ -119,16 +119,10 @@ let () =
     (fun fields -> assert (not (correct ~fields decision)))
     [
       [];
-      [ ("choice", Response.String "A"); ("reason", Response.String "Cheaper") ];
-      [ ("choice", Response.String "B"); ("reason", Response.String "") ];
-      [
-        ("choice", Response.String "B"); ("reason", Response.String (String.concat " " (words 41)));
-      ];
-      [
-        ("choice", Response.String "B");
-        ("reason", Response.String "Cheap");
-        ("extra", Response.Bool true);
-      ];
+      [ ("choice", Ast.String "A"); ("reason", Ast.String "Cheaper") ];
+      [ ("choice", Ast.String "B"); ("reason", Ast.String "") ];
+      [ ("choice", Ast.String "B"); ("reason", Ast.String (String.concat " " (words 41))) ];
+      [ ("choice", Ast.String "B"); ("reason", Ast.String "Cheap"); ("extra", Ast.Bool true) ];
     ];
   let review = find "decision-review" in
   List.iter
@@ -140,14 +134,14 @@ let () =
                [
                  ("decision_was_supported", supported);
                  ("change_rule", change_rule);
-                 ("reason", Response.String "One loss.");
+                 ("reason", Ast.String "One loss.");
                ]
              review)))
     [
-      (Response.Bool false, Response.Bool false);
-      (Response.Bool false, Response.Bool true);
-      (Response.Bool true, Response.Bool true);
-      (Response.String "true", Response.String "false");
+      (Ast.Bool false, Ast.Bool false);
+      (Ast.Bool false, Ast.Bool true);
+      (Ast.Bool true, Ast.Bool true);
+      (Ast.String "true", Ast.String "false");
     ]
 
 let () =
@@ -155,14 +149,14 @@ let () =
     (fun (id, fields) ->
       List.iter
         (fun count ->
-          let reason = Response.String (String.concat (utf8 0x2003) (words count)) in
+          let reason = Ast.String (String.concat (utf8 0x2003) (words count)) in
           assert (
             correct ~fields:(fields @ [ ("reason", reason) ]) (find id) = (1 <= count && count <= 40)))
         [ 0; 1; 40; 41 ])
     [
-      ("small-decision", [ ("choice", Response.String "B") ]);
+      ("small-decision", [ ("choice", Ast.String "B") ]);
       ( "decision-review",
-        [ ("decision_was_supported", Response.Bool true); ("change_rule", Response.Bool false) ] );
+        [ ("decision_was_supported", Ast.Bool true); ("change_rule", Ast.Bool false) ] );
     ]
 
 let () =
@@ -178,13 +172,13 @@ let () =
   assert (count 0x200B = 1)
 
 let () =
-  let status = ("status", Response.String "ready") and safe = ("safe", Response.Bool true) in
+  let status = ("status", Ast.String "ready") and safe = ("safe", Ast.Bool true) in
   let shaped =
     answer_case
       ~text_rule:{ Ast.field = "explanation"; min_words = 2; max_words = 3 }
       [ status; safe ]
   in
-  let explained text = [ status; safe; ("explanation", Response.String text) ] in
+  let explained text = [ status; safe; ("explanation", Ast.String text) ] in
   assert (correct ~fields:(explained "All good") shaped);
   assert (correct ~fields:(explained "All is good") shaped);
   assert (not (correct ~fields:(explained "Good") shaped));
@@ -192,20 +186,19 @@ let () =
   assert (
     not
       (correct
-         ~fields:
-           [ status; ("safe", Response.String "true"); ("explanation", Response.String "All good") ]
+         ~fields:[ status; ("safe", Ast.String "true"); ("explanation", Ast.String "All good") ]
          shaped));
   List.iter
     (fun field ->
       let exact = answer_case [ field ] in
       assert (correct ~fields:[ field ] exact);
-      assert (not (correct ~fields:[ field; ("extra", Response.String "value") ] exact)))
-    [ status; ("reason", Response.String "exact") ];
+      assert (not (correct ~fields:[ field; ("extra", Ast.String "value") ] exact)))
+    [ status; ("reason", Ast.String "exact") ];
   let note = answer_case ~text_rule:{ Ast.field = "note"; min_words = 0; max_words = 0 } [] in
-  assert (correct ~fields:[ ("note", Response.String "") ] note);
+  assert (correct ~fields:[ ("note", Ast.String "") ] note);
   List.iter
     (fun fields -> assert (not (correct ~fields note)))
-    [ []; [ ("note", Response.Bool true) ]; [ ("note", Response.String "word") ] ]
+    [ []; [ ("note", Ast.Bool true) ]; [ ("note", Ast.String "word") ] ]
 
 let () =
   let case =
@@ -221,10 +214,7 @@ let () =
   | Ast.Structured reply -> assert (correct ~fields:(Response.fields reply) case)
   | Ast.Plain _ -> assert false);
   assert (
-    not
-      (correct
-         ~fields:[ ("choice", Response.String "B"); ("reason", Response.String "Cheaper.") ]
-         case))
+    not (correct ~fields:[ ("choice", Ast.String "B"); ("reason", Ast.String "Cheaper.") ] case))
 
 let () =
   let original = find "clear-task" in
@@ -247,3 +237,62 @@ let () =
   assert (
     rejection (fun () -> Case.validate { original with fixture = Fixture.empty })
     = "Case clear-task: criteria read files missing from the fixture: receipt.ml")
+
+let () =
+  let original = find "clear-task" in
+  let public = Projection.case original in
+  assert (public.id = original.id);
+  assert (public.prompt = original.instruction.prompt);
+  assert (List.map fst public.files = [ "receipt.ml"; "test_receipt.ml"; "check.sh" ]);
+  assert (not (List.mem_assoc "verifier.py" public.files));
+  assert (List.assoc "check.sh" public.files = Ast.Resource "check.sh");
+  (match Projection.verifier original with
+  | Some verifier ->
+      assert (List.map fst verifier.files = [ "verifier.py" ]);
+      assert (verifier.stdin <> "");
+      assert (verifier.inputs = [ "receipt.ml" ])
+  | None -> assert false);
+  assert (Projection.reference original = original.reference);
+  let decision = find "small-decision" in
+  assert (Projection.verifier decision = None);
+  assert ((Projection.case decision).files = []);
+  assert (Projection.reference decision = decision.reference);
+  assert (
+    rejection (fun () -> Projection.case { original with fixture = Fixture.empty })
+    = "Case clear-task: criteria read files missing from the fixture: receipt.ml")
+
+(* Ast values can be assembled directly; every consuming boundary validates them. *)
+let reject_raw_case case =
+  List.iter
+    (fun consume -> assert (rejection (fun () -> consume case) <> ""))
+    [
+      (fun case -> ignore (Projection.case case));
+      (fun case -> ignore (Projection.verifier case));
+      (fun case -> ignore (Projection.reference case));
+      (fun case -> ignore (Grader.grade case ~response:None ~outcome:no_changes));
+    ]
+
+let () =
+  let code = find "clear-task" in
+  let checks =
+    match code.criterion with Ast.Code checks -> checks | Ast.Answer _ -> assert false
+  in
+  List.iter
+    (fun checks -> reject_raw_case { code with criterion = Ast.Code checks })
+    [
+      { checks with timeout_seconds = 0 }; { checks with command = [] }; { checks with inputs = [] };
+    ];
+  let answer = find "small-decision" in
+  List.iter
+    (fun criterion -> reject_raw_case { answer with criterion })
+    [
+      Ast.Answer { expected = []; text_rule = None };
+      Ast.Answer { expected = [ ("x", Ast.Bool true); ("x", Ast.Bool false) ]; text_rule = None };
+      Ast.Answer
+        { expected = []; text_rule = Some { field = "note"; min_words = 2; max_words = 1 } };
+    ];
+  reject_raw_case
+    {
+      answer with
+      reference = { answer.reference with completion = Ast.Structured [ ("", Ast.Bool true) ] };
+    }

@@ -11,7 +11,8 @@ from inspect_ai.model import ModelName
 from inspect_ai.solver import TaskState
 from inspect_swe import claude_code, codex_cli
 
-from evals.python.agents import (
+from evals.python.integrations.datasets.catalog import experiment
+from evals.python.integrations.inspect.agents import (
     AGENT_REGISTRY,
     AgentKind,
     AgentSpec,
@@ -19,9 +20,8 @@ from evals.python.agents import (
     contained_agent,
     truncated,
 )
-from evals.python.tasks import TaskRequest, build_task
+from evals.python.integrations.inspect.tasks import TaskRequest, build_task
 from evals.python.tests.scenarios import crashing
-from evals.python.transport import experiment
 
 
 def run_crash(kind: AgentKind, *, message: str, monkeypatch: pytest.MonkeyPatch) -> TaskState:
@@ -110,7 +110,9 @@ def test_long_failure_keeps_exit_code_and_provider_error() -> None:
 
 
 def test_claude_options_are_fixed() -> None:
-    with patch("evals.python.agents.claude_code", wraps=claude_code) as factory:
+    with patch(
+        "evals.python.integrations.inspect.agents.claude_code", wraps=claude_code
+    ) as factory:
         coding_agent("claude", version="2.1.278")
     assert factory.call_args.kwargs == {
         "cwd": "workspace",
@@ -124,7 +126,7 @@ def test_claude_options_are_fixed() -> None:
 
 
 def test_codex_options_disable_network() -> None:
-    with patch("evals.python.agents.codex_cli", wraps=codex_cli) as factory:
+    with patch("evals.python.integrations.inspect.agents.codex_cli", wraps=codex_cli) as factory:
         coding_agent("codex", version="0.137.0")
     assert factory.call_args.kwargs == {
         "cwd": "workspace",

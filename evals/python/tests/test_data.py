@@ -11,24 +11,25 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import transport
-from evals.python.profiles import content_hash, load_profile
-from evals.python.tasks import TaskRequest, build_task
-from evals.python.tests.support import ocaml_choice_case, ocaml_timeout_case
-from evals.python.transport import (
-    SUITE,
-    CaseQuery,
-    GradeRequest,
-    Verification,
-    case_by_id,
-    decode,
+from evals.python.contracts import GradeRequest, Verification
+from evals.python.integrations.datasets.catalog import (
+    case as catalog_case,
+)
+from evals.python.integrations.datasets.catalog import (
     experiment,
     load_cases,
+    reference,
+    verifier,
 )
-from evals.python.transport import grade as kernel_grade
+from evals.python.integrations.datasets.catalog import grade as kernel_grade
+from evals.python.integrations.inspect.profiles import content_hash, load_profile
+from evals.python.integrations.inspect.tasks import TaskRequest, build_task
+from evals.python.tests.support import ocaml_choice_case, ocaml_timeout_case
+from evals.python.transport import SUITE, decode
 
 
 def encode(cases: list[dict[str, object]]) -> str:
-    return json.dumps(cases)
+    return json.dumps({"version": 3, "value": cases})
 
 
 def test_manifest_roundtrip() -> None:
@@ -68,8 +69,8 @@ def grade(case_id: str, *, text: str, suite: Path | None = None) -> bool:
             response=text,
             changed_files=(),
             verification=Verification(status="unchecked"),
-            selection=SUITE if suite is None else suite,
-        )
+        ),
+        selection=SUITE if suite is None else suite,
     )["correctness"]
 
 
@@ -129,7 +130,10 @@ def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
     suite.write_text(f"let cases = List.init 200 (fun i -> {expression})\n")
     cases = load_cases(selection=suite)
     assert len(cases) == 200
-    assert cases[199].solution["config.ml"] == "let timeout_seconds = 229\n"
+    assert (
+        reference(cases[199].id, selection=suite).solution["config.ml"]
+        == "let timeout_seconds = 229\n"
+    )
     assert [path.name for path in tmp_path.iterdir()] == ["suite.ml"]
 
 
@@ -147,7 +151,7 @@ def test_duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
     expression = ocaml_choice_case(case_id="duplicate", a=10, b=8)
     suite.write_text(f"let c = {expression}\nlet cases = [c; c]\n")
-    with pytest.raises(ValueError, match="unique"):
+    with pytest.raises(subprocess.CalledProcessError):
         load_cases(selection=suite)
 
 
@@ -168,18 +172,19 @@ let cases = [{ c with instruction = { c.instruction with prompt = text } }]
 
 
 def test_cases_are_immutable() -> None:
-    case = case_by_id(query=CaseQuery(case_id="clear-task"))
+    case = catalog_case("clear-task")
     with pytest.raises(ValidationError):
         case.id = "changed"
     with pytest.raises(TypeError):
         case.files["receipt.ml"] = "changed"  # type: ignore[index]
     with pytest.raises(TypeError):
-        case.solution["receipt.ml"] = "changed"  # type: ignore[index]
-    assert case.checks is not None
+        reference(case.id).solution["receipt.ml"] = "changed"  # type: ignore[index]
+    checks = verifier(case.id)
+    assert checks is not None
     with pytest.raises(ValidationError):
-        case.checks.stdin = "changed"
-    assert isinstance(case.checks.inputs, tuple)
-    assert case_by_id(query=CaseQuery(case_id="clear-task")) is case
+        checks.stdin = "changed"
+    assert isinstance(checks.inputs, tuple)
+    assert catalog_case("clear-task") is case
 
 
 def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> None:
@@ -190,11 +195,11 @@ def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> Non
     with patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as compiler:
         first = load_cases(selection=suite)
         assert load_cases(selection=suite) == first
-        assert compiler.call_count == 2
+        assert compiler.call_count == 3
         changed = ocaml_choice_case(case_id="cache", a=4, b=8)
         suite.write_text(f"let cases = [{changed}]\n")
-        assert json.loads(load_cases(selection=suite)[0].answer)["choice"] == "A"
-        assert compiler.call_count == 4
+        assert json.loads(reference("cache", selection=suite).answer)["choice"] == "A"
+        assert compiler.call_count == 7
 
 
 def test_generic_python_case_exports_without_language_restriction(tmp_path: Path) -> None:
@@ -209,8 +214,9 @@ def test_generic_python_case_exports_without_language_restriction(tmp_path: Path
       ~reference:{ Ast.edits = Fixture.empty; completion = Plain "done" }]
 """)
     case = load_cases(selection=suite)[0]
-    assert case.checks is not None
-    assert case.checks.model_dump() == {
+    checks = verifier(case.id, selection=suite)
+    assert checks is not None
+    assert checks.model_dump() == {
         "inputs": ("solution.py",),
         "files": {"grader.py": "trusted"},
         "tools": {},
@@ -248,14 +254,13 @@ def test_record_updates_cannot_bypass_kernel_validation(
     suite.write_text(f"let c = {expression}\nlet cases = [{{c with fixture = Fixture.empty}}]\n")
     request = GradeRequest(
         case_id="updated",
-        selection=suite,
         response="",
         changed_files=(),
         verification=Verification(status="unchecked"),
     )
     operation: Callable[[], object]
     if grade_only:
-        operation = partial(kernel_grade, request=request)
+        operation = partial(kernel_grade, request=request, selection=suite)
     else:
         operation = partial(load_cases, selection=suite)
     with pytest.raises(subprocess.CalledProcessError):

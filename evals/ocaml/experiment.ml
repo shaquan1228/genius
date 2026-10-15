@@ -1,15 +1,4 @@
-type profile = { name : string; preamble : string; instructions : string list }
-
-type t = {
-  profiles : profile list;
-  epochs : int;
-  message_limit : int;
-  token_limit : int;
-  time_limit : int;
-  cache : bool;
-}
-
-let default =
+let default : Ast.experiment =
   {
     profiles =
       [
@@ -28,3 +17,17 @@ let default =
     time_limit = 300;
     cache = false;
   }
+
+let resolve ?(epochs = default.epochs) ?(message_limit = default.message_limit)
+    ?(token_limit = default.token_limit) ?(time_limit = default.time_limit) ?(cache = default.cache)
+    () =
+  List.iter
+    (fun (name, value) ->
+      if value <= 0 then invalid_arg ("Experiment " ^ name ^ " must be positive"))
+    [
+      ("epochs", epochs);
+      ("message_limit", message_limit);
+      ("token_limit", token_limit);
+      ("time_limit", time_limit);
+    ];
+  { Ast.profiles = default.profiles; epochs; message_limit; token_limit; time_limit; cache }

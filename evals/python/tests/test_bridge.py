@@ -8,15 +8,15 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python.transport import (
-    LIBRARY,
+from evals.python.contracts import GradeRequest, Verification
+from evals.python.integrations.datasets.catalog import (
     RUNNER,
-    SUITE,
-    GradeRequest,
-    Verification,
     grade,
     load_cases,
+    reference,
+    verifier,
 )
+from evals.python.transport import LIBRARY, SUITE
 
 
 def judgment(*, response: str, suite: Path = SUITE) -> bool:
@@ -26,8 +26,8 @@ def judgment(*, response: str, suite: Path = SUITE) -> bool:
             response=response,
             changed_files=(),
             verification=Verification(status="unchecked"),
-            selection=suite,
-        )
+        ),
+        selection=suite,
     )["correctness"]
 
 
@@ -51,9 +51,9 @@ def test_kernel_grades_response_and_scope() -> None:
         "version-missing",
         '{"version":1,"scores":{"correctness":true,"scope":true}}',
         '{"version":true,"scores":{"correctness":true,"scope":true}}',
-        '{"version":2,"scores":{"correctness":1,"scope":true}}',
-        '{"version":2,"scores":{"correctness":true,"scope":"true"}}',
-        '{"version":2,"scores":{"correctness":true,"scope":true},"extra":1}',
+        '{"version":3,"scores":{"correctness":1,"scope":true}}',
+        '{"version":3,"scores":{"correctness":true,"scope":"true"}}',
+        '{"version":3,"scores":{"correctness":true,"scope":true},"extra":1}',
     ],
 )
 def test_invalid_kernel_output_is_a_harness_error(response: str) -> None:
@@ -73,7 +73,7 @@ def test_unknown_kernel_score_names_are_rejected() -> None:
     with (
         patch(
             "evals.python.transport.subprocess.run",
-            return_value=subprocess.CompletedProcess([], 0, stdout='{"version":2,"scores":{}}'),
+            return_value=subprocess.CompletedProcess([], 0, stdout='{"version":3,"scores":{}}'),
         ),
         pytest.raises(ValueError, match="score names"),
     ):
@@ -127,11 +127,11 @@ def test_kernel_cache_tracks_every_trusted_source(*, source: Path, tmp_path: Pat
     runner = {source: copied}.get(RUNNER, RUNNER)
     with (
         patch("evals.python.transport.LIBRARY", library),
-        patch("evals.python.transport.RUNNER", runner),
+        patch("evals.python.integrations.datasets.catalog.RUNNER", runner),
         patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as process,
     ):
         assert judgment(response='{"choice":"B","reason":"Cheap"}')
-        assert process.call_count == 2
+        assert process.call_count == 4
         assert process.call_args_list[0].args[0][0] == "ocamlfind"
 
 
@@ -158,7 +158,7 @@ def test_candidate_duplicate_keys_keep_last_value() -> None:
 
 def test_additional_named_scores_cross_bridge_without_decoder_changes() -> None:
     judgment(response="{}")
-    response = '{"version":2,"scores":{"correctness":true,"scope":false,"new_metric":true}}'
+    response = '{"version":3,"scores":{"correctness":true,"scope":false,"new_metric":true}}'
     with patch(
         "evals.python.transport.subprocess.run",
         return_value=subprocess.CompletedProcess([], 0, stdout=response),
@@ -177,8 +177,8 @@ def test_additional_named_scores_cross_bridge_without_decoder_changes() -> None:
 def test_reference_channels_export_independently_and_escape(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
     suite.write_text(r"""let fields = Response.of_fields [
-      "state", Response.String "quote\" \\ \n é";
-      "safe", Response.Bool true]
+      "state", Ast.String "quote\" \\ \n é";
+      "safe", Ast.Bool true]
 let cases = [Case.make ~id:"reference" ~fixture:Fixture.empty
   ~instruction:{ Ast.skill = "reasoning"; prompt = "fields" }
   ~criterion:(Criterion.answer ~expected:fields ()) ~allowed_files:["result.txt"]
@@ -186,17 +186,18 @@ let cases = [Case.make ~id:"reference" ~fixture:Fixture.empty
     completion = Structured fields }]
 """)
     case = load_cases(selection=suite)[0]
-    assert case.checks is None
-    assert dict(case.solution) == {"result.txt": "result"}
-    assert json.loads(case.answer) == {"state": 'quote" \\ \n é', "safe": True}
+    expected = reference(case.id, selection=suite)
+    assert verifier(case.id, selection=suite) is None
+    assert dict(expected.solution) == {"result.txt": "result"}
+    assert json.loads(expected.answer) == {"state": 'quote" \\ \n é', "safe": True}
     assert grade(
         request=GradeRequest(
             case_id="reference",
-            response=case.answer,
+            response=expected.answer,
             changed_files=(),
             verification=Verification(status="unchecked"),
-            selection=suite,
-        )
+        ),
+        selection=suite,
     )["correctness"]
 
 
@@ -214,13 +215,13 @@ def test_nonstandard_json_is_an_incorrect_candidate(response: str) -> None:
 
 def test_kernel_cache_tracks_trusted_python_runtime(tmp_path: Path) -> None:
     judgment(response="{}")
-    runtime = tmp_path / "python"
-    runtime.mkdir()
-    for source in (RUNNER.parent.parent / "python").glob("verifier.py"):
+    runtime = tmp_path / "python/integrations/verifiers"
+    runtime.mkdir(parents=True)
+    for source in (RUNNER.parent.parent / "python/integrations/verifiers").glob("verifier.py"):
         (runtime / source.name).write_text(source.read_text() + "\n")
     with (
-        patch("evals.python.transport.EVALS_ROOT", tmp_path),
+        patch("evals.python.integrations.datasets.catalog.DRIVER", runtime / "verifier.py"),
         patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as process,
     ):
         assert judgment(response='{"choice":"B","reason":"Cheap"}')
-        assert process.call_count == 2
+        assert process.call_count == 4

@@ -11,12 +11,33 @@ from typing import Literal, assert_never
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 from pydantic import BaseModel, ConfigDict
 
-from evals.python.transport import Case, ExecutableChecks, benchmark_info, load_cases
-from evals.python.verification import Verifier
+from evals.python.contracts import Case, ExecutableChecks
+from evals.python.integrations.datasets.catalog import dataset_info, load_cases, reference, verifier
+from evals.python.integrations.inspect.verification import Verifier
+
+
+class BenchmarkInfo(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+    source: str
+    revision: str
+    sha256: str
+    count: int
+    evaluator_commit: str
+    numpy_version: str
+    psutil_version: str
+
+
+def benchmark_info() -> BenchmarkInfo:
+    info = dataset_info("humanevalplus")
+    if info is None:
+        raise ValueError("Benchmark adapter must declare provenance")
+    return BenchmarkInfo.model_validate(
+        {**info.model_dump(exclude={"attributes"}), **info.attributes}
+    )
 
 
 async def validate_case(case: Case) -> dict[str, object]:
-    match case.checks:
+    match verifier(case.id, selection="humanevalplus"):
         case ExecutableChecks() as checks:
             pass
         case None:
@@ -26,7 +47,7 @@ async def validate_case(case: Case) -> dict[str, object]:
     agent = LocalSandboxEnvironment()
     try:
         await agent.exec(["mkdir", "workspace"])
-        for name, contents in case.solution.items():
+        for name, contents in reference(case.id, selection="humanevalplus").solution.items():
             await agent.write_file(f"workspace/{name}", contents)
         evidence, metadata = await Verifier(checks=checks, agent=agent).verify()
         return {"case_id": case.id, **evidence.model_dump(), "metadata": metadata}

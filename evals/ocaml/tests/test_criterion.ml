@@ -17,13 +17,11 @@ let () =
   rejected (fun () -> Criterion.ocaml ~sources:[ "a.ml" ] ~assertions:[])
 
 let () =
-  let exact =
-    Response.of_fields [ ("status", Response.String "ready"); ("safe", Response.Bool true) ]
-  in
+  let exact = Response.of_fields [ ("status", Ast.String "ready"); ("safe", Ast.Bool true) ] in
   assert (List.length (Response.fields exact) = 2);
   assert (Response.fields Response.empty = []);
-  rejected (fun () -> Response.of_fields [ ("", Response.String "value") ]);
-  rejected (fun () -> Response.of_fields [ ("x", Response.Bool true); ("x", Response.Bool false) ]);
+  rejected (fun () -> Response.of_fields [ ("", Ast.String "value") ]);
+  rejected (fun () -> Response.of_fields [ ("x", Ast.Bool true); ("x", Ast.Bool false) ]);
   List.iter
     (fun text_rule -> rejected (fun () -> Criterion.answer ~expected:exact ~text_rule ()))
     [

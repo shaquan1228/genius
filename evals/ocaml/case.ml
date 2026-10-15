@@ -1,6 +1,10 @@
 (* Validating constructors for Ast.case. *)
 let validate (case : Ast.case) =
   let { Ast.id; fixture; instruction = _; criterion; allowed_files; reference } = case in
+  ignore (Criterion.validate criterion);
+  (match reference.completion with
+  | Ast.Plain _ -> ()
+  | Ast.Structured fields -> ignore (Response.of_fields fields));
   let paths fixture = List.map fst (Fixture.files fixture) in
   let require ~problem ~within names =
     match List.filter (fun name -> not (List.mem name within)) names with
@@ -13,7 +17,7 @@ let validate (case : Ast.case) =
       require
         ~problem:"criteria read files missing from the fixture"
         ~within:(paths fixture)
-        verifier.Verifier.inputs;
+        verifier.Ast.inputs;
       if
         List.exists
           (fun (name, _) -> List.mem name (paths fixture))

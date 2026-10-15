@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from inspect_ai.util import ExecResult
 
-from evals.python.workspace import execute
+from evals.python.integrations.inspect.workspace import execute
 
 
 @pytest.mark.parametrize("error", ["stderr", "stdout"])
@@ -14,14 +14,14 @@ def test_failed_setup_commands_raise(error: str) -> None:
     result = ExecResult(
         success=False, returncode=1, stdout="stdout", stderr="stderr" if error == "stderr" else ""
     )
-    with patch("evals.python.workspace.sandbox") as environment:
+    with patch("evals.python.integrations.inspect.workspace.sandbox") as environment:
         environment.return_value.exec = AsyncMock(return_value=result)
         with pytest.raises(RuntimeError, match=error):
             asyncio.run(execute(["git", "init"]))
 
 
 def test_command_timeouts_propagate() -> None:
-    with patch("evals.python.workspace.sandbox") as environment:
+    with patch("evals.python.integrations.inspect.workspace.sandbox") as environment:
         environment.return_value.exec = AsyncMock(side_effect=TimeoutError("Timed out"))
         with pytest.raises(TimeoutError):
             asyncio.run(execute(["git", "init"]))
