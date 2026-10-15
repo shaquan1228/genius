@@ -10,8 +10,9 @@ from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
 from inspect_ai.util import sandbox
 
-from evals.python.transport import Case, CaseQuery, Dataset, case_by_id
-from evals.python.workspace import GIT_IDENTITY, execute
+from evals.python.contracts import CaseQuery, Reference
+from evals.python.integrations.datasets.catalog import reference
+from evals.python.integrations.inspect.workspace import GIT_IDENTITY, execute
 
 Mode = Literal[
     "pass",
@@ -34,32 +35,32 @@ def echo_model(  # noqa: PLR0917 - Inspect calls mock model callbacks positional
     return ModelOutput.from_content("mockllm/model", messages[-1].text)
 
 
-Step = Callable[[Case], Awaitable[None]]
+Step = Callable[[Reference], Awaitable[None]]
 
 
-async def apply_solution(case: Case) -> None:
+async def apply_solution(case: Reference) -> None:
     for name, text in case.solution.items():
         await sandbox().write_file(f"workspace/{name}", text)
 
 
-async def write_extra(case: Case) -> None:
+async def write_extra(case: Reference) -> None:
     await sandbox().write_file("workspace/unrequested.txt", "Extra change")
 
 
-async def commit(case: Case) -> None:
+async def commit(case: Reference) -> None:
     await execute(["git", "add", "--all"])
     await execute(["git", *GIT_IDENTITY, "commit", "-q", "-m", "Agent commit"])
 
 
-async def corrupt_instructions(case: Case) -> None:
+async def corrupt_instructions(case: Reference) -> None:
     await sandbox().write_file("instructions/skills/reasoning/SKILL.md", "Corrupted")
 
 
-async def tamper_runner(case: Case) -> None:
+async def tamper_runner(case: Reference) -> None:
     await sandbox().write_file("workspace/check.sh", "#!/bin/sh\nexit 0\n")
 
 
-async def exit_early(case: Case) -> None:
+async def exit_early(case: Reference) -> None:
     for name in case.solution:
         path = f"workspace/{name}"
         source = await sandbox().read_file(path)
@@ -89,10 +90,10 @@ class Scripted:
     scenario: Scenario
 
     async def __call__(self, state: TaskState, generate: Generate) -> TaskState:  # noqa: PLR0917 - Inspect calls solvers positionally
-        case = case_by_id(
+        case = reference(
             query=CaseQuery(
                 case_id=str(state.metadata["case_id"]),
-                selection=cast(Dataset, state.metadata.get("dataset", "smoke")),
+                selection=cast(str, state.metadata.get("dataset", "smoke")),
             )
         )
         for step in self.scenario.steps:

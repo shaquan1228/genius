@@ -8,8 +8,15 @@ from unittest.mock import patch
 
 import pytest
 
+from evals.python.integrations.verifiers.verifier import (
+    Compilation,
+    Invocation,
+    Result,
+    classify,
+    execute,
+    main,
+)
 from evals.python.paths import EVALS_ROOT
-from evals.python.verifier import Compilation, Invocation, Result, classify, execute, main
 
 
 @pytest.mark.parametrize(
@@ -28,7 +35,7 @@ def test_classification(*, code: int, stdout: str, status: str) -> None:
 
 
 def test_missing_compiler_is_harness_error() -> None:
-    with patch("evals.python.verifier.shutil.which", return_value=None):
+    with patch("evals.python.integrations.verifiers.verifier.shutil.which", return_value=None):
         assert execute(invocation=Invocation(mode="ocaml")) == Result(
             status="harness_error", detail="OCaml compiler is unavailable"
         )
@@ -37,10 +44,17 @@ def test_missing_compiler_is_harness_error() -> None:
 def test_trusted_driver_uses_separate_inner_marker() -> None:
     result = subprocess.CompletedProcess([], 0, stdout="inner\n", stderr="")
     with (
-        patch("evals.python.verifier.shutil.which", return_value="compiler"),
-        patch("evals.python.verifier.secrets.token_hex", return_value="inner"),
-        patch("evals.python.verifier.sys.stdin.read", return_value="assert true"),
-        patch("evals.python.verifier.subprocess.run", return_value=result) as process,
+        patch("evals.python.integrations.verifiers.verifier.shutil.which", return_value="compiler"),
+        patch(
+            "evals.python.integrations.verifiers.verifier.secrets.token_hex", return_value="inner"
+        ),
+        patch(
+            "evals.python.integrations.verifiers.verifier.sys.stdin.read",
+            return_value="assert true",
+        ),
+        patch(
+            "evals.python.integrations.verifiers.verifier.subprocess.run", return_value=result
+        ) as process,
     ):
         assert execute(invocation=Invocation(mode="ocaml")) == Result(
             status="passed", detail="inner\n"
@@ -54,7 +68,7 @@ def test_main_emits_generic_envelope(
 ) -> None:
     with (
         patch(
-            "evals.python.verifier.execute",
+            "evals.python.integrations.verifiers.verifier.execute",
             return_value=Result(status="passed", detail="done"),
             side_effect=failure,
         ),
@@ -78,7 +92,9 @@ def test_driver_entrypoint_emits_evidence(*, mode: str, capsys: pytest.CaptureFi
         patch.dict("os.environ", {"GENIUS_VERIFIER_MARKER": "entrypoint"}),
         patch.object(sys, "argv", ["verifier", mode]),
     ):
-        runpy.run_path(str(EVALS_ROOT / "python/verifier.py"), run_name="__main__")
+        runpy.run_path(
+            str(EVALS_ROOT / "python/integrations/verifiers/verifier.py"), run_name="__main__"
+        )
     evidence = json.loads(capsys.readouterr().out)
     assert evidence["status"] == "harness_error"
     assert (

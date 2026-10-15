@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from evals.python.transport import Download, cache_path, download
+from evals.python.integrations.datasets.download import Download, cache_path, download
 
 DATA = b'{"task_id":"HumanEval/0"}\n'
 DIGEST = hashlib.sha256(DATA).hexdigest()

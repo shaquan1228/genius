@@ -7,10 +7,11 @@ from inspect_ai import eval
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import GenerateConfig, get_model, modelapi
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
-from pydantic import TypeAdapter
 
-from evals.python.tasks import baseline, genius
-from evals.python.transport import Dataset
+import evals.python.integrations.hugging_face.sandbox  # noqa: F401 - provider registration belongs to HF
+from evals.python.contracts import Experiment, RunOverrides
+from evals.python.integrations.datasets.catalog import experiment
+from evals.python.integrations.inspect.tasks import TaskRequest, build_task
 
 
 @modelapi(name="genius-hf")
@@ -45,10 +46,15 @@ def crash_summary(log: EvalLog) -> str:
     return f"{log.eval.task}: {crashes} of {len(samples)} samples had an agent crash"
 
 
+def run_specification() -> Experiment:
+    value = os.environ.get("EVAL_EPOCHS")
+    return experiment(RunOverrides(epochs=int(value) if value else None))
+
+
 def run() -> int:
     agent = os.environ.get("EVAL_AGENT", "claude")
     version = os.environ.get("EVAL_VERSION", "")
-    dataset = TypeAdapter(Dataset).validate_python(os.environ.get("EVAL_DATASET", "smoke"))
+    dataset = os.environ.get("EVAL_DATASET", "smoke")
     model_name = os.environ["EVAL_MODEL"]
     if model_name.startswith("hf-inference-providers/"):
         model = get_model(
@@ -57,13 +63,23 @@ def run() -> int:
         )
     else:
         model = get_model(model_name)
+    spec = run_specification()
     logs = eval(
         [
-            baseline(agent=agent, version=version, dataset=dataset),
-            genius(agent=agent, version=version, dataset=dataset),
+            build_task(
+                request=TaskRequest(
+                    profile=profile.name,
+                    agent=agent,
+                    version=version,
+                    dataset=dataset,
+                    sandbox="hf",
+                    experiment=spec,
+                )
+            )
+            for profile in spec.profiles
         ],
         model=model,
-        epochs=int(os.environ.get("EVAL_EPOCHS", "5")),
+        epochs=spec.epochs,
         sandbox="hf",
         max_samples=1,
         limit=sample_limit(),

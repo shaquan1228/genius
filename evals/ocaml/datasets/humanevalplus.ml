@@ -49,3 +49,60 @@ let make problem ~stdin =
     ~reference:
       (Reference.edits
          (Fixture.of_files [ ("solution.py", problem.prompt ^ problem.canonical_solution) ]))
+
+let info =
+  Some
+    Dataset_spec.
+      {
+        source;
+        revision;
+        sha256;
+        count;
+        attributes =
+          [
+            ("evaluator_commit", evaluator_commit);
+            ("numpy_version", numpy_version);
+            ("psutil_version", psutil_version);
+          ];
+      }
+
+let cases = []
+
+let import raw =
+  let fields =
+    match Codec.decode (`String raw) with
+    | `Assoc fields -> fields
+    | _ -> invalid_arg "Expected HumanEval record object"
+  in
+  let get name =
+    match List.assoc name fields with
+    | `String text -> text
+    | _ -> invalid_arg ("Expected HumanEval string: " ^ name)
+  in
+  let problem =
+    {
+      task_id = get "task_id";
+      prompt = get "prompt";
+      entry_point = get "entry_point";
+      canonical_solution = get "canonical_solution";
+      private_input = raw;
+    }
+  in
+  (* Preserve the original JSON string: Jsonm numbers are floats, while benchmark
+     private inputs include integers beyond floating-point precision. *)
+  let manifest =
+    `Assoc
+      [
+        ("source", `String source);
+        ("revision", `String revision);
+        ("sha256", `String sha256);
+        ("count", `Float (float_of_int count));
+        ("evaluator_commit", `String evaluator_commit);
+        ("numpy_version", `String numpy_version);
+        ("psutil_version", `String psutil_version);
+      ]
+  in
+  let stdin =
+    Codec.encode (`Assoc [ ("manifest", manifest); ("record", `String problem.private_input) ])
+  in
+  make problem ~stdin

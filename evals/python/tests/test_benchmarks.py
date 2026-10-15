@@ -10,11 +10,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from evals.python import benchmarks
+from evals.python.contracts import Verification
+from evals.python.integrations.datasets.catalog import load_cases
+from evals.python.integrations.evalplus import benchmarks
+from evals.python.integrations.inspect.verification import Verifier
 from evals.python.paths import EVALS_ROOT
+from evals.python.tests.support import import_records, imported_reference, imported_verifier
 from evals.python.tests.test_humaneval import record
-from evals.python.transport import Verification, import_records, load_cases
-from evals.python.verification import Verifier
 
 
 def test_info(capsys: pytest.CaptureFixture[str]) -> None:
@@ -55,10 +57,14 @@ def test_memory_workaround_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_reference_workspace_cleanup() -> None:
     case = import_records((record(),))[0]
-    with patch.object(
-        Verifier,
-        "verify",
-        new=AsyncMock(return_value=(Verification(status="passed"), {"test": True})),
+    with (
+        patch.object(
+            Verifier,
+            "verify",
+            new=AsyncMock(return_value=(Verification(status="passed"), {"test": True})),
+        ),
+        patch.object(benchmarks, "verifier", return_value=imported_verifier(record())),
+        patch.object(benchmarks, "reference", return_value=imported_reference(record())),
     ):
         result = asyncio.run(benchmarks.validate_case(case))
     assert result == {
@@ -67,7 +73,10 @@ def test_reference_workspace_cleanup() -> None:
         "detail": "",
         "metadata": {"test": True},
     }
-    with pytest.raises(ValueError, match="executable"):
+    with (
+        patch.object(benchmarks, "verifier", return_value=None),
+        pytest.raises(ValueError, match="executable"),
+    ):
         asyncio.run(benchmarks.validate_case(load_cases()[2]))
 
 
@@ -76,6 +85,8 @@ def test_benchmark_entrypoint(capsys: pytest.CaptureFixture[str]) -> None:
         patch.object(sys, "argv", ["benchmarks", "info"]),
         pytest.raises(SystemExit) as exited,
     ):
-        runpy.run_path(str(EVALS_ROOT / "python/benchmarks.py"), run_name="__main__")
+        runpy.run_path(
+            str(EVALS_ROOT / "python/integrations/evalplus/benchmarks.py"), run_name="__main__"
+        )
     assert exited.value.code == 0
     assert json.loads(capsys.readouterr().out)["count"] == 164

@@ -1,39 +1,39 @@
-"""The only bridge between the OCaml suite and the Python harness.
+"""Dataset-independent compiler and versioned OCaml protocol boundary."""
 
-It compiles the OCaml modules, decodes their export into immutable cases, and
-builds the OCaml runner inputs that grade a workspace. No other Python module
-reads OCaml sources or writes OCaml code.
-"""
-
-import gzip
 import hashlib
 import json
-import os
 import subprocess
-import urllib.request
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
+from itertools import batched, chain
 from pathlib import Path
-from tempfile import NamedTemporaryFile, TemporaryDirectory
+from tempfile import TemporaryDirectory
 from types import MappingProxyType
-from typing import Annotated, Final, Literal, assert_never
+from typing import Annotated, Final
 
-from pydantic import (
-    AfterValidator,
-    BaseModel,
-    ConfigDict,
-    Field,
-    PlainSerializer,
-    TypeAdapter,
+from pydantic import AfterValidator, BaseModel, Field
+
+from evals.python.contracts import (
+    FROZEN,
+    VERSION,
+    Case,
+    DatasetInfo,
+    ExecutableChecks,
+    Experiment,
+    GradeRequest,
+    Program,
+    Reference,
+    RunOverrides,
+    Sources,
 )
-
 from evals.python.paths import EVALS_ROOT
 
 OCAML_ROOT: Final = EVALS_ROOT / "ocaml"
 LIBRARY: Final = tuple(
     OCAML_ROOT / name
     for name in (
+        "experiment.mli",
         "experiment.ml",
         "response.mli",
         "response.ml",
@@ -42,84 +42,44 @@ LIBRARY: Final = tuple(
         "verifier.mli",
         "verifier.ml",
         "ast.ml",
-        "criterion.ml",
-        "reference.ml",
+        "case.mli",
         "case.ml",
+        "criterion.mli",
+        "criterion.ml",
+        "reference.mli",
+        "reference.ml",
         "grader.mli",
         "grader.ml",
         "fixtures.ml",
         "scenarios.ml",
-        "humaneval.ml",
+        "dataset_spec.mli",
+        "dataset_spec.ml",
+        "projection.mli",
+        "projection.ml",
+        "codec.ml",
     )
 )
 SUITE: Final = OCAML_ROOT / "suite.ml"
 EXPORTER: Final = OCAML_ROOT / "transport.ml"
-RUNNER: Final = OCAML_ROOT / "check.sh"
-
-FROZEN: Final = ConfigDict(strict=True, extra="forbid", frozen=True)
-FileName = Annotated[str, Field(pattern=r"^[a-zA-Z_][a-zA-Z0-9_.-]*$")]
-Files = Annotated[Mapping[FileName, str], AfterValidator(MappingProxyType), PlainSerializer(dict)]
+DATASET_INTERFACE: Final = OCAML_ROOT / "dataset.mli"
 
 
-class ExecutableChecks(BaseModel):
+class Envelope[T](BaseModel):
     model_config = FROZEN
-
-    inputs: tuple[FileName, ...] = Field(min_length=1)
-    files: Files
-    tools: Files
-    command: tuple[Annotated[str, Field(min_length=1)], ...] = Field(min_length=1)
-    stdin: str
-    timeout_seconds: int = Field(gt=0)
+    version: int = Field(ge=VERSION, le=VERSION)
+    value: T
 
 
-class Case(BaseModel):
-    """One exported case. Every field is read-only, so cached cases are safe to share.
-
-    Answer cases have no checks: the kernel grades their replies.
-    """
-
+class GradingResult(BaseModel):
     model_config = FROZEN
-
-    id: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
-    skill: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
-    prompt: str
-    files: Files
-    checks: ExecutableChecks | None
-    solution: Files
-    answer: str
-
-
-def decode(data: str) -> tuple[Case, ...]:
-    cases = TypeAdapter(tuple[Case, ...]).validate_json(data)
-    if len({case.id for case in cases}) != len(cases):
-        raise ValueError("Suite case IDs must be unique")
-    return cases
-
-
-Dataset = Literal["smoke", "humanevalplus"]
-
-
-Selection = Dataset | Path
-SELECTION_ADAPTER = TypeAdapter(Selection)
-
-
-class CaseQuery(BaseModel):
-    model_config = FROZEN
-
-    case_id: str
-    selection: Selection = "smoke"
-
-
-@dataclass(frozen=True, kw_only=True)
-class Sources:
-    modules: tuple[tuple[str, str], ...]
-    resources: tuple[tuple[str, str], ...]
+    version: int = Field(ge=VERSION, le=VERSION)
+    scores: Annotated[Mapping[str, bool], AfterValidator(MappingProxyType)]
 
 
 @dataclass(frozen=True, kw_only=True)
 class KernelRequest:
-    arguments: tuple[str, ...] = ()
-    data: str | None = None
+    arguments: tuple[str, ...]
+    data: str
 
 
 @dataclass(frozen=True)
@@ -136,48 +96,8 @@ class _Kernel:
             timeout=30,
         ).stdout
 
-    def import_records(self, records: tuple[str, ...]) -> tuple[Case, ...]:
-        cases = tuple(
-            case
-            for start in range(0, len(records), 16)
-            for case in decode(
-                data=self.run(
-                    request=KernelRequest(
-                        arguments=("--import-humaneval",),
-                        data=json.dumps(records[start : start + 16]),
-                    )
-                )
-            )
-        )
-        if len({case.id for case in cases}) != len(cases):
-            raise ValueError("Dataset task IDs must be unique")
-        return cases
 
-    def import_benchmark(self) -> "Catalog":
-        info = BenchmarkInfo.model_validate_json(
-            self.run(request=KernelRequest(arguments=("--humaneval-info",)))
-        )
-        records = tuple(
-            download(
-                request=Download(
-                    source=info.source,
-                    sha256=info.sha256,
-                    destination=cache_path(sha256=info.sha256),
-                )
-            )
-            .decode()
-            .splitlines()
-        )
-        cases = self.import_records(records=records)
-        if len(cases) != info.count:
-            raise ValueError("Dataset count mismatch")
-        return Catalog(
-            cases=MappingProxyType({case.id: case for case in cases}),
-            records=MappingProxyType(dict(zip((case.id for case in cases), records, strict=True))),
-        )
-
-
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=8)
 def _kernel(*, sources: Sources) -> _Kernel:
     directory = TemporaryDirectory(prefix="genius-kernel-")
     try:
@@ -204,237 +124,111 @@ def _kernel(*, sources: Sources) -> _Kernel:
     return _Kernel(directory)
 
 
-def _sources(selection: Selection = "smoke") -> Sources:
-    selection = SELECTION_ADAPTER.validate_python(selection, strict=True)
-    match selection:
-        case Path() as suite:
-            pass
-        case "smoke" | "humanevalplus":
-            suite = SUITE
-        case _ as unreachable:
-            assert_never(unreachable)
+def sources(program: Program) -> Sources:
     return Sources(
         modules=(
             *((path.name, path.read_text()) for path in LIBRARY),
-            (SUITE.name, suite.read_text()),
-            (EXPORTER.name, EXPORTER.read_text()),
+            ("suite.ml", program.suite.read_text()),
+            ("dataset.mli", DATASET_INTERFACE.read_text()),
+            ("dataset.ml", program.adapter.read_text()),
+            ("transport.ml", EXPORTER.read_text()),
         ),
-        resources=_resources(),
+        resources=tuple((path.name, path.read_text()) for path in program.resources),
     )
 
 
-def _resources() -> tuple[tuple[str, str], ...]:
-    return tuple(
-        (path.name, path.read_text()) for path in (RUNNER, EVALS_ROOT / "python/verifier.py")
+def fingerprint(sources: Sources) -> str:
+    return hashlib.sha256(json.dumps((sources.modules, sources.resources)).encode()).hexdigest()
+
+
+def invoke(*, sources: Sources, operation: str, payload: object) -> str:
+    return _kernel(sources=sources).run(
+        request=KernelRequest(arguments=(operation,), data=json.dumps(payload))
     )
 
 
-class BenchmarkInfo(BaseModel):
-    model_config = FROZEN
-
-    source: str
-    revision: str
-    sha256: str
-    count: int
-    evaluator_commit: str
-    numpy_version: str
-    psutil_version: str
+def decode(data: str) -> tuple[Case, ...]:
+    cases = Envelope[tuple[Case, ...]].model_validate_json(data).value
+    if len({case.id for case in cases}) != len(cases):
+        raise ValueError("Suite case IDs must be unique")
+    return cases
 
 
-class ProfileSpec(BaseModel):
-    model_config = FROZEN
-
-    name: str
-    preamble: str
-    instructions: tuple[str, ...]
-
-
-class Experiment(BaseModel):
-    model_config = FROZEN
-
-    profiles: tuple[ProfileSpec, ...]
-    epochs: int = Field(gt=0)
-    message_limit: int = Field(gt=0)
-    token_limit: int = Field(gt=0)
-    time_limit: int = Field(gt=0)
-    cache: bool
-
-
-@lru_cache(maxsize=1)
-def _experiment(sources: Sources) -> Experiment:
-    return Experiment.model_validate_json(
-        _kernel(sources=sources).run(request=KernelRequest(arguments=("--experiment",)))
-    )
-
-
-def experiment() -> Experiment:
-    return _experiment(sources=_sources())
-
-
-def benchmark_info() -> BenchmarkInfo:
-    kernel = _kernel(sources=_sources())
-    return BenchmarkInfo.model_validate_json(
-        kernel.run(request=KernelRequest(arguments=("--humaneval-info",)))
-    )
-
-
-def benchmark_metadata(dataset: Dataset) -> dict[str, object]:
-    match dataset:
-        case "smoke":
-            return {}
-        case "humanevalplus":
-            return benchmark_info().model_dump()
-        case _ as unreachable:
-            assert_never(unreachable)
-
-
-@dataclass(frozen=True, kw_only=True)
-class Download:
-    source: str
-    sha256: str
-    destination: Path
-
-
-def cache_path(sha256: str) -> Path:
-    root = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache")))
-    return root / "genius-evals" / f"{sha256}.jsonl"
-
-
-def download(*, request: Download) -> bytes:
-    if request.destination.exists():
-        data = request.destination.read_bytes()
-    else:
-        with urllib.request.urlopen(request.source, timeout=60) as response:
-            data = gzip.decompress(response.read())
-    if hashlib.sha256(data).hexdigest() != request.sha256:
-        raise ValueError("Dataset checksum mismatch")
-    if not request.destination.exists():
-        request.destination.parent.mkdir(parents=True, exist_ok=True)
-        with NamedTemporaryFile(dir=request.destination.parent, delete=False) as stream:
-            temporary = Path(stream.name)
-            try:
-                stream.write(data)
-                stream.close()
-                temporary.replace(request.destination)
-            finally:
-                temporary.unlink(missing_ok=True)
-    return data
-
-
-def import_records(records: tuple[str, ...]) -> tuple[Case, ...]:
-    return _kernel(sources=_sources()).import_records(records=records)
-
-
-@dataclass(frozen=True, kw_only=True)
-class Catalog:
-    cases: Mapping[str, Case]
-    records: Mapping[str, str]
-
-
-@dataclass(frozen=True, kw_only=True)
-class CatalogRequest:
-    selection: Selection
-    sources: Sources
-
-
-@lru_cache(maxsize=1)
-def _catalog(request: CatalogRequest) -> Catalog:
-    kernel = _kernel(sources=request.sources)
-    match request.selection:
-        case "smoke" | Path():
-            cases = decode(data=kernel.run(request=KernelRequest()))
-        case "humanevalplus":
-            return kernel.import_benchmark()
-        case _ as unreachable:
-            assert_never(unreachable)
-    return Catalog(
-        cases=MappingProxyType({case.id: case for case in cases}), records=MappingProxyType({})
-    )
-
-
-def _selected(selection: Selection) -> Catalog:
-    return _catalog(
-        request=CatalogRequest(
-            selection=selection,
-            sources=_sources(selection=selection),
+def cases(*, sources: Sources, records: tuple[str, ...] = ()) -> tuple[Case, ...]:
+    batches = tuple(batched(records, 16)) or ((),)
+    result = tuple(
+        chain.from_iterable(
+            decode(invoke(sources=sources, operation="--cases", payload=batch)) for batch in batches
         )
     )
+    if len({case.id for case in result}) != len(result):
+        raise ValueError("Dataset task IDs must be unique")
+    return result
 
 
-def load_cases(*, selection: Selection = "smoke") -> tuple[Case, ...]:
-    return tuple(_selected(selection=selection).cases.values())
+def describe(*, sources: Sources) -> DatasetInfo | None:
+    return (
+        Envelope[DatasetInfo | None]
+        .model_validate_json(invoke(sources=sources, operation="--describe", payload={}))
+        .value
+    )
 
 
-def case_by_id(*, query: CaseQuery) -> Case:
-    return _selected(selection=query.selection).cases[query.case_id]
+def experiment(*, sources: Sources, overrides: RunOverrides | None = None) -> Experiment:
+    return (
+        Envelope[Experiment]
+        .model_validate_json(
+            invoke(
+                sources=sources,
+                operation="--experiment",
+                payload=(overrides or RunOverrides()).model_dump(),
+            )
+        )
+        .value
+    )
 
 
-def workspace_files(case: Case) -> Mapping[str, str]:
-    match case.checks:
-        case ExecutableChecks(tools=tools):
-            return MappingProxyType({**case.files, **tools})
-        case None:
-            return case.files
-        case _ as unreachable:
-            assert_never(unreachable)
+@lru_cache(maxsize=256)
+def verifier(
+    *, sources: Sources, case_id: str, record: str | None = None
+) -> ExecutableChecks | None:
+    return (
+        Envelope[ExecutableChecks | None]
+        .model_validate_json(
+            invoke(
+                sources=sources,
+                operation="--verifier",
+                payload={"case_id": case_id, "record": record},
+            )
+        )
+        .value
+    )
 
 
-VerificationStatus = Literal[
-    "unchecked", "passed", "failed", "invalid_submission", "timed_out", "harness_error"
-]
+def reference(*, sources: Sources, case_id: str, record: str | None = None) -> Reference:
+    return (
+        Envelope[Reference]
+        .model_validate_json(
+            invoke(
+                sources=sources,
+                operation="--reference",
+                payload={"case_id": case_id, "record": record},
+            )
+        )
+        .value
+    )
 
 
-class Verification(BaseModel):
-    model_config = FROZEN
-
-    status: VerificationStatus
-    detail: str = ""
-
-
-Scores = Annotated[Mapping[str, bool], AfterValidator(MappingProxyType)]
-
-
-class _GradingResult(BaseModel):
-    """Named score results, matching the codec-free Score primitive in OCaml.
-
-    Score vocabulary: https://developers.openai.com/api/docs/guides/graders
-    and https://evalscope.readthedocs.io/en/latest/get_started/basic_usage.html
-    """
-
-    model_config = FROZEN
-
-    version: int = Field(ge=2, le=2)
-    scores: Scores
-
-
-class GradeRequest(CaseQuery):
-    response: str
-    changed_files: tuple[str, ...]
-    verification: Verification
-
-
-def grade(*, request: GradeRequest) -> Mapping[str, bool]:
-    payload: dict[str, object] = {
-        "version": 2,
-        "case_id": request.case_id,
-        "response": request.response,
-        "changed_files": request.changed_files,
-        "verification": request.verification.model_dump(),
-    }
-    match request.selection:
-        case "smoke" | Path():
-            operation = "--grade"
-        case "humanevalplus":
-            operation = "--grade-humaneval"
-            payload = {
-                "record": _selected(selection=request.selection).records[request.case_id],
-                "request": payload,
-            }
-        case _ as unreachable:
-            assert_never(unreachable)
-    kernel = _kernel(sources=_sources(selection=request.selection))
-    result = _GradingResult.model_validate_json(
-        kernel.run(request=KernelRequest(arguments=(operation,), data=json.dumps(payload)))
+def grade(
+    *, sources: Sources, request: GradeRequest, record: str | None = None
+) -> Mapping[str, bool]:
+    payload = {"version": VERSION, **request.model_dump(exclude={"selection"})}
+    result = GradingResult.model_validate_json(
+        invoke(
+            sources=sources,
+            operation="--grade",
+            payload={"record": record, "request": payload},
+        )
     )
     if not {"correctness", "scope"} <= result.scores.keys():
         raise ValueError("Kernel omitted required score names")

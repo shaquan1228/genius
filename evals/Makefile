@@ -27,22 +27,26 @@ format-python:
 
 # ocaml/.ocamlformat pins the formatter version and style; `make format-ocaml` applies it.
 format-ocaml:
-	ocamlformat --inplace ocaml/*.ml ocaml/*.mli ocaml/tests/*.ml
+	ocamlformat --inplace $(shell find ocaml -name '*.ml' -o -name '*.mli')
 
 check-ocaml-format:
 	@command -v ocamlformat >/dev/null || { echo "Install ocamlformat 0.29.0 for OCaml style checks; see README.md." >&2; exit 1; }
-	ocamlformat --check ocaml/*.ml ocaml/*.mli ocaml/tests/*.ml || { echo "OCaml style differs; run make -C evals format-ocaml." >&2; exit 1; }
+	ocamlformat --check $(shell find ocaml -name '*.ml' -o -name '*.mli') || { echo "OCaml style differs; run make -C evals format-ocaml." >&2; exit 1; }
 
 # Compile temporary copies in dependency order so no build files enter the checkout.
 lint-ocaml:
 	@command -v ocamlfind >/dev/null || { echo "Install OCaml 4.13+, ocamlfind and Jsonm for kernel checks." >&2; exit 1; }
 	sh -n ocaml/check.sh
-	build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
-	  cp ocaml/*.mli ocaml/*.ml "$$build_dir" && cd "$$build_dir" && \
-	  ocamlfind ocamlc -package jsonm $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml)
+	@for adapter in ocaml/datasets/*.ml; do \
+	  build_dir=$$(mktemp -d) && \
+	  (trap 'rm -rf "$$build_dir"' EXIT; \
+	    cp ocaml/*.mli ocaml/*.ml "$$build_dir" && \
+	    cp "$$adapter" "$$build_dir/dataset.ml" && cd "$$build_dir" && \
+	    ocamlfind ocamlc -package jsonm $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml)) || exit 1; \
+	done
 
 # Every kernel module except the JSON entry point, in dependency order.
-KERNEL = $(shell cd ocaml && ocamldep -sort $(filter-out transport.ml,$(notdir $(wildcard ocaml/*.mli ocaml/*.ml))))
+KERNEL = $(shell cd ocaml && ocamldep -sort $(filter-out transport.ml codec.ml dataset.mli,$(notdir $(wildcard ocaml/*.mli ocaml/*.ml))))
 
 # Link a test with only the modules it may use, so a new dependency fails to compile.
 ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
@@ -50,10 +54,10 @@ ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
   ocamlc $(OCAML_FLAGS) -o test $(notdir $(1)) && ./test
 
 test-ocaml:
-	$(call ocaml_test,experiment.ml tests/test_experiment.ml)
+	$(call ocaml_test,experiment.mli experiment.ml tests/test_experiment.ml)
 	$(call ocaml_test,verifier.mli verifier.ml tests/test_verifier.ml)
 	$(call ocaml_test,fixture.mli fixture.ml fixtures.ml tests/test_fixture.ml)
-	$(call ocaml_test,response.mli response.ml fixture.mli fixture.ml verifier.mli verifier.ml ast.ml criterion.ml tests/test_criterion.ml)
+	$(call ocaml_test,response.mli response.ml fixture.mli fixture.ml verifier.mli verifier.ml ast.ml criterion.mli criterion.ml tests/test_criterion.ml)
 	$(call ocaml_test,$(KERNEL) tests/test_kernel.ml)
 
 check-scaffolding:

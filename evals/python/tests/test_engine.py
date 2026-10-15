@@ -8,15 +8,16 @@ import pytest
 from inspect_ai.log import read_eval_log
 from inspect_ai.scorer import CORRECT, INCORRECT
 
-from evals.python.agents import AGENT_REGISTRY
-from evals.python.tasks import baseline, genius
+from evals.python.contracts import Verification
+from evals.python.integrations.datasets.catalog import grade
+from evals.python.integrations.inspect.agents import AGENT_REGISTRY
+from evals.python.integrations.inspect.tasks import baseline, genius
 from evals.python.tests.scenarios import Mode, crashing
 from evals.python.tests.support import crash_evidence, offline_run, results
-from evals.python.transport import Verification, grade
 
 
 def test_complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
-    with patch("evals.python.scoring.grade", wraps=grade) as grading:
+    with patch("evals.python.integrations.inspect.scoring.grade", wraps=grade) as grading:
         logs = offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
     assert grading.call_count == 16
     expected = [
@@ -109,7 +110,7 @@ def test_crashed_agent_is_scored_on_its_workspace(
 
 def test_verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
     with patch(
-        "evals.python.scoring.Verifier.verify",
+        "evals.python.integrations.inspect.scoring.Verifier.verify",
         return_value=(Verification(status="harness_error", detail="grader failed to import"), {}),
     ):
         log = offline_run([baseline()], mode="pass", directory=tmp_path)[0]

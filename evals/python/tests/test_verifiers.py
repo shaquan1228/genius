@@ -8,9 +8,10 @@ from pathlib import Path
 import pytest
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
+from evals.python.contracts import Case, CaseQuery, ExecutableChecks, Selection
+from evals.python.integrations.datasets.catalog import RUNNER, load_cases, reference, verifier
+from evals.python.integrations.inspect.verification import Verifier
 from evals.python.tests.support import ocaml_timeout_case
-from evals.python.transport import RUNNER, Case, ExecutableChecks, load_cases
-from evals.python.verification import Verifier
 
 CASES = {case.id: case for case in load_cases()}
 
@@ -19,8 +20,8 @@ def snapshot(directory: Path) -> dict[str, bytes]:
     return {path.name: path.read_bytes() for path in directory.iterdir()}
 
 
-def verify(case: Case, *, directory: Path) -> bool:
-    checks = case.checks
+def verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> bool:
+    checks = verifier(query=CaseQuery(case_id=case.id, selection=selection))
     assert isinstance(checks, ExecutableChecks)
 
     async def execute() -> bool:
@@ -55,7 +56,7 @@ def seed(case_id: str, *, directory: Path) -> Case:
 def test_seeds_fail_and_solutions_pass(*, case_id: str, tmp_path: Path) -> None:
     case = seed(case_id, directory=tmp_path)
     assert not verify(case, directory=tmp_path)
-    write_files(tmp_path, files=case.solution)
+    write_files(tmp_path, files=reference(query=CaseQuery(case_id=case.id)).solution)
     before = snapshot(tmp_path)
     assert verify(case, directory=tmp_path)
     assert snapshot(tmp_path) == before
@@ -91,7 +92,8 @@ def test_preflight_defaults_overrides_and_validation(
     case = seed("known-preflight", directory=tmp_path)
     (tmp_path / "config.ml").write_text(f"let timeout_seconds = {config}\n")
     source = (
-        case.solution["client.ml"]
+        reference(query=CaseQuery(case_id=case.id))
+        .solution["client.ml"]
         .replace("= 30", f"= {client}")
         .replace("      value\n", f"      {override}\n")
     )
@@ -181,6 +183,6 @@ def test_family_variants_generate_working_seeds_and_solutions(
     work = tmp_path / "workspace"
     work.mkdir()
     write_files(work, files=case.files)
-    assert not verify(case, directory=work)
-    write_files(work, files=case.solution)
-    assert verify(case, directory=work)
+    assert not verify(case, directory=work, selection=suite)
+    write_files(work, files=reference(query=CaseQuery(case_id=case.id, selection=suite)).solution)
+    assert verify(case, directory=work, selection=suite)

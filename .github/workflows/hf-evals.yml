@@ -10,9 +10,8 @@ on:
         required: true
         type: string
       dataset:
-        description: Benchmark suite
-        type: choice
-        options: [smoke, humanevalplus]
+        description: Dataset adapter name
+        type: string
         default: smoke
       limit:
         description: Optional number of problems per profile (empty runs all)

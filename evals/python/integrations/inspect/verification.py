@@ -9,7 +9,7 @@ from typing import assert_never, cast
 from inspect_ai.util import ExecResult, SandboxEnvironment
 from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
 
-from evals.python.transport import ExecutableChecks, Verification, VerificationStatus
+from evals.python.contracts import ExecutableChecks, Verification, VerificationStatus
 
 
 class Evidence(BaseModel):

@@ -11,15 +11,9 @@ from inspect_ai.util import ExecResult
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 from pydantic import ValidationError
 
-from evals.python.transport import (
-    ExecutableChecks,
-    GradeRequest,
-    Verification,
-    grade,
-    load_cases,
-    workspace_files,
-)
-from evals.python.verification import (
+from evals.python.contracts import CaseQuery, ExecutableChecks, GradeRequest, Verification
+from evals.python.integrations.datasets.catalog import grade, load_cases, verifier
+from evals.python.integrations.inspect.verification import (
     Completion,
     Verifier,
     completion,
@@ -138,7 +132,7 @@ def test_cleanup_runs_when_verifier_fails(error: Exception) -> None:
                 ),
                 patch.object(LocalSandboxEnvironment, "sample_cleanup") as cleanup,
                 patch(
-                    "evals.python.verification.Verifier.candidate_files",
+                    "evals.python.integrations.inspect.verification.Verifier.candidate_files",
                     return_value={"solution.py": b""},
                 ),
             ):
@@ -179,7 +173,7 @@ def test_cancellation_cleans_created_environment() -> None:
                 ),
                 patch.object(LocalSandboxEnvironment, "sample_cleanup") as cleanup,
                 patch(
-                    "evals.python.verification.Verifier.candidate_files",
+                    "evals.python.integrations.inspect.verification.Verifier.candidate_files",
                     return_value={"solution.py": b""},
                 ),
                 pytest.raises(asyncio.CancelledError),
@@ -239,8 +233,9 @@ def test_kernel_refuses_harness_error() -> None:
 def test_private_artifacts_are_excluded_from_public_files() -> None:
 
     for case in load_cases():
-        if isinstance(case.checks, ExecutableChecks):
-            assert not case.checks.files.keys() & workspace_files(case).keys()
+        checks = verifier(query=CaseQuery(case_id=case.id))
+        if isinstance(checks, ExecutableChecks):
+            assert not checks.files.keys() & case.files.keys()
 
 
 def test_candidate_inspection_failure_is_harness_error() -> None:
@@ -342,7 +337,7 @@ def test_verifier_execution_deadline_is_preserved() -> None:
                 ),
                 patch.object(LocalSandboxEnvironment, "sample_cleanup") as finish,
                 patch(
-                    "evals.python.verification.Verifier.candidate_files",
+                    "evals.python.integrations.inspect.verification.Verifier.candidate_files",
                     return_value={"solution.py": b""},
                 ),
             ):

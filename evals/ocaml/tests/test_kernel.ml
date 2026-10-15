@@ -247,3 +247,26 @@ let () =
   assert (
     rejection (fun () -> Case.validate { original with fixture = Fixture.empty })
     = "Case clear-task: criteria read files missing from the fixture: receipt.ml")
+
+let () =
+  let original = find "clear-task" in
+  let public = Projection.case original in
+  assert (public.id = original.id);
+  assert (public.prompt = original.instruction.prompt);
+  assert (List.map fst public.files = [ "receipt.ml"; "test_receipt.ml"; "check.sh" ]);
+  assert (not (List.mem_assoc "verifier.py" public.files));
+  assert (List.assoc "check.sh" public.files = Verifier.Resource "check.sh");
+  (match Projection.verifier original with
+  | Some verifier ->
+      assert (List.map fst verifier.files = [ "verifier.py" ]);
+      assert (verifier.stdin <> "");
+      assert (verifier.inputs = [ "receipt.ml" ])
+  | None -> assert false);
+  assert (Projection.reference original = original.reference);
+  let decision = find "small-decision" in
+  assert (Projection.verifier decision = None);
+  assert ((Projection.case decision).files = []);
+  assert (Projection.reference decision = decision.reference);
+  assert (
+    rejection (fun () -> Projection.case { original with fixture = Fixture.empty })
+    = "Case clear-task: criteria read files missing from the fixture: receipt.ml")

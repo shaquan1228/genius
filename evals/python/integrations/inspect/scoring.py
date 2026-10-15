@@ -7,17 +7,10 @@ from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accurac
 from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
 
-from evals.python.transport import (
-    CaseQuery,
-    Dataset,
-    ExecutableChecks,
-    GradeRequest,
-    Verification,
-    case_by_id,
-    grade,
-)
-from evals.python.verification import Verifier
-from evals.python.workspace import changed_files
+from evals.python.contracts import CaseQuery, ExecutableChecks, GradeRequest, Verification
+from evals.python.integrations.datasets.catalog import case_by_id, grade, verifier
+from evals.python.integrations.inspect.verification import Verifier
+from evals.python.integrations.inspect.workspace import changed_files
 
 
 def score_values(scores: Mapping[str, bool]) -> dict[str, str]:
@@ -33,11 +26,11 @@ def with_failure(explanation: str, *, failure: str | None) -> str:
 async def score_sample(state: TaskState, target: Target) -> Score:  # noqa: PLR0917 - Inspect calls scorers positionally
     # A crashed agent is graded on its workspace, like an agent that stopped early.
     failure = state.metadata.get("agent_failure")
-    dataset = cast(Dataset, state.metadata.get("dataset", "smoke"))
+    dataset = cast(str, state.metadata.get("dataset", "smoke"))
     case = case_by_id(query=CaseQuery(case_id=str(state.metadata["case_id"]), selection=dataset))
     completion = state.output.completion
     changed = tuple(sorted(await changed_files(state)))
-    match case.checks:
+    match verifier(query=CaseQuery(case_id=case.id, selection=dataset)):
         case ExecutableChecks() as checks:
             evidence, metadata = await Verifier(checks=checks, agent=sandbox()).verify()
             explanation = evidence.detail

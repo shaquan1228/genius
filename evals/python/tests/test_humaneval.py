@@ -8,21 +8,15 @@ from unittest.mock import patch
 
 import pytest
 
-from evals.python import transport
-from evals.python.profiles import load_profile
-from evals.python.tasks import baseline, cases_hash
-from evals.python.transport import (
-    CaseQuery,
-    ExecutableChecks,
-    GradeRequest,
-    Verification,
+from evals.python.contracts import CaseQuery, ExecutableChecks, GradeRequest, Sources, Verification
+from evals.python.integrations.datasets import catalog
+from evals.python.integrations.datasets.catalog import case_by_id, cases_hash, grade, load_cases
+from evals.python.integrations.evalplus.benchmarks import (
     benchmark_info,
-    case_by_id,
-    grade,
-    import_records,
-    load_cases,
-    workspace_files,
 )
+from evals.python.integrations.inspect.profiles import load_profile
+from evals.python.integrations.inspect.tasks import baseline
+from evals.python.tests.support import import_records, imported_reference, imported_verifier
 
 
 def record(**updates: object) -> str:
@@ -42,20 +36,20 @@ def record(**updates: object) -> str:
 
 def test_import_preserves_original_private_json() -> None:
     raw = record()
-    case = import_records((raw,))[0]
-    assert isinstance(case.checks, ExecutableChecks)
-    assert json.loads(case.checks.stdin)["record"] == raw
-    assert str(2**326 + 17) in case.checks.stdin
+    checks = imported_verifier(raw)
+    assert isinstance(checks, ExecutableChecks)
+    assert json.loads(checks.stdin)["record"] == raw
+    assert str(2**326 + 17) in checks.stdin
 
 
 def test_imported_case_keeps_grader_private() -> None:
     case = import_records((record(),))[0]
     assert case.id == "humaneval-0"
-    assert case.solution["solution.py"].endswith("    return x\n")
-    assert dict(workspace_files(case)) == dict(case.files)
+    assert imported_reference(record()).solution["solution.py"].endswith("    return x\n")
+    assert dict(case.files) == dict(case.files)
     assert (
         "canonical_solution" in case.prompt,
-        "verifier.py" in workspace_files(case),
+        "verifier.py" in case.files,
     ) == (False, False)
 
 
@@ -87,8 +81,8 @@ def test_malformed_import_rejected(records: tuple[str, ...]) -> None:
 def test_dataset_selector_grades_one_trusted_record() -> None:
     raw = record()
     case = import_records((raw,))[0]
-    catalog = transport.Catalog(cases={case.id: case}, records={case.id: raw})
-    with patch("evals.python.transport._selected", return_value=catalog):
+    compiled = catalog.compile_records(sources=catalog.sources("humanevalplus"), records=(raw,))
+    with patch("evals.python.integrations.datasets.catalog._selected", return_value=compiled):
         assert case_by_id(query=CaseQuery(case_id=case.id, selection="humanevalplus")) == case
         assert load_cases(selection="humanevalplus") == (case,)
         assert grade(
@@ -119,12 +113,12 @@ def test_pinned_manifest() -> None:
 @pytest.fixture
 def synthetic_dataset(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     data = "\n".join(record(task_id=f"HumanEval/{i}") for i in range(164)).encode()
-    transport._catalog.cache_clear()
-    monkeypatch.setattr("evals.python.transport.download", lambda request: data)
+    catalog._catalog.cache_clear()
+    monkeypatch.setattr("evals.python.integrations.datasets.catalog.download", lambda request: data)
     try:
         yield
     finally:
-        transport._catalog.cache_clear()
+        catalog._catalog.cache_clear()
 
 
 def test_dataset_index_keeps_all_cases(synthetic_dataset: None) -> None:
@@ -137,20 +131,28 @@ def test_import_cache_tracks_verifier_source(
     *, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     load_cases(selection="humanevalplus")
-    resources = transport._resources()
+    resources = catalog.sources().resources
     updated = tuple(
         (name, source + "\n" if name == "verifier.py" else source) for name, source in resources
     )
-    monkeypatch.setattr("evals.python.transport._resources", lambda: updated)
+    original = catalog.sources
+    monkeypatch.setattr(
+        catalog,
+        "sources",
+        lambda selection="smoke": Sources(modules=original(selection).modules, resources=updated),
+    )
     second = load_cases(selection="humanevalplus")[0]
-    assert isinstance(second.checks, ExecutableChecks)
-    assert second.checks.files["verifier.py"] == (dict(resources)["verifier.py"] + "\n")
+    checks = catalog.verifier(query=CaseQuery(case_id=second.id, selection="humanevalplus"))
+    assert isinstance(checks, ExecutableChecks)
+    assert checks.files["verifier.py"] == (dict(resources)["verifier.py"] + "\n")
 
 
 def test_dataset_count_mismatch(
     *, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("evals.python.transport.download", lambda request: record().encode())
+    monkeypatch.setattr(
+        "evals.python.integrations.datasets.catalog.download", lambda request: record().encode()
+    )
     with pytest.raises(ValueError, match="count"):
         load_cases(selection="humanevalplus")
 
@@ -169,11 +171,16 @@ def test_custom_smoke_suite_still_supported(tmp_path: Path) -> None:
 
 def test_case_hash_tracks_private_verifier_code(monkeypatch: pytest.MonkeyPatch) -> None:
     before = cases_hash("smoke")
-    resources = transport._resources()
+    resources = catalog.sources().resources
     updated = tuple(
         (name, source + "\n" if name == "verifier.py" else source) for name, source in resources
     )
-    monkeypatch.setattr("evals.python.transport._resources", lambda: updated)
+    original = catalog.sources
+    monkeypatch.setattr(
+        catalog,
+        "sources",
+        lambda selection="smoke": Sources(modules=original(selection).modules, resources=updated),
+    )
     assert cases_hash("smoke") != before
 
 

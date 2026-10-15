@@ -8,6 +8,9 @@ from inspect_ai import Task, eval
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import get_model
 
+from evals.python import transport
+from evals.python.contracts import Case, ExecutableChecks, Reference
+from evals.python.integrations.datasets import catalog
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.scenarios import Mode, echo_model, scripted
 
@@ -70,3 +73,20 @@ def ocaml_choice_case(*, case_id: str, a: int, b: int) -> str:
   ~instruction:(Scenarios.Decision.cheaper ~a:{a} ~b:{b})
   ~criterion:(Scenarios.Decision.choice {choice}) ~allowed_files:[]
   ~reference:(Scenarios.Decision.choice_reference {choice} ~reason:"The cost is lower.")"""
+
+
+# Synthetic benchmark import never downloads datasets or calls a model.
+def import_records(records: tuple[str, ...]) -> tuple[Case, ...]:
+    return transport.cases(sources=catalog.sources("humanevalplus"), records=records)
+
+
+def imported_verifier(raw: str) -> ExecutableChecks | None:
+    case = import_records((raw,))[0]
+    return transport.verifier(sources=catalog.sources("humanevalplus"), case_id=case.id, record=raw)
+
+
+def imported_reference(raw: str) -> Reference:
+    case = import_records((raw,))[0]
+    return transport.reference(
+        sources=catalog.sources("humanevalplus"), case_id=case.id, record=raw
+    )
