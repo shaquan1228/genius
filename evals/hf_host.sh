@@ -24,7 +24,7 @@ source_repo="$HF_NAMESPACE/genius-evals"
 results_bucket="$HF_NAMESPACE/genius-eval-results"
 snapshot_dir=$(mktemp -d)
 trap 'rm -rf "$snapshot_dir"' EXIT HUP INT TERM
-git archive HEAD README.md docs skills evals | tar -x -C "$snapshot_dir"
+git -c safe.directory="$(pwd)" archive HEAD README.md docs skills evals | tar -x -C "$snapshot_dir"
 
 hf repos create "$source_repo" --repo-type dataset --private --exist-ok
 hf buckets create "$results_bucket" --private --exist-ok

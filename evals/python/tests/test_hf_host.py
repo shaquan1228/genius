@@ -124,6 +124,7 @@ def test_host_script_launches_job_without_exposing_key(
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     monkeypatch.setenv("OPENAI_API_KEY", "private-test-key")
     monkeypatch.setenv("EVAL_VERSION", "test-pinned-version")
+    monkeypatch.setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     result = subprocess.run(
@@ -164,8 +165,8 @@ def test_host_script_uses_hf_model_without_provider_key(
         capture_output=True,
         check=False,
     )
+    assert result.returncode == 0, result.stderr.decode()
     commands = calls.read_text()
-    assert result.returncode == 0
     assert "--secrets HF_TOKEN --env EVAL_AGENT=codex" in commands
     assert "OPENAI_API_KEY" not in commands
 
