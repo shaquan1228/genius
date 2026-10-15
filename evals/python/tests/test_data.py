@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from evals.python.profiles import BASELINE, GENIUS, content_hash
 from evals.python.tests.support import ocaml_choice_case, ocaml_timeout_case
-from evals.python.transport import Verification, case_by_id, decode, load_cases
+from evals.python.transport import SUITE, Verification, case_by_id, decode, load_cases
 from evals.python.transport import grade as kernel_grade
 
 
@@ -49,13 +49,12 @@ def test_generated_paths_are_validated(*, field: str, value: object) -> None:
 
 
 def grade(case_id: str, *, text: str, suite: Path | None = None) -> bool:
-    arguments = {} if suite is None else {"suite": suite}
     return kernel_grade(
         case_id,
         response=text,
         changed_files=(),
         verification=Verification(status="unchecked"),
-        **arguments,
+        suite=SUITE if suite is None else suite,
     )["correctness"]
 
 
@@ -119,7 +118,11 @@ def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
 
 def test_generated_artifacts_stay_out_of_sample_metadata() -> None:
     for sample in BASELINE.samples():
-        assert sample.metadata == {"case_id": sample.id, "profile": "baseline"}
+        assert sample.metadata == {
+            "case_id": sample.id,
+            "profile": "baseline",
+            "dataset": "smoke",
+        }
         assert not any("heldout" in path for path in sample.files or {})
 
 

@@ -3,6 +3,9 @@ name = "genius-evals"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+  "evalplus @ git+https://github.com/evalplus/evalplus.git@6eb1e199c2e370518e7bf3e8eee6322c2b23c89c",
+  "numpy==2.5.4",
+  "psutil==7.2.2",
   "huggingface-hub==2.2.0",
   "inspect-ai==0.3.278",
   "inspect-swe==0.2.71",
@@ -50,3 +53,8 @@ source = ["python"]
 [tool.coverage.report]
 fail_under = 100
 show_missing = true
+
+[[tool.uv.dependency-metadata]]
+name = "evalplus"
+version = "0.4.0.dev13"
+requires-dist = ["numpy", "psutil"]

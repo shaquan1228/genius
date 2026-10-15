@@ -9,8 +9,21 @@ on:
         default: hf-inference-providers/openai/gpt-oss-20b:nscale
         required: true
         type: string
+      dataset:
+        description: Benchmark suite
+        type: choice
+        options: [smoke, humanevalplus]
+        default: smoke
+      limit:
+        description: Optional number of problems per profile (empty runs all)
+        type: string
+        default: ""
+      job_timeout:
+        description: Hugging Face Job timeout
+        type: string
+        default: 4h
       epochs:
-        description: Epochs per profile (1 is the smoke test; 5 is the full comparison)
+        description: Epochs per problem and profile (1 is one independent attempt)
         required: true
         default: "1"
         type: string
@@ -50,6 +63,9 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           HF_NAMESPACE: ${{ vars.HF_NAMESPACE || github.repository_owner }}
           EVAL_MODEL: ${{ inputs.model }}
+          EVAL_DATASET: ${{ inputs.dataset }}
+          EVAL_LIMIT: ${{ inputs.limit }}
+          EVAL_JOB_TIMEOUT: ${{ inputs.job_timeout }}
           EVAL_EPOCHS: ${{ inputs.epochs }}
           EVAL_AGENT: ${{ inputs.agent }}
           EVAL_VERSION: ${{ inputs.version }}

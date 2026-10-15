@@ -25,10 +25,12 @@ The OCaml kernel owns eval definitions and pure grading. Primitive definitions i
 | `fixture.mli` / `fixture.ml` | Immutable initial files, duplicate detection, explicit overlays |
 | `instruction.ml` | Instructions supplied to the agent |
 | `response.mli` / `response.ml` | Immutable typed string/boolean fields shared by expectations and reference replies |
-| `criterion.ml` | Declarative expected fields, optional text bounds, and executable OCaml assertions |
-| `reference.ml` | Known-good edits and replies for offline verification |
+| `verifier.mli` / `verifier.ml` | Executable commands, declared inputs, private artifacts, public tools, and deadlines |
+| `criterion.ml` | Declarative expected fields, optional text bounds, and executable verifier contracts |
+| `humaneval.ml` | Pinned benchmark provenance and typed HumanEval+ case construction |
+| `reference.ml` | Reference edits and replies for offline validation |
 | `case.ml` | Explicit case assembly and file-containment validation |
-| `outcome.ml` | Environment evidence collected by the Python harness |
+| `outcome.ml` | Changed files and explicit verification outcomes, including harness errors |
 | `score.mli` / `score.ml` | Immutable named boolean results |
 | `grader.ml` | Pure response comparison, text constraints, and allowed-file judgment |
 | `fixtures.ml` / `scenarios.ml` | Parameterized starting projects and scenario-specific constructors |
@@ -37,12 +39,12 @@ The OCaml kernel owns eval definitions and pure grading. Primitive definitions i
 | `check.sh` | Temporary compiler runner for visible and held-out code verification |
 | `tests/*.ml` | Kernel tests; each links only the modules it may use |
 
-The bridge has two operations: export execution inputs, and grade observations by case ID.
+The bridge exports local cases, imports external records into typed cases, and grades observations by case ID.
 A grading request sends a protocol version, case ID, raw response text, changed paths, and trusted code-execution evidence. It returns a versioned map of named scores. Candidate values never become OCaml source. Criteria stay inside the kernel: Python does not mirror answer expectations, text rules, or grading variants.
 
 `python/transport.py` builds a cached host executable from trusted source contents and invokes it with isolated, uncached requests. It returns frozen execution projections and score data. Code cases expose their runtime verifier inputs; answer cases expose no checks, because the kernel grades their replies. References and private verifier programs stay in the host index, outside agent files and sample metadata.
 
-Python retains Git observation, trusted held-out runner and completion-marker handling, sandbox lifecycle, profile packaging, agent integrations, Inspect adapters, limits, logging, and metrics. Invalid candidate replies receive failing scores; compiler/process/protocol failures remain harness errors. Source changes invalidate the executable and manifest caches. Historical logs are unchanged; old exported manifests have no compatibility shim.
+Python retains Git observation, trusted held-out runner and completion-marker handling, sandbox lifecycle, profile packaging, agent integrations, Inspect adapters, limits, logging, and metrics. Invalid replies, candidate compilation failures, and failed tests receive explicit unsuccessful outcomes; provisioning, transfer, driver, and protocol failures remain harness errors. Source changes invalidate the executable and manifest caches. Historical logs are unchanged; old exported manifests have no compatibility shim.
 
 Only `transport.ml` handles JSON in OCaml, using Jsonm for JSON decoding and encoding. Only `python/transport.py` compiles or invokes the kernel. Domain modules are independent of codecs and Inspect. `python/tests/test_boundary.py` enforces these boundaries.
 
@@ -265,12 +267,17 @@ worktree. A generated workspace can run its visible checks with, for example:
 sh check.sh receipt.ml test_receipt.ml
 ```
 
-After the agent finishes, the grader sends the generated private OCaml checks to
-the sandbox through standard input, using the host's trusted runner. A fresh
-completion marker appears after every assertion; successful early exits without
-that marker fail correctness. Private checks contain independent assertions, so changing visible tests or the
-agent's copy of the runner cannot make the seeded bugs pass. The marker
-checks completion; it does not isolate hostile code sharing the grader process.
+After the agent finishes, the harness creates a fresh grading sandbox using the
+same provider. It copies only the declared submission inputs and trusted verifier
+artifacts, then streams private input to the declared command. The driver returns
+a structured outcome with a fresh completion marker. Provisioning and transfer
+timeouts are harness errors; the verifier command's deadline is a distinct timeout
+outcome. The grading sandbox is cleaned up after success, failure, or cancellation.
+
+The OCaml verifier is one instance of this contract. It uses a separate inner
+completion marker after all private assertions, so an early successful exit fails
+correctness. Agent edits to public helper scripts do not alter the trusted grader
+copies. Completion markers do not isolate hostile code sharing the grader process.
 
 Scope checks compare the final worktree against its original commit.
 They detect agent commits, untracked files, ignored files, and changed instructions.
@@ -302,3 +309,53 @@ seeds, solved fixtures, partial fixes, malformed code, and visible test commands
 Neither is included in Python coverage or the Python CRAP calculation.
 Strict mypy checks the Python modules without type-ignore exceptions; `ocamlc`
 type-checks fixture modules and assertions on every execution.
+
+
+## HumanEval+ coding benchmark
+
+`humanevalplus` imports all 164 HumanEval+ v0.1.10 problems into typed OCaml
+`Case` values. The upstream release is public and requires no API key. The free commands below show the pinned provenance, then download and
+checksum-verify the dataset into the user cache and validate three references:
+
+```sh
+uv run --project evals python -m evals.python.benchmarks info
+uv run --project evals python -m evals.python.benchmarks validate --limit 3
+```
+
+On macOS, trusted reference validation can explicitly work around EvalPlus's
+incompatible memory guard with `--trusted-macos-memory-workaround`. This flag is
+only for the bundled upstream reference code. Live candidate evaluation keeps
+EvalPlus's default memory guard in the Linux grading sandbox.
+
+Each agent sees only `solution.py`, containing the original prompt and function
+signature. Baseline and Genius receive the same public problem. Canonical
+solutions and base/plus inputs stay in the private host index and fresh grading
+environment. The original JSON record crosses the kernel as an opaque string,
+preserving integers larger than floating-point precision. Grading runs the
+pinned official EvalPlus checker, separately for base and plus inputs; correctness
+requires both groups to pass. Metadata records both upstream statuses, test
+counts, dataset digest, evaluator commit, and runtime versions. A timeout remains
+an upstream timeout result; infrastructure errors fail the sample.
+
+`evals/ocaml/humaneval.ml` owns dataset provenance and constructs the cases.
+`ExecutableChecks` runs them through the same generic verifier as other coding
+cases. No dataset-specific scorer or Python-to-OCaml transpilation of benchmark
+programs is required. The evaluator is pinned to commit
+`6eb1e199c2e370518e7bf3e8eee6322c2b23c89c`; its minimal evaluation dependencies
+are pinned in the project lockfile. Fresh sandbox graders install those exact
+packages into a temporary private directory when unavailable.
+
+Canonical solutions are validation candidates, not scoring authority. The
+unmodified v0.1.10 reference for `HumanEval/32` fails the official expanded tests
+with this evaluator due to a numerical issue. Its failure is retained and
+reported; the adapter does not weaken or rewrite the benchmark. Reference
+validation exits nonzero when any case fails or encounters an infrastructure
+error.
+
+For a model run, select `humanevalplus` in the manual HF workflow and optionally
+set `limit` for a small probe. The equivalent local launcher settings are
+`EVAL_DATASET=humanevalplus EVAL_LIMIT=3`; omitting `EVAL_LIMIT` runs all 164
+problems per profile and epoch. `EVAL_JOB_TIMEOUT` defaults to `4h` and can be
+explicitly increased for larger runs. No model calls or paid Jobs are made by the
+`benchmarks` CLI. Inspect logs include the dataset selection, pinned provenance,
+case hash, and each sample's verifier evidence.

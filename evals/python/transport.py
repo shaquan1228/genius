@@ -13,7 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import MappingProxyType
-from typing import Annotated, Final, Literal
+from typing import Annotated, Final, Literal, TypedDict, Unpack
 
 from pydantic import (
     AfterValidator,
@@ -25,6 +25,7 @@ from pydantic import (
     model_validator,
 )
 
+from evals.python.datasets import cache_path, download
 from evals.python.paths import EVALS_ROOT
 
 OCAML_ROOT: Final = EVALS_ROOT / "ocaml"
@@ -47,6 +48,7 @@ LIBRARY: Final = tuple(
         "grader.ml",
         "fixtures.ml",
         "scenarios.ml",
+        "humaneval.ml",
     )
 )
 SUITE: Final = OCAML_ROOT / "suite.ml"
@@ -182,12 +184,78 @@ def _suite_index(suite: Path) -> Mapping[str, Case]:
     return _index(_export(_sources(suite), resources=_resources()))
 
 
-def load_cases(suite: Path = SUITE) -> tuple[Case, ...]:
-    return tuple(_suite_index(suite).values())
+Dataset = Literal["smoke", "humanevalplus"]
 
 
-def case_by_id(case_id: str) -> Case:
-    return _suite_index(SUITE)[case_id]
+class HumanEvalInfo(BaseModel):
+    model_config = FROZEN
+
+    source: str
+    revision: str
+    sha256: str
+    count: int
+    evaluator_commit: str
+    numpy_version: str
+    psutil_version: str
+
+
+def humaneval_info() -> HumanEvalInfo:
+    kernel = _kernel(_sources(SUITE), resources=_resources())
+    return HumanEvalInfo.model_validate_json(kernel.run("--humaneval-info"))
+
+
+def import_humaneval(records: tuple[str, ...]) -> tuple[Case, ...]:
+    return _import_humaneval(records, kernel=_kernel(_sources(SUITE), resources=_resources()))
+
+
+def _import_humaneval(records: tuple[str, ...], *, kernel: _Kernel) -> tuple[Case, ...]:
+    cases = tuple(
+        case
+        for start in range(0, len(records), 16)
+        for case in decode(
+            kernel.run("--import-humaneval", data=json.dumps(records[start : start + 16]))
+        )
+    )
+    if len({case.id for case in cases}) != len(cases):
+        raise ValueError("HumanEval task IDs must be unique")
+    return cases
+
+
+@lru_cache(maxsize=1)
+def _humaneval_data(
+    sources: tuple[tuple[str, str], ...], *, resources: tuple[tuple[str, str], ...]
+) -> tuple[Mapping[str, str], Mapping[str, Case]]:
+    kernel = _kernel(sources, resources=resources)
+    info = HumanEvalInfo.model_validate_json(kernel.run("--humaneval-info"))
+    data = download(source=info.source, sha256=info.sha256, destination=cache_path(info.sha256))
+    records = tuple(data.decode().splitlines())
+    cases = _import_humaneval(records, kernel=kernel)
+    if len(cases) != info.count:
+        raise ValueError("HumanEval dataset count mismatch")
+    return (
+        MappingProxyType(dict(zip((case.id for case in cases), records, strict=True))),
+        MappingProxyType({case.id: case for case in cases}),
+    )
+
+
+def _humaneval_records() -> Mapping[str, str]:
+    return _humaneval_data(_sources(SUITE), resources=_resources())[0]
+
+
+def _humaneval_index() -> Mapping[str, Case]:
+    return _humaneval_data(_sources(SUITE), resources=_resources())[1]
+
+
+def dataset_index(*, suite: Path = SUITE, dataset: Dataset = "smoke") -> Mapping[str, Case]:
+    return _humaneval_index() if dataset == "humanevalplus" else _suite_index(suite)
+
+
+def load_cases(suite: Path = SUITE, *, dataset: Dataset = "smoke") -> tuple[Case, ...]:
+    return tuple(dataset_index(suite=suite, dataset=dataset).values())
+
+
+def case_by_id(case_id: str, *, dataset: Dataset = "smoke") -> Case:
+    return dataset_index(dataset=dataset)[case_id]
 
 
 def workspace_files(case: Case) -> Mapping[str, str]:
@@ -231,6 +299,10 @@ class _GradingResult(BaseModel):
     scores: Scores
 
 
+class DatasetOptions(TypedDict, total=False):
+    dataset: Dataset
+
+
 def grade(
     case_id: str,
     *,
@@ -238,19 +310,22 @@ def grade(
     changed_files: tuple[str, ...],
     verification: Verification,
     suite: Path = SUITE,
+    **options: Unpack[DatasetOptions],
 ) -> Mapping[str, bool]:
     """Apply private kernel criteria to observed evidence, without caching candidate results."""
-    request = json.dumps(
-        {
-            "version": 2,
-            "case_id": case_id,
-            "response": response,
-            "changed_files": changed_files,
-            "verification": verification.model_dump(),
-        }
-    )
+    request: dict[str, object] = {
+        "version": 2,
+        "case_id": case_id,
+        "response": response,
+        "changed_files": changed_files,
+        "verification": verification.model_dump(),
+    }
     kernel = _kernel(_sources(suite), resources=_resources())
-    result = _GradingResult.model_validate_json(kernel.run("--grade", data=request))
+    operation = "--grade"
+    if options.get("dataset", "smoke") == "humanevalplus":
+        operation = "--grade-humaneval"
+        request = {"record": _humaneval_records()[case_id], "request": request}
+    result = _GradingResult.model_validate_json(kernel.run(operation, data=json.dumps(request)))
     if not {"correctness", "scope"} <= result.scores.keys():
         raise ValueError("Kernel omitted required score names")
     return result.scores

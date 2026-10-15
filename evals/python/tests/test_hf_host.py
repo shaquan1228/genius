@@ -14,7 +14,7 @@ from inspect_ai.model import GenerateConfig, get_model
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 from inspect_ai.util import SandboxUserUnsupportedError
 
-from evals.python.hf_job import HfChatAPI, run
+from evals.python.hf_job import HfChatAPI, run, sample_limit
 from evals.python.hf_sandbox import HfSandboxEnvironment
 from evals.python.paths import REPO_ROOT
 
@@ -297,3 +297,20 @@ def test_cancelled_creation_kills_eventual_sandbox() -> None:
     with patch("evals.python.hf_sandbox.Sandbox.create", side_effect=create):
         asyncio.run(cancel_during_creation())
     client.kill.assert_called_once_with()
+
+
+@pytest.mark.parametrize(("value", "expected"), [("3", 3), ("", None), (None, None)])
+def test_hf_sample_limit(
+    *, monkeypatch: pytest.MonkeyPatch, value: str | None, expected: int | None
+) -> None:
+    monkeypatch.delenv("EVAL_LIMIT", raising=False)
+    if value is not None:
+        monkeypatch.setenv("EVAL_LIMIT", value)
+    assert sample_limit() == expected
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "invalid"])
+def test_hf_sample_limit_rejects_invalid(*, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("EVAL_LIMIT", value)
+    with pytest.raises(ValueError, match=r"positive|invalid literal"):
+        sample_limit()

@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from evals.python.ocaml_verifier import classify, execute, main
+from evals.python.paths import EVALS_ROOT
 
 
 @pytest.mark.parametrize(
@@ -68,5 +69,5 @@ def test_driver_entrypoint_emits_evidence(capsys: pytest.CaptureFixture[str]) ->
         patch("shutil.which", return_value=None),
         patch.dict("os.environ", {"GENIUS_VERIFIER_MARKER": "entrypoint"}),
     ):
-        runpy.run_module("evals.python.ocaml_verifier", run_name="__main__")
+        runpy.run_path(str(EVALS_ROOT / "python/ocaml_verifier.py"), run_name="__main__")
     assert json.loads(capsys.readouterr().out)["status"] == "harness_error"

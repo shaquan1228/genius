@@ -38,11 +38,12 @@ if [ -n "$provider_key" ]; then
   set -- "$@" --secrets "$provider_key"
 fi
 
-hf jobs run --name genius-evals --namespace "$HF_NAMESPACE" --timeout 4h \
+hf jobs run --name genius-evals --namespace "$HF_NAMESPACE" --timeout "${EVAL_JOB_TIMEOUT:-4h}" \
   --volume "hf://datasets/$source_repo:/source:ro" \
   --volume "hf://buckets/$results_bucket:/results:rw" \
   "$@" \
   --env "EVAL_AGENT=$EVAL_AGENT" --env "EVAL_MODEL=$EVAL_MODEL" \
   --env "EVAL_VERSION=${EVAL_VERSION:-}" \
   --env "EVAL_EPOCHS=$EVAL_EPOCHS" \
+  --env "EVAL_DATASET=${EVAL_DATASET:-smoke}" --env "EVAL_LIMIT=${EVAL_LIMIT:-}" \
   ghcr.io/astral-sh/uv:python3.12-bookworm sh /source/evals/hf_bootstrap.sh

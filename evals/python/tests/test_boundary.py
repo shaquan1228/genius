@@ -37,7 +37,8 @@ def harness_references() -> dict[str, set[str]]:
 def test_only_python_transport_reads_ocaml_or_runs_compilers() -> None:
     references = harness_references()
     assert references.pop("transport.py")
-    assert references.pop("ocaml_verifier.py")
+    for name in ("ocaml_verifier.py", "evalplus_verifier.py"):
+        references.pop(name)
     assert "scoring.py" in references
     assert references == dict.fromkeys(references, frozenset())
 

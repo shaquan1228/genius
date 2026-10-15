@@ -9,7 +9,7 @@ from pathlib import Path
 from inspect_ai.dataset import Sample
 
 from evals.python.paths import REPO_ROOT
-from evals.python.transport import Case, load_cases, workspace_files
+from evals.python.transport import Case, Dataset, load_cases, workspace_files
 
 
 def directory_files(root: Path, *, destination: str) -> dict[str, str]:
@@ -58,15 +58,15 @@ class Profile:
         }
         return {"workspace/.gitkeep": inline_file(""), **workspace, **self.instruction_files()}
 
-    def samples(self) -> list[Sample]:
+    def samples(self, *, dataset: Dataset = "smoke") -> list[Sample]:
         return [
             Sample(
                 id=case.id,
                 input=self.prompt(case),
                 files=self.files(case),
-                metadata={"case_id": case.id, "profile": self.name},
+                metadata={"case_id": case.id, "profile": self.name, "dataset": dataset},
             )
-            for case in load_cases()
+            for case in load_cases(dataset=dataset)
         ]
 
 

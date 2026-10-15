@@ -172,7 +172,7 @@ let candidate text =
     | _ -> None
   with Invalid_argument _ -> None
 
-let request value =
+let request ?(cases = Suite.cases) value =
   let invalid () = invalid_arg "Invalid grading request" in
   let fields = match value with `Assoc fields -> fields | _ -> invalid () in
   let names = List.sort compare (List.map fst fields) in
@@ -199,7 +199,7 @@ let request value =
     | _ -> invalid ()
   in
   let case =
-    match List.find_opt (fun (case : Case.t) -> case.id = id) Suite.cases with
+    match List.find_opt (fun (case : Case.t) -> case.id = id) cases with
     | Some case -> case
     | None -> invalid_arg ("Unknown case: " ^ id)
   in
@@ -215,11 +215,60 @@ let request value =
       ("scores", `Assoc (List.map (fun (name, value) -> (name, `Bool value)) (Score.fields score)));
     ]
 
+let humaneval_info =
+  `Assoc
+    [
+      ("source", `String Humaneval.source);
+      ("revision", `String Humaneval.revision);
+      ("sha256", `String Humaneval.sha256);
+      ("count", `Float (float_of_int Humaneval.count));
+      ("evaluator_commit", `String Humaneval.evaluator_commit);
+      ("numpy_version", `String Humaneval.numpy_version);
+      ("psutil_version", `String Humaneval.psutil_version);
+    ]
+
+let json_fields = function `Assoc fields -> fields | _ -> invalid_arg "Expected object"
+let json_string = function `String text -> text | _ -> invalid_arg "Expected string"
+
+let humaneval_record raw =
+  let fields = json_fields (Json.decode (`String raw)) in
+  let get name = json_string (List.assoc name fields) in
+  let problem =
+    Humaneval.
+      {
+        task_id = get "task_id";
+        prompt = get "prompt";
+        entry_point = get "entry_point";
+        canonical_solution = get "canonical_solution";
+        private_input = raw;
+      }
+  in
+  let stdin =
+    Json.encode (`Assoc [ ("manifest", humaneval_info); ("record", `String problem.private_input) ])
+  in
+  Humaneval.make problem ~stdin
+
+let humaneval_cases = function
+  | `List records ->
+      let cases = List.map (fun raw -> humaneval_record (json_string raw)) records in
+      let ids = List.map (fun (case : Case.t) -> case.id) cases in
+      if List.length (List.sort_uniq compare ids) <> List.length ids then
+        invalid_arg "Duplicate HumanEval task ID";
+      cases
+  | _ -> invalid_arg "Expected HumanEval record strings"
+
 let () =
   let output =
     match Array.to_list Sys.argv with
     | [ _ ] -> `List (List.map case Suite.cases)
     | [ _; "--grade" ] -> request (Json.decode (`Channel stdin))
-    | _ -> invalid_arg "Expected no arguments or --grade"
+    | [ _; "--humaneval-info" ] -> humaneval_info
+    | [ _; "--import-humaneval" ] ->
+        `List (List.map case (humaneval_cases (Json.decode (`Channel stdin))))
+    | [ _; "--grade-humaneval" ] ->
+        let fields = json_fields (Json.decode (`Channel stdin)) in
+        let cases = [ humaneval_record (json_string (List.assoc "record" fields)) ] in
+        request ~cases (List.assoc "request" fields)
+    | _ -> invalid_arg "Unknown kernel operation"
   in
   print_endline (Json.encode output)
