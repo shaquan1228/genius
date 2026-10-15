@@ -4,6 +4,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal, cast
 
+from inspect_ai.agent import Agent, AgentState, agent
 from inspect_ai.model import ChatMessage, ChatMessageUser, GenerateConfig, ModelOutput
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
@@ -103,3 +104,13 @@ class Scripted:
 @solver
 def scripted(mode: Mode = "pass") -> Solver:
     return Scripted(SCENARIOS[mode])
+
+
+@agent
+def crashing(*, message: str) -> Agent:
+    """Stand in for an agent CLI that exits nonzero before it edits the workspace."""
+
+    async def execute(state: AgentState) -> AgentState:
+        raise RuntimeError(message)
+
+    return execute
