@@ -18,32 +18,36 @@ ocaml/*.ml  ──►  ocaml/transport.ml  ──JSON──►  python/transport
                                                   immutable Case)           cases only)
 ```
 
-The OCaml modules have separate responsibilities:
+The OCaml kernel owns eval definitions and pure grading. Primitive definitions include comments with meanings and primary-source links.
 
 | Module | Owns |
 | --- | --- |
-| `fixture.mli` / `fixture.ml` | Abstract immutable file collections, duplicate detection, explicit overlays |
-| `fixtures.ml` | Parameterized starting projects and their visible tests |
-| `check.ml` | Expected behavior and private assertion generation |
-| `task.ml` | Prompts and selected skills |
-| `reference.ml` | Known edits and replies for offline harness verification |
-| `eval.ml` | Case assembly with explicit edit scope |
+| `fixture.mli` / `fixture.ml` | Immutable initial files, duplicate detection, explicit overlays |
+| `instruction.ml` | Instructions supplied to the agent |
+| `response.mli` / `response.ml` | Immutable typed string/boolean fields shared by expectations and reference replies |
+| `criterion.ml` | Declarative expected fields, optional text bounds, and executable OCaml assertions |
+| `reference.ml` | Known-good edits and replies for offline verification |
+| `case.ml` | Explicit case assembly and file-containment validation |
+| `outcome.ml` | Environment evidence collected by the Python harness |
+| `score.mli` / `score.ml` | Immutable named boolean results |
+| `grader.ml` | Pure response comparison, text constraints, and allowed-file judgment |
+| `fixtures.ml` / `scenarios.ml` | Parameterized starting projects and scenario-specific constructors |
 | `suite.ml` | Pure case declarations |
-| `transport.ml` | JSON encoding for Python and the executable exporter entry point |
-| `check.sh` | Compiler runner shared by export, visible tests, and grading |
+| `transport.ml` | Sole OCaml codec and executable entry point |
+| `check.sh` | Temporary compiler runner for visible and held-out code verification |
 
-`python/transport.py` is the only Python module that reads OCaml sources, runs
-the compiler, writes OCaml code, or decodes the export. It returns frozen `Case`
-values: tuples and read-only mappings, safe to cache and share. Each case's
-`checks` is a tagged union, `code` or `answer`; Python branches on its type, never
-on a string, so a new OCaml answer kind needs no Python change. Other Python
-modules adapt those cases to Inspect and handle agent sessions, scoring, logs,
-and Hugging Face execution. OCaml domain modules have no JSON or Inspect
-dependencies. `python/tests/test_boundary.py` enforces both rules.
+The bridge has two operations: export execution inputs, and grade observations by case ID.
+A grading request sends a protocol version, case ID, raw response text, changed paths, and trusted code-execution evidence. It returns a versioned map of named scores. Candidate values never become OCaml source. Criteria stay inside the kernel: Python does not mirror answer expectations, text rules, or grading variants.
+
+`python/transport.py` builds a cached host executable from trusted source contents and invokes it with isolated, uncached requests. It returns frozen execution projections and score data. Code cases expose their runtime verifier inputs; answer cases expose only their execution mode. References and private verifier programs stay in the host index, outside agent files and sample metadata.
+
+Python retains Git observation, trusted held-out runner and completion-marker handling, sandbox lifecycle, profile packaging, agent integrations, Inspect adapters, limits, logging, and metrics. Invalid candidate replies receive failing scores; compiler/process/protocol failures remain harness errors. Source changes invalidate the executable and manifest caches. Historical logs are unchanged; old exported manifests have no compatibility shim.
+
+Only `transport.ml` handles JSON in OCaml, using Jsonm for JSON decoding and encoding. Only `python/transport.py` compiles or invokes the kernel. Domain modules are independent of codecs and Inspect. `python/tests/test_boundary.py` enforces these boundaries.
 
 ## Check the harness offline
 
-Install OCaml 4.13+ (`ocamlc`), Python 3.12+, [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, and Make.
+Install OCaml 4.13+ (`ocamlc`), ocamlfind, Jsonm, Python 3.12+, [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, and Make.
 Install [ocamlformat](https://github.com/ocaml-ppx/ocamlformat) 0.29.0 through opam; Homebrew does not package it.
 A separate opam switch can reuse the system compiler:
 
@@ -51,7 +55,7 @@ A separate opam switch can reuse the system compiler:
 brew install opam
 opam init --bare --no-setup
 opam switch create evals-fmt ocaml-system
-opam install --switch evals-fmt ocamlformat.0.29.0
+opam install --switch evals-fmt ocamlformat.0.29.0 ocamlfind jsonm
 export PATH="$(opam var --switch evals-fmt bin):$PATH"
 ```
 
@@ -88,7 +92,7 @@ GitHub Actions minutes are free for this public repository.
 - `.github/workflows/evals.yml` runs on pushes and pull requests that touch
   `evals/`, `docs/`, or `skills/`. Its `check` job runs `check-scaffolding`,
   `lint-ocaml`, and `check-python` in the Hugging Face Job image
-  (`ghcr.io/astral-sh/uv:python3.12-bookworm` with Debian's OCaml 4.13). Its
+  (`ghcr.io/astral-sh/uv:python3.12-bookworm` with Debian's OCaml 4.13, ocamlfind and Jsonm). Its
   `format` job runs `check-ocaml-format` with ocamlformat 0.29.0.
 - `.github/workflows/hf-evals.yml` launches a paid hosted run on manual dispatch
   (Actions → HF evals → Run workflow). It runs the `evals.yml` checks first, then
@@ -171,19 +175,19 @@ A suite declares the parts of a case explicitly:
 ```ocaml
 let cases =
   [
-    Eval.case
+    Case.make
       ~id:"quantity"
       ~fixture:(Fixtures.Receipt.fixture ~bug:Ignore_quantity)
-      ~task:Task.Receipt.fix_total
-      ~checks:
-        Check.Receipt.(
+      ~instruction:Scenarios.Receipt.fix_total
+      ~criterion:
+        Scenarios.Receipt.(
           totals
             [
               expect ~items:[ item ~price:3.0 ~quantity:4 ] ~total:12.0;
               expect ~items:[ item ~price:3.0 ~quantity:0 ] ~total:0.0;
             ])
       ~allowed_files:[ "receipt.ml" ]
-      ~reference:Reference.receipt;
+      ~reference:Scenarios.Receipt.reference;
   ]
 ```
 
@@ -191,7 +195,7 @@ The fixture does not choose the prompt, expectations, reference answer, or edit
 scope. Scope is declared independently of reference edits. A suite may reuse a
 fixture with different tasks or checks. `Fixture.of_files` rejects duplicate
 paths; `Fixture.overlay base ~overrides` explicitly replaces matching paths and
-leaves both inputs unchanged. `Eval.case` rejects checks that read files missing
+leaves both inputs unchanged. `Case.make` rejects checks that read files missing
 from the fixture and reference edits outside `allowed_files`; the error names the
 case and the files.
 
@@ -200,22 +204,27 @@ Use helpers inside a suite to describe larger parameter sets:
 ```ocaml
 let timeout_case i =
   let requested = 30 + i in
-  Eval.case
+  Case.make
     ~id:(Printf.sprintf "timeout-%d" i)
     ~fixture:(Fixtures.Preflight.fixture ~timeout:15)
-    ~task:(Task.Preflight.change_timeout ~initial:15 ~requested)
-    ~checks:(Check.Preflight.defaults ~timeout:requested)
+    ~instruction:(Scenarios.Preflight.change_timeout ~initial:15 ~requested)
+    ~criterion:(Scenarios.Preflight.defaults ~timeout:requested)
     ~allowed_files:[ "config.ml"; "client.ml" ]
-    ~reference:(Reference.preflight ~timeout:requested)
+    ~reference:(Scenarios.Preflight.reference ~timeout:requested)
 
 let cases = List.init 200 timeout_case
 ```
 
-A new starting-project shape belongs in `ocaml/fixtures.ml`; a new property belongs in
-`check.ml`. Prompts live in `task.ml`. Reference edits live in `reference.ml` and
-are used only by offline scripted agents. Case IDs have no matching directory or
-Python registry entry. The `Check.choice` constructor uses the closed `A | B`
-type, while decision replies and expected values are separate explicit inputs.
+A new starting project belongs in `ocaml/fixtures.ml`. Scenario instructions, assertions,
+and reference outputs belong in `scenarios.ml`. Add a reusable success condition to
+`criterion.ml` and its pure evaluation to `grader.ml`. Case IDs have no matching directory
+or Python registry entry.
+
+For a new structured answer, use `Response.of_fields` to declare string/boolean values
+and `Criterion.answer` for its expectation. An optional `Criterion.text_rule` declares
+a named string field and inclusive word bounds. A field named `reason` has no special
+meaning unless the criterion declares it. Reference replies use `Reference.Structured`.
+Adding answer fields does not require Python or transport changes.
 
 ## Execution boundary
 
@@ -226,7 +235,7 @@ execution side effects. Compilation and validated case indexes are cached
 by source contents; changing any module, interface, or the runner invalidates
 the cache.
 No generated files are written into this checkout. Both local checks and the
-hosted Job need OCaml 4.13+; the hosted bootstrap installs Debian's `ocaml-nox`.
+hosted Job need OCaml 4.13+; the hosted bootstrap installs Debian's `ocaml-nox`, `ocaml-findlib`, and `libjsonm-ocaml-dev`.
 
 Inspect receives only public project files, selected skill instructions, and a
 case ID. Private checks and reference edits stay in the host's case index; they
