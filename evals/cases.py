@@ -12,6 +12,17 @@ EVALS_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = EVALS_ROOT.parent
 Profile = Literal["baseline", "genius"]
 Grading = Literal["ocaml", "choice", "review"]
+OCAML_SOURCES = (
+    "fixture.mli",
+    "fixture.ml",
+    "fixtures.ml",
+    "check.ml",
+    "task.ml",
+    "reference.ml",
+    "eval.ml",
+    "suite.ml",
+    "inspect_export.ml",
+)
 SourceName = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*\.ml$")]
 FileName = Annotated[str, Field(pattern=r"^[a-zA-Z_][a-zA-Z0-9_.-]*$")]
 
@@ -33,16 +44,12 @@ class Case(BaseModel):
 
 
 @lru_cache(maxsize=1)
-def export_suite(suite: str, *, families: str, runner: str) -> str:
+def export_suite(sources: tuple[tuple[str, str], ...], *, runner: str) -> str:
     with TemporaryDirectory(prefix="genius-suite-") as directory:
-        for name, contents in {
-            "fixtures.ml": families,
-            "suite.ml": suite,
-            "check.sh": runner,
-        }.items():
+        for name, contents in (*sources, ("check.sh", runner)):
             (Path(directory) / name).write_text(contents)
         return subprocess.run(
-            ["sh", "check.sh", "fixtures.ml", "suite.ml"],
+            ["sh", "check.sh", *(name for name, _ in sources)],
             cwd=directory,
             check=True,
             capture_output=True,
@@ -60,11 +67,10 @@ def _parsed_suite(data: str) -> dict[str, Case]:
 
 
 def _suite_index(path: Path = EVALS_ROOT / "suite.ml") -> dict[str, Case]:
-    data = export_suite(
-        path.read_text(),
-        families=(EVALS_ROOT / "fixtures.ml").read_text(),
-        runner=(EVALS_ROOT / "check.sh").read_text(),
-    )
+    paths = {name: EVALS_ROOT / name for name in OCAML_SOURCES}
+    paths["suite.ml"] = path
+    sources = tuple((name, source.read_text()) for name, source in paths.items())
+    data = export_suite(sources, runner=(EVALS_ROOT / "check.sh").read_text())
     return _parsed_suite(data)
 
 

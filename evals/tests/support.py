@@ -1,5 +1,6 @@
 """Run scripted agents through Inspect for integration tests."""
 
+import json
 import shutil
 from pathlib import Path
 
@@ -39,3 +40,20 @@ def sample_result(sample: EvalSample) -> tuple[str, object, object]:
 
 def results(log: EvalLog) -> list[tuple[str, object, object]]:
     return sorted(sample_result(sample) for sample in log.samples or [])
+
+
+def ocaml_timeout_case(*, id_expression: str, initial: str, requested: str) -> str:
+    return f"""Eval.case ~id:({id_expression})
+  ~fixture:(Fixtures.Preflight.fixture ~timeout:({initial}))
+  ~task:(Task.Preflight.change_timeout ~initial:({initial}) ~requested:({requested}))
+  ~checks:(Check.Preflight.defaults ~timeout:({requested}))
+  ~allowed_files:["config.ml"; "client.ml"]
+  ~reference:(Reference.preflight ~timeout:({requested}))"""
+
+
+def ocaml_choice_case(*, case_id: str, a: int, b: int) -> str:
+    choice = "A" if a < b else "B"
+    return f"""Eval.case ~id:{json.dumps(case_id)} ~fixture:Fixture.empty
+  ~task:(Task.Decision.cheaper ~a:{a} ~b:{b})
+  ~checks:(Check.choice {choice}) ~allowed_files:[]
+  ~reference:(Reference.reply ~answer:(Choice {choice}) ~reason:"The cost is lower.")"""

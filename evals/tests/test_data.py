@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from evals.answers import grade_answer, unfence
 from evals.cases import Case, case_by_id, load_cases
 from evals.profiles import content_hash, files_for, prompt_for, samples
+from evals.tests.support import ocaml_choice_case, ocaml_timeout_case
 
 
 def test_manifest_roundtrip() -> None:
@@ -134,12 +135,12 @@ def test_json_fences(text: str, expected: str) -> None:
 
 def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
-    suite.write_text("""open Fixtures
-let cases = List.init 200 (fun i ->
-  Preflight.case ~id:(Printf.sprintf "timeout-%d" i)
-    ~initial_timeout:15 ~requested_timeout:(30 + i))
-let () = emit cases
-""")
+    expression = ocaml_timeout_case(
+        id_expression='Printf.sprintf "timeout-%d" i',
+        initial="15",
+        requested="30 + i",
+    )
+    suite.write_text(f"let cases = List.init 200 (fun i -> {expression})\n")
     cases = load_cases(suite)
     assert len(cases) == 200
     assert cases[199].solution["config.ml"] == "let timeout_seconds = 229\n"
@@ -154,19 +155,16 @@ def test_generated_artifacts_stay_out_of_sample_metadata() -> None:
 
 def test_duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
-    suite.write_text("""open Fixtures
-let c = Decision.cheaper ~id:"duplicate" ~a:10 ~b:8
-let () = emit [c; c]
-""")
+    expression = ocaml_choice_case(case_id="duplicate", a=10, b=8)
+    suite.write_text(f"let c = {expression}\nlet cases = [c; c]\n")
     with pytest.raises(ValueError, match="unique"):
         load_cases(suite)
 
 
 def test_new_decision_ids_and_reversed_costs_need_no_registry_entry(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
-    suite.write_text("""open Fixtures
-let () = emit [Decision.cheaper ~id:"new-choice" ~a:4 ~b:8]
-""")
+    expression = ocaml_choice_case(case_id="new-choice", a=4, b=8)
+    suite.write_text(f"let cases = [{expression}]\n")
     case = load_cases(suite)[0]
     assert grade_answer(case.grading, case.answer, expected=case.expected)
     assert not grade_answer(
@@ -176,10 +174,14 @@ let () = emit [Decision.cheaper ~id:"new-choice" ~a:4 ~b:8]
 
 def test_exporter_escapes_strings(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
-    suite.write_text(r"""open Fixtures
-let c = Decision.cheaper ~id:"escaped" ~a:10 ~b:8
-let () = emit [{ c with prompt = "quote\" slash\\ newline\n tab\t return\r zero\000 é" }]
-""")
+    expression = ocaml_choice_case(case_id="escaped", a=10, b=8)
+    suite.write_text(
+        f"let c = {expression}\n"
+        + r"""
+let text = "quote\" slash\\ newline\n tab\t return\r zero\000 é"
+let cases = [{ c with task = { c.task with prompt = text } }]
+"""
+    )
     assert load_cases(suite)[0].prompt == 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
 
 
@@ -193,12 +195,14 @@ def test_cached_cases_do_not_share_mutable_contents() -> None:
 
 def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
-    source = 'open Fixtures\nlet () = emit [Decision.cheaper ~id:"cache" ~a:10 ~b:8]\n'
+    expression = ocaml_choice_case(case_id="cache", a=10, b=8)
+    source = f"let cases = [{expression}]\n"
     suite.write_text(source)
     with patch("evals.cases.subprocess.run", wraps=subprocess.run) as compiler:
         first = load_cases(suite)
         assert load_cases(suite) == first
         assert compiler.call_count == 1
-        suite.write_text(source.replace("~a:10", "~a:4"))
+        changed = ocaml_choice_case(case_id="cache", a=4, b=8)
+        suite.write_text(f"let cases = [{changed}]\n")
         assert load_cases(suite)[0].expected == {"choice": "A"}
         assert compiler.call_count == 2

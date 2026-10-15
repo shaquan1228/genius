@@ -7,6 +7,7 @@ import pytest
 
 from evals.cases import EVALS_ROOT, Case, load_cases
 from evals.scoring import heldout_check
+from evals.tests.support import ocaml_timeout_case
 
 CASES = {case.id: case for case in load_cases()}
 RUNNER = EVALS_ROOT / "check.sh"
@@ -120,7 +121,7 @@ def test_visible_check_command_leaves_no_build_files(
     seed(case_id, tmp_path)
     before = snapshot(tmp_path)
     result = subprocess.run(
-        ["sh", "check.sh", "examples.ml", *modules],
+        ["sh", "check.sh", *modules],
         cwd=tmp_path,
         capture_output=True,
         timeout=30,
@@ -133,18 +134,20 @@ def test_visible_check_command_leaves_no_build_files(
     "expression,filename,fragment",
     [
         (
-            'Preflight.case ~id:"variant" ~initial_timeout:7 ~requested_timeout:17',
+            ocaml_timeout_case(id_expression='"variant"', initial="7", requested="17"),
             "config.ml",
             "let timeout_seconds = 7",
         ),
         (
-            'Preflight.case ~id:"variant" ~initial_timeout:30 ~requested_timeout:229',
+            ocaml_timeout_case(id_expression='"variant"', initial="30", requested="229"),
             "config.ml",
             "let timeout_seconds = 30",
         ),
         (
-            'Receipt.case ~id:"variant" ~bug:Receipt.Clamp_quantity '
-            "~examples:[ ([(3., 0)], 0.); ([(3., 4)], 12.) ]",
+            """Eval.case ~id:"variant"
+  ~fixture:(Fixtures.Receipt.fixture ~bug:Clamp_quantity) ~task:Task.Receipt.fix_total
+  ~checks:(Check.Receipt.total [ ([(3., 0)], 0.); ([(3., 4)], 12.) ])
+  ~allowed_files:["receipt.ml"] ~reference:Reference.receipt""",
             "receipt.ml",
             "max quantity 1",
         ),
@@ -157,7 +160,7 @@ def test_family_variants_generate_working_seeds_and_solutions(
     tmp_path: Path,
 ) -> None:
     suite = tmp_path / "suite.ml"
-    suite.write_text(f"open Fixtures\nlet () = emit [{expression}]\n")
+    suite.write_text(f"let cases = [{expression}]\n")
     case = load_cases(suite)[0]
     assert fragment in case.files[filename]
     work = tmp_path / "workspace"

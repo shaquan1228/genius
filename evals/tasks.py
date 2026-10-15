@@ -4,7 +4,7 @@ from inspect_ai import Task, task
 from inspect_ai.model import GenerateConfig
 
 from evals.agents import DEFAULT_VERSIONS, AgentKind, coding_agent
-from evals.cases import EVALS_ROOT, Profile
+from evals.cases import EVALS_ROOT, OCAML_SOURCES, Profile
 from evals.profiles import content_hash, instruction_files, samples
 from evals.scoring import correctness, scope
 from evals.workspace import prepare
@@ -30,7 +30,11 @@ def build_task(profile: Profile, *, agent: AgentKind, version: str) -> Task:
             "agent_version": agent_version,
             "instructions_sha256": content_hash(instruction_files()),
             "fixtures_sha256": content_hash(
-                {name: str(EVALS_ROOT / name) for name in ("fixtures.ml", "check.sh")}
+                {
+                    name: str(EVALS_ROOT / name)
+                    for name in (*OCAML_SOURCES, "check.sh")
+                    if name != "suite.ml"
+                }
             ),
             "cases_sha256": content_hash({"suite.ml": str(EVALS_ROOT / "suite.ml")}),
         },

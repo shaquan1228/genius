@@ -46,7 +46,6 @@ async def mutate(state: TaskState, mode: Mode) -> None:
         await execute(["git", *GIT_IDENTITY, "commit", "-q", "-m", "Agent commit"])
     if mode == "tampered-checks":
         await sandbox().write_file("workspace/check.sh", "#!/bin/sh\nexit 0\n")
-        await sandbox().write_file("workspace/examples.ml", "let check ~name _ _ = ()\n")
     if mode == "instructions":
         await sandbox().write_file("instructions/skills/reasoning/SKILL.md", "Corrupted")
 

@@ -5,15 +5,25 @@
 Both frameworks use the MIT license. Model calls and compute can cost money.
 
 Inspect owns execution, repeats, model calls, limits, scoring, and logs.
-Case authors edit two OCaml files:
+`suite.ml` is a pure list of eval definitions. Each definition explicitly composes
+its starting project, task, checks, edit scope, and offline reference. Adding cases
+adds values; it creates no checked-in fixture, grader, or solution files.
 
-- `suite.ml` contains case values and parameter lists.
-- `fixtures.ml` contains reusable family builders that generate public files,
-  private checks, and reference edits.
+The OCaml modules have separate responsibilities:
 
-Adding 200 timeout cases means adding 200 values, or one `List.init`, to the suite.
-It creates no checked-in fixture, grader, or solution files. Python supplies the
-Inspect adapter, instruction profiles, agent settings, and hosted execution.
+| Module | Owns |
+| --- | --- |
+| `fixture.mli` / `fixture.ml` | Abstract immutable file collections, duplicate detection, explicit overlays |
+| `fixtures.ml` | Parameterized starting projects and their visible tests |
+| `check.ml` | Expected behavior and private assertion generation |
+| `task.ml` | Prompts and selected skills |
+| `reference.ml` | Known edits and replies for offline harness verification |
+| `eval.ml` | Case assembly with explicit edit scope |
+| `suite.ml` | Pure case declarations |
+| `inspect_export.ml` | Inspect wire format and the executable exporter entry point |
+
+Python adapts this data to Inspect and handles agent sessions, scoring, logs, and
+Hugging Face execution. Domain modules have no JSON or Inspect dependencies.
 
 ## Check the harness offline
 
@@ -97,42 +107,54 @@ Inspect reports each score separately. Scores are not inferred from agent claims
 
 ## Author cases
 
-`suite.ml` defines the suite with typed family constructors:
+A suite declares the parts of a case explicitly:
 
 ```ocaml
-open Fixtures
-
 let cases = [
-  Receipt.case ~id:"quantity" ~bug:Receipt.Ignore_quantity
-    ~examples:[ ([(3., 4)], 12.); ([(3., 0)], 0.) ];
-  Preflight.case ~id:"timeout-30" ~initial_timeout:15 ~requested_timeout:30;
-  Decision.cheaper ~id:"lower-cost" ~a:10 ~b:8;
+  Eval.case ~id:"quantity"
+    ~fixture:(Fixtures.Receipt.fixture ~bug:Ignore_quantity)
+    ~task:Task.Receipt.fix_total
+    ~checks:(Check.Receipt.total [ ([(3., 4)], 12.); ([(3., 0)], 0.) ])
+    ~allowed_files:["receipt.ml"]
+    ~reference:Reference.receipt;
 ]
-
-let () = emit cases
 ```
 
-A case ID has no registry entry or matching directory. For a larger family:
+The fixture does not choose the prompt, expectations, reference answer, or edit
+scope. Scope is declared independently of reference edits. A suite may reuse a
+fixture with different tasks or checks. `Fixture.of_files` rejects duplicate
+paths; `Fixture.overlay base overrides` explicitly replaces matching paths and
+leaves both inputs unchanged.
+
+Use helpers inside a suite to describe larger parameter sets:
 
 ```ocaml
-let cases = List.init 200 (fun i ->
-  Preflight.case ~id:(Printf.sprintf "timeout-%d" i)
-    ~initial_timeout:15 ~requested_timeout:(30 + i))
+let timeout_case i =
+  let requested = 30 + i in
+  Eval.case ~id:(Printf.sprintf "timeout-%d" i)
+    ~fixture:(Fixtures.Preflight.fixture ~timeout:15)
+    ~task:(Task.Preflight.change_timeout ~initial:15 ~requested)
+    ~checks:(Check.Preflight.defaults ~timeout:requested)
+    ~allowed_files:["config.ml"; "client.ml"]
+    ~reference:(Reference.preflight ~timeout:requested)
+
+let cases = List.init 200 timeout_case
 ```
 
-Family builders generate the buggy project, visible tests, held-out checks, and
-reference edits from these values. Receipt expectations are explicit input/output
-tables, independent of its reference implementation. Preflight checks compare
-both defaults against the requested value and independently test overrides and
-invalid input. Decision cases share output schemas by kind, so new IDs and costs
-need no Python edits. Add a new builder in `fixtures.ml` for a different task
-shape; variations use its existing parameters.
+A new starting-project shape belongs in `fixtures.ml`; a new property belongs in
+`check.ml`. Prompts live in `task.ml`. Reference edits live in `reference.ml` and
+are used only by offline scripted agents. Case IDs have no matching directory or
+Python registry entry. The `Check.choice` constructor uses the closed `A | B`
+type, while decision replies and expected values are separate explicit inputs.
 
 ## Execution boundary
 
-The host compiles `fixtures.ml` and `suite.ml` in a temporary directory and reads
-the resulting JSON into memory. Compilation and validated case indexes are cached
-by source contents; changing the suite, families, or runner invalidates the cache.
+The host compiles the fixed OCaml module set in a temporary directory.
+`inspect_export.ml` consumes `Suite.cases` and emits the Inspect data as JSON; the
+host reads that output into memory. Importing `Suite` itself has no output or
+execution side effects. Compilation and validated case indexes are cached
+by source contents; changing any module, interface, or the runner invalidates
+the cache.
 No generated files are written into this checkout. Both local checks and the
 hosted Job need OCaml 4.13+; the hosted bootstrap installs Debian's `ocaml-nox`.
 
@@ -146,21 +168,21 @@ up after success or failure, leaving no compiler artifacts in the measured
 worktree. A generated workspace can run its visible checks with, for example:
 
 ```sh
-sh check.sh examples.ml receipt.ml test_receipt.ml
+sh check.sh receipt.ml test_receipt.ml
 ```
 
 After the agent finishes, the grader sends the generated private OCaml checks to
 the sandbox through standard input, using the host's trusted runner. A fresh
 completion marker appears after every assertion; successful early exits without
-that marker fail correctness. Private checks embed their own trusted helper, so
-changing visible tests or helpers cannot make the seeded bugs pass. The marker
+that marker fail correctness. Private checks contain independent assertions, so changing visible tests or the
+agent's copy of the runner cannot make the seeded bugs pass. The marker
 checks completion; it does not isolate hostile code sharing the grader process.
 
 Scope checks compare the final worktree against its original commit.
 They detect agent commits, untracked files, ignored files, and changed instructions.
 
 The four cases cover clear-task completion, known preflight fields, numeric choice, and hindsight after one loss.
-Task prompts, sources, and assertions are generated from `suite.ml` and `fixtures.ml`.
+The suite composes sources, prompts, and assertions from their respective modules.
 Decision schemas check selected conclusions and bounded explanations, not explanation quality.
 Question usefulness and reasoning quality require human review of saved traces.
 These small regression tasks do not establish that Genius improves performance overall.
