@@ -35,6 +35,7 @@ make -C evals check
 ```
 
 This installs locked dependencies, checks strict typing, runs tests, and enforces CRAP ≤5.
+`make -C evals lint-ocaml` compiles the OCaml modules with every warning as an error.
 Tests exercise Inspect's real engine with its mock model and scripted test agents.
 They use temporary local sandboxes, requiring no Docker or API keys.
 Scripted passes verify the harness; they do not measure Genius performance.
@@ -114,7 +115,10 @@ let cases = [
   Eval.case ~id:"quantity"
     ~fixture:(Fixtures.Receipt.fixture ~bug:Ignore_quantity)
     ~task:Task.Receipt.fix_total
-    ~checks:(Check.Receipt.total [ ([(3., 4)], 12.); ([(3., 0)], 0.) ])
+    ~checks:Check.Receipt.(totals [
+      expect ~items:[ item ~price:3.0 ~quantity:4 ] ~total:12.0;
+      expect ~items:[ item ~price:3.0 ~quantity:0 ] ~total:0.0;
+    ])
     ~allowed_files:["receipt.ml"]
     ~reference:Reference.receipt;
 ]
@@ -124,7 +128,9 @@ The fixture does not choose the prompt, expectations, reference answer, or edit
 scope. Scope is declared independently of reference edits. A suite may reuse a
 fixture with different tasks or checks. `Fixture.of_files` rejects duplicate
 paths; `Fixture.overlay base overrides` explicitly replaces matching paths and
-leaves both inputs unchanged.
+leaves both inputs unchanged. `Eval.case` rejects checks that read files missing
+from the fixture and reference edits outside `allowed_files`; the error names the
+case and the files.
 
 Use helpers inside a suite to describe larger parameter sets:
 

@@ -3,9 +3,12 @@ let cases = [
   Eval.case ~id:"clear-task"
     ~fixture:(Fixtures.Receipt.fixture ~bug:Ignore_quantity)
     ~task:Task.Receipt.fix_total
-    ~checks:(Check.Receipt.total [
-      ([], 0.); ([(3., 4)], 12.); ([(3., 0)], 0.);
-      ([(2., 3); (4., 2)], 14.); ([(1.5, 2)], 3.);
+    ~checks:Check.Receipt.(totals [
+      expect ~items:[] ~total:0.0;
+      expect ~items:[ item ~price:3.0 ~quantity:4 ] ~total:12.0;
+      expect ~items:[ item ~price:3.0 ~quantity:0 ] ~total:0.0;
+      expect ~items:[ item ~price:2.0 ~quantity:3; item ~price:4.0 ~quantity:2 ] ~total:14.0;
+      expect ~items:[ item ~price:1.5 ~quantity:2 ] ~total:3.0;
     ])
     ~allowed_files:["receipt.ml"] ~reference:Reference.receipt;
   Eval.case ~id:"known-preflight"

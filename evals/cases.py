@@ -48,11 +48,12 @@ def export_suite(sources: tuple[tuple[str, str], ...], *, runner: str) -> str:
     with TemporaryDirectory(prefix="genius-suite-") as directory:
         for name, contents in (*sources, ("check.sh", runner)):
             (Path(directory) / name).write_text(contents)
+        # Compiler and assembly errors stay on stderr so suite authors can read them.
         return subprocess.run(
             ["sh", "check.sh", *(name for name, _ in sources)],
             cwd=directory,
             check=True,
-            capture_output=True,
+            stdout=subprocess.PIPE,
             text=True,
             timeout=30,
         ).stdout

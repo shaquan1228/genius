@@ -49,12 +49,17 @@ let case (case : Eval.t) =
         kind, [], Json.Null, answer_fields answer in
   let solution, answer = reference case.reference in
   Json.Object [
-    "id", Json.String case.id; "skill", Json.String case.task.skill;
-    "prompt", Json.String case.task.prompt; "files", Json.files (Fixture.files case.fixture);
+    "id", Json.String case.id;
+    "skill", Json.String case.task.skill;
+    "prompt", Json.String case.task.prompt;
+    "files", Json.files (Fixture.files case.fixture);
     "allowed_files", Json.strings case.allowed_files;
-    "grading", Json.String grading; "sources", Json.strings sources;
-    "heldout", heldout; "expected", Json.Object expected;
-    "solution", solution; "answer", Json.String answer;
+    "grading", Json.String grading;
+    "sources", Json.strings sources;
+    "heldout", heldout;
+    "expected", Json.Object expected;
+    "solution", solution;
+    "answer", Json.String answer;
   ]
 
 let () = print_endline (Json.encode (Json.List (List.map case Suite.cases)))

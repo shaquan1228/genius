@@ -146,7 +146,10 @@ def test_visible_check_command_leaves_no_build_files(
         (
             """Eval.case ~id:"variant"
   ~fixture:(Fixtures.Receipt.fixture ~bug:Clamp_quantity) ~task:Task.Receipt.fix_total
-  ~checks:(Check.Receipt.total [ ([(3., 0)], 0.); ([(3., 4)], 12.) ])
+  ~checks:Check.Receipt.(totals [
+    expect ~items:[ item ~price:3.0 ~quantity:0 ] ~total:0.0;
+    expect ~items:[ item ~price:3.0 ~quantity:4 ] ~total:12.0;
+  ])
   ~allowed_files:["receipt.ml"] ~reference:Reference.receipt""",
             "receipt.ml",
             "max quantity 1",

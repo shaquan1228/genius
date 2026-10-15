@@ -12,18 +12,22 @@ let choice expected = Answer (Choice expected)
 let review ~supported ~change_rule = Answer (Review { supported; change_rule })
 
 module Receipt = struct
-  type example = (float * int) list * float
+  type item = { price : float; quantity : int }
+  type example = { items : item list; total : float }
+
+  let item ~price ~quantity = { price; quantity }
+  let expect ~items ~total = { items; total }
 
   let number value =
     if not (Float.is_finite value) then invalid_arg "Receipt examples must be finite";
     Float.to_string value
 
-  let total examples =
-    let assertion (items, expected) =
-      let item (price, quantity) = Printf.sprintf "(%s, %d)" (number price) quantity in
-      "Receipt.total [" ^ String.concat "; " (List.map item items) ^ "] = " ^ number expected
-    in
-    ocaml ~sources:["receipt.ml"] ~assertions:(List.map assertion examples)
+  let assertion { items; total } =
+    let literal { price; quantity } = Printf.sprintf "(%s, %d)" (number price) quantity in
+    let items = String.concat "; " (List.map literal items) in
+    Printf.sprintf "Receipt.total [%s] = %s" items (number total)
+
+  let totals examples = ocaml ~sources:["receipt.ml"] ~assertions:(List.map assertion examples)
 end
 
 module Preflight = struct

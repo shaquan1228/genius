@@ -19,11 +19,14 @@ def test_manifest_roundtrip() -> None:
     assert [Case.model_validate(case.model_dump()) for case in cases] == cases
 
 
-def test_invalid_ocaml_suite_is_rejected(tmp_path: Path) -> None:
+def test_invalid_ocaml_suite_is_rejected(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
     path = tmp_path / "suite.ml"
     path.write_text("this is not valid OCaml")
     with pytest.raises(subprocess.CalledProcessError):
         load_cases(path)
+    assert 'File "suite.ml"' in capfd.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -159,6 +162,45 @@ def test_duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
     suite.write_text(f"let c = {expression}\nlet cases = [c; c]\n")
     with pytest.raises(ValueError, match="unique"):
         load_cases(suite)
+
+
+@pytest.mark.parametrize(
+    "fixture,allowed_files,message",
+    [
+        (
+            "Fixtures.Preflight.fixture ~timeout:15",
+            '["receipt.ml"]',
+            "checks read files missing from the fixture: receipt.ml",
+        ),
+        (
+            "Fixtures.Receipt.fixture ~bug:Ignore_quantity",
+            '["config.ml"]',
+            "reference edits files outside allowed_files: receipt.ml",
+        ),
+    ],
+)
+def test_case_parts_must_agree_on_files(
+    fixture: str,
+    allowed_files: str,
+    message: str,
+    tmp_path: Path,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    suite = tmp_path / "suite.ml"
+    suite.write_text(
+        f"""let cases = [Eval.case ~id:"mismatch" ~fixture:({fixture})
+  ~task:Task.Receipt.fix_total ~checks:Check.Receipt.(totals [ expect ~items:[] ~total:0.0 ])
+  ~allowed_files:{allowed_files} ~reference:Reference.receipt]
+"""
+    )
+    with pytest.raises(subprocess.CalledProcessError):
+        load_cases(suite)
+    assert f"Case mismatch: {message}" in capfd.readouterr().err
+
+
+def test_prompts_name_their_scope_and_answer_fields() -> None:
+    for case in load_cases():
+        assert all(name in case.prompt for name in [*case.allowed_files, *case.expected]), case.id
 
 
 def test_new_decision_ids_and_reversed_costs_need_no_registry_entry(tmp_path: Path) -> None:

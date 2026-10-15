@@ -61,7 +61,8 @@ def test_checks_compile_without_fixture_modules(tmp_path: Path) -> None:
             tmp_path,
             ["check.ml"],
             """
-let () = match Check.Receipt.total [ ([(3., 4)], 12.) ] with
+let checks = Check.Receipt.(totals [ expect ~items:[ item ~price:3.0 ~quantity:4 ] ~total:12.0 ])
+let () = match checks with
   | Check.Code { sources; program } ->
       assert (sources = ["receipt.ml"]);
       assert (String.length program > 0)
@@ -84,7 +85,7 @@ let () =
   let original = List.hd Suite.cases in
   let changed = { original with
     Eval.task = Task.make ~skill:"reasoning" ~prompt:"A different instruction";
-    checks = Check.Receipt.total [ ([(3., 4)], 99.) ];
+    checks = Check.Receipt.(totals [ expect ~items:[] ~total:99.0 ]);
     allowed_files = [];
   } in
   assert (List.length Suite.cases = 4);
