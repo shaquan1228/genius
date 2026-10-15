@@ -59,7 +59,7 @@ async def tamper_runner(case: Case) -> None:
 
 
 async def exit_early(case: Case) -> None:
-    for name in case.allowed_files:
+    for name in case.solution:
         path = f"workspace/{name}"
         source = await sandbox().read_file(path)
         await sandbox().write_file(path, "let () = exit 0\n" + source)

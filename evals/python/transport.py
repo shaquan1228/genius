@@ -14,7 +14,7 @@ from pathlib import Path
 from secrets import token_hex
 from tempfile import TemporaryDirectory
 from types import MappingProxyType
-from typing import Annotated, Final, Literal
+from typing import Annotated, Final
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, PlainSerializer, TypeAdapter
 
@@ -45,7 +45,6 @@ EXPORTER: Final = OCAML_ROOT / "transport.ml"
 RUNNER: Final = OCAML_ROOT / "check.sh"
 
 FROZEN: Final = ConfigDict(strict=True, extra="forbid", frozen=True)
-SourceName = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*\.ml$")]
 FileName = Annotated[str, Field(pattern=r"^[a-zA-Z_][a-zA-Z0-9_.-]*$")]
 Files = Annotated[Mapping[FileName, str], AfterValidator(MappingProxyType), PlainSerializer(dict)]
 
@@ -55,31 +54,15 @@ class CodeChecks(BaseModel):
 
     model_config = FROZEN
 
-    kind: Literal["code"]
-    sources: tuple[SourceName, ...]
+    sources: tuple[FileName, ...]
     program: str
-
-    def tools(self) -> Mapping[str, str]:
-        """The runner that task prompts call `check.sh`."""
-        return MappingProxyType({RUNNER.name: RUNNER.read_text()})
-
-
-class AnswerChecks(BaseModel):
-    """Opaque response grading strategy; policy stays in the kernel."""
-
-    model_config = FROZEN
-
-    kind: Literal["answer"]
-
-    def tools(self) -> Mapping[str, str]:
-        return MappingProxyType({})
-
-
-Checks = Annotated[CodeChecks | AnswerChecks, Field(discriminator="kind")]
 
 
 class Case(BaseModel):
-    """One exported case. Every field is read-only, so cached cases are safe to share."""
+    """One exported case. Every field is read-only, so cached cases are safe to share.
+
+    Answer cases have no checks: the kernel grades their replies.
+    """
 
     model_config = FROZEN
 
@@ -87,8 +70,7 @@ class Case(BaseModel):
     skill: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     prompt: str
     files: Files
-    allowed_files: tuple[FileName, ...]
-    checks: Checks
+    checks: CodeChecks | None
     solution: Files
     answer: str
 
@@ -173,8 +155,9 @@ def case_by_id(case_id: str) -> Case:
 
 
 def workspace_files(case: Case) -> Mapping[str, str]:
-    """Starting files plus any tools the case's checks give the agent."""
-    return MappingProxyType({**case.files, **case.checks.tools()})
+    """Starting files, plus the runner that code-case prompts call `check.sh`."""
+    tools = {} if case.checks is None else {RUNNER.name: RUNNER.read_text()}
+    return MappingProxyType({**case.files, **tools})
 
 
 def heldout_check(checks: CodeChecks) -> tuple[list[str], str, str]:
