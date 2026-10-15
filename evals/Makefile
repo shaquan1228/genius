@@ -36,7 +36,7 @@ check-ocaml-format:
 # Compile temporary copies in dependency order so no build files enter the checkout.
 lint-ocaml:
 	@command -v ocamlfind >/dev/null || { echo "Install OCaml 4.13+, ocamlfind and Jsonm for kernel checks." >&2; exit 1; }
-	sh -n ocaml/check.sh
+	sh -n bin/enforce
 	@for adapter in ocaml/datasets/*.ml; do \
 	  build_dir=$$(mktemp -d) && \
 	  (trap 'rm -rf "$$build_dir"' EXIT; \

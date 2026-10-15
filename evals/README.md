@@ -292,9 +292,10 @@ case ID. Private checks and reference edits stay in the host's case index; they
 are not copied into sample metadata or the agent workspace. Only the offline
 scripted test agent applies the reference edits.
 
-`ocaml/check.sh` is the shared compiler runner. It compiles temporary copies and cleans
+`bin/enforce` is the shared compiler runner. It compiles temporary copies and cleans
 up after success or failure, leaving no compiler artifacts in the measured
-worktree. A generated workspace can run its visible checks with, for example:
+worktree. Evaluation tasks receive it as `check.sh`, so a generated workspace can
+run its visible checks with, for example:
 
 ```sh
 sh check.sh receipt.ml test_receipt.ml
