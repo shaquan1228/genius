@@ -101,8 +101,8 @@ GitHub Actions minutes are free for this public repository.
   `hf_host.sh`, streams the Job logs, and fails if the Job fails. Add an `HF_TOKEN`
   repository secret with write access. HF Inference Providers models use this same
   token, with inference permission; no separate provider key is required. Add
-  `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` only for direct calls to those providers. The `HF_NAMESPACE`
-  repository variable defaults to the repository owner.
+  `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` only for direct calls to those providers.
+  The `HF_NAMESPACE` repository variable defaults to the repository owner.
 
 GitHub dispatches only workflows that exist on the default branch. Before this
 workflow reaches `main`, launch from a local checkout with `sh evals/hf_host.sh`;
@@ -129,11 +129,14 @@ merge. The private source repository and results bucket already exist for
 ```sh
 uvx --from huggingface_hub==2.2.0 hf auth whoami
 export HF_NAMESPACE='shaquan1228'
-export EVAL_MODEL='hf-inference-providers/openai/gpt-oss-20b'
+export EVAL_MODEL='hf-inference-providers/openai/gpt-oss-20b:nscale'
 sh evals/hf_host.sh
 ```
 
 That first example runs the Codex harness against a Hugging Face hosted model.
+The `:nscale` suffix pins its inference provider. The automatic Groq route
+returned malformed tool names during smoke testing; use an explicit provider
+when comparing runs.
 To evaluate the target Codex or Claude models, use `openai/<pinned-model-id>`
 with `OPENAI_API_KEY` or `anthropic/<pinned-model-id>` with `ANTHROPIC_API_KEY`.
 Set the matching key in your shell or secret manager before launching the Job.
@@ -148,7 +151,8 @@ the full 40-session comparison.
 changes before running it. It creates a private dataset repository containing
 the evaluation source, a private results bucket, and a Hugging Face Job. The
 launcher streams logs and waits for the final Job status; it exits nonzero if the
-Job fails. The Job runs Inspect and launches a dedicated Hugging Face Sandbox VM for each sample.
+Job fails. The Job runs Inspect and launches a dedicated Hugging Face Sandbox VM
+for each sample.
 Only task files and the selected skill enter that VM; held-out checks stay in
 the Job and run against the VM after the agent finishes. The script prints the
 Job ID. Watch it at `https://huggingface.co/jobs/shaquan1228/<job-id>` or with:
@@ -165,8 +169,10 @@ under `live/`.
 
 Both profiles share the selected model, agent version, effort, tools, and limits.
 Every sample and epoch starts with fresh task files and a fresh agent session.
-Codex configuration and session state live under `/tmp/genius-codex`, outside
+Codex configuration and session state live under `/root/genius-codex`, outside
 the measured repository, so harness bookkeeping does not count as agent edits.
+Codex refuses to install its `apply_patch` helper when its home is under `/tmp`.
+Login shells are disabled so shell startup files do not discard the helper's `PATH` entry.
 The agent's `attempts=1` prevents retries after a failed submission within one
 session; epochs provide independent attempts for estimating pass rates.
 Agent retries and model-response caching are disabled. Provider transport retries retain Inspect defaults.

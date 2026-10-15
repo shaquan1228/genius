@@ -51,10 +51,13 @@ def test_codex_options_disable_network() -> None:
         "version": "0.137.0",
         "attempts": 1,
         "web_search": "disabled",
-        "home_dir": "/tmp/genius-codex",
+        "home_dir": "/root/genius-codex",
         "network_access": False,
         "retry_refusals": 0,
-        "config_overrides": {"model_reasoning_effort": '"medium"'},
+        "config_overrides": {
+            "model_reasoning_effort": '"medium"',
+            "allow_login_shell": "false",
+        },
     }
 
 

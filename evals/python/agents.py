@@ -33,10 +33,13 @@ AGENT_REGISTRY: dict[AgentKind, AgentSpec] = {
         factory=lambda: codex_cli,
         options={
             "web_search": "disabled",
-            "home_dir": "/tmp/genius-codex",
+            "home_dir": "/root/genius-codex",
             "network_access": False,
             "retry_refusals": 0,
-            "config_overrides": {"model_reasoning_effort": '"medium"'},
+            "config_overrides": {
+                "model_reasoning_effort": '"medium"',
+                "allow_login_shell": "false",
+            },
         },
     ),
 }

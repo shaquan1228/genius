@@ -5,7 +5,8 @@ on:
   workflow_dispatch:
     inputs:
       model:
-        description: Exact Inspect provider/model ID, for example hf-inference-providers/openai/gpt-oss-20b
+        description: Exact Inspect provider/model ID, for example hf-inference-providers/openai/gpt-oss-20b:nscale
+        default: hf-inference-providers/openai/gpt-oss-20b:nscale
         required: true
         type: string
       epochs:

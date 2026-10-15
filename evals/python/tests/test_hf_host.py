@@ -223,7 +223,7 @@ def test_host_script_uses_hf_model_without_provider_key(
     calls = tmp_path / "calls.txt"
     monkeypatch.setenv("HF_CALLS", str(calls))
     monkeypatch.setenv("HF_NAMESPACE", "example")
-    monkeypatch.setenv("EVAL_MODEL", "hf-inference-providers/openai/gpt-oss-20b")
+    monkeypatch.setenv("EVAL_MODEL", "hf-inference-providers/openai/gpt-oss-20b:nscale")
     monkeypatch.delenv("EVAL_AGENT", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
@@ -237,7 +237,10 @@ def test_host_script_uses_hf_model_without_provider_key(
     )
     assert result.returncode == 0, result.stderr.decode()
     commands = calls.read_text()
-    assert "--secrets HF_TOKEN --env EVAL_AGENT=codex" in commands
+    assert (
+        "--secrets HF_TOKEN --env EVAL_AGENT=codex" in commands,
+        "--env EVAL_MODEL=hf-inference-providers/openai/gpt-oss-20b:nscale" in commands,
+    ) == (True, True)
     assert "OPENAI_API_KEY" not in commands
 
 
@@ -267,8 +270,11 @@ def test_host_script_rejects_empty_provider_key(
 
 def test_hf_inference_provider_initializes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HF_TOKEN", "hf_test")
-    model = get_model("hf-inference-providers/openai/gpt-oss-20b")
-    assert model.name == "openai/gpt-oss-20b"
+    model = get_model("genius-hf/openai/gpt-oss-20b:nscale")
+    assert (model.name, model.api.canonical_name()) == (
+        "openai/gpt-oss-20b:nscale",
+        "openai/gpt-oss-20b",
+    )
 
 
 def test_cancelled_creation_kills_eventual_sandbox() -> None:
