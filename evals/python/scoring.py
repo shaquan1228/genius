@@ -1,5 +1,6 @@
 """Grade correctness and file scope independently of the agent's self-report."""
 
+from collections.abc import Mapping
 from typing import assert_never, cast
 
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer, stderr
@@ -19,14 +20,15 @@ from evals.python.verification import Verifier
 from evals.python.workspace import changed_files
 
 
-def score_value(*, passed: bool) -> str:
-    return CORRECT if passed else INCORRECT
+def score_values(scores: Mapping[str, bool]) -> dict[str, str]:
+    return {name: CORRECT if passed else INCORRECT for name, passed in scores.items()}
 
 
-async def score_correctness(state: TaskState, target: Target) -> Score:  # noqa: PLR0917 - Inspect calls scorers positionally
+async def score_sample(state: TaskState, target: Target) -> Score:  # noqa: PLR0917 - Inspect calls scorers positionally
     dataset = cast(Dataset, state.metadata.get("dataset", "smoke"))
     case = case_by_id(query=CaseQuery(case_id=str(state.metadata["case_id"]), selection=dataset))
     completion = state.output.completion
+    changed = tuple(sorted(await changed_files(state)))
     match case.checks:
         case ExecutableChecks() as checks:
             evidence, metadata = await Verifier(checks=checks, agent=sandbox()).verify()
@@ -42,42 +44,22 @@ async def score_correctness(state: TaskState, target: Target) -> Score:  # noqa:
         request=GradeRequest(
             case_id=case.id,
             response=completion,
-            changed_files=(),
+            changed_files=changed,
             verification=evidence,
             selection=dataset,
         )
     )
     return Score(
-        value=score_value(passed=scores["correctness"]),
+        value=score_values(scores=scores),
         explanation=explanation,
-        metadata={"verification": evidence.model_dump(), "verifier_metadata": metadata},
+        metadata={
+            "verification": evidence.model_dump(),
+            "verifier_metadata": metadata,
+            "changed_files": changed,
+        },
     )
 
 
-async def score_scope(state: TaskState, target: Target) -> Score:  # noqa: PLR0917 - Inspect calls scorers positionally
-    dataset = cast(Dataset, state.metadata.get("dataset", "smoke"))
-    case = case_by_id(query=CaseQuery(case_id=str(state.metadata["case_id"]), selection=dataset))
-    changed = tuple(sorted(await changed_files(state)))
-    scores = grade(
-        request=GradeRequest(
-            case_id=case.id,
-            response=state.output.completion,
-            changed_files=changed,
-            verification=Verification(status="unchecked"),
-            selection=dataset,
-        )
-    )
-    return Score(
-        value=score_value(passed=scores["scope"]),
-        explanation=f"Changed files: {list(changed)}",
-    )
-
-
-@scorer(metrics=[accuracy(), stderr()])
-def correctness() -> Scorer:
-    return score_correctness
-
-
-@scorer(metrics=[accuracy(), stderr()])
-def scope() -> Scorer:
-    return score_scope
+@scorer(metrics={name: [accuracy(), stderr()] for name in ("correctness", "scope")})
+def evaluation() -> Scorer:
+    return score_sample

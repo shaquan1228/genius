@@ -10,11 +10,13 @@ from inspect_ai.scorer import CORRECT, INCORRECT
 from evals.python.tasks import baseline, genius
 from evals.python.tests.scenarios import Mode
 from evals.python.tests.support import offline_run, results
-from evals.python.transport import Verification
+from evals.python.transport import Verification, grade
 
 
 def test_complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
-    logs = offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
+    with patch("evals.python.scoring.grade", wraps=grade) as grading:
+        logs = offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
+    assert grading.call_count == 16
     expected = [
         (case, CORRECT, CORRECT)
         for case in ["clear-task", "known-preflight", "small-decision", "decision-review"]
@@ -27,6 +29,8 @@ def test_complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
 def test_logs_reopen_with_scores_and_model_calls(tmp_path: Path) -> None:
     log = offline_run([baseline()], mode="pass", directory=tmp_path)[0]
     saved = read_eval_log(str(log.location))
+    assert saved.results is not None
+    assert {score.name for score in saved.results.scores} == {"correctness", "scope"}
     assert (saved.status, len(saved.samples or []), set(saved.stats.model_usage)) == (
         "success",
         4,

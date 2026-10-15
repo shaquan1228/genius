@@ -26,7 +26,6 @@ from pydantic import (
     Field,
     PlainSerializer,
     TypeAdapter,
-    model_validator,
 )
 
 from evals.python.paths import EVALS_ROOT
@@ -35,6 +34,7 @@ OCAML_ROOT: Final = EVALS_ROOT / "ocaml"
 LIBRARY: Final = tuple(
     OCAML_ROOT / name
     for name in (
+        "experiment.ml",
         "response.mli",
         "response.ml",
         "fixture.mli",
@@ -69,24 +69,9 @@ class ExecutableChecks(BaseModel):
     inputs: tuple[FileName, ...] = Field(min_length=1)
     files: Files
     tools: Files
-    command: tuple[str, ...] = Field(min_length=1)
+    command: tuple[Annotated[str, Field(min_length=1)], ...] = Field(min_length=1)
     stdin: str
     timeout_seconds: int = Field(gt=0)
-
-    @model_validator(mode="after")
-    def validate_specification(self) -> "ExecutableChecks":
-        names = (*self.inputs, *self.files, *self.tools)
-        if len(set(names)) != len(names):
-            raise ValueError("Verifier paths must be unique and disjoint")
-        if any(not argument for argument in self.command):
-            raise ValueError("Verifier command arguments cannot be empty")
-        return self
-
-    def validate_fixture(self, files: Files) -> None:
-        if not set(self.inputs) <= files.keys():
-            raise ValueError("Verifier inputs missing from fixture")
-        if (self.files.keys() | self.tools.keys()) & files.keys():
-            raise ValueError("Verifier artifacts overlap fixture")
 
 
 class Case(BaseModel):
@@ -104,17 +89,6 @@ class Case(BaseModel):
     checks: ExecutableChecks | None
     solution: Files
     answer: str
-
-    @model_validator(mode="after")
-    def validate_files(self) -> "Case":
-        match self.checks:
-            case ExecutableChecks() as checks:
-                checks.validate_fixture(files=self.files)
-            case None:
-                pass
-            case _ as unreachable:
-                assert_never(unreachable)
-        return self
 
 
 def decode(data: str) -> tuple[Case, ...]:
@@ -267,6 +241,36 @@ class BenchmarkInfo(BaseModel):
     evaluator_commit: str
     numpy_version: str
     psutil_version: str
+
+
+class ProfileSpec(BaseModel):
+    model_config = FROZEN
+
+    name: str
+    preamble: str
+    instructions: tuple[str, ...]
+
+
+class Experiment(BaseModel):
+    model_config = FROZEN
+
+    profiles: tuple[ProfileSpec, ...]
+    epochs: int = Field(gt=0)
+    message_limit: int = Field(gt=0)
+    token_limit: int = Field(gt=0)
+    time_limit: int = Field(gt=0)
+    cache: bool
+
+
+@lru_cache(maxsize=1)
+def _experiment(sources: Sources) -> Experiment:
+    return Experiment.model_validate_json(
+        _kernel(sources=sources).run(request=KernelRequest(arguments=("--experiment",)))
+    )
+
+
+def experiment() -> Experiment:
+    return _experiment(sources=_sources())
 
 
 def benchmark_info() -> BenchmarkInfo:

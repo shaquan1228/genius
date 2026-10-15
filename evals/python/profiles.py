@@ -3,13 +3,19 @@
 import base64
 import hashlib
 import json
-from dataclasses import dataclass
 from pathlib import Path
 
 from inspect_ai.dataset import Sample
 
 from evals.python.paths import REPO_ROOT
-from evals.python.transport import Case, Dataset, load_cases, workspace_files
+from evals.python.transport import (
+    Case,
+    Dataset,
+    ProfileSpec,
+    experiment,
+    load_cases,
+    workspace_files,
+)
 
 
 def inline_file(contents: str) -> str:
@@ -24,13 +30,8 @@ def content_hash(files: dict[str, str]) -> str:
     return hashlib.sha256(json.dumps(contents, sort_keys=True).encode()).hexdigest()
 
 
-@dataclass(frozen=True)
-class Profile:
+class Profile(ProfileSpec):
     """What a profile adds to every case: a prompt preamble and instruction folders."""
-
-    name: str
-    preamble: str = ""
-    instructions: tuple[str, ...] = ()
 
     def instruction_files(self) -> dict[str, str]:
         return {
@@ -66,12 +67,6 @@ class Profile:
         ]
 
 
-BASELINE = Profile("baseline")
-GENIUS = Profile(
-    "genius",
-    preamble=(
-        "Read ../instructions/skills/{skill}/SKILL.md and its referenced files. "
-        "Apply that skill to this task.\n\n"
-    ),
-    instructions=("docs", "skills"),
-)
+def load_profile(name: str) -> Profile:
+    spec = {value.name: value for value in experiment().profiles}[name]
+    return Profile.model_validate(spec.model_dump())

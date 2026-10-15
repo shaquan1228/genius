@@ -2,13 +2,17 @@
 
 import json
 import subprocess
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
 
-from evals.python.profiles import BASELINE, GENIUS, content_hash
+from evals.python import transport
+from evals.python.profiles import content_hash, load_profile
+from evals.python.tasks import TaskRequest, build_task
 from evals.python.tests.support import ocaml_choice_case, ocaml_timeout_case
 from evals.python.transport import (
     SUITE,
@@ -17,6 +21,7 @@ from evals.python.transport import (
     Verification,
     case_by_id,
     decode,
+    experiment,
     load_cases,
 )
 from evals.python.transport import grade as kernel_grade
@@ -70,29 +75,31 @@ def grade(case_id: str, *, text: str, suite: Path | None = None) -> bool:
 
 def test_profiles_share_fixture_files() -> None:
     case = load_cases()[0]
-    baseline = BASELINE.files(case)
-    genius = GENIUS.files(case)
+    baseline = load_profile(name="baseline").files(case)
+    genius = load_profile(name="genius").files(case)
     assert {key: genius[key] for key in baseline} == baseline
 
 
 def test_only_genius_receives_instructions() -> None:
     case = load_cases()[0]
     assert (
-        any(key.startswith("instructions/") for key in BASELINE.files(case)),
-        any(key.startswith("instructions/") for key in GENIUS.files(case)),
+        any(key.startswith("instructions/") for key in load_profile(name="baseline").files(case)),
+        any(key.startswith("instructions/") for key in load_profile(name="genius").files(case)),
     ) == (False, True)
 
 
 def test_profile_prompts() -> None:
     case = load_cases()[0]
     assert (
-        BASELINE.prompt(case) == case.prompt,
-        "../instructions/skills/reasoning/SKILL.md" in GENIUS.prompt(case),
+        load_profile(name="baseline").prompt(case) == case.prompt,
+        "../instructions/skills/reasoning/SKILL.md" in load_profile(name="genius").prompt(case),
     ) == (True, True)
 
 
 def test_samples_keep_task_ids_and_metadata() -> None:
-    assert [sample.id for sample in GENIUS.samples()] == [case.id for case in load_cases()]
+    assert [sample.id for sample in load_profile(name="genius").samples()] == [
+        case.id for case in load_cases()
+    ]
 
 
 def test_hash_tracks_contents_and_ignores_mapping_order(tmp_path: Path) -> None:
@@ -127,7 +134,7 @@ def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
 
 
 def test_generated_artifacts_stay_out_of_sample_metadata() -> None:
-    for sample in BASELINE.samples():
+    for sample in load_profile(name="baseline").samples():
         assert sample.metadata == {
             "case_id": sample.id,
             "profile": "baseline",
@@ -212,14 +219,44 @@ def test_generic_python_case_exports_without_language_restriction(tmp_path: Path
     }
 
 
-@pytest.mark.parametrize(
-    "updates",
-    [
-        {"files": {}},
-        {"files": {"receipt.ml": "seed", "verifier.py": "bad"}},
-    ],
-)
-def test_decoded_case_parts_must_agree(updates: dict[str, object]) -> None:
-    data = {**load_cases()[0].model_dump(), **updates}
-    with pytest.raises(ValidationError):
-        decode(encode([data]))
+def test_experiment_cache_tracks_native_configuration(tmp_path: Path) -> None:
+    before = experiment()
+    source = transport.OCAML_ROOT / "experiment.ml"
+    copied = tmp_path / source.name
+    copied.write_text(
+        source.read_text().replace("epochs = 5", "epochs = 7").replace("Apply that", "Follow that")
+    )
+    library = tuple({source: copied}.get(path, path) for path in transport.LIBRARY)
+    with patch("evals.python.transport.LIBRARY", library):
+        task = build_task(request=TaskRequest(profile="genius", agent="codex"))
+        assert (
+            experiment().epochs,
+            task.epochs,
+            "Follow that" in str(task.dataset[0].input),
+            "Follow that" in load_profile(name="genius").preamble,
+        ) == (7, 7, True, True)
+    assert experiment() == before
+
+
+@pytest.mark.parametrize("grade_only", [False, True])
+def test_record_updates_cannot_bypass_kernel_validation(
+    *, grade_only: bool, tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    suite = tmp_path / "suite.ml"
+    expression = ocaml_timeout_case(id_expression='"updated"', initial="15", requested="30")
+    suite.write_text(f"let c = {expression}\nlet cases = [{{c with fixture = Fixture.empty}}]\n")
+    request = GradeRequest(
+        case_id="updated",
+        selection=suite,
+        response="",
+        changed_files=(),
+        verification=Verification(status="unchecked"),
+    )
+    operation: Callable[[], object]
+    if grade_only:
+        operation = partial(kernel_grade, request=request)
+    else:
+        operation = partial(load_cases, selection=suite)
+    with pytest.raises(subprocess.CalledProcessError):
+        operation()
+    assert "criteria read files missing from the fixture" in capfd.readouterr().err

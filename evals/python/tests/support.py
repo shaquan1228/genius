@@ -37,7 +37,9 @@ def offline_run(
 
 def sample_result(sample: EvalSample) -> tuple[str, object, object]:
     assert sample.scores is not None
-    return (str(sample.id), sample.scores["correctness"].value, sample.scores["scope"].value)
+    value = sample.scores["evaluation"].value
+    assert isinstance(value, dict)
+    return (str(sample.id), value["correctness"], value["scope"])
 
 
 def results(log: EvalLog) -> list[tuple[str, object, object]]:

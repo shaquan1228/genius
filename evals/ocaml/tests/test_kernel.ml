@@ -230,3 +230,25 @@ let () =
       (correct
          ~fields:[ ("choice", Response.String "B"); ("reason", Response.String "Cheaper.") ]
          case))
+
+let () =
+  let original = find "clear-task" in
+  let fixture =
+    Fixture.overlay original.fixture ~overrides:(Fixture.of_files [ ("verifier.py", "tampered") ])
+  in
+  assert (
+    rejection (fun () ->
+        Case.make
+          ~id:original.id
+          ~fixture
+          ~instruction:original.instruction
+          ~criterion:original.criterion
+          ~allowed_files:original.allowed_files
+          ~reference:original.reference)
+    = "Case clear-task: verifier artifacts overlap fixture")
+
+let () =
+  let original = find "clear-task" in
+  assert (
+    rejection (fun () -> Case.validate { original with fixture = Fixture.empty })
+    = "Case clear-task: criteria read files missing from the fixture: receipt.ml")

@@ -6,8 +6,8 @@ import pytest
 from inspect_swe import claude_code, codex_cli
 
 from evals.python.agents import AGENT_REGISTRY, AgentKind, AgentSpec, coding_agent
-from evals.python.profiles import GENIUS
 from evals.python.tasks import TaskRequest, build_task
+from evals.python.transport import experiment
 
 
 def test_registered_harness_uses_shared_and_custom_settings(
@@ -62,7 +62,14 @@ def test_codex_options_disable_network() -> None:
 
 
 def test_explicit_agent_version_is_logged() -> None:
-    task = build_task(request=TaskRequest(profile=GENIUS, agent="codex", version="0.137.0"))
+    task = build_task(request=TaskRequest(profile="genius", agent="codex", version="0.137.0"))
+    spec = experiment()
+    assert (task.epochs, task.message_limit, task.token_limit, task.time_limit) == (
+        spec.epochs,
+        spec.message_limit,
+        spec.token_limit,
+        spec.time_limit,
+    )
     metadata = task.metadata
     assert metadata is not None
     assert (metadata["agent"], metadata["agent_version"]) == ("codex", "0.137.0")

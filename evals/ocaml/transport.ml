@@ -119,6 +119,7 @@ let criterion = function
   | Criterion.Answer _ -> `Null
 
 let case (case : Case.t) =
+  let case = Case.validate case in
   let solution, answer = reference case.reference in
   `Assoc
     [
@@ -129,6 +130,27 @@ let case (case : Case.t) =
       ("checks", criterion case.criterion);
       ("solution", solution);
       ("answer", `String answer);
+    ]
+
+let experiment =
+  let spec = Experiment.default in
+  let profile (value : Experiment.profile) =
+    `Assoc
+      [
+        ("name", `String value.name);
+        ("preamble", `String value.preamble);
+        ("instructions", strings value.instructions);
+      ]
+  in
+  let number value = `Float (float_of_int value) in
+  `Assoc
+    [
+      ("profiles", `List (List.map profile spec.profiles));
+      ("epochs", number spec.epochs);
+      ("message_limit", number spec.message_limit);
+      ("token_limit", number spec.token_limit);
+      ("time_limit", number spec.time_limit);
+      ("cache", `Bool spec.cache);
     ]
 
 let trim text =
@@ -199,7 +221,7 @@ let request ?(cases = Suite.cases) value =
   in
   let case =
     match List.find_opt (fun (case : Case.t) -> case.id = id) cases with
-    | Some case -> case
+    | Some case -> Case.validate case
     | None -> invalid_arg ("Unknown case: " ^ id)
   in
   let score =
@@ -260,6 +282,7 @@ let () =
   let output =
     match Array.to_list Sys.argv with
     | [ _ ] -> `List (List.map case Suite.cases)
+    | [ _; "--experiment" ] -> experiment
     | [ _; "--grade" ] -> request (Json.decode (`Channel stdin))
     | [ _; "--humaneval-info" ] -> humaneval_info
     | [ _; "--import-humaneval" ] ->

@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from evals.python import transport
-from evals.python.profiles import BASELINE, GENIUS
+from evals.python.profiles import load_profile
 from evals.python.tasks import baseline, cases_hash
 from evals.python.transport import (
     CaseQuery,
@@ -61,7 +61,10 @@ def test_imported_case_keeps_grader_private() -> None:
 
 def test_imported_profile_public_inputs_match() -> None:
     case = import_records((record(),))[0]
-    assert {name: GENIUS.files(case)[name] for name in BASELINE.files(case)} == BASELINE.files(case)
+    assert {
+        name: load_profile(name="genius").files(case)[name]
+        for name in load_profile(name="baseline").files(case)
+    } == load_profile(name="baseline").files(case)
 
 
 @pytest.mark.parametrize(
@@ -97,7 +100,7 @@ def test_dataset_selector_grades_one_trusted_record() -> None:
                 verification=Verification(status="passed"),
             )
         ) == {"correctness": True, "scope": True}
-        samples = BASELINE.samples(dataset="humanevalplus")
+        samples = load_profile(name="baseline").samples(dataset="humanevalplus")
     assert samples[0].metadata == {
         "case_id": case.id,
         "profile": "baseline",

@@ -35,6 +35,7 @@ The OCaml kernel owns eval definitions and pure grading. Primitive definitions i
 | `grader.ml` | Pure response comparison, text constraints, and allowed-file judgment |
 | `fixtures.ml` / `scenarios.ml` | Parameterized starting projects and scenario-specific constructors |
 | `suite.ml` | Pure case declarations |
+| `experiment.ml` | Profiles, prompts, instruction folders, and run limits |
 | `transport.ml` | Sole OCaml codec and executable entry point |
 | `check.sh` | Temporary compiler runner for visible and held-out code verification |
 | `tests/*.ml` | Kernel tests; each links only the modules it may use |
@@ -57,6 +58,12 @@ Closed variants use `match` and `assert_never`; strict mypy enables `exhaustive-
 Adding a variant requires updating its matches. Coverage excludes only the statically unreachable
 `assert_never` guard branches. Public requests and driver evidence are validated at their boundaries. Benchmark payloads retain
 the original pinned private JSON; malformed driver input becomes a harness error.
+
+OCaml owns semantic case/verifier invariants and experiment configuration. Python validates the
+wire fields and adapts the exported specification to Inspect. One `evaluation` scorer collects
+verification and changed paths, grades once per sample, and publishes named `correctness` and
+`scope` metrics. In new sample logs, these are under `scores.evaluation.value`; verifier evidence
+and changed paths are under `scores.evaluation.metadata`. Historical logs retain their original layout.
 
 Python retains Git observation, trusted held-out runner and completion-marker handling, sandbox lifecycle, profile packaging, agent integrations, Inspect adapters, limits, logging, and metrics. Invalid replies, candidate compilation failures, and failed tests receive explicit unsuccessful outcomes; provisioning, transfer, driver, and protocol failures remain harness errors. Source changes invalidate the executable and manifest caches. Historical logs are unchanged; old exported manifests have no compatibility shim.
 

@@ -14,7 +14,8 @@ type t = {
 
 let paths fixture = List.map fst (Fixture.files fixture)
 
-let make ~id ~fixture ~instruction ~criterion ~allowed_files ~reference =
+let validate (case : t) =
+  let { id; fixture; instruction = _; criterion; allowed_files; reference } = case in
   let require ~problem ~within names =
     match List.filter (fun name -> not (List.mem name within)) names with
     | [] -> ()
@@ -37,4 +38,7 @@ let make ~id ~fixture ~instruction ~criterion ~allowed_files ~reference =
     ~problem:"reference edits files outside allowed_files"
     ~within:allowed_files
     (paths reference.Reference.edits);
-  { id; fixture; instruction; criterion; allowed_files; reference }
+  case
+
+let make ~id ~fixture ~instruction ~criterion ~allowed_files ~reference =
+  validate { id; fixture; instruction; criterion; allowed_files; reference }

@@ -18,6 +18,8 @@ let () =
       ~timeout_seconds:5
   in
   assert (checks.inputs = [ "solution.py" ]);
+  rejected (fun () ->
+      spec ~inputs:[ "a.py"; "a.py" ] ~files:[] ~tools:[] ~command:[ "run" ] ~timeout_seconds:5);
   rejected (fun () -> spec ~inputs:[] ~files:[] ~tools:[] ~command:[ "run" ] ~timeout_seconds:5);
   List.iter
     (fun name ->

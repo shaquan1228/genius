@@ -199,8 +199,6 @@ def test_cancellation_cleans_created_environment() -> None:
     [
         {"inputs": ("../bad.py",)},
         {"inputs": ("/bad.py",)},
-        {"inputs": ("solution.py", "solution.py")},
-        {"files": {"solution.py": "bad"}},
         {"command": ("",)},
         {"timeout_seconds": 0},
     ],
