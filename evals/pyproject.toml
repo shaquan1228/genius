@@ -24,29 +24,28 @@ target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "PLR0917"]
+select = ["E", "F", "I", "UP", "B", "PL", "FBT", "SIM", "C4", "RUF", "PT", "PIE", "RET", "N"]
+# Literal values in comparisons read clearly in tests and protocol checks.
+ignore = ["PLR2004"]
 
 [tool.ruff.lint.pylint]
-max-positional-args = 2
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**" = ["PLR0917"]
+# Only the first parameter may be positional, so callers name every other argument.
+# Pytest passes fixtures by name, so tests follow the same rule.
+max-positional-args = 1
 
 [tool.mypy]
 strict = true
-files = ["."]
-exclude = ["fixtures", "tests/solutions"]
+files = ["python"]
 mypy_path = ".."
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["python/tests"]
 addopts = "-q"
 pythonpath = [".."]
 
 [tool.coverage.run]
 branch = true
-source = ["."]
-omit = ["fixtures/*", "tests/solutions/*"]
+source = ["python"]
 
 [tool.coverage.report]
 fail_under = 100

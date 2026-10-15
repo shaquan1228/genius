@@ -3,7 +3,6 @@ set -eu
 
 : "${HF_NAMESPACE:?Set HF_NAMESPACE to your Hugging Face username or organization}"
 : "${EVAL_MODEL:?Set EVAL_MODEL to an exact Inspect provider/model ID}"
-test -f evals/tasks.py || { echo "Eval runtime is supplied by the stacked fixture PR." >&2; exit 1; }
 EVAL_EPOCHS="${EVAL_EPOCHS:-1}"
 
 case "$EVAL_MODEL" in
@@ -14,7 +13,8 @@ case "$EVAL_MODEL" in
 esac
 EVAL_AGENT="${EVAL_AGENT:-$default_agent}"
 
-if [ -n "$provider_key" ] && ! printenv "$provider_key" >/dev/null; then
+# CI passes unset secrets as empty strings, so require a non-empty key.
+if [ -n "$provider_key" ] && [ -z "$(printenv "$provider_key")" ]; then
   echo "Set $provider_key in this shell before launching the Job" >&2
   exit 2
 fi
@@ -24,7 +24,7 @@ source_repo="$HF_NAMESPACE/genius-evals"
 results_bucket="$HF_NAMESPACE/genius-eval-results"
 snapshot_dir=$(mktemp -d)
 trap 'rm -rf "$snapshot_dir"' EXIT HUP INT TERM
-git archive HEAD README.md docs skills evals | tar -x -C "$snapshot_dir"
+git -c safe.directory="$(pwd)" archive HEAD README.md docs skills evals | tar -x -C "$snapshot_dir"
 
 hf repos create "$source_repo" --repo-type dataset --private --exist-ok
 hf buckets create "$results_bucket" --private --exist-ok

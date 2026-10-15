@@ -1,0 +1,57 @@
+name: HF evals
+
+# Paid: each run launches a Hugging Face Job. Only users with write access can dispatch it.
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Exact Inspect provider/model ID, for example hf-inference-providers/openai/gpt-oss-20b
+        required: true
+        type: string
+      epochs:
+        description: Epochs per profile (1 is the smoke test; 5 is the full comparison)
+        required: true
+        default: "1"
+        type: string
+      agent:
+        description: Agent override, claude or codex (empty selects by model)
+        required: false
+        default: ""
+        type: string
+      version:
+        description: Agent version override (empty uses the pinned default)
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hf-evals
+  cancel-in-progress: false
+
+jobs:
+  check:
+    uses: ./.github/workflows/evals.yml
+
+  launch:
+    name: Launch Hugging Face Job
+    needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Launch the detached Job
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          HF_NAMESPACE: ${{ vars.HF_NAMESPACE || github.repository_owner }}
+          EVAL_MODEL: ${{ inputs.model }}
+          EVAL_EPOCHS: ${{ inputs.epochs }}
+          EVAL_AGENT: ${{ inputs.agent }}
+          EVAL_VERSION: ${{ inputs.version }}
+        run: |
+          test -n "$HF_TOKEN" || { echo "Add an HF_TOKEN repository secret with write access." >&2; exit 1; }
+          sh evals/hf_host.sh

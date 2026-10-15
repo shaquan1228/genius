@@ -1,23 +1,64 @@
-# Genius eval scaffolding
-
-This branch contains the non-Python scaffolding extracted from PR #81: dependency
-locks, container setup, hosting scripts, and documentation. The stacked OCaml
-fixture PR supplies the Inspect adapter, task data, graders, and tests.
-
-Validate this layer with `make -C evals check-scaffolding`. The full `check` and
-hosted launcher require the runtime from the stacked PR and fail clearly until
-it is present. The launch instructions below describe the completed stack.
+# Genius evals
 
 [Inspect AI](https://inspect.aisi.org.uk/) runs repeated baseline/Genius comparisons.
 [Inspect SWE](https://meridianlabs-ai.github.io/inspect_swe/) supplies Claude Code and Codex integrations.
 Both frameworks use the MIT license. Model calls and compute can cost money.
 
 Inspect owns execution, repeats, model calls, limits, scoring, and logs.
-This package supplies task data, instruction profiles, agent settings, and graders.
+`ocaml/suite.ml` is a pure list of eval definitions. Each definition explicitly composes
+its starting project, task, checks, edit scope, and offline reference. Adding cases
+adds values; it creates no checked-in fixture, grader, or solution files.
+
+The code is split by language. `ocaml/` defines cases; `python/` runs them.
+One transport module on each side is the only bridge between the two:
+
+```text
+ocaml/*.ml  ──►  ocaml/transport.ml  ──JSON──►  python/transport.py  ──►  python/*.py
+ (values)         (sole encoder)                 (sole decoder:            (immutable
+                                                  immutable Case)           cases only)
+```
+
+The OCaml kernel owns eval definitions and pure grading. Primitive definitions include comments with meanings and primary-source links.
+
+| Module | Owns |
+| --- | --- |
+| `fixture.mli` / `fixture.ml` | Immutable initial files, duplicate detection, explicit overlays |
+| `instruction.ml` | Instructions supplied to the agent |
+| `response.mli` / `response.ml` | Immutable typed string/boolean fields shared by expectations and reference replies |
+| `criterion.ml` | Declarative expected fields, optional text bounds, and executable OCaml assertions |
+| `reference.ml` | Known-good edits and replies for offline verification |
+| `case.ml` | Explicit case assembly and file-containment validation |
+| `outcome.ml` | Environment evidence collected by the Python harness |
+| `score.mli` / `score.ml` | Immutable named boolean results |
+| `grader.ml` | Pure response comparison, text constraints, and allowed-file judgment |
+| `fixtures.ml` / `scenarios.ml` | Parameterized starting projects and scenario-specific constructors |
+| `suite.ml` | Pure case declarations |
+| `transport.ml` | Sole OCaml codec and executable entry point |
+| `check.sh` | Temporary compiler runner for visible and held-out code verification |
+
+The bridge has two operations: export execution inputs, and grade observations by case ID.
+A grading request sends a protocol version, case ID, raw response text, changed paths, and trusted code-execution evidence. It returns a versioned map of named scores. Candidate values never become OCaml source. Criteria stay inside the kernel: Python does not mirror answer expectations, text rules, or grading variants.
+
+`python/transport.py` builds a cached host executable from trusted source contents and invokes it with isolated, uncached requests. It returns frozen execution projections and score data. Code cases expose their runtime verifier inputs; answer cases expose only their execution mode. References and private verifier programs stay in the host index, outside agent files and sample metadata.
+
+Python retains Git observation, trusted held-out runner and completion-marker handling, sandbox lifecycle, profile packaging, agent integrations, Inspect adapters, limits, logging, and metrics. Invalid candidate replies receive failing scores; compiler/process/protocol failures remain harness errors. Source changes invalidate the executable and manifest caches. Historical logs are unchanged; old exported manifests have no compatibility shim.
+
+Only `transport.ml` handles JSON in OCaml, using Jsonm for JSON decoding and encoding. Only `python/transport.py` compiles or invokes the kernel. Domain modules are independent of codecs and Inspect. `python/tests/test_boundary.py` enforces these boundaries.
 
 ## Check the harness offline
 
-Install Python 3.12+, [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, and Make.
+Install OCaml 4.13+ (`ocamlc`), ocamlfind, Jsonm, Python 3.12+, [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, and Make.
+Install [ocamlformat](https://github.com/ocaml-ppx/ocamlformat) 0.29.0 through opam; Homebrew does not package it.
+A separate opam switch can reuse the system compiler:
+
+```sh
+brew install opam
+opam init --bare --no-setup
+opam switch create evals-fmt ocaml-system
+opam install --switch evals-fmt ocamlformat.0.29.0 ocamlfind jsonm
+export PATH="$(opam var --switch evals-fmt bin):$PATH"
+```
+
 From the repository root:
 
 ```sh
@@ -25,11 +66,43 @@ make -C evals check
 ```
 
 This installs locked dependencies, checks strict typing, runs tests, and enforces CRAP ≤5.
+`check` runs four parts that also run alone: `check-scaffolding`, `check-ocaml-format`
+(ocamlformat style), `lint-ocaml` (compilation with every warning as an error), and
+`check-python` (Ruff format and lint, strict mypy, tests, coverage, Xenon).
+`make -C evals format` applies both styles: ocamlformat from `ocaml/.ocamlformat`
+and Ruff from `pyproject.toml`.
+
+Functions take at most one positional argument, usually an ID or the value they
+act on. Callers name every other argument. Ruff enforces this for Python
+(`PLR0917` with `max-positional-args = 1`), including tests, because pytest
+passes fixtures by name. Inspect calls solvers, scorers, and mock-model callbacks
+positionally, so those carry a `noqa` with the reason; methods marked
+`@override` keep their base signatures. OCaml follows the same rule with labeled
+arguments, by review.
 Tests exercise Inspect's real engine with its mock model and scripted test agents.
-They use temporary local sandboxes, requiring no Docker or API keys.
+They use temporary local sandboxes and need no API keys.
 Scripted passes verify the harness; they do not measure Genius performance.
 
 Reports and native offline logs are saved under `evals/results/`.
+
+## Continuous integration
+
+GitHub Actions minutes are free for this public repository.
+
+- `.github/workflows/evals.yml` runs on pushes and pull requests that touch
+  `evals/`, `docs/`, or `skills/`. Its `check` job runs `check-scaffolding`,
+  `lint-ocaml`, and `check-python` in the Hugging Face Job image
+  (`ghcr.io/astral-sh/uv:python3.12-bookworm` with Debian's OCaml 4.13, ocamlfind and Jsonm). Its
+  `format` job runs `check-ocaml-format` with ocamlformat 0.29.0.
+- `.github/workflows/hf-evals.yml` launches a paid hosted run on manual dispatch
+  (Actions → HF evals → Run workflow). It runs the `evals.yml` checks first, then
+  `hf_host.sh`. Add an `HF_TOKEN` repository secret with write access, and add
+  `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` for those models. The `HF_NAMESPACE`
+  repository variable defaults to the repository owner.
+
+GitHub dispatches only workflows that exist on the default branch. Before this
+workflow reaches `main`, launch from a local checkout with `sh evals/hf_host.sh`;
+it needs only uv, Git, and a Hugging Face login.
 
 ## Run live comparisons on Hugging Face
 
@@ -40,8 +113,8 @@ token out of chat. A Hugging Face Inference Providers model needs only that
 Hugging Face token. OpenAI and Anthropic models need their own provider API keys;
 a ChatGPT or Claude subscription does not supply an API key for Inspect.
 
-Run from a checkout of the completed eval stack branch, or `main` after this PR
-merges. The private source repository and results bucket already exist for
+Run from a checkout of the completed eval stack, or `main` after both PRs
+merge. The private source repository and results bucket already exist for
 `shaquan1228`; the launch script safely reuses them. From the repository root:
 
 ```sh
@@ -83,6 +156,8 @@ under `live/`.
 
 Both profiles share the selected model, agent version, effort, tools, and limits.
 Every sample and epoch starts with fresh task files and a fresh agent session.
+Codex configuration and session state live under `/tmp/genius-codex`, outside
+the measured repository, so harness bookkeeping does not count as agent edits.
 The agent's `attempts=1` prevents retries after a failed submission within one
 session; epochs provide independent attempts for estimating pass rates.
 Agent retries and model-response caching are disabled. Provider transport retries retain Inspect defaults.
@@ -93,32 +168,102 @@ Inspect logs record model usage, sample events, answers, errors, and scores.
 Compare each task across profiles; require both correctness and scope to pass.
 Inspect reports each score separately. Scores are not inferred from agent claims.
 
-## Module boundaries
+## Author cases
 
-| Module | Responsibility |
-| --- | --- |
-| `cases.py` | Validate manifest fields and task identifiers |
-| `profiles.py` | Build sample files, prompts, and content hashes |
-| `agents.py` | Configure native Inspect SWE integrations |
-| `tasks.py` | Register profiles, shared limits, and metadata |
-| `workspace.py` | Initialize sandboxes and detect changed files |
-| `answers.py` | Validate strict decision output schemas |
-| `scoring.py` | Combine independent correctness and scope checks |
-| `hf_job.py` | Run both profiles in a hosted Hugging Face Job |
-| `hf_sandbox.py` | Give each sample a dedicated Hugging Face Sandbox VM |
-| `heldout/` | Check code against expectations after the agent finishes |
-| `tests/` | Exercise graders and the native Inspect engine offline |
+A suite declares the parts of a case explicitly:
 
-The manifest names each coding case's held-out check. The same runner executes
-every check inside the sandbox after the agent finishes; adding a case needs no
-new scorer branch or verifier registry entry. The checks run agent-produced code
-inside that sandbox, never on the grading host.
+```ocaml
+let cases =
+  [
+    Case.make
+      ~id:"quantity"
+      ~fixture:(Fixtures.Receipt.fixture ~bug:Ignore_quantity)
+      ~instruction:Scenarios.Receipt.fix_total
+      ~criterion:
+        Scenarios.Receipt.(
+          totals
+            [
+              expect ~items:[ item ~price:3.0 ~quantity:4 ] ~total:12.0;
+              expect ~items:[ item ~price:3.0 ~quantity:0 ] ~total:0.0;
+            ])
+      ~allowed_files:[ "receipt.ml" ]
+      ~reference:Scenarios.Receipt.reference;
+  ]
+```
+
+The fixture does not choose the prompt, expectations, reference answer, or edit
+scope. Scope is declared independently of reference edits. A suite may reuse a
+fixture with different tasks or checks. `Fixture.of_files` rejects duplicate
+paths; `Fixture.overlay base ~overrides` explicitly replaces matching paths and
+leaves both inputs unchanged. `Case.make` rejects checks that read files missing
+from the fixture and reference edits outside `allowed_files`; the error names the
+case and the files.
+
+Use helpers inside a suite to describe larger parameter sets:
+
+```ocaml
+let timeout_case i =
+  let requested = 30 + i in
+  Case.make
+    ~id:(Printf.sprintf "timeout-%d" i)
+    ~fixture:(Fixtures.Preflight.fixture ~timeout:15)
+    ~instruction:(Scenarios.Preflight.change_timeout ~initial:15 ~requested)
+    ~criterion:(Scenarios.Preflight.defaults ~timeout:requested)
+    ~allowed_files:[ "config.ml"; "client.ml" ]
+    ~reference:(Scenarios.Preflight.reference ~timeout:requested)
+
+let cases = List.init 200 timeout_case
+```
+
+A new starting project belongs in `ocaml/fixtures.ml`. Scenario instructions, assertions,
+and reference outputs belong in `scenarios.ml`. Add a reusable success condition to
+`criterion.ml` and its pure evaluation to `grader.ml`. Case IDs have no matching directory
+or Python registry entry.
+
+For a new structured answer, use `Response.of_fields` to declare string/boolean values
+and `Criterion.answer` for its expectation. An optional `Criterion.text_rule` declares
+a named string field and inclusive word bounds. A field named `reason` has no special
+meaning unless the criterion declares it. Reference replies use `Reference.Structured`.
+Adding answer fields does not require Python or transport changes.
+
+## Execution boundary
+
+The host compiles the fixed OCaml module set in a temporary directory.
+`ocaml/transport.ml` consumes `Suite.cases` and emits JSON; `python/transport.py`
+decodes that output into memory. Importing `Suite` itself has no output or
+execution side effects. Compilation and validated case indexes are cached
+by source contents; changing any module, interface, or the runner invalidates
+the cache.
+No generated files are written into this checkout. Both local checks and the
+hosted Job need OCaml 4.13+; the hosted bootstrap installs Debian's `ocaml-nox`, `ocaml-findlib`, and `libjsonm-ocaml-dev`.
+
+Inspect receives only public project files, selected skill instructions, and a
+case ID. Private checks and reference edits stay in the host's case index; they
+are not copied into sample metadata or the agent workspace. Only the offline
+scripted test agent applies the reference edits.
+
+`ocaml/check.sh` is the shared compiler runner. It compiles temporary copies and cleans
+up after success or failure, leaving no compiler artifacts in the measured
+worktree. A generated workspace can run its visible checks with, for example:
+
+```sh
+sh check.sh receipt.ml test_receipt.ml
+```
+
+After the agent finishes, the grader sends the generated private OCaml checks to
+the sandbox through standard input, using the host's trusted runner. A fresh
+completion marker appears after every assertion; successful early exits without
+that marker fail correctness. Private checks contain independent assertions, so changing visible tests or the
+agent's copy of the runner cannot make the seeded bugs pass. The marker
+checks completion; it does not isolate hostile code sharing the grader process.
+
 Scope checks compare the final worktree against its original commit.
 They detect agent commits, untracked files, ignored files, and changed instructions.
 
 The four cases cover clear-task completion, known preflight fields, numeric choice, and hindsight after one loss.
-Task prompts and fixtures live in `cases.json` and `fixtures/`.
-Decision schemas check selected conclusions and bounded explanations, not explanation quality.
+The suite composes sources, prompts, and assertions from their respective modules.
+Reply checks compare each expected field with its exact JSON type and bound the reason;
+they do not judge explanation quality.
 Question usefulness and reasoning quality require human review of saved traces.
 These small regression tasks do not establish that Genius improves performance overall.
 
@@ -135,6 +280,9 @@ Xenon's rank-A gate requires every function's cyclomatic complexity to be at mos
 At full coverage, CRAP equals complexity, so those gates enforce CRAP ≤5.
 Radon exports measured complexity to `results/complexity.json`.
 
-Coverage and complexity include all authored runtime code, held-out checks, tests, and scripted helpers.
-Pre-existing buggy fixture data is excluded from the quality gate.
-Strict typing checks the same authored modules without type-ignore exceptions.
+Python coverage and complexity include all adapter runtime code, harness tests,
+and scripted helpers. OCaml checks are verified by compiling and executing the
+seeds, solved fixtures, partial fixes, malformed code, and visible test commands;
+they are not included in Python coverage or the Python CRAP calculation.
+Strict mypy checks the Python modules without type-ignore exceptions; `ocamlc`
+type-checks fixture modules and assertions on every execution.
