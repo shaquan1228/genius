@@ -3,6 +3,7 @@
 import asyncio
 from pathlib import PurePosixPath
 from typing import Literal, cast, overload, override
+from uuid import uuid4
 
 from huggingface_hub import Sandbox, SandboxCommandResult
 from inspect_ai.util import (
@@ -97,21 +98,37 @@ class HfSandboxEnvironment(SandboxEnvironment):
     ) -> ExecResult[str]:
         if user not in (None, "root", "0"):
             raise SandboxUserUnsupportedError(f"Hugging Face Sandbox cannot execute as {user!r}")
-        stdin = input.decode() if isinstance(input, bytes) else input
-        result = cast(
-            SandboxCommandResult,
-            await asyncio.to_thread(
-                self.client.run,
-                cmd,
-                shell=False,
-                stdin=stdin,
-                cwd=self._path(cwd or "."),
-                env=env,
-                timeout=timeout,
-                check=False,
-            ),
-        )
-        return completed(result, cmd=cmd)
+        stdin_path: str | None = None
+        try:
+            if isinstance(input, bytes):
+                stdin_path = f"/tmp/genius-stdin-{uuid4().hex}"
+                await asyncio.to_thread(self.client.files.write, stdin_path, input, mode="0600")
+                cmd = [
+                    "/bin/sh",
+                    "-c",
+                    'stdin=$1; shift; exec "$@" < "$stdin"',
+                    "sh",
+                    stdin_path,
+                    *cmd,
+                ]
+                input = None
+            result = cast(
+                SandboxCommandResult,
+                await asyncio.to_thread(
+                    self.client.run,
+                    cmd,
+                    shell=False,
+                    stdin=input,
+                    cwd=self._path(cwd or "."),
+                    env=env,
+                    timeout=timeout,
+                    check=False,
+                ),
+            )
+            return completed(result, cmd=cmd)
+        finally:
+            if stdin_path is not None:
+                await asyncio.to_thread(self.client.files.delete, stdin_path)
 
     @override
     async def write_file(self, file: str, contents: str | bytes) -> None:

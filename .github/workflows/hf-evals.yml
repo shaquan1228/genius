@@ -36,13 +36,13 @@ jobs:
     uses: ./.github/workflows/evals.yml
 
   launch:
-    name: Launch Hugging Face Job
+    name: Run Hugging Face evaluation
     needs: check
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - name: Launch the detached Job
+      - name: Run the Job and check its result
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

@@ -98,8 +98,10 @@ GitHub Actions minutes are free for this public repository.
   `format` job runs `check-ocaml-format` with ocamlformat 0.29.0.
 - `.github/workflows/hf-evals.yml` launches a paid hosted run on manual dispatch
   (Actions → HF evals → Run workflow). It runs the `evals.yml` checks first, then
-  `hf_host.sh`. Add an `HF_TOKEN` repository secret with write access, and add
-  `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` for those models. The `HF_NAMESPACE`
+  `hf_host.sh`, streams the Job logs, and fails if the Job fails. Add an `HF_TOKEN`
+  repository secret with write access. HF Inference Providers models use this same
+  token, with inference permission; no separate provider key is required. Add
+  `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` only for direct calls to those providers. The `HF_NAMESPACE`
   repository variable defaults to the repository owner.
 
 GitHub dispatches only workflows that exist on the default branch. Before this
@@ -114,6 +116,10 @@ credit balance. Authenticate from the shared workspace with
 token out of chat. A Hugging Face Inference Providers model needs only that
 Hugging Face token. OpenAI and Anthropic models need their own provider API keys;
 a ChatGPT or Claude subscription does not supply an API key for Inspect.
+
+HF Job logs name the provider `genius-hf`: this adapter uses Inspect's HF provider
+and removes Codex's `prompt_cache_key`, which HF's chat endpoint rejects. It keeps
+the requested model ID and HF authentication.
 
 Run from a checkout of the completed eval stack, or `main` after both PRs
 merge. The private source repository and results bucket already exist for
@@ -139,9 +145,9 @@ the full 40-session comparison.
 
 `hf_host.sh` uploads only tracked files from the current Git commit, so commit
 changes before running it. It creates a private dataset repository containing
-the evaluation source, a private results bucket, and a detached Hugging Face Job.
-The Job
-runs Inspect and launches a dedicated Hugging Face Sandbox VM for each sample.
+the evaluation source, a private results bucket, and a Hugging Face Job. The
+launcher streams logs and waits for the final Job status; it exits nonzero if the
+Job fails. The Job runs Inspect and launches a dedicated Hugging Face Sandbox VM for each sample.
 Only task files and the selected skill enter that VM; held-out checks stay in
 the Job and run against the VM after the agent finishes. The script prints the
 Job ID. Watch it at `https://huggingface.co/jobs/shaquan1228/<job-id>` or with:

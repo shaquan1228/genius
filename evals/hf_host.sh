@@ -38,7 +38,7 @@ if [ -n "$provider_key" ]; then
   set -- "$@" --secrets "$provider_key"
 fi
 
-hf jobs run --detach --name genius-evals --namespace "$HF_NAMESPACE" --timeout 4h \
+hf jobs run --name genius-evals --namespace "$HF_NAMESPACE" --timeout 4h \
   --volume "hf://datasets/$source_repo:/source:ro" \
   --volume "hf://buckets/$results_bucket:/results:rw" \
   "$@" \
