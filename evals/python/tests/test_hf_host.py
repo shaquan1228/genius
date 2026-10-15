@@ -12,6 +12,7 @@ import pytest
 from huggingface_hub import SandboxCommandResult
 from inspect_ai.model import GenerateConfig, get_model
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
+from inspect_ai.scorer import Score
 from inspect_ai.util import SandboxUserUnsupportedError
 
 from evals.python.hf_job import HfChatAPI, run, sample_limit
@@ -142,7 +143,10 @@ def test_hf_job_runs_both_profiles(provider: str, *, monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("EVAL_AGENT", "codex")
     logs = [
         SimpleNamespace(
-            eval=SimpleNamespace(task=name), status="success", location=f"/results/{name}"
+            eval=SimpleNamespace(task=name),
+            status="success",
+            location=f"/results/{name}",
+            samples=[],
         )
         for name in ("baseline", "genius")
     ]
@@ -172,9 +176,45 @@ def test_hf_chat_omits_codex_cache_key(extra_body: dict[str, object] | None) -> 
 def test_hf_job_reports_failed_profile(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     monkeypatch.setenv("OPENAI_API_KEY", "test")
-    logs = [SimpleNamespace(eval=SimpleNamespace(task="baseline"), status="error", location="log")]
+    logs = [
+        SimpleNamespace(
+            eval=SimpleNamespace(task="baseline"), status="error", location="log", samples=None
+        )
+    ]
     with patch("evals.python.hf_job.eval", return_value=logs):
         assert run() == 1
+
+
+@pytest.mark.parametrize(
+    ("failures", "summary"),
+    [
+        ((None, None), "baseline: 0 of 3 samples had an agent crash"),
+        (
+            ("Error executing codex cli agent 1: x", None),
+            "baseline: 1 of 3 samples had an agent crash",
+        ),
+    ],
+)
+def test_hf_job_counts_crashed_samples(
+    failures: tuple[str | None, ...],
+    *,
+    summary: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "test")
+    scored = [
+        SimpleNamespace(scores={"evaluation": Score(value={}, metadata={"agent_failure": failure})})
+        for failure in failures
+    ]
+    samples = [*scored, SimpleNamespace(scores=None)]  # A sample error leaves no score.
+    log = SimpleNamespace(
+        eval=SimpleNamespace(task="baseline"), status="success", location="log", samples=samples
+    )
+    with patch("evals.python.hf_job.eval", return_value=[log]):
+        assert run() == 0
+    assert capsys.readouterr().out.splitlines() == ["baseline: success (log)", summary]
 
 
 @pytest.mark.parametrize("job_exit", [0, 7])

@@ -4,6 +4,7 @@ import os
 from typing import Any, override
 
 from inspect_ai import eval
+from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import GenerateConfig, get_model, modelapi
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 from pydantic import TypeAdapter
@@ -32,6 +33,18 @@ def sample_limit() -> int | None:
     return limit
 
 
+def crashed(sample: EvalSample) -> bool:
+    scores = sample.scores or {}
+    return any((score.metadata or {}).get("agent_failure") for score in scores.values())
+
+
+# A scored crash still counts as success, so name crashes apart from clean zeros.
+def crash_summary(log: EvalLog) -> str:
+    samples = log.samples or []
+    crashes = sum(crashed(sample) for sample in samples)
+    return f"{log.eval.task}: {crashes} of {len(samples)} samples had an agent crash"
+
+
 def run() -> int:
     agent = os.environ.get("EVAL_AGENT", "claude")
     version = os.environ.get("EVAL_VERSION", "")
@@ -58,4 +71,5 @@ def run() -> int:
     )
     for log in logs:
         print(f"{log.eval.task}: {log.status} ({log.location})", flush=True)
+        print(crash_summary(log), flush=True)
     return int(any(log.status != "success" for log in logs))
