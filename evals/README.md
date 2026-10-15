@@ -204,6 +204,14 @@ Inspect logs record model usage, sample events, answers, errors, and scores.
 Compare each task across profiles; require both correctness and scope to pass.
 Inspect reports each score separately. Scores are not inferred from agent claims.
 
+A crash of the agent process does not stop the task.
+The scorer grades the files that the agent left in the workspace.
+An unchanged workspace fails its checks.
+The score records the crash message in its `agent_failure` metadata and its explanation.
+The task then continues with the next sample.
+The Job log shows the number of crashed samples for each task.
+Sandbox and verifier failures still stop the task.
+
 ## Author cases
 
 A suite declares the parts of a case explicitly:
