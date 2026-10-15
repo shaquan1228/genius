@@ -2,21 +2,26 @@
 
 import json
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
 
-from evals.answers import grade_answer, unfence
-from evals.cases import Case, case_by_id, load_cases
-from evals.profiles import content_hash, files_for, prompt_for, samples
-from evals.tests.support import ocaml_choice_case, ocaml_timeout_case
+from evals.python.answers import grade_answer, unfence
+from evals.python.profiles import BASELINE, GENIUS, content_hash, files_for, prompt_for, samples
+from evals.python.tests.support import ocaml_choice_case, ocaml_timeout_case
+from evals.python.transport import AnswerChecks, Case, case_by_id, decode, load_cases
+
+
+def encode(cases: list[dict[str, object]]) -> str:
+    return json.dumps(cases)
 
 
 def test_manifest_roundtrip() -> None:
     cases = load_cases()
-    assert [Case.model_validate(case.model_dump()) for case in cases] == cases
+    assert decode(encode([case.model_dump() for case in cases])) == cases
 
 
 def test_invalid_ocaml_suite_is_rejected(
@@ -32,7 +37,8 @@ def test_invalid_ocaml_suite_is_rejected(
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("sources", ["../outside.ml"]),
+        ("checks", {"kind": "code", "sources": ["../outside.ml"], "program": ""}),
+        ("checks", {"kind": "unknown"}),
         ("files", {"../outside.ml": "bad"}),
         ("solution", {"../outside.ml": "bad"}),
         ("allowed_files", ["../outside.ml"]),
@@ -42,39 +48,43 @@ def test_generated_paths_are_validated(field: str, value: object) -> None:
     data = load_cases()[0].model_dump()
     data[field] = value
     with pytest.raises(ValidationError):
-        Case.model_validate(data)
+        decode(encode([data]))
+
+
+def expected(case: Case) -> Mapping[str, str | bool]:
+    assert isinstance(case.checks, AnswerChecks)
+    return case.checks.expected
 
 
 def grade(case_id: str, text: str) -> bool:
-    case = case_by_id(case_id)
-    return grade_answer(case.grading, text, expected=case.expected)
+    return grade_answer(text, expected=expected(case_by_id(case_id)))
 
 
 def test_profiles_share_fixture_files() -> None:
     case = load_cases()[0]
-    baseline = files_for(case, "baseline")
-    genius = files_for(case, "genius")
+    baseline = files_for(case, BASELINE)
+    genius = files_for(case, GENIUS)
     assert {key: genius[key] for key in baseline} == baseline
 
 
 def test_only_genius_receives_instructions() -> None:
     case = load_cases()[0]
     assert (
-        any(key.startswith("instructions/") for key in files_for(case, "baseline")),
-        any(key.startswith("instructions/") for key in files_for(case, "genius")),
+        any(key.startswith("instructions/") for key in files_for(case, BASELINE)),
+        any(key.startswith("instructions/") for key in files_for(case, GENIUS)),
     ) == (False, True)
 
 
 def test_profile_prompts() -> None:
     case = load_cases()[0]
     assert (
-        prompt_for(case, "baseline") == case.prompt,
-        "../instructions/skills/reasoning/SKILL.md" in prompt_for(case, "genius"),
+        prompt_for(case, BASELINE) == case.prompt,
+        "../instructions/skills/reasoning/SKILL.md" in prompt_for(case, GENIUS),
     ) == (True, True)
 
 
 def test_samples_keep_task_ids_and_metadata() -> None:
-    assert [sample.id for sample in samples("genius")] == [case.id for case in load_cases()]
+    assert [sample.id for sample in samples(GENIUS)] == [case.id for case in load_cases()]
 
 
 def test_hash_tracks_contents_and_ignores_mapping_order(tmp_path: Path) -> None:
@@ -151,7 +161,7 @@ def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
 
 
 def test_generated_artifacts_stay_out_of_sample_metadata() -> None:
-    for sample in samples("baseline"):
+    for sample in samples(BASELINE):
         assert sample.metadata == {"case_id": sample.id, "profile": "baseline"}
         assert not any("heldout" in path for path in sample.files or {})
 
@@ -200,7 +210,8 @@ def test_case_parts_must_agree_on_files(
 
 def test_prompts_name_their_scope_and_answer_fields() -> None:
     for case in load_cases():
-        assert all(name in case.prompt for name in [*case.allowed_files, *case.expected]), case.id
+        fields = case.checks.model_dump().get("expected", {})
+        assert all(name in case.prompt for name in [*case.allowed_files, *fields]), case.id
 
 
 def test_new_decision_ids_and_reversed_costs_need_no_registry_entry(tmp_path: Path) -> None:
@@ -208,10 +219,8 @@ def test_new_decision_ids_and_reversed_costs_need_no_registry_entry(tmp_path: Pa
     expression = ocaml_choice_case(case_id="new-choice", a=4, b=8)
     suite.write_text(f"let cases = [{expression}]\n")
     case = load_cases(suite)[0]
-    assert grade_answer(case.grading, case.answer, expected=case.expected)
-    assert not grade_answer(
-        case.grading, '{"choice":"B","reason":"Cheaper."}', expected=case.expected
-    )
+    assert grade_answer(case.answer, expected=expected(case))
+    assert not grade_answer('{"choice":"B","reason":"Cheaper."}', expected=expected(case))
 
 
 def test_exporter_escapes_strings(tmp_path: Path) -> None:
@@ -227,12 +236,18 @@ let cases = [{ c with task = { c.task with prompt = text } }]
     assert load_cases(suite)[0].prompt == 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
 
 
-def test_cached_cases_do_not_share_mutable_contents() -> None:
-    original = case_by_id("clear-task")
-    changed = case_by_id("clear-task")
-    changed.files.clear()
-    changed.solution.clear()
-    assert case_by_id("clear-task") == original
+def test_cases_are_immutable() -> None:
+    case = case_by_id("clear-task")
+    with pytest.raises(ValidationError):
+        case.id = "changed"
+    with pytest.raises(TypeError):
+        case.files["receipt.ml"] = "changed"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        case.solution["receipt.ml"] = "changed"  # type: ignore[index]
+    with pytest.raises(ValidationError):
+        case.checks.kind = "answer"
+    assert isinstance(case.allowed_files, tuple)
+    assert case_by_id("clear-task") is case
 
 
 def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> None:
@@ -240,11 +255,11 @@ def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> Non
     expression = ocaml_choice_case(case_id="cache", a=10, b=8)
     source = f"let cases = [{expression}]\n"
     suite.write_text(source)
-    with patch("evals.cases.subprocess.run", wraps=subprocess.run) as compiler:
+    with patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as compiler:
         first = load_cases(suite)
         assert load_cases(suite) == first
         assert compiler.call_count == 1
         changed = ocaml_choice_case(case_id="cache", a=4, b=8)
         suite.write_text(f"let cases = [{changed}]\n")
-        assert load_cases(suite)[0].expected == {"choice": "A"}
+        assert expected(load_cases(suite)[0]) == {"choice": "A"}
         assert compiler.call_count == 2

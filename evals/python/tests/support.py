@@ -8,8 +8,8 @@ from inspect_ai import Task, eval
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import get_model
 
-from evals.cases import EVALS_ROOT
-from evals.tests.scenarios import Mode, echo_model, scripted
+from evals.python.paths import EVALS_ROOT
+from evals.python.tests.scenarios import Mode, echo_model, scripted
 
 
 def offline_run(tasks: list[Task], mode: Mode, directory: Path, epochs: int = 1) -> list[EvalLog]:

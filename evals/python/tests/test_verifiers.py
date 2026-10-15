@@ -1,16 +1,15 @@
 """Compile real OCaml fixtures and reject seeds, partial fixes, and invalid code."""
 
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
 
-from evals.cases import EVALS_ROOT, Case, load_cases
-from evals.scoring import heldout_check
-from evals.tests.support import ocaml_timeout_case
+from evals.python.tests.support import ocaml_timeout_case
+from evals.python.transport import RUNNER, Case, CodeChecks, heldout_check, load_cases
 
 CASES = {case.id: case for case in load_cases()}
-RUNNER = EVALS_ROOT / "check.sh"
 
 
 def snapshot(directory: Path) -> dict[str, bytes]:
@@ -18,7 +17,8 @@ def snapshot(directory: Path) -> dict[str, bytes]:
 
 
 def verify(case: Case, directory: Path) -> bool:
-    command, script, marker = heldout_check(case)
+    assert isinstance(case.checks, CodeChecks)
+    command, script, marker = heldout_check(case.checks)
     result = subprocess.run(
         command,
         input=script,
@@ -30,7 +30,7 @@ def verify(case: Case, directory: Path) -> bool:
     return result.returncode == 0 and marker in result.stdout.splitlines()
 
 
-def write_files(directory: Path, files: dict[str, str]) -> None:
+def write_files(directory: Path, files: Mapping[str, str]) -> None:
     for name, text in files.items():
         (directory / name).write_text(text)
 

@@ -58,7 +58,7 @@ Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply 
 ## Evaluations
 
 Use [Inspect AI](https://inspect.aisi.org.uk/) for repeated baseline/Genius comparisons.
-Cases are pure OCaml values in `evals/suite.ml`, composing reusable starting
+Cases are pure OCaml values in `evals/ocaml/suite.ml`, composing reusable starting
 projects, tasks, and checks without per-case files.
 Install OCaml 4.13+ and run the offline checks, strict typing, coverage, and CRAP gate:
 

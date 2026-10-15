@@ -3,17 +3,25 @@
 from inspect_ai import Task, task
 from inspect_ai.model import GenerateConfig
 
-from evals.agents import DEFAULT_VERSIONS, AgentKind, coding_agent
-from evals.cases import EVALS_ROOT, OCAML_SOURCES, Profile
-from evals.profiles import content_hash, instruction_files, samples
-from evals.scoring import correctness, scope
-from evals.workspace import prepare
+from evals.python.agents import DEFAULT_VERSIONS, AgentKind, coding_agent
+from evals.python.paths import EVALS_ROOT
+from evals.python.profiles import (
+    BASELINE,
+    GENIUS,
+    Profile,
+    content_hash,
+    instruction_files,
+    samples,
+)
+from evals.python.scoring import correctness, scope
+from evals.python.transport import EXPORTER, LIBRARY, RUNNER, SUITE
+from evals.python.workspace import prepare
 
 
 def build_task(profile: Profile, *, agent: AgentKind, version: str) -> Task:
     agent_version = version or DEFAULT_VERSIONS[agent]
     return Task(
-        name=profile,
+        name=profile.name,
         dataset=samples(profile),
         setup=prepare(),
         solver=coding_agent(agent, agent_version),
@@ -25,27 +33,23 @@ def build_task(profile: Profile, *, agent: AgentKind, version: str) -> Task:
         token_limit=50_000,
         time_limit=300,
         metadata={
-            "profile": profile,
+            "profile": profile.name,
             "agent": agent,
             "agent_version": agent_version,
             "instructions_sha256": content_hash(instruction_files()),
             "fixtures_sha256": content_hash(
-                {
-                    name: str(EVALS_ROOT / name)
-                    for name in (*OCAML_SOURCES, "check.sh")
-                    if name != "suite.ml"
-                }
+                {path.name: str(path) for path in (*LIBRARY, EXPORTER, RUNNER)}
             ),
-            "cases_sha256": content_hash({"suite.ml": str(EVALS_ROOT / "suite.ml")}),
+            "cases_sha256": content_hash({SUITE.name: str(SUITE)}),
         },
     )
 
 
 @task
 def baseline(agent: AgentKind = "claude", version: str = "") -> Task:
-    return build_task("baseline", agent=agent, version=version)
+    return build_task(BASELINE, agent=agent, version=version)
 
 
 @task
 def genius(agent: AgentKind = "claude", version: str = "") -> Task:
-    return build_task("genius", agent=agent, version=version)
+    return build_task(GENIUS, agent=agent, version=version)

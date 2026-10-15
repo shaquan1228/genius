@@ -3,11 +3,33 @@
 import base64
 import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 from inspect_ai.dataset import Sample
 
-from evals.cases import EVALS_ROOT, REPO_ROOT, Case, Profile, load_cases
+from evals.python.paths import REPO_ROOT
+from evals.python.transport import Case, load_cases, workspace_files
+
+
+@dataclass(frozen=True)
+class Profile:
+    """What a profile adds to every case: a prompt preamble and instruction folders."""
+
+    name: str
+    preamble: str = ""
+    instructions: tuple[str, ...] = ()
+
+
+BASELINE = Profile("baseline")
+GENIUS = Profile(
+    "genius",
+    preamble=(
+        "Read ../instructions/skills/{skill}/SKILL.md and its referenced files. "
+        "Apply that skill to this task.\n\n"
+    ),
+    instructions=("docs", "skills"),
+)
 
 
 def directory_files(root: Path, destination: str) -> dict[str, str]:
@@ -18,10 +40,11 @@ def directory_files(root: Path, destination: str) -> dict[str, str]:
     }
 
 
-def instruction_files() -> dict[str, str]:
+def instruction_files(profile: Profile = GENIUS) -> dict[str, str]:
     return {
-        **directory_files(REPO_ROOT / "docs", "instructions/docs"),
-        **directory_files(REPO_ROOT / "skills", "instructions/skills"),
+        name: path
+        for folder in profile.instructions
+        for name, path in directory_files(REPO_ROOT / folder, f"instructions/{folder}").items()
     }
 
 
@@ -30,22 +53,14 @@ def inline_file(contents: str) -> str:
 
 
 def files_for(case: Case, profile: Profile) -> dict[str, str]:
-    files = {"workspace/.gitkeep": inline_file("")}
-    files.update({f"workspace/{name}": inline_file(text) for name, text in case.files.items()})
-    if case.grading == "ocaml":
-        files["workspace/check.sh"] = str(EVALS_ROOT / "check.sh")
-    if profile == "genius":
-        files.update(instruction_files())
-    return files
+    workspace = {
+        f"workspace/{name}": inline_file(text) for name, text in workspace_files(case).items()
+    }
+    return {"workspace/.gitkeep": inline_file(""), **workspace, **instruction_files(profile)}
 
 
 def prompt_for(case: Case, profile: Profile) -> str:
-    if profile == "baseline":
-        return case.prompt
-    return (
-        f"Read ../instructions/skills/{case.skill}/SKILL.md and its referenced files. "
-        f"Apply that skill to this task.\n\n{case.prompt}"
-    )
+    return profile.preamble.format(skill=case.skill) + case.prompt
 
 
 def samples(profile: Profile) -> list[Sample]:
@@ -54,7 +69,7 @@ def samples(profile: Profile) -> list[Sample]:
             id=case.id,
             input=prompt_for(case, profile),
             files=files_for(case, profile),
-            metadata={"case_id": case.id, "profile": profile},
+            metadata={"case_id": case.id, "profile": profile.name},
         )
         for case in load_cases()
     ]

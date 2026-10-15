@@ -12,9 +12,9 @@ from huggingface_hub import SandboxCommandResult
 from inspect_ai.model import get_model
 from inspect_ai.util import SandboxUserUnsupportedError
 
-from evals.cases import REPO_ROOT
-from evals.hf_job import run
-from evals.hf_sandbox import HfSandboxEnvironment
+from evals.python.hf_job import run
+from evals.python.hf_sandbox import HfSandboxEnvironment
+from evals.python.paths import REPO_ROOT
 
 
 def command_result(code: int | None = 0, *, timed_out: bool = False) -> SandboxCommandResult:
@@ -24,7 +24,7 @@ def command_result(code: int | None = 0, *, timed_out: bool = False) -> SandboxC
 def test_hf_sample_lifecycle() -> None:
     client = Mock()
     client.run.return_value = command_result()
-    with patch("evals.hf_sandbox.Sandbox.create", return_value=client):
+    with patch("evals.python.hf_sandbox.Sandbox.create", return_value=client):
         environment = asyncio.run(HfSandboxEnvironment.sample_init("genius", None, {}))["default"]
     assert isinstance(environment, HfSandboxEnvironment)
     client.files.mkdir.assert_called_once_with("/eval")
@@ -59,7 +59,7 @@ def test_hf_sandbox_file_io() -> None:
 def test_failed_setup_kills_remote_sandbox() -> None:
     client = Mock()
     client.run.return_value = command_result(1)
-    with patch("evals.hf_sandbox.Sandbox.create", return_value=client):
+    with patch("evals.python.hf_sandbox.Sandbox.create", return_value=client):
         with pytest.raises(RuntimeError, match="Could not install"):
             asyncio.run(HfSandboxEnvironment.sample_init("genius", None, {}))
     client.kill.assert_called_once_with()
@@ -88,7 +88,7 @@ def test_hf_job_runs_both_profiles(monkeypatch: pytest.MonkeyPatch) -> None:
         )
         for name in ("baseline", "genius")
     ]
-    with patch("evals.hf_job.eval", return_value=logs) as inspect_eval:
+    with patch("evals.python.hf_job.eval", return_value=logs) as inspect_eval:
         assert run() == 0
     assert (
         [task.name for task in inspect_eval.call_args.args[0]],
@@ -100,7 +100,7 @@ def test_hf_job_runs_both_profiles(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_hf_job_reports_failed_profile(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     logs = [SimpleNamespace(eval=SimpleNamespace(task="baseline"), status="error", location="log")]
-    with patch("evals.hf_job.eval", return_value=logs):
+    with patch("evals.python.hf_job.eval", return_value=logs):
         assert run() == 1
 
 
@@ -179,6 +179,6 @@ def test_cancelled_creation_kills_eventual_sandbox() -> None:
         with pytest.raises(asyncio.CancelledError):
             await task
 
-    with patch("evals.hf_sandbox.Sandbox.create", side_effect=create):
+    with patch("evals.python.hf_sandbox.Sandbox.create", side_effect=create):
         asyncio.run(cancel_during_creation())
     client.kill.assert_called_once_with()

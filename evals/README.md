@@ -5,9 +5,18 @@
 Both frameworks use the MIT license. Model calls and compute can cost money.
 
 Inspect owns execution, repeats, model calls, limits, scoring, and logs.
-`suite.ml` is a pure list of eval definitions. Each definition explicitly composes
+`ocaml/suite.ml` is a pure list of eval definitions. Each definition explicitly composes
 its starting project, task, checks, edit scope, and offline reference. Adding cases
 adds values; it creates no checked-in fixture, grader, or solution files.
+
+The code is split by language. `ocaml/` defines cases; `python/` runs them.
+One transport module on each side is the only bridge between the two:
+
+```text
+ocaml/*.ml  ──►  ocaml/transport.ml  ──JSON──►  python/transport.py  ──►  python/*.py
+ (values)         (sole encoder)                 (sole decoder:            (immutable
+                                                  immutable Case)           cases only)
+```
 
 The OCaml modules have separate responsibilities:
 
@@ -20,10 +29,17 @@ The OCaml modules have separate responsibilities:
 | `reference.ml` | Known edits and replies for offline harness verification |
 | `eval.ml` | Case assembly with explicit edit scope |
 | `suite.ml` | Pure case declarations |
-| `inspect_export.ml` | Inspect wire format and the executable exporter entry point |
+| `transport.ml` | JSON encoding for Python and the executable exporter entry point |
+| `check.sh` | Compiler runner shared by export, visible tests, and grading |
 
-Python adapts this data to Inspect and handles agent sessions, scoring, logs, and
-Hugging Face execution. Domain modules have no JSON or Inspect dependencies.
+`python/transport.py` is the only Python module that reads OCaml sources, runs
+the compiler, writes OCaml code, or decodes the export. It returns frozen `Case`
+values: tuples and read-only mappings, safe to cache and share. Each case's
+`checks` is a tagged union, `code` or `answer`; Python branches on its type, never
+on a string, so a new OCaml answer kind needs no Python change. Other Python
+modules adapt those cases to Inspect and handle agent sessions, scoring, logs,
+and Hugging Face execution. OCaml domain modules have no JSON or Inspect
+dependencies. `python/tests/test_boundary.py` enforces both rules.
 
 ## Check the harness offline
 
@@ -147,7 +163,7 @@ let timeout_case i =
 let cases = List.init 200 timeout_case
 ```
 
-A new starting-project shape belongs in `fixtures.ml`; a new property belongs in
+A new starting-project shape belongs in `ocaml/fixtures.ml`; a new property belongs in
 `check.ml`. Prompts live in `task.ml`. Reference edits live in `reference.ml` and
 are used only by offline scripted agents. Case IDs have no matching directory or
 Python registry entry. The `Check.choice` constructor uses the closed `A | B`
@@ -156,8 +172,8 @@ type, while decision replies and expected values are separate explicit inputs.
 ## Execution boundary
 
 The host compiles the fixed OCaml module set in a temporary directory.
-`inspect_export.ml` consumes `Suite.cases` and emits the Inspect data as JSON; the
-host reads that output into memory. Importing `Suite` itself has no output or
+`ocaml/transport.ml` consumes `Suite.cases` and emits JSON; `python/transport.py`
+decodes that output into memory. Importing `Suite` itself has no output or
 execution side effects. Compilation and validated case indexes are cached
 by source contents; changing any module, interface, or the runner invalidates
 the cache.
@@ -169,7 +185,7 @@ case ID. Private checks and reference edits stay in the host's case index; they
 are not copied into sample metadata or the agent workspace. Only the offline
 scripted test agent applies the reference edits.
 
-`check.sh` is the shared compiler runner. It compiles temporary copies and cleans
+`ocaml/check.sh` is the shared compiler runner. It compiles temporary copies and cleans
 up after success or failure, leaving no compiler artifacts in the measured
 worktree. A generated workspace can run its visible checks with, for example:
 
@@ -189,7 +205,8 @@ They detect agent commits, untracked files, ignored files, and changed instructi
 
 The four cases cover clear-task completion, known preflight fields, numeric choice, and hindsight after one loss.
 The suite composes sources, prompts, and assertions from their respective modules.
-Decision schemas check selected conclusions and bounded explanations, not explanation quality.
+Reply checks compare each expected field with its exact JSON type and bound the reason;
+they do not judge explanation quality.
 Question usefulness and reasoning quality require human review of saved traces.
 These small regression tasks do not establish that Genius improves performance overall.
 

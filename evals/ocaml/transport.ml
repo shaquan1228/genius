@@ -1,6 +1,7 @@
-(* Inspect wire format and process entry point. Domain modules do not depend on JSON. *)
+(* The only OCaml module that speaks to Python. It encodes Suite.cases as JSON for
+   python/transport.py and is the process entry point. Domain modules have no JSON. *)
 module Json = struct
-  type t = String of string | Bool of bool | List of t list | Object of (string * t) list | Null
+  type t = String of string | Bool of bool | List of t list | Object of (string * t) list
 
   let quote value =
     let buffer = Buffer.create (String.length value + 2) in
@@ -20,7 +21,6 @@ module Json = struct
   let rec encode = function
     | String value -> quote value
     | Bool value -> string_of_bool value
-    | Null -> "null"
     | List values -> "[" ^ String.concat "," (List.map encode values) ^ "]"
     | Object fields ->
         let field (name, value) = quote name ^ ":" ^ encode value in
@@ -41,12 +41,17 @@ let reference = function
   | Reference.Reply { answer; reason } ->
       Json.Object [], Json.encode (Json.Object (answer_fields answer @ ["reason", Json.String reason]))
 
+let checks = function
+  | Check.Code { sources; program } ->
+      Json.Object [
+        "kind", Json.String "code";
+        "sources", Json.strings sources;
+        "program", Json.String program;
+      ]
+  | Check.Answer answer ->
+      Json.Object ["kind", Json.String "answer"; "expected", Json.Object (answer_fields answer)]
+
 let case (case : Eval.t) =
-  let grading, sources, heldout, expected = match case.checks with
-    | Check.Code { sources; program } -> "ocaml", sources, Json.String program, []
-    | Check.Answer answer ->
-        let kind = match answer with Check.Choice _ -> "choice" | Check.Review _ -> "review" in
-        kind, [], Json.Null, answer_fields answer in
   let solution, answer = reference case.reference in
   Json.Object [
     "id", Json.String case.id;
@@ -54,10 +59,7 @@ let case (case : Eval.t) =
     "prompt", Json.String case.task.prompt;
     "files", Json.files (Fixture.files case.fixture);
     "allowed_files", Json.strings case.allowed_files;
-    "grading", Json.String grading;
-    "sources", Json.strings sources;
-    "heldout", heldout;
-    "expected", Json.Object expected;
+    "checks", checks case.checks;
     "solution", solution;
     "answer", Json.String answer;
   ]

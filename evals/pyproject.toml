@@ -30,21 +30,21 @@ select = ["E", "F", "I", "UP", "B", "PLR0917"]
 max-positional-args = 2
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["PLR0917"]
+"python/tests/**" = ["PLR0917"]
 
 [tool.mypy]
 strict = true
-files = ["."]
+files = ["python"]
 mypy_path = ".."
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["python/tests"]
 addopts = "-q"
 pythonpath = [".."]
 
 [tool.coverage.run]
 branch = true
-source = ["."]
+source = ["python"]
 
 [tool.coverage.report]
 fail_under = 100

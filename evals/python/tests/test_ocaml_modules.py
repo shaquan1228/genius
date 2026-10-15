@@ -3,15 +3,15 @@
 import subprocess
 from pathlib import Path
 
-from evals.cases import EVALS_ROOT
+from evals.python.transport import LIBRARY, OCAML_ROOT, RUNNER, SUITE
 
 
 def run_modules(directory: Path, modules: list[str], probe: str) -> str:
     for name in modules:
-        (directory / name).write_text((EVALS_ROOT / name).read_text())
+        (directory / name).write_text((OCAML_ROOT / name).read_text())
     (directory / "probe.ml").write_text(probe)
     return subprocess.run(
-        ["sh", str(EVALS_ROOT / "check.sh"), *modules, "probe.ml"],
+        ["sh", str(RUNNER), *modules, "probe.ml"],
         cwd=directory,
         text=True,
         capture_output=True,
@@ -74,12 +74,10 @@ let () = match checks with
 
 
 def test_suite_is_pure_and_eval_policy_does_not_change_fixture(tmp_path: Path) -> None:
-    from evals.cases import OCAML_SOURCES
-
     assert (
         run_modules(
             tmp_path,
-            list(OCAML_SOURCES[:-1]),
+            [path.name for path in (*LIBRARY, SUITE)],
             """
 let () =
   let original = List.hd Suite.cases in

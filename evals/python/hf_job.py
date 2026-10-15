@@ -4,8 +4,8 @@ import os
 
 from inspect_ai import eval
 
-import evals.hf_sandbox  # noqa: F401 - registers the Hugging Face Sandbox provider
-from evals.tasks import baseline, genius
+import evals.python.hf_sandbox  # noqa: F401 - registers the Hugging Face Sandbox provider
+from evals.python.tasks import baseline, genius
 
 
 def run() -> int:

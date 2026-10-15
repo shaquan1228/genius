@@ -3,7 +3,7 @@ set -eu
 
 : "${HF_NAMESPACE:?Set HF_NAMESPACE to your Hugging Face username or organization}"
 : "${EVAL_MODEL:?Set EVAL_MODEL to an exact Inspect provider/model ID}"
-test -f evals/tasks.py || { echo "Eval runtime is supplied by the stacked fixture PR." >&2; exit 1; }
+test -f evals/python/tasks.py || { echo "Eval runtime is supplied by the stacked fixture PR." >&2; exit 1; }
 EVAL_EPOCHS="${EVAL_EPOCHS:-1}"
 
 case "$EVAL_MODEL" in

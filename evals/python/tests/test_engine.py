@@ -6,9 +6,9 @@ import pytest
 from inspect_ai.log import read_eval_log
 from inspect_ai.scorer import CORRECT, INCORRECT
 
-from evals.tasks import baseline, genius
-from evals.tests.scenarios import Mode
-from evals.tests.support import offline_run, results
+from evals.python.tasks import baseline, genius
+from evals.python.tests.scenarios import Mode
+from evals.python.tests.support import offline_run, results
 
 
 def test_complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:

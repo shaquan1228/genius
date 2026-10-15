@@ -5,8 +5,9 @@ from unittest.mock import Mock, patch
 import pytest
 from inspect_swe import claude_code, codex_cli
 
-from evals.agents import AGENT_REGISTRY, AgentKind, AgentSpec, coding_agent
-from evals.tasks import build_task
+from evals.python.agents import AGENT_REGISTRY, AgentKind, AgentSpec, coding_agent
+from evals.python.profiles import GENIUS
+from evals.python.tasks import build_task
 
 
 def test_registered_harness_uses_shared_and_custom_settings(
@@ -29,7 +30,7 @@ def test_real_swe_bindings_accept_our_options(kind: AgentKind) -> None:
 
 
 def test_claude_options_are_fixed() -> None:
-    with patch("evals.agents.claude_code", wraps=claude_code) as factory:
+    with patch("evals.python.agents.claude_code", wraps=claude_code) as factory:
         coding_agent("claude", "2.1.278")
     assert factory.call_args.kwargs == {
         "cwd": "workspace",
@@ -43,7 +44,7 @@ def test_claude_options_are_fixed() -> None:
 
 
 def test_codex_options_disable_network() -> None:
-    with patch("evals.agents.codex_cli", wraps=codex_cli) as factory:
+    with patch("evals.python.agents.codex_cli", wraps=codex_cli) as factory:
         coding_agent("codex", "0.137.0")
     assert factory.call_args.kwargs == {
         "cwd": "workspace",
@@ -58,7 +59,7 @@ def test_codex_options_disable_network() -> None:
 
 
 def test_explicit_agent_version_is_logged() -> None:
-    task = build_task("genius", agent="codex", version="0.137.0")
+    task = build_task(GENIUS, agent="codex", version="0.137.0")
     metadata = task.metadata
     assert metadata is not None
     assert (metadata["agent"], metadata["agent_version"]) == ("codex", "0.137.0")
