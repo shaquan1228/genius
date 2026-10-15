@@ -62,14 +62,34 @@ make -C evals check
 ```
 
 This installs locked dependencies, checks strict typing, runs tests, and enforces CRAP ≤5.
-`make -C evals lint-ocaml` checks OCaml style with ocamlformat, then compiles the modules
-with every warning as an error. `make -C evals format-ocaml` applies the pinned style
-from `ocaml/.ocamlformat`.
+`check` runs four parts that also run alone: `check-scaffolding`, `check-ocaml-format`
+(ocamlformat style), `lint-ocaml` (compilation with every warning as an error), and
+`check-python`. `make -C evals format-ocaml` applies the pinned style from
+`ocaml/.ocamlformat`.
 Tests exercise Inspect's real engine with its mock model and scripted test agents.
-They use temporary local sandboxes, requiring no Docker or API keys.
+They use temporary local sandboxes and need no API keys.
 Scripted passes verify the harness; they do not measure Genius performance.
 
 Reports and native offline logs are saved under `evals/results/`.
+
+## Continuous integration
+
+GitHub Actions minutes are free for this public repository.
+
+- `.github/workflows/evals.yml` runs on pushes and pull requests that touch
+  `evals/`, `docs/`, or `skills/`. Its `check` job runs `check-scaffolding`,
+  `lint-ocaml`, and `check-python` in the Hugging Face Job image
+  (`ghcr.io/astral-sh/uv:python3.12-bookworm` with Debian's OCaml 4.13). Its
+  `format` job runs `check-ocaml-format` with ocamlformat 0.29.0.
+- `.github/workflows/hf-evals.yml` launches a paid hosted run on manual dispatch
+  (Actions → HF evals → Run workflow). It runs the `evals.yml` checks first, then
+  `hf_host.sh`. Add an `HF_TOKEN` repository secret with write access, and add
+  `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` for those models. The `HF_NAMESPACE`
+  repository variable defaults to the repository owner.
+
+GitHub dispatches only workflows that exist on the default branch. Before this
+workflow reaches `main`, launch from a local checkout with `sh evals/hf_host.sh`;
+it needs only uv, Git, and a Hugging Face login.
 
 ## Run live comparisons on Hugging Face
 

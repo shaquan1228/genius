@@ -3,8 +3,8 @@
 from inspect_ai import Task, task
 from inspect_ai.model import GenerateConfig
 
+import evals.python.hf_sandbox  # noqa: F401 - registers the Hugging Face Sandbox provider
 from evals.python.agents import DEFAULT_VERSIONS, AgentKind, coding_agent
-from evals.python.paths import EVALS_ROOT
 from evals.python.profiles import (
     BASELINE,
     GENIUS,
@@ -26,7 +26,7 @@ def build_task(profile: Profile, *, agent: AgentKind, version: str) -> Task:
         setup=prepare(),
         solver=coding_agent(agent, agent_version),
         scorer=[correctness(), scope()],
-        sandbox=("docker", str(EVALS_ROOT / "Dockerfile")),
+        sandbox="hf",
         config=GenerateConfig(cache=False),
         epochs=5,
         message_limit=40,

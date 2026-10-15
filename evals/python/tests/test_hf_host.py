@@ -154,6 +154,26 @@ def test_host_script_uses_hf_model_without_provider_key(
     assert "OPENAI_API_KEY" not in commands
 
 
+def test_host_script_rejects_empty_provider_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    launcher = tmp_path / "uvx"
+    launcher.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$HF_CALLS"\n')
+    launcher.chmod(0o755)
+    calls = tmp_path / "calls.txt"
+    monkeypatch.setenv("HF_CALLS", str(calls))
+    monkeypatch.setenv("HF_NAMESPACE", "example")
+    monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+
+    result = subprocess.run(
+        ["sh", "evals/hf_host.sh"], cwd=REPO_ROOT, env=os.environ.copy(), capture_output=True
+    )
+    assert (result.returncode, calls.exists()) == (2, False)
+    assert b"Set OPENAI_API_KEY" in result.stderr
+
+
 def test_hf_inference_provider_initializes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HF_TOKEN", "hf_test")
     model = get_model("hf-inference-providers/openai/gpt-oss-20b")
