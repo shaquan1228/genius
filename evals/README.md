@@ -5,7 +5,15 @@
 Both frameworks use the MIT license. Model calls and compute can cost money.
 
 Inspect owns execution, repeats, model calls, limits, scoring, and logs.
-This package supplies task data, instruction profiles, agent settings, and graders.
+Case authors edit two OCaml files:
+
+- `suite.ml` contains case values and parameter lists.
+- `fixtures.ml` contains reusable family builders that generate public files,
+  private checks, and reference edits.
+
+Adding 200 timeout cases means adding 200 values, or one `List.init`, to the suite.
+It creates no checked-in fixture, grader, or solution files. Python supplies the
+Inspect adapter, instruction profiles, agent settings, and hosted execution.
 
 ## Check the harness offline
 
@@ -87,59 +95,72 @@ Inspect logs record model usage, sample events, answers, errors, and scores.
 Compare each task across profiles; require both correctness and scope to pass.
 Inspect reports each score separately. Scores are not inferred from agent claims.
 
-## Module boundaries
+## Author cases
 
-| Module | Responsibility |
-| --- | --- |
-| `cases.py` | Validate manifest fields and task identifiers |
-| `profiles.py` | Build sample files, prompts, and content hashes |
-| `agents.py` | Configure native Inspect SWE integrations |
-| `tasks.py` | Register profiles, shared limits, and metadata |
-| `workspace.py` | Initialize sandboxes and detect changed files |
-| `answers.py` | Validate strict decision output schemas |
-| `scoring.py` | Combine independent correctness and scope checks |
-| `hf_job.py` | Run both profiles in a hosted Hugging Face Job |
-| `hf_sandbox.py` | Give each sample a dedicated Hugging Face Sandbox VM |
-| `heldout/` | Check code against expectations after the agent finishes |
-| `tests/` | Exercise graders and the native Inspect engine offline |
+`suite.ml` defines the suite with typed family constructors:
 
-Coding fixtures, visible tests, scripted solutions, and held-out checks are OCaml.
-The Inspect adapter remains Python. Both Docker and Hugging Face sample sandboxes
-install Debian's `ocaml-nox`; local offline checks require `ocamlc` on `PATH`.
+```ocaml
+open Fixtures
 
-Each case lists ordered `fixtures` layers in `cases.json`. For example,
-`["ocaml", "clear-task"]` combines the shared compiler runner and typed example
-helpers with receipt-specific source and visible tests. Later layers override
-files at the same path, so a variant can reuse a scenario and replace only its
-different files. Decision cases use only the empty layer. `sources` lists coding
-modules in dependency order; `allowed_files` separately defines edit scope.
+let cases = [
+  Receipt.case ~id:"quantity" ~bug:Receipt.Ignore_quantity
+    ~examples:[ ([(3., 4)], 12.); ([(3., 0)], 0.) ];
+  Preflight.case ~id:"timeout-30" ~initial_timeout:15 ~requested_timeout:30;
+  Decision.cheaper ~id:"lower-cost" ~a:10 ~b:8;
+]
 
-Run visible checks in a coding workspace with, for example:
+let () = emit cases
+```
+
+A case ID has no registry entry or matching directory. For a larger family:
+
+```ocaml
+let cases = List.init 200 (fun i ->
+  Preflight.case ~id:(Printf.sprintf "timeout-%d" i)
+    ~initial_timeout:15 ~requested_timeout:(30 + i))
+```
+
+Family builders generate the buggy project, visible tests, held-out checks, and
+reference edits from these values. Receipt expectations are explicit input/output
+tables, independent of its reference implementation. Preflight checks compare
+both defaults against the requested value and independently test overrides and
+invalid input. Decision cases share output schemas by kind, so new IDs and costs
+need no Python edits. Add a new builder in `fixtures.ml` for a different task
+shape; variations use its existing parameters.
+
+## Execution boundary
+
+The host compiles `fixtures.ml` and `suite.ml` in a temporary directory and reads
+the resulting JSON into memory. Compilation and validated case indexes are cached
+by source contents; changing the suite, families, or runner invalidates the cache.
+No generated files are written into this checkout. Both local checks and the
+hosted Job need OCaml 4.13+; the hosted bootstrap installs Debian's `ocaml-nox`.
+
+Inspect receives only public project files, selected skill instructions, and a
+case ID. Private checks and reference edits stay in the host's case index; they
+are not copied into sample metadata or the agent workspace. Only the offline
+scripted test agent applies the reference edits.
+
+`check.sh` is the shared compiler runner. It compiles temporary copies and cleans
+up after success or failure, leaving no compiler artifacts in the measured
+worktree. A generated workspace can run its visible checks with, for example:
 
 ```sh
 sh check.sh examples.ml receipt.ml test_receipt.ml
 ```
 
-The shared runner compiles fresh copies in a temporary directory and cleans up
-after success or failure, leaving no compiler artifacts in the measured worktree.
-`examples.ml` supplies polymorphic tables of inputs and expected outputs plus
-invalid-input checks. The held-out grader uses the host's trusted copies of this
-runner and helper, sends the private OCaml assertions through standard input,
-and compiles them with the agent's modules inside the sample sandbox. It does
-not trust the agent's visible tests or copies of the shared tools. Compile errors,
-uncaught exceptions, failed assertions, and exits before the private completion
-marker produce incorrect scores. Each grading run gets a fresh unpredictable
-marker, emitted only after every assertion completes.
+After the agent finishes, the grader sends the generated private OCaml checks to
+the sandbox through standard input, using the host's trusted runner. A fresh
+completion marker appears after every assertion; successful early exits without
+that marker fail correctness. Private checks embed their own trusted helper, so
+changing visible tests or helpers cannot make the seeded bugs pass. The marker
+checks completion; it does not isolate hostile code sharing the grader process.
 
-The manifest names each coding case's held-out check. The same runner executes
-every check inside the sandbox after the agent finishes; adding a case needs no
-new scorer branch or verifier registry entry. The checks run agent-produced code
-inside that sandbox, never on the grading host.
 Scope checks compare the final worktree against its original commit.
 They detect agent commits, untracked files, ignored files, and changed instructions.
 
 The four cases cover clear-task completion, known preflight fields, numeric choice, and hindsight after one loss.
-Task prompts and fixtures live in `cases.json` and `fixtures/`.
+Task prompts, sources, and assertions are generated from `suite.ml` and `fixtures.ml`.
 Decision schemas check selected conclusions and bounded explanations, not explanation quality.
 Question usefulness and reasoning quality require human review of saved traces.
 These small regression tasks do not establish that Genius improves performance overall.
@@ -161,6 +182,5 @@ Python coverage and complexity include all adapter runtime code, harness tests,
 and scripted helpers. OCaml checks are verified by compiling and executing the
 seeds, solved fixtures, partial fixes, malformed code, and visible test commands;
 they are not included in Python coverage or the Python CRAP calculation.
-Pre-existing buggy fixture data is excluded from the quality gate.
 Strict mypy checks the Python modules without type-ignore exceptions; `ocamlc`
 type-checks fixture modules and assertions on every execution.

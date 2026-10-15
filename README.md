@@ -58,7 +58,8 @@ Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply 
 ## Evaluations
 
 Use [Inspect AI](https://inspect.aisi.org.uk/) for repeated baseline/Genius comparisons.
-Coding fixtures and held-out checks use OCaml, with reusable fixture layers.
+Cases are OCaml values in `evals/suite.ml`; reusable families generate their
+fixtures and held-out checks without per-case files.
 Install OCaml 4.13+ and run the offline checks, strict typing, coverage, and CRAP gate:
 
 ```sh

@@ -1,1 +1,0 @@
-Updated both defaults to 30.

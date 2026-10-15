@@ -1,1 +1,0 @@
-{"choice":"B","reason":"Identical service costs less."}

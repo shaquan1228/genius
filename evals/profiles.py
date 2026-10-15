@@ -1,5 +1,6 @@
 """Build identical fixtures; add instructions only to the Genius profile."""
 
+import base64
 import hashlib
 import json
 from pathlib import Path
@@ -24,10 +25,15 @@ def instruction_files() -> dict[str, str]:
     }
 
 
+def inline_file(contents: str) -> str:
+    return "data:text/plain;base64," + base64.b64encode(contents.encode()).decode()
+
+
 def files_for(case: Case, profile: Profile) -> dict[str, str]:
-    files: dict[str, str] = {}
-    for fixture in case.fixtures:
-        files.update(directory_files(EVALS_ROOT / "fixtures" / fixture, "workspace"))
+    files = {"workspace/.gitkeep": inline_file("")}
+    files.update({f"workspace/{name}": inline_file(text) for name, text in case.files.items()})
+    if case.grading == "ocaml":
+        files["workspace/check.sh"] = str(EVALS_ROOT / "check.sh")
     if profile == "genius":
         files.update(instruction_files())
     return files
@@ -48,7 +54,7 @@ def samples(profile: Profile) -> list[Sample]:
             id=case.id,
             input=prompt_for(case, profile),
             files=files_for(case, profile),
-            metadata={"case": case.model_dump(), "profile": profile},
+            metadata={"case_id": case.id, "profile": profile},
         )
         for case in load_cases()
     ]

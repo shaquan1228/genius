@@ -1,6 +1,5 @@
 """Compile real OCaml fixtures and reject seeds, partial fixes, and invalid code."""
 
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -8,10 +7,9 @@ import pytest
 
 from evals.cases import EVALS_ROOT, Case, load_cases
 from evals.scoring import heldout_check
-from evals.tests.scenarios import SOLUTIONS
 
 CASES = {case.id: case for case in load_cases()}
-SHARED = EVALS_ROOT / "fixtures/ocaml"
+RUNNER = EVALS_ROOT / "check.sh"
 
 
 def snapshot(directory: Path) -> dict[str, bytes]:
@@ -31,10 +29,15 @@ def verify(case: Case, directory: Path) -> bool:
     return result.returncode == 0 and marker in result.stdout.splitlines()
 
 
+def write_files(directory: Path, files: dict[str, str]) -> None:
+    for name, text in files.items():
+        (directory / name).write_text(text)
+
+
 def seed(case_id: str, directory: Path) -> Case:
     case = CASES[case_id]
-    for fixture in case.fixtures:
-        shutil.copytree(EVALS_ROOT / "fixtures" / fixture, directory, dirs_exist_ok=True)
+    write_files(directory, case.files)
+    (directory / "check.sh").write_text(RUNNER.read_text())
     return case
 
 
@@ -43,7 +46,7 @@ def test_seeds_fail_and_solutions_pass(case_id: str, tmp_path: Path) -> None:
     case = seed(case_id, tmp_path)
     assert not verify(case, tmp_path)
     for name in case.allowed_files:
-        shutil.copy2(SOLUTIONS / case_id / name, tmp_path / name)
+        (tmp_path / name).write_text(case.solution[name])
     before = snapshot(tmp_path)
     assert verify(case, tmp_path)
     assert snapshot(tmp_path) == before
@@ -78,8 +81,7 @@ def test_preflight_defaults_overrides_and_validation(
     case = seed("known-preflight", tmp_path)
     (tmp_path / "config.ml").write_text(f"let timeout_seconds = {config}\n")
     source = (
-        (SOLUTIONS / "known-preflight/client.ml")
-        .read_text()
+        case.solution["client.ml"]
         .replace("= 30", f"= {client}")
         .replace("      value\n", f"      {override}\n")
     )
@@ -125,3 +127,42 @@ def test_visible_check_command_leaves_no_build_files(
     )
     assert result.returncode == 0, result.stderr
     assert snapshot(tmp_path) == before
+
+
+@pytest.mark.parametrize(
+    "expression,filename,fragment",
+    [
+        (
+            'Preflight.case ~id:"variant" ~initial_timeout:7 ~requested_timeout:17',
+            "config.ml",
+            "let timeout_seconds = 7",
+        ),
+        (
+            'Preflight.case ~id:"variant" ~initial_timeout:30 ~requested_timeout:229',
+            "config.ml",
+            "let timeout_seconds = 30",
+        ),
+        (
+            'Receipt.case ~id:"variant" ~bug:Receipt.Clamp_quantity '
+            "~examples:[ ([(3., 0)], 0.); ([(3., 4)], 12.) ]",
+            "receipt.ml",
+            "max quantity 1",
+        ),
+    ],
+)
+def test_family_variants_generate_working_seeds_and_solutions(
+    expression: str,
+    filename: str,
+    fragment: str,
+    tmp_path: Path,
+) -> None:
+    suite = tmp_path / "suite.ml"
+    suite.write_text(f"open Fixtures\nlet () = emit [{expression}]\n")
+    case = load_cases(suite)[0]
+    assert fragment in case.files[filename]
+    work = tmp_path / "workspace"
+    work.mkdir()
+    write_files(work, case.files)
+    assert not verify(case, work)
+    write_files(work, case.solution)
+    assert verify(case, work)

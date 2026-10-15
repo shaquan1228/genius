@@ -1,15 +1,16 @@
 """Validate schemas and keep the comparison's inputs controlled."""
 
 import json
+import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
 
 from evals.answers import grade_answer, unfence
-from evals.cases import Case, load_cases
+from evals.cases import Case, case_by_id, load_cases
 from evals.profiles import content_hash, files_for, prompt_for, samples
-from evals.tests.scenarios import SOLUTIONS
 
 
 def test_manifest_roundtrip() -> None:
@@ -17,46 +18,32 @@ def test_manifest_roundtrip() -> None:
     assert [Case.model_validate(case.model_dump()) for case in cases] == cases
 
 
-def test_invalid_manifest_is_rejected(tmp_path: Path) -> None:
-    path = tmp_path / "cases.json"
-    path.write_text('[{"id":"unknown"}]')
-    with pytest.raises(ValidationError):
+def test_invalid_ocaml_suite_is_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "suite.ml"
+    path.write_text("this is not valid OCaml")
+    with pytest.raises(subprocess.CalledProcessError):
         load_cases(path)
-
-
-def test_new_code_case_needs_no_registry_entry() -> None:
-    case = Case(
-        id="new-case",
-        skill="reasoning",
-        fixtures=["ocaml", "new-case"],
-        allowed_files=["answer.ml"],
-        prompt="Fix answer.ml",
-        heldout_test="answer.ml",
-    )
-    assert (case.id, case.heldout_test) == ("new-case", "answer.ml")
 
 
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("heldout_test", "../outside.ml"),
         ("sources", ["../outside.ml"]),
-        ("fixtures", ["../outside"]),
-        ("fixtures", []),
-        ("heldout_test", "old.py"),
+        ("files", {"../outside.ml": "bad"}),
+        ("solution", {"../outside.ml": "bad"}),
+        ("allowed_files", ["../outside.ml"]),
     ],
 )
-def test_fixture_paths_are_validated(field: str, value: object) -> None:
-    data = {
-        "id": "new-case",
-        "skill": "reasoning",
-        "fixtures": ["ocaml", "new-case"],
-        "allowed_files": [],
-        "prompt": "Fix it",
-        field: value,
-    }
+def test_generated_paths_are_validated(field: str, value: object) -> None:
+    data = load_cases()[0].model_dump()
+    data[field] = value
     with pytest.raises(ValidationError):
         Case.model_validate(data)
+
+
+def grade(case_id: str, text: str) -> bool:
+    case = case_by_id(case_id)
+    return grade_answer(case.grading, text, expected=case.expected)
 
 
 def test_profiles_share_fixture_files() -> None:
@@ -95,9 +82,19 @@ def test_hash_tracks_contents_and_ignores_mapping_order(tmp_path: Path) -> None:
     assert content_hash({"a": str(path), "b": str(path)}) != before
 
 
-@pytest.mark.parametrize("case_id", ["small-decision", "decision-review"])
-def test_correct_decision_outputs(case_id: str) -> None:
-    assert grade_answer(case_id, (SOLUTIONS / case_id / "answer.txt").read_text())
+@pytest.mark.parametrize(
+    "case_id,text",
+    [
+        ("small-decision", '{"choice":"B","reason":"B costs less for identical service."}'),
+        (
+            "decision-review",
+            '{"decision_was_supported":true,"change_rule":false,'
+            '"reason":"One loss did not change the known odds."}',
+        ),
+    ],
+)
+def test_correct_decision_outputs(case_id: str, text: str) -> None:
+    assert grade(case_id, text)
 
 
 @pytest.mark.parametrize(
@@ -114,17 +111,17 @@ def test_correct_decision_outputs(case_id: str) -> None:
     ],
 )
 def test_invalid_decisions_fail(text: str) -> None:
-    assert not grade_answer("small-decision", text)
+    assert not grade("small-decision", text)
 
 
 @pytest.mark.parametrize(
-    "supported,changed", [(False, False), (True, True), (1, 0), ("true", "false")]
+    "supported,changed", [(False, False), (False, True), (True, True), (1, 0), ("true", "false")]
 )
 def test_wrong_review_verdicts_fail(supported: object, changed: object) -> None:
     text = json.dumps(
         {"decision_was_supported": supported, "change_rule": changed, "reason": "One loss."}
     )
-    assert not grade_answer("decision-review", text)
+    assert not grade("decision-review", text)
 
 
 @pytest.mark.parametrize(
@@ -135,22 +132,73 @@ def test_json_fences(text: str, expected: str) -> None:
     assert unfence(text) == expected
 
 
-def test_fixture_layers_compose_in_order(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from evals import profiles
+def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
+    suite = tmp_path / "suite.ml"
+    suite.write_text("""open Fixtures
+let cases = List.init 200 (fun i ->
+  Preflight.case ~id:(Printf.sprintf "timeout-%d" i)
+    ~initial_timeout:15 ~requested_timeout:(30 + i))
+let () = emit cases
+""")
+    cases = load_cases(suite)
+    assert len(cases) == 200
+    assert cases[199].solution["config.ml"] == "let timeout_seconds = 229\n"
+    assert [path.name for path in tmp_path.iterdir()] == ["suite.ml"]
 
-    for layer in ("shared", "specific"):
-        directory = tmp_path / "fixtures" / layer
-        directory.mkdir(parents=True)
-        (directory / "config.ml").write_text(layer)
-    (tmp_path / "fixtures/shared/check.sh").write_text("shared runner")
-    monkeypatch.setattr(profiles, "EVALS_ROOT", tmp_path)
-    case = Case(
-        id="composed",
-        skill="reasoning",
-        fixtures=["shared", "specific"],
-        allowed_files=[],
-        prompt="Check the fixture",
+
+def test_generated_artifacts_stay_out_of_sample_metadata() -> None:
+    for sample in samples("baseline"):
+        assert sample.metadata == {"case_id": sample.id, "profile": "baseline"}
+        assert not any("heldout" in path for path in sample.files or {})
+
+
+def test_duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
+    suite = tmp_path / "suite.ml"
+    suite.write_text("""open Fixtures
+let c = Decision.cheaper ~id:"duplicate" ~a:10 ~b:8
+let () = emit [c; c]
+""")
+    with pytest.raises(ValueError, match="unique"):
+        load_cases(suite)
+
+
+def test_new_decision_ids_and_reversed_costs_need_no_registry_entry(tmp_path: Path) -> None:
+    suite = tmp_path / "suite.ml"
+    suite.write_text("""open Fixtures
+let () = emit [Decision.cheaper ~id:"new-choice" ~a:4 ~b:8]
+""")
+    case = load_cases(suite)[0]
+    assert grade_answer(case.grading, case.answer, expected=case.expected)
+    assert not grade_answer(
+        case.grading, '{"choice":"B","reason":"Cheaper."}', expected=case.expected
     )
-    files = files_for(case, "baseline")
-    assert Path(files["workspace/config.ml"]).read_text() == "specific"
-    assert Path(files["workspace/check.sh"]).read_text() == "shared runner"
+
+
+def test_exporter_escapes_strings(tmp_path: Path) -> None:
+    suite = tmp_path / "suite.ml"
+    suite.write_text(r"""open Fixtures
+let c = Decision.cheaper ~id:"escaped" ~a:10 ~b:8
+let () = emit [{ c with prompt = "quote\" slash\\ newline\n tab\t return\r zero\000 é" }]
+""")
+    assert load_cases(suite)[0].prompt == 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
+
+
+def test_cached_cases_do_not_share_mutable_contents() -> None:
+    original = case_by_id("clear-task")
+    changed = case_by_id("clear-task")
+    changed.files.clear()
+    changed.solution.clear()
+    assert case_by_id("clear-task") == original
+
+
+def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> None:
+    suite = tmp_path / "suite.ml"
+    source = 'open Fixtures\nlet () = emit [Decision.cheaper ~id:"cache" ~a:10 ~b:8]\n'
+    suite.write_text(source)
+    with patch("evals.cases.subprocess.run", wraps=subprocess.run) as compiler:
+        first = load_cases(suite)
+        assert load_cases(suite) == first
+        assert compiler.call_count == 1
+        suite.write_text(source.replace("~a:10", "~a:4"))
+        assert load_cases(suite)[0].expected == {"choice": "A"}
+        assert compiler.call_count == 2

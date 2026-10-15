@@ -7,7 +7,7 @@ from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
 
 from evals.answers import grade_answer
-from evals.cases import EVALS_ROOT, Case
+from evals.cases import EVALS_ROOT, Case, case_by_id
 from evals.workspace import changed_files
 
 
@@ -16,15 +16,11 @@ def verdict(passed: bool, explanation: str) -> Score:
 
 
 def heldout_check(case: Case) -> tuple[list[str], str, str]:
-    script = (EVALS_ROOT / "heldout" / str(case.heldout_test)).read_text()
-    shared = EVALS_ROOT / "fixtures/ocaml"
-    script = (
-        "module Examples = struct\n" + (shared / "examples.ml").read_text() + "\nend\n" + script
-    )
+    script = str(case.heldout)
     command = [
         "sh",
         "-c",
-        (shared / "check.sh").read_text(),
+        (EVALS_ROOT / "check.sh").read_text(),
         "ocaml-check",
         "--stdin",
         *case.sources,
@@ -35,9 +31,12 @@ def heldout_check(case: Case) -> tuple[list[str], str, str]:
 
 
 async def score_correctness(state: TaskState, target: Target) -> Score:
-    case = Case.model_validate(state.metadata["case"])
-    if case.heldout_test is None:
-        return verdict(grade_answer(case.id, state.output.completion), state.output.completion)
+    case = case_by_id(str(state.metadata["case_id"]))
+    if case.grading != "ocaml":
+        return verdict(
+            grade_answer(case.grading, state.output.completion, expected=case.expected),
+            state.output.completion,
+        )
     command, script, marker = heldout_check(case)
     result = await sandbox().exec(command, input=script, cwd="workspace", timeout=30)
     return verdict(
@@ -47,7 +46,7 @@ async def score_correctness(state: TaskState, target: Target) -> Score:
 
 
 async def score_scope(state: TaskState, target: Target) -> Score:
-    case = Case.model_validate(state.metadata["case"])
+    case = case_by_id(str(state.metadata["case_id"]))
     changed = await changed_files(state)
     allowed = {f"workspace/{name}" for name in case.allowed_files}
     return verdict(changed <= allowed, f"Changed files: {sorted(changed)}")

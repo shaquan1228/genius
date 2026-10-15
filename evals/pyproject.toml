@@ -35,7 +35,6 @@ max-positional-args = 2
 [tool.mypy]
 strict = true
 files = ["."]
-exclude = ["fixtures", "tests/solutions"]
 mypy_path = ".."
 
 [tool.pytest.ini_options]
@@ -46,7 +45,6 @@ pythonpath = [".."]
 [tool.coverage.run]
 branch = true
 source = ["."]
-omit = ["fixtures/*", "tests/solutions/*"]
 
 [tool.coverage.report]
 fail_under = 100

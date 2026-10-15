@@ -5,7 +5,7 @@ from inspect_ai.model import GenerateConfig
 
 from evals.agents import DEFAULT_VERSIONS, AgentKind, coding_agent
 from evals.cases import EVALS_ROOT, Profile
-from evals.profiles import content_hash, directory_files, instruction_files, samples
+from evals.profiles import content_hash, instruction_files, samples
 from evals.scoring import correctness, scope
 from evals.workspace import prepare
 
@@ -29,8 +29,10 @@ def build_task(profile: Profile, *, agent: AgentKind, version: str) -> Task:
             "agent": agent,
             "agent_version": agent_version,
             "instructions_sha256": content_hash(instruction_files()),
-            "fixtures_sha256": content_hash(directory_files(EVALS_ROOT / "fixtures", "fixtures")),
-            "cases_sha256": content_hash({"cases.json": str(EVALS_ROOT / "cases.json")}),
+            "fixtures_sha256": content_hash(
+                {name: str(EVALS_ROOT / name) for name in ("fixtures.ml", "check.sh")}
+            ),
+            "cases_sha256": content_hash({"suite.ml": str(EVALS_ROOT / "suite.ml")}),
         },
     )
 

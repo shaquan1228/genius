@@ -18,31 +18,17 @@ class Answer(BaseModel):
 
 
 class DecisionAnswer(Answer):
-    choice: Literal["B"]
+    choice: Literal["A", "B"]
 
 
 class ReviewAnswer(Answer):
     decision_was_supported: StrictBool
     change_rule: StrictBool
 
-    @field_validator("decision_was_supported")
-    @classmethod
-    def require_supported(cls, value: bool) -> bool:
-        if not value:
-            raise ValueError("Original decision was supported by the known odds")
-        return value
-
-    @field_validator("change_rule")
-    @classmethod
-    def reject_hindsight(cls, value: bool) -> bool:
-        if value:
-            raise ValueError("One loss alone should not change the rule")
-        return value
-
 
 ANSWER_MODELS: dict[str, type[Answer]] = {
-    "small-decision": DecisionAnswer,
-    "decision-review": ReviewAnswer,
+    "choice": DecisionAnswer,
+    "review": ReviewAnswer,
 }
 
 
@@ -53,9 +39,9 @@ def unfence(text: str) -> str:
     return answer
 
 
-def grade_answer(case_id: str, text: str) -> bool:
+def grade_answer(kind: str, text: str, *, expected: dict[str, str | bool]) -> bool:
     try:
-        ANSWER_MODELS[case_id].model_validate_json(unfence(text), strict=True)
+        answer = ANSWER_MODELS[kind].model_validate_json(unfence(text), strict=True)
     except ValidationError:
         return False
-    return True
+    return answer.model_dump(exclude={"reason"}) == expected
