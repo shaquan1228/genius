@@ -27,18 +27,21 @@ module Receipt = struct
     let items = String.concat "; " (List.map literal items) in
     Printf.sprintf "Receipt.total [%s] = %s" items (number total)
 
-  let totals examples = ocaml ~sources:["receipt.ml"] ~assertions:(List.map assertion examples)
+  let totals examples = ocaml ~sources:[ "receipt.ml" ] ~assertions:(List.map assertion examples)
 end
 
 module Preflight = struct
   let defaults ~timeout =
-    ocaml ~sources:["config.ml"; "client.ml"] ~assertions:[
-      Printf.sprintf "Config.timeout_seconds = %d" timeout;
-      Printf.sprintf "Client.fallback_timeout = %d" timeout;
-      Printf.sprintf "Client.timeout None = %d" timeout;
-      "Client.timeout (Some 5) = 5";
-      "Client.timeout (Some 1) = 1";
-      "try ignore (Client.timeout (Some 0)); false with Invalid_argument _ -> true";
-      "try ignore (Client.timeout (Some (-1))); false with Invalid_argument _ -> true";
-    ]
+    ocaml
+      ~sources:[ "config.ml"; "client.ml" ]
+      ~assertions:
+        [
+          Printf.sprintf "Config.timeout_seconds = %d" timeout;
+          Printf.sprintf "Client.fallback_timeout = %d" timeout;
+          Printf.sprintf "Client.timeout None = %d" timeout;
+          "Client.timeout (Some 5) = 5";
+          "Client.timeout (Some 1) = 1";
+          "try ignore (Client.timeout (Some 0)); false with Invalid_argument _ -> true";
+          "try ignore (Client.timeout (Some (-1))); false with Invalid_argument _ -> true";
+        ]
 end

@@ -19,11 +19,11 @@ let case ~id ~fixture ~task ~checks ~allowed_files ~reference =
         invalid_arg (Printf.sprintf "Case %s: %s: %s" id problem (String.concat ", " missing))
   in
   (match checks with
-   | Check.Code { sources; _ } ->
-       require "checks read files missing from the fixture" ~within:(paths fixture) sources
-   | Check.Answer _ -> ());
+  | Check.Code { sources; _ } ->
+      require "checks read files missing from the fixture" ~within:(paths fixture) sources
+  | Check.Answer _ -> ());
   (match reference with
-   | Reference.Edits edits ->
-       require "reference edits files outside allowed_files" ~within:allowed_files (paths edits)
-   | Reference.Reply _ -> ());
+  | Reference.Edits edits ->
+      require "reference edits files outside allowed_files" ~within:allowed_files (paths edits)
+  | Reference.Reply _ -> ());
   { id; fixture; task; checks; allowed_files; reference }

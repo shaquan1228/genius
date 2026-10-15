@@ -44,6 +44,17 @@ dependencies. `python/tests/test_boundary.py` enforces both rules.
 ## Check the harness offline
 
 Install OCaml 4.13+ (`ocamlc`), Python 3.12+, [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, and Make.
+Install [ocamlformat](https://github.com/ocaml-ppx/ocamlformat) 0.29.0 through opam; Homebrew does not package it.
+A separate opam switch can reuse the system compiler:
+
+```sh
+brew install opam
+opam init --bare --no-setup
+opam switch create evals-fmt ocaml-system
+opam install --switch evals-fmt ocamlformat.0.29.0
+export PATH="$(opam var --switch evals-fmt bin):$PATH"
+```
+
 From the repository root:
 
 ```sh
@@ -51,7 +62,9 @@ make -C evals check
 ```
 
 This installs locked dependencies, checks strict typing, runs tests, and enforces CRAP ≤5.
-`make -C evals lint-ocaml` compiles the OCaml modules with every warning as an error.
+`make -C evals lint-ocaml` checks OCaml style with ocamlformat, then compiles the modules
+with every warning as an error. `make -C evals format-ocaml` applies the pinned style
+from `ocaml/.ocamlformat`.
 Tests exercise Inspect's real engine with its mock model and scripted test agents.
 They use temporary local sandboxes, requiring no Docker or API keys.
 Scripted passes verify the harness; they do not measure Genius performance.
@@ -127,17 +140,22 @@ Inspect reports each score separately. Scores are not inferred from agent claims
 A suite declares the parts of a case explicitly:
 
 ```ocaml
-let cases = [
-  Eval.case ~id:"quantity"
-    ~fixture:(Fixtures.Receipt.fixture ~bug:Ignore_quantity)
-    ~task:Task.Receipt.fix_total
-    ~checks:Check.Receipt.(totals [
-      expect ~items:[ item ~price:3.0 ~quantity:4 ] ~total:12.0;
-      expect ~items:[ item ~price:3.0 ~quantity:0 ] ~total:0.0;
-    ])
-    ~allowed_files:["receipt.ml"]
-    ~reference:Reference.receipt;
-]
+let cases =
+  [
+    Eval.case
+      ~id:"quantity"
+      ~fixture:(Fixtures.Receipt.fixture ~bug:Ignore_quantity)
+      ~task:Task.Receipt.fix_total
+      ~checks:
+        Check.Receipt.(
+          totals
+            [
+              expect ~items:[ item ~price:3.0 ~quantity:4 ] ~total:12.0;
+              expect ~items:[ item ~price:3.0 ~quantity:0 ] ~total:0.0;
+            ])
+      ~allowed_files:[ "receipt.ml" ]
+      ~reference:Reference.receipt;
+  ]
 ```
 
 The fixture does not choose the prompt, expectations, reference answer, or edit
@@ -153,11 +171,12 @@ Use helpers inside a suite to describe larger parameter sets:
 ```ocaml
 let timeout_case i =
   let requested = 30 + i in
-  Eval.case ~id:(Printf.sprintf "timeout-%d" i)
+  Eval.case
+    ~id:(Printf.sprintf "timeout-%d" i)
     ~fixture:(Fixtures.Preflight.fixture ~timeout:15)
     ~task:(Task.Preflight.change_timeout ~initial:15 ~requested)
     ~checks:(Check.Preflight.defaults ~timeout:requested)
-    ~allowed_files:["config.ml"; "client.ml"]
+    ~allowed_files:[ "config.ml"; "client.ml" ]
     ~reference:(Reference.preflight ~timeout:requested)
 
 let cases = List.init 200 timeout_case

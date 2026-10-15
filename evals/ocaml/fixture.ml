@@ -1,4 +1,5 @@
 module Files = Map.Make (String)
+
 type t = string Files.t
 
 let empty = Files.empty

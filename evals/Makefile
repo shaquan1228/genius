@@ -1,4 +1,4 @@
-.PHONY: check check-scaffolding lint-ocaml
+.PHONY: check check-scaffolding format-ocaml lint-ocaml
 
 # Every OCaml warning is an error, except type-directed disambiguation and open shadowing.
 OCAML_FLAGS = -strict-sequence -strict-formats -w +a-4-40-41-42-44-45-70 -warn-error +a
@@ -15,9 +15,15 @@ check: check-scaffolding lint-ocaml
 	uv run xenon --max-absolute A --max-modules A --max-average A python
 	uv run radon cc --show-complexity --json python > results/complexity.json
 
-# Compile temporary copies in dependency order so no build files enter the checkout.
+# ocaml/.ocamlformat pins the formatter version and style; `make format-ocaml` applies it.
+format-ocaml:
+	ocamlformat --inplace ocaml/*.ml ocaml/*.mli
+
+# Check style, then compile temporary copies in dependency order so no build files enter the checkout.
 lint-ocaml:
 	@command -v ocamlc >/dev/null || { echo "Install OCaml 4.13+ (ocamlc) for fixture checks." >&2; exit 1; }
+	@command -v ocamlformat >/dev/null || { echo "Install ocamlformat 0.29.0 for OCaml style checks; see README.md." >&2; exit 1; }
+	ocamlformat --check ocaml/*.ml ocaml/*.mli || { echo "OCaml style differs; run make -C evals format-ocaml." >&2; exit 1; }
 	build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
 	  cp ocaml/*.mli ocaml/*.ml "$$build_dir" && cd "$$build_dir" && \
 	  ocamlc $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml)
