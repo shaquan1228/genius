@@ -7,7 +7,7 @@ from inspect_ai.model import GenerateConfig
 from pydantic import BaseModel, ConfigDict
 
 import evals.python.hf_sandbox  # noqa: F401 - registers the Hugging Face Sandbox provider
-from evals.python.agents import DEFAULT_VERSIONS, AgentKind, coding_agent
+from evals.python.agents import DEFAULT_VERSIONS, AgentKind, contained_agent
 from evals.python.profiles import content_hash, load_profile
 from evals.python.scoring import evaluation
 from evals.python.transport import (
@@ -40,7 +40,7 @@ def build_task(*, request: TaskRequest) -> Task:
         name=profile.name,
         dataset=profile.samples(dataset=dataset),
         setup=prepare(),
-        solver=coding_agent(agent, version=agent_version),
+        solver=contained_agent(agent, version=agent_version),
         scorer=evaluation(),
         sandbox="hf",
         config=GenerateConfig(cache=spec.cache),

@@ -24,7 +24,15 @@ def score_values(scores: Mapping[str, bool]) -> dict[str, str]:
     return {name: CORRECT if passed else INCORRECT for name, passed in scores.items()}
 
 
+def with_failure(explanation: str, *, failure: str | None) -> str:
+    if failure is None:
+        return explanation
+    return f"Agent process crashed: {failure}\n\n{explanation}"
+
+
 async def score_sample(state: TaskState, target: Target) -> Score:  # noqa: PLR0917 - Inspect calls scorers positionally
+    # A crashed agent is graded on its workspace, like an agent that stopped early.
+    failure = state.metadata.get("agent_failure")
     dataset = cast(Dataset, state.metadata.get("dataset", "smoke"))
     case = case_by_id(query=CaseQuery(case_id=str(state.metadata["case_id"]), selection=dataset))
     completion = state.output.completion
@@ -51,11 +59,12 @@ async def score_sample(state: TaskState, target: Target) -> Score:  # noqa: PLR0
     )
     return Score(
         value=score_values(scores=scores),
-        explanation=explanation,
+        explanation=with_failure(explanation, failure=failure),
         metadata={
             "verification": evidence.model_dump(),
             "verifier_metadata": metadata,
             "changed_files": changed,
+            "agent_failure": failure,
         },
     )
 

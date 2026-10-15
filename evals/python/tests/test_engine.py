@@ -1,15 +1,17 @@
 """Check Inspect scoring, repeated runs, and saved logs."""
 
+from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from inspect_ai.log import read_eval_log
 from inspect_ai.scorer import CORRECT, INCORRECT
 
+from evals.python.agents import AGENT_REGISTRY
 from evals.python.tasks import baseline, genius
-from evals.python.tests.scenarios import Mode
-from evals.python.tests.support import offline_run, results
+from evals.python.tests.scenarios import Mode, crashing
+from evals.python.tests.support import crash_evidence, offline_run, results
 from evals.python.transport import Verification, grade
 
 
@@ -78,6 +80,31 @@ def test_early_exit_cannot_skip_heldout_assertions(tmp_path: Path) -> None:
     scores = {case: (correct, scope) for case, correct, scope in results(log)}
     assert scores["clear-task"] == (INCORRECT, CORRECT)
     assert scores["known-preflight"] == (INCORRECT, CORRECT)
+
+
+def test_crashed_agent_is_scored_on_its_workspace(
+    *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    message = "Error executing codex cli agent 1: tool 'apply_patch' was not in request.tools"
+    factory = Mock(return_value=crashing(message=message))
+    monkeypatch.setitem(
+        AGENT_REGISTRY, "codex", replace(AGENT_REGISTRY["codex"], factory=lambda: factory)
+    )
+    log = offline_run([baseline(agent="codex")], mode=None, directory=tmp_path)[0]
+    assert (log.status, results(log)) == (
+        "success",
+        sorted(
+            (case, INCORRECT, CORRECT)
+            for case in ["clear-task", "known-preflight", "small-decision", "decision-review"]
+        ),
+    )
+    crash = f"Agent process crashed: {message}"
+    assert {str(sample.id): crash_evidence(sample) for sample in log.samples or []} == {
+        "clear-task": (crash, message, "failed"),
+        "known-preflight": (crash, message, "failed"),
+        "small-decision": (crash, message, "unchecked"),
+        "decision-review": (crash, message, "unchecked"),
+    }
 
 
 def test_verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
