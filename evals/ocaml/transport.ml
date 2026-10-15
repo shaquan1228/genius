@@ -96,9 +96,8 @@ let reference (reference : Reference.t) =
 
 let criterion = function
   | Criterion.Code { sources; program } ->
-      `Assoc
-        [ ("kind", `String "code"); ("sources", strings sources); ("program", `String program) ]
-  | Criterion.Answer _ -> `Assoc [ ("kind", `String "answer") ]
+      `Assoc [ ("sources", strings sources); ("program", `String program) ]
+  | Criterion.Answer _ -> `Null
 
 let case (case : Case.t) =
   let solution, answer = reference case.reference in
@@ -108,7 +107,6 @@ let case (case : Case.t) =
       ("skill", `String case.instruction.skill);
       ("prompt", `String case.instruction.prompt);
       ("files", files (Fixture.files case.fixture));
-      ("allowed_files", strings case.allowed_files);
       ("checks", criterion case.criterion);
       ("solution", solution);
       ("answer", `String answer);

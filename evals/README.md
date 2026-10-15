@@ -35,11 +35,12 @@ The OCaml kernel owns eval definitions and pure grading. Primitive definitions i
 | `suite.ml` | Pure case declarations |
 | `transport.ml` | Sole OCaml codec and executable entry point |
 | `check.sh` | Temporary compiler runner for visible and held-out code verification |
+| `tests/*.ml` | Kernel tests; each links only the modules it may use |
 
 The bridge has two operations: export execution inputs, and grade observations by case ID.
 A grading request sends a protocol version, case ID, raw response text, changed paths, and trusted code-execution evidence. It returns a versioned map of named scores. Candidate values never become OCaml source. Criteria stay inside the kernel: Python does not mirror answer expectations, text rules, or grading variants.
 
-`python/transport.py` builds a cached host executable from trusted source contents and invokes it with isolated, uncached requests. It returns frozen execution projections and score data. Code cases expose their runtime verifier inputs; answer cases expose only their execution mode. References and private verifier programs stay in the host index, outside agent files and sample metadata.
+`python/transport.py` builds a cached host executable from trusted source contents and invokes it with isolated, uncached requests. It returns frozen execution projections and score data. Code cases expose their runtime verifier inputs; answer cases expose no checks, because the kernel grades their replies. References and private verifier programs stay in the host index, outside agent files and sample metadata.
 
 Python retains Git observation, trusted held-out runner and completion-marker handling, sandbox lifecycle, profile packaging, agent integrations, Inspect adapters, limits, logging, and metrics. Invalid candidate replies receive failing scores; compiler/process/protocol failures remain harness errors. Source changes invalidate the executable and manifest caches. Historical logs are unchanged; old exported manifests have no compatibility shim.
 
@@ -66,9 +67,10 @@ make -C evals check
 ```
 
 This installs locked dependencies, checks strict typing, runs tests, and enforces CRAP ≤5.
-`check` runs four parts that also run alone: `check-scaffolding`, `check-ocaml-format`
-(ocamlformat style), `lint-ocaml` (compilation with every warning as an error), and
-`check-python` (Ruff format and lint, strict mypy, tests, coverage, Xenon).
+`check` runs five parts that also run alone: `check-scaffolding`, `check-ocaml-format`
+(ocamlformat style), `lint-ocaml` (compilation with every warning as an error),
+`test-ocaml` (kernel tests in `ocaml/tests/`), and `check-python` (Ruff format and lint,
+strict mypy, tests, coverage, Xenon).
 `make -C evals format` applies both styles: ocamlformat from `ocaml/.ocamlformat`
 and Ruff from `pyproject.toml`.
 
@@ -91,7 +93,7 @@ GitHub Actions minutes are free for this public repository.
 
 - `.github/workflows/evals.yml` runs on pushes and pull requests that touch
   `evals/`, `docs/`, or `skills/`. Its `check` job runs `check-scaffolding`,
-  `lint-ocaml`, and `check-python` in the Hugging Face Job image
+  `lint-ocaml`, `test-ocaml`, and `check-python` in the Hugging Face Job image
   (`ghcr.io/astral-sh/uv:python3.12-bookworm` with Debian's OCaml 4.13, ocamlfind and Jsonm). Its
   `format` job runs `check-ocaml-format` with ocamlformat 0.29.0.
 - `.github/workflows/hf-evals.yml` launches a paid hosted run on manual dispatch
@@ -282,7 +284,8 @@ Radon exports measured complexity to `results/complexity.json`.
 
 Python coverage and complexity include all adapter runtime code, harness tests,
 and scripted helpers. OCaml checks are verified by compiling and executing the
-seeds, solved fixtures, partial fixes, malformed code, and visible test commands;
-they are not included in Python coverage or the Python CRAP calculation.
+seeds, solved fixtures, partial fixes, malformed code, and visible test commands.
+`make test-ocaml` checks module boundaries, case relationships, and grading policy.
+Neither is included in Python coverage or the Python CRAP calculation.
 Strict mypy checks the Python modules without type-ignore exceptions; `ocamlc`
 type-checks fixture modules and assertions on every execution.

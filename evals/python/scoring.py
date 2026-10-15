@@ -24,7 +24,7 @@ async def score_code(checks: CodeChecks) -> Score:
 async def score_correctness(state: TaskState, target: Target) -> Score:  # noqa: PLR0917 - Inspect calls scorers positionally
     case = case_by_id(str(state.metadata["case_id"]))
     completion = state.output.completion
-    code = await score_code(case.checks) if isinstance(case.checks, CodeChecks) else None
+    code = None if case.checks is None else await score_code(case.checks)
     scores = grade(
         case.id,
         response=completion,

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from evals.python.tests.support import ocaml_timeout_case
-from evals.python.transport import RUNNER, Case, CodeChecks, heldout_check, load_cases
+from evals.python.transport import RUNNER, Case, heldout_check, load_cases
 
 CASES = {case.id: case for case in load_cases()}
 
@@ -17,7 +17,7 @@ def snapshot(directory: Path) -> dict[str, bytes]:
 
 
 def verify(case: Case, *, directory: Path) -> bool:
-    assert isinstance(case.checks, CodeChecks)
+    assert case.checks is not None
     command, script, marker = heldout_check(case.checks)
     result = subprocess.run(
         command,
@@ -47,8 +47,7 @@ def seed(case_id: str, *, directory: Path) -> Case:
 def test_seeds_fail_and_solutions_pass(*, case_id: str, tmp_path: Path) -> None:
     case = seed(case_id, directory=tmp_path)
     assert not verify(case, directory=tmp_path)
-    for name in case.allowed_files:
-        (tmp_path / name).write_text(case.solution[name])
+    write_files(tmp_path, files=case.solution)
     before = snapshot(tmp_path)
     assert verify(case, directory=tmp_path)
     assert snapshot(tmp_path) == before
