@@ -154,7 +154,10 @@ def test_hf_job_runs_both_profiles(provider: str, *, monkeypatch: pytest.MonkeyP
         inspect_eval.call_args.kwargs["epochs"],
     ) == (["baseline", "genius"], "hf", 5)
     model = inspect_eval.call_args.kwargs["model"]
-    assert isinstance(model.api, HFInferenceProvidersAPI) == (provider == "hf-inference-providers")
+    assert (
+        isinstance(model.api, HFInferenceProvidersAPI),
+        getattr(model.api, "strict_tools", False),
+    ) == (provider == "hf-inference-providers", False)
 
 
 @pytest.mark.parametrize("extra_body", [None, {"prompt_cache_key": "codex-session", "top_k": 5}])

@@ -118,8 +118,9 @@ Hugging Face token. OpenAI and Anthropic models need their own provider API keys
 a ChatGPT or Claude subscription does not supply an API key for Inspect.
 
 HF Job logs name the provider `genius-hf`: this adapter uses Inspect's HF provider
-and removes Codex's `prompt_cache_key`, which HF's chat endpoint rejects. It keeps
-the requested model ID and HF authentication.
+and removes Codex's `prompt_cache_key`, which HF's chat endpoint rejects. It uses
+non-strict tool schemas so Codex's optional arguments remain valid. It keeps the
+requested model ID and HF authentication.
 
 Run from a checkout of the completed eval stack, or `main` after both PRs
 merge. The private source repository and results bucket already exist for

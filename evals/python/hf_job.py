@@ -23,12 +23,17 @@ class HfChatAPI(HFInferenceProvidersAPI):
 def run() -> int:
     agent = os.environ.get("EVAL_AGENT", "claude")
     version = os.environ.get("EVAL_VERSION", "")
-    model = os.environ["EVAL_MODEL"]
-    if model.startswith("hf-inference-providers/"):
-        model = model.replace("hf-inference-providers/", "genius-hf/", 1)
+    model_name = os.environ["EVAL_MODEL"]
+    if model_name.startswith("hf-inference-providers/"):
+        model = get_model(
+            model_name.replace("hf-inference-providers/", "genius-hf/", 1),
+            strict_tools=False,
+        )
+    else:
+        model = get_model(model_name)
     logs = eval(
         [baseline(agent=agent, version=version), genius(agent=agent, version=version)],
-        model=get_model(model),
+        model=model,
         epochs=int(os.environ.get("EVAL_EPOCHS", "5")),
         sandbox="hf",
         max_samples=1,
