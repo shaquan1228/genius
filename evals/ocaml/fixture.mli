@@ -1,3 +1,7 @@
+(* Fixture: initial-state files, our immutable file-based mapping of sample files
+   and task environments.
+   https://inspect.aisi.org.uk/datasets.html#sample-files
+   https://docs.harborframework.com/tasks/environment *)
 type t
 (** Immutable file collections. Adding a duplicate fails; overlay explicitly replaces it. *)
 

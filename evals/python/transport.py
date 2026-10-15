@@ -5,8 +5,10 @@ builds the OCaml runner inputs that grade a workspace. No other Python module
 reads OCaml sources or writes OCaml code.
 """
 
+import json
 import subprocess
 from collections.abc import Mapping
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from secrets import token_hex
@@ -22,13 +24,20 @@ OCAML_ROOT: Final = EVALS_ROOT / "ocaml"
 LIBRARY: Final = tuple(
     OCAML_ROOT / name
     for name in (
+        "response.mli",
+        "response.ml",
         "fixture.mli",
         "fixture.ml",
-        "fixtures.ml",
-        "check.ml",
-        "task.ml",
+        "instruction.ml",
+        "criterion.ml",
         "reference.ml",
-        "eval.ml",
+        "case.ml",
+        "outcome.ml",
+        "score.mli",
+        "score.ml",
+        "grader.ml",
+        "fixtures.ml",
+        "scenarios.ml",
     )
 )
 SUITE: Final = OCAML_ROOT / "suite.ml"
@@ -39,9 +48,6 @@ FROZEN: Final = ConfigDict(strict=True, extra="forbid", frozen=True)
 SourceName = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*\.ml$")]
 FileName = Annotated[str, Field(pattern=r"^[a-zA-Z_][a-zA-Z0-9_.-]*$")]
 Files = Annotated[Mapping[FileName, str], AfterValidator(MappingProxyType), PlainSerializer(dict)]
-Expected = Annotated[
-    Mapping[str, str | bool], AfterValidator(MappingProxyType), PlainSerializer(dict)
-]
 
 
 class CodeChecks(BaseModel):
@@ -59,12 +65,11 @@ class CodeChecks(BaseModel):
 
 
 class AnswerChecks(BaseModel):
-    """Expected fields of the agent's JSON reply."""
+    """Opaque response grading strategy; policy stays in the kernel."""
 
     model_config = FROZEN
 
     kind: Literal["answer"]
-    expected: Expected
 
     def tools(self) -> Mapping[str, str]:
         return MappingProxyType({})
@@ -95,15 +100,14 @@ def decode(data: str) -> tuple[Case, ...]:
     return cases
 
 
-@lru_cache(maxsize=1)
-def _export(sources: tuple[tuple[str, str], ...], *, runner: str) -> str:
-    with TemporaryDirectory(prefix="genius-suite-") as directory:
-        for name, contents in (*sources, (RUNNER.name, runner)):
-            (Path(directory) / name).write_text(contents)
-        # Compiler and assembly errors stay on stderr so suite authors can read them.
+@dataclass(frozen=True)
+class _Kernel:
+    directory: TemporaryDirectory[str]
+
+    def run(self, *arguments: str, data: str | None = None) -> str:
         return subprocess.run(
-            ["sh", RUNNER.name, *(name for name, _ in sources)],
-            cwd=directory,
+            [str(Path(self.directory.name) / "kernel"), *arguments],
+            input=data,
             check=True,
             stdout=subprocess.PIPE,
             text=True,
@@ -112,17 +116,52 @@ def _export(sources: tuple[tuple[str, str], ...], *, runner: str) -> str:
 
 
 @lru_cache(maxsize=1)
+def _kernel(sources: tuple[tuple[str, str], ...], *, runner: str) -> _Kernel:
+    directory = TemporaryDirectory(prefix="genius-kernel-")
+    try:
+        for name, contents in (*sources, (RUNNER.name, runner)):
+            (Path(directory.name) / name).write_text(contents)
+        subprocess.run(
+            [
+                "ocamlfind",
+                "ocamlc",
+                "-package",
+                "jsonm",
+                "-linkpkg",
+                "-o",
+                "kernel",
+                *(name for name, _ in sources),
+            ],
+            cwd=directory.name,
+            check=True,
+            timeout=30,
+        )
+    except BaseException:
+        directory.cleanup()
+        raise
+    return _Kernel(directory)
+
+
+@lru_cache(maxsize=1)
+def _export(sources: tuple[tuple[str, str], ...], *, runner: str) -> str:
+    return _kernel(sources, runner=runner).run()
+
+
+@lru_cache(maxsize=1)
 def _index(data: str) -> Mapping[str, Case]:
     return MappingProxyType({case.id: case for case in decode(data)})
 
 
-def _suite_index(suite: Path) -> Mapping[str, Case]:
-    sources = (
+def _sources(suite: Path) -> tuple[tuple[str, str], ...]:
+    return (
         *((path.name, path.read_text()) for path in LIBRARY),
         (SUITE.name, suite.read_text()),
         (EXPORTER.name, EXPORTER.read_text()),
     )
-    return _index(_export(sources, runner=RUNNER.read_text()))
+
+
+def _suite_index(suite: Path) -> Mapping[str, Case]:
+    return _index(_export(_sources(suite), runner=RUNNER.read_text()))
 
 
 def load_cases(suite: Path = SUITE) -> tuple[Case, ...]:
@@ -144,3 +183,44 @@ def heldout_check(checks: CodeChecks) -> tuple[list[str], str, str]:
     program = f'{checks.program}\nlet () = print_endline "\\n{marker}"\n'
     command = ["sh", "-c", RUNNER.read_text(), "ocaml-check", "--stdin", *checks.sources]
     return command, program, marker
+
+
+Scores = Annotated[Mapping[str, bool], AfterValidator(MappingProxyType)]
+
+
+class _GradingResult(BaseModel):
+    """Named score results, matching the codec-free Score primitive in OCaml.
+
+    Score vocabulary: https://developers.openai.com/api/docs/guides/graders
+    and https://evalscope.readthedocs.io/en/latest/get_started/basic_usage.html
+    """
+
+    model_config = FROZEN
+
+    version: int = Field(ge=1, le=1)
+    scores: Scores
+
+
+def grade(
+    case_id: str,
+    *,
+    response: str,
+    changed_files: tuple[str, ...],
+    code_passed: bool,
+    suite: Path = SUITE,
+) -> Mapping[str, bool]:
+    """Apply private kernel criteria to observed evidence, without caching candidate results."""
+    request = json.dumps(
+        {
+            "version": 1,
+            "case_id": case_id,
+            "response": response,
+            "changed_files": changed_files,
+            "code_passed": code_passed,
+        }
+    )
+    kernel = _kernel(_sources(suite), runner=RUNNER.read_text())
+    result = _GradingResult.model_validate_json(kernel.run("--grade", data=request))
+    if not {"correctness", "scope"} <= result.scores.keys():
+        raise ValueError("Kernel omitted required score names")
+    return result.scores

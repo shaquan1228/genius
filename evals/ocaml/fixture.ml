@@ -1,3 +1,7 @@
+(* Fixture: initial-state files. This immutable collection is our file-based mapping
+   of sample files and task environments, not a universal evaluation fixture schema.
+   https://inspect.aisi.org.uk/datasets.html#sample-files
+   https://docs.harborframework.com/tasks/environment *)
 module Files = Map.Make (String)
 
 type t = string Files.t

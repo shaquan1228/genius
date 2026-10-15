@@ -21,7 +21,7 @@ jobs:
       - name: Install OCaml and build tools
         run: |
           apt-get update -qq
-          apt-get install -y --no-install-recommends git make ocaml-nox
+          apt-get install -y --no-install-recommends git make ocaml-nox ocaml-findlib libjsonm-ocaml-dev
       - uses: actions/checkout@v4
       - run: make -C evals check-scaffolding lint-ocaml check-python
 

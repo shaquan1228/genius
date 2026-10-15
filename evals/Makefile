@@ -35,11 +35,11 @@ check-ocaml-format:
 
 # Compile temporary copies in dependency order so no build files enter the checkout.
 lint-ocaml:
-	@command -v ocamlc >/dev/null || { echo "Install OCaml 4.13+ (ocamlc) for fixture checks." >&2; exit 1; }
+	@command -v ocamlfind >/dev/null || { echo "Install OCaml 4.13+, ocamlfind and Jsonm for kernel checks." >&2; exit 1; }
 	sh -n ocaml/check.sh
 	build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
 	  cp ocaml/*.mli ocaml/*.ml "$$build_dir" && cd "$$build_dir" && \
-	  ocamlc $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml)
+	  ocamlfind ocamlc -package jsonm $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml)
 
 check-scaffolding:
 	sh -n hf_host.sh

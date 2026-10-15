@@ -49,5 +49,5 @@ def test_transport_internals_stay_private() -> None:
 def test_only_ocaml_transport_encodes_or_prints() -> None:
     assert sorted(OCAML_ROOT.glob("*.ml*")) == sorted((*LIBRARY, SUITE, EXPORTER))
     domain = {path.name: path.read_text() for path in (*LIBRARY, SUITE)}
-    assert {name for name, text in domain.items() if re.search(r"Json|print_", text)} == set()
-    assert "Json" in EXPORTER.read_text()
+    assert {name for name, text in domain.items() if re.search(r"Jsonm|print_", text)} == set()
+    assert "Jsonm" in EXPORTER.read_text()

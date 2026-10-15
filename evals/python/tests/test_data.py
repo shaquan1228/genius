@@ -2,17 +2,16 @@
 
 import json
 import subprocess
-from collections.abc import Mapping
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
 
-from evals.python.answers import grade_answer, unfence
 from evals.python.profiles import BASELINE, GENIUS, content_hash
 from evals.python.tests.support import ocaml_choice_case, ocaml_timeout_case
-from evals.python.transport import AnswerChecks, Case, case_by_id, decode, load_cases
+from evals.python.transport import AnswerChecks, case_by_id, decode, load_cases
+from evals.python.transport import grade as kernel_grade
 
 
 def encode(cases: list[dict[str, object]]) -> str:
@@ -51,13 +50,11 @@ def test_generated_paths_are_validated(*, field: str, value: object) -> None:
         decode(encode([data]))
 
 
-def expected(case: Case) -> Mapping[str, str | bool]:
-    assert isinstance(case.checks, AnswerChecks)
-    return case.checks.expected
-
-
-def grade(case_id: str, *, text: str) -> bool:
-    return grade_answer(text, expected=expected(case_by_id(case_id)))
+def grade(case_id: str, *, text: str, suite: Path | None = None) -> bool:
+    arguments = {} if suite is None else {"suite": suite}
+    return kernel_grade(case_id, response=text, changed_files=(), code_passed=False, **arguments)[
+        "correctness"
+    ]
 
 
 def test_profiles_share_fixture_files() -> None:
@@ -140,11 +137,11 @@ def test_wrong_review_verdicts_fail(*, supported: object, changed: object) -> No
 
 
 @pytest.mark.parametrize(
-    ("text", "expected"),
-    [("  plain  ", "plain"), ("```json\n{}\n```", "{}"), ("```json\n{}", "```json\n{}")],
+    "text",
+    ['  {"choice":"B","reason":"Cheap"}  ', '```json\n{"choice":"B","reason":"Cheap"}\n```'],
 )
-def test_json_fences(*, text: str, expected: str) -> None:
-    assert unfence(text) == expected
+def test_json_fences(text: str) -> None:
+    assert grade("small-decision", text=text)
 
 
 def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
@@ -181,7 +178,7 @@ def test_duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
         (
             "Fixtures.Preflight.fixture ~timeout:15",
             '["receipt.ml"]',
-            "checks read files missing from the fixture: receipt.ml",
+            "criteria read files missing from the fixture: receipt.ml",
         ),
         (
             "Fixtures.Receipt.fixture ~bug:Ignore_quantity",
@@ -200,9 +197,10 @@ def test_case_parts_must_agree_on_files(
 ) -> None:
     suite = tmp_path / "suite.ml"
     suite.write_text(
-        f"""let cases = [Eval.case ~id:"mismatch" ~fixture:({fixture})
-  ~task:Task.Receipt.fix_total ~checks:Check.Receipt.(totals [ expect ~items:[] ~total:0.0 ])
-  ~allowed_files:{allowed_files} ~reference:Reference.receipt]
+        f"""let cases = [Case.make ~id:"mismatch" ~fixture:({fixture})
+  ~instruction:Scenarios.Receipt.fix_total
+  ~criterion:Scenarios.Receipt.(totals [ expect ~items:[] ~total:0.0 ])
+  ~allowed_files:{allowed_files} ~reference:Scenarios.Receipt.reference]
 """
     )
     with pytest.raises(subprocess.CalledProcessError):
@@ -212,7 +210,7 @@ def test_case_parts_must_agree_on_files(
 
 def test_prompts_name_their_scope_and_answer_fields() -> None:
     for case in load_cases():
-        fields = case.checks.model_dump().get("expected", {})
+        fields = json.loads(case.answer) if isinstance(case.checks, AnswerChecks) else {}
         assert all(name in case.prompt for name in [*case.allowed_files, *fields]), case.id
 
 
@@ -221,8 +219,8 @@ def test_new_decision_ids_and_reversed_costs_need_no_registry_entry(tmp_path: Pa
     expression = ocaml_choice_case(case_id="new-choice", a=4, b=8)
     suite.write_text(f"let cases = [{expression}]\n")
     case = load_cases(suite)[0]
-    assert grade_answer(case.answer, expected=expected(case))
-    assert not grade_answer('{"choice":"B","reason":"Cheaper."}', expected=expected(case))
+    assert grade(case.id, text=case.answer, suite=suite)
+    assert not grade(case.id, text='{"choice":"B","reason":"Cheaper."}', suite=suite)
 
 
 def test_exporter_escapes_strings(tmp_path: Path) -> None:
@@ -232,7 +230,7 @@ def test_exporter_escapes_strings(tmp_path: Path) -> None:
         f"let c = {expression}\n"
         + r"""
 let text = "quote\" slash\\ newline\n tab\t return\r zero\000 é"
-let cases = [{ c with task = { c.task with prompt = text } }]
+let cases = [{ c with instruction = { c.instruction with prompt = text } }]
 """
     )
     assert load_cases(suite)[0].prompt == 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
@@ -260,8 +258,8 @@ def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> Non
     with patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as compiler:
         first = load_cases(suite)
         assert load_cases(suite) == first
-        assert compiler.call_count == 1
+        assert compiler.call_count == 2
         changed = ocaml_choice_case(case_id="cache", a=4, b=8)
         suite.write_text(f"let cases = [{changed}]\n")
-        assert expected(load_cases(suite)[0]) == {"choice": "A"}
-        assert compiler.call_count == 2
+        assert json.loads(load_cases(suite)[0].answer)["choice"] == "A"
+        assert compiler.call_count == 4
