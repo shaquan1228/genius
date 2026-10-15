@@ -86,20 +86,40 @@ let response value =
   in
   `Assoc (List.map field (Response.fields value))
 
-let reference (reference : Reference.t) =
+let reference (reference : Ast.reference) =
   let completion =
     match reference.completion with
-    | Reference.Plain text -> text
-    | Reference.Structured fields -> Json.encode (response fields)
+    | Ast.Plain text -> text
+    | Ast.Structured fields -> Json.encode (response fields)
   in
   (files (Fixture.files reference.edits), completion)
 
-let criterion = function
-  | Criterion.Code { sources; program } ->
-      `Assoc [ ("sources", strings sources); ("program", `String program) ]
-  | Criterion.Answer _ -> `Null
+let resource = function
+  | Verifier.Inline text -> text
+  | Verifier.Resource name ->
+      if not (Verifier.valid_path name) then invalid_arg "Invalid verifier resource";
+      let channel = open_in_bin (Filename.concat (Filename.dirname Sys.executable_name) name) in
+      Fun.protect
+        ~finally:(fun () -> close_in channel)
+        (fun () -> really_input_string channel (in_channel_length channel))
 
-let case (case : Case.t) =
+let artifacts values = files (List.map (fun (name, content) -> (name, resource content)) values)
+
+let criterion = function
+  | Ast.Code verifier ->
+      `Assoc
+        [
+          ("inputs", strings verifier.inputs);
+          ("files", artifacts verifier.files);
+          ("tools", artifacts verifier.tools);
+          ("command", strings verifier.command);
+          ("stdin", `String verifier.stdin);
+          ("timeout_seconds", `Float (float_of_int verifier.timeout_seconds));
+        ]
+  | Ast.Answer _ -> `Null
+
+let case (case : Ast.case) =
+  let case = Case.validate case in
   let solution, answer = reference case.reference in
   `Assoc
     [
@@ -112,19 +132,29 @@ let case (case : Case.t) =
       ("answer", `String answer);
     ]
 
-let trim text =
-  let rec bounds index first last =
-    if index = String.length text then
-      match first with None -> "" | Some start -> String.sub text start (last - start)
-    else
-      let width = Grader.whitespace_width text index in
-      if width > 0 then bounds (index + width) first last
-      else bounds (index + 1) (match first with None -> Some index | some -> some) (index + 1)
+let experiment =
+  let spec = Experiment.default in
+  let profile (value : Experiment.profile) =
+    `Assoc
+      [
+        ("name", `String value.name);
+        ("preamble", `String value.preamble);
+        ("instructions", strings value.instructions);
+      ]
   in
-  bounds 0 None 0
+  let number value = `Float (float_of_int value) in
+  `Assoc
+    [
+      ("profiles", `List (List.map profile spec.profiles));
+      ("epochs", number spec.epochs);
+      ("message_limit", number spec.message_limit);
+      ("token_limit", number spec.token_limit);
+      ("time_limit", number spec.time_limit);
+      ("cache", `Bool spec.cache);
+    ]
 
 let unfence text =
-  let text = trim text in
+  let text = Grader.trim text in
   let length = String.length text in
   if length >= 12 && String.sub text 0 8 = "```json\n" && String.sub text (length - 4) 4 = "\n```"
   then String.sub text 8 (length - 12)
@@ -152,39 +182,101 @@ let candidate text =
     | _ -> None
   with Invalid_argument _ -> None
 
-let request value =
+let request ?(cases = Suite.cases) value =
   let invalid () = invalid_arg "Invalid grading request" in
   let fields = match value with `Assoc fields -> fields | _ -> invalid () in
   let names = List.sort compare (List.map fst fields) in
-  if names <> [ "case_id"; "changed_files"; "code_passed"; "response"; "version" ] then invalid ();
+  if names <> [ "case_id"; "changed_files"; "response"; "verification"; "version" ] then invalid ();
   let get name = List.assoc name fields in
-  if get "version" <> `Float 1.0 then invalid ();
+  if get "version" <> `Float 2.0 then invalid ();
   let string = function `String text -> text | _ -> invalid () in
   let id = string (get "case_id") in
   let text = string (get "response") in
   let changed_files =
     match get "changed_files" with `List values -> List.map string values | _ -> invalid ()
   in
-  let code_passed = match get "code_passed" with `Bool value -> value | _ -> invalid () in
+  let verification =
+    let fields = match get "verification" with `Assoc fields -> fields | _ -> invalid () in
+    if List.sort compare (List.map fst fields) <> [ "detail"; "status" ] then invalid ();
+    let detail = string (List.assoc "detail" fields) in
+    match string (List.assoc "status" fields) with
+    | "unchecked" -> Ast.Unchecked
+    | "passed" -> Ast.Passed
+    | "failed" -> Ast.Failed
+    | "invalid_submission" -> Ast.Invalid_submission
+    | "timed_out" -> Ast.Timed_out
+    | "harness_error" -> Ast.Harness_error detail
+    | _ -> invalid ()
+  in
   let case =
-    match List.find_opt (fun (case : Case.t) -> case.id = id) Suite.cases with
-    | Some case -> case
+    match List.find_opt (fun (case : Ast.case) -> case.id = id) cases with
+    | Some case -> Case.validate case
     | None -> invalid_arg ("Unknown case: " ^ id)
   in
   let score =
-    Grader.grade case ~response:(candidate text) ~outcome:(Outcome.make ~changed_files ~code_passed)
+    Grader.grade case ~response:(candidate text) ~outcome:{ Ast.changed_files; verification }
   in
   `Assoc
     [
-      ("version", `Float 1.0);
-      ("scores", `Assoc (List.map (fun (name, value) -> (name, `Bool value)) (Score.fields score)));
+      ("version", `Float 2.0);
+      ("scores", `Assoc (List.map (fun (name, value) -> (name, `Bool value)) score));
     ]
+
+let humaneval_info =
+  `Assoc
+    [
+      ("source", `String Humaneval.source);
+      ("revision", `String Humaneval.revision);
+      ("sha256", `String Humaneval.sha256);
+      ("count", `Float (float_of_int Humaneval.count));
+      ("evaluator_commit", `String Humaneval.evaluator_commit);
+      ("numpy_version", `String Humaneval.numpy_version);
+      ("psutil_version", `String Humaneval.psutil_version);
+    ]
+
+let json_fields = function `Assoc fields -> fields | _ -> invalid_arg "Expected object"
+let json_string = function `String text -> text | _ -> invalid_arg "Expected string"
+
+let humaneval_record raw =
+  let fields = json_fields (Json.decode (`String raw)) in
+  let get name = json_string (List.assoc name fields) in
+  let problem =
+    Humaneval.
+      {
+        task_id = get "task_id";
+        prompt = get "prompt";
+        entry_point = get "entry_point";
+        canonical_solution = get "canonical_solution";
+        private_input = raw;
+      }
+  in
+  let stdin =
+    Json.encode (`Assoc [ ("manifest", humaneval_info); ("record", `String problem.private_input) ])
+  in
+  Humaneval.make problem ~stdin
+
+let humaneval_cases = function
+  | `List records ->
+      let cases = List.map (fun raw -> humaneval_record (json_string raw)) records in
+      let ids = List.map (fun (case : Ast.case) -> case.id) cases in
+      if List.length (List.sort_uniq compare ids) <> List.length ids then
+        invalid_arg "Duplicate HumanEval task ID";
+      cases
+  | _ -> invalid_arg "Expected HumanEval record strings"
 
 let () =
   let output =
     match Array.to_list Sys.argv with
     | [ _ ] -> `List (List.map case Suite.cases)
+    | [ _; "--experiment" ] -> experiment
     | [ _; "--grade" ] -> request (Json.decode (`Channel stdin))
-    | _ -> invalid_arg "Expected no arguments or --grade"
+    | [ _; "--humaneval-info" ] -> humaneval_info
+    | [ _; "--import-humaneval" ] ->
+        `List (List.map case (humaneval_cases (Json.decode (`Channel stdin))))
+    | [ _; "--grade-humaneval" ] ->
+        let fields = json_fields (Json.decode (`Channel stdin)) in
+        let cases = [ humaneval_record (json_string (List.assoc "record" fields)) ] in
+        request ~cases (List.assoc "request" fields)
+    | _ -> invalid_arg "Unknown kernel operation"
   in
   print_endline (Json.encode output)

@@ -1,8 +1,6 @@
-let find id = List.find (fun (case : Case.t) -> case.id = id) Suite.cases
-let no_changes = Outcome.make ~changed_files:[] ~code_passed:false
-
-let scores ?(outcome = no_changes) ~response case =
-  Score.fields (Grader.grade case ~response ~outcome)
+let find id = List.find (fun (case : Ast.case) -> case.id = id) Suite.cases
+let no_changes = { Ast.changed_files = []; verification = Unchecked }
+let scores ?(outcome = no_changes) ~response case = Grader.grade case ~response ~outcome
 
 let correct ~fields case =
   List.assoc "correctness" (scores ~response:(Some (Response.of_fields fields)) case)
@@ -11,10 +9,10 @@ let answer_case ?text_rule expected =
   Case.make
     ~id:"answer"
     ~fixture:Fixture.empty
-    ~instruction:(Instruction.make ~skill:"reasoning" ~prompt:"Custom answer")
+    ~instruction:{ Ast.skill = "reasoning"; prompt = "Custom answer" }
     ~criterion:(Criterion.answer ?text_rule ~expected:(Response.of_fields expected) ())
     ~allowed_files:[]
-    ~reference:(Reference.make (Plain "reference"))
+    ~reference:{ Ast.edits = Fixture.empty; completion = Plain "reference" }
 
 let utf8 code =
   let buffer = Buffer.create 4 in
@@ -42,7 +40,7 @@ let () =
   let changed =
     {
       original with
-      Case.instruction = Instruction.make ~skill:"reasoning" ~prompt:"A different instruction";
+      Ast.instruction = { skill = "reasoning"; prompt = "A different instruction" };
       criterion = Scenarios.Receipt.(totals [ expect ~items:[] ~total:99.0 ]);
       allowed_files = [];
     }
@@ -75,13 +73,13 @@ let () =
 
 let () =
   List.iter
-    (fun (case : Case.t) ->
+    (fun (case : Ast.case) ->
       let fields =
         match case.criterion with
-        | Criterion.Answer { expected; text_rule } -> (
+        | Ast.Answer { expected; text_rule } -> (
             List.map fst (Response.fields expected)
             @ match text_rule with Some rule -> [ rule.field ] | None -> [])
-        | Criterion.Code _ -> []
+        | Ast.Code _ -> []
       in
       List.iter
         (fun name -> assert (contains case.instruction.prompt ~fragment:name))
@@ -90,10 +88,9 @@ let () =
 
 let () =
   List.iter
-    (fun (case : Case.t) ->
+    (fun (case : Ast.case) ->
       match (case.criterion, case.reference.completion) with
-      | Criterion.Answer _, Reference.Structured reply ->
-          assert (correct ~fields:(Response.fields reply) case)
+      | Ast.Answer _, Ast.Structured reply -> assert (correct ~fields:(Response.fields reply) case)
       | _ -> ())
     Suite.cases
 
@@ -103,7 +100,9 @@ let () =
     (fun changed_files ->
       List.iter
         (fun code_passed ->
-          let outcome = Outcome.make ~changed_files ~code_passed in
+          let outcome =
+            { Ast.changed_files; verification = (if code_passed then Passed else Failed) }
+          in
           assert (
             scores ~outcome ~response:None receipt
             = [
@@ -182,7 +181,7 @@ let () =
   let status = ("status", Response.String "ready") and safe = ("safe", Response.Bool true) in
   let shaped =
     answer_case
-      ~text_rule:(Criterion.text_rule ~field:"explanation" ~min_words:2 ~max_words:3)
+      ~text_rule:{ Ast.field = "explanation"; min_words = 2; max_words = 3 }
       [ status; safe ]
   in
   let explained text = [ status; safe; ("explanation", Response.String text) ] in
@@ -202,10 +201,49 @@ let () =
       assert (correct ~fields:[ field ] exact);
       assert (not (correct ~fields:[ field; ("extra", Response.String "value") ] exact)))
     [ status; ("reason", Response.String "exact") ];
-  let note =
-    answer_case ~text_rule:(Criterion.text_rule ~field:"note" ~min_words:0 ~max_words:0) []
-  in
+  let note = answer_case ~text_rule:{ Ast.field = "note"; min_words = 0; max_words = 0 } [] in
   assert (correct ~fields:[ ("note", Response.String "") ] note);
   List.iter
     (fun fields -> assert (not (correct ~fields note)))
     [ []; [ ("note", Response.Bool true) ]; [ ("note", Response.String "word") ] ]
+
+let () =
+  let case =
+    Case.make
+      ~id:"new-choice"
+      ~fixture:Fixture.empty
+      ~instruction:(Scenarios.Decision.cheaper ~a:4 ~b:8)
+      ~criterion:(Scenarios.Decision.choice A)
+      ~allowed_files:[]
+      ~reference:(Scenarios.Decision.choice_reference A ~reason:"Cheaper.")
+  in
+  (match case.reference.completion with
+  | Ast.Structured reply -> assert (correct ~fields:(Response.fields reply) case)
+  | Ast.Plain _ -> assert false);
+  assert (
+    not
+      (correct
+         ~fields:[ ("choice", Response.String "B"); ("reason", Response.String "Cheaper.") ]
+         case))
+
+let () =
+  let original = find "clear-task" in
+  let fixture =
+    Fixture.overlay original.fixture ~overrides:(Fixture.of_files [ ("verifier.py", "tampered") ])
+  in
+  assert (
+    rejection (fun () ->
+        Case.make
+          ~id:original.id
+          ~fixture
+          ~instruction:original.instruction
+          ~criterion:original.criterion
+          ~allowed_files:original.allowed_files
+          ~reference:original.reference)
+    = "Case clear-task: verifier artifacts overlap fixture")
+
+let () =
+  let original = find "clear-task" in
+  assert (
+    rejection (fun () -> Case.validate { original with fixture = Fixture.empty })
+    = "Case clear-task: criteria read files missing from the fixture: receipt.ml")

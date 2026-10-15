@@ -12,5 +12,5 @@ else
   cp -- "$@" "$build_dir/"
 fi
 cd "$build_dir"
-ocamlc -o checks "$@"
+ocamlc -o checks "$@" || exit 65
 ./checks

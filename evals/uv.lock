@@ -6,6 +6,13 @@ resolution-markers = [
     "python_full_version < '3.15'",
 ]
 
+[manifest]
+
+[[manifest.dependency-metadata]]
+name = "evalplus"
+version = "0.4.0.dev13"
+requires-dist = ["numpy", "psutil"]
+
 [[package]]
 name = "agent-client-protocol"
 version = "0.12.1"
@@ -582,6 +589,15 @@ wheels = [
 ]
 
 [[package]]
+name = "evalplus"
+version = "0.4.0.dev13"
+source = { git = "https://github.com/evalplus/evalplus.git?rev=6eb1e199c2e370518e7bf3e8eee6322c2b23c89c#6eb1e199c2e370518e7bf3e8eee6322c2b23c89c" }
+dependencies = [
+    { name = "numpy" },
+    { name = "psutil" },
+]
+
+[[package]]
 name = "fastapi"
 version = "0.143.0"
 source = { registry = "https://pypi.org/simple" }
@@ -710,10 +726,13 @@ name = "genius-evals"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "evalplus" },
     { name = "huggingface-hub" },
     { name = "inspect-ai" },
     { name = "inspect-swe" },
+    { name = "numpy" },
     { name = "openai" },
+    { name = "psutil" },
 ]
 
 [package.optional-dependencies]
@@ -728,11 +747,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "evalplus", git = "https://github.com/evalplus/evalplus.git?rev=6eb1e199c2e370518e7bf3e8eee6322c2b23c89c" },
     { name = "huggingface-hub", specifier = "==2.2.0" },
     { name = "inspect-ai", specifier = "==0.3.278" },
     { name = "inspect-swe", specifier = "==0.2.71" },
     { name = "mypy", marker = "extra == 'dev'", specifier = "==1.19.1" },
+    { name = "numpy", specifier = "==2.5.4" },
     { name = "openai", specifier = ">=3.4,<4" },
+    { name = "psutil", specifier = "==7.2.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.1.1" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = "==7.1.0" },
     { name = "radon", marker = "extra == 'dev'", specifier = "==6.0.1" },

@@ -5,12 +5,14 @@ let rejected construct =
       false
     with Invalid_argument _ -> true)
 
+let rule ~field ~min_words ~max_words = { Ast.field; min_words; max_words }
+
 let () =
   (match Criterion.ocaml ~sources:[ "receipt.ml" ] ~assertions:[ "Receipt.total [] = 0." ] with
-  | Criterion.Code { sources; program } ->
-      assert (sources = [ "receipt.ml" ]);
-      assert (String.length program > 0)
-  | Criterion.Answer _ -> assert false);
+  | Ast.Code verifier ->
+      assert (verifier.inputs = [ "receipt.ml" ]);
+      assert (String.length verifier.stdin > 0)
+  | Ast.Answer _ -> assert false);
   rejected (fun () -> Criterion.ocaml ~sources:[] ~assertions:[ "true" ]);
   rejected (fun () -> Criterion.ocaml ~sources:[ "a.ml" ] ~assertions:[])
 
@@ -22,23 +24,18 @@ let () =
   assert (Response.fields Response.empty = []);
   rejected (fun () -> Response.of_fields [ ("", Response.String "value") ]);
   rejected (fun () -> Response.of_fields [ ("x", Response.Bool true); ("x", Response.Bool false) ]);
-  rejected (fun () -> Criterion.text_rule ~field:"" ~min_words:0 ~max_words:1);
-  rejected (fun () -> Criterion.text_rule ~field:"note" ~min_words:(-1) ~max_words:1);
-  rejected (fun () -> Criterion.text_rule ~field:"note" ~min_words:2 ~max_words:1);
+  List.iter
+    (fun text_rule -> rejected (fun () -> Criterion.answer ~expected:exact ~text_rule ()))
+    [
+      rule ~field:"" ~min_words:0 ~max_words:1;
+      rule ~field:"note" ~min_words:(-1) ~max_words:1;
+      rule ~field:"note" ~min_words:2 ~max_words:1;
+      rule ~field:"status" ~min_words:0 ~max_words:1;
+    ];
   rejected (fun () -> Criterion.answer ~expected:Response.empty ());
-  rejected (fun () ->
-      Criterion.answer
-        ~expected:exact
-        ~text_rule:(Criterion.text_rule ~field:"status" ~min_words:0 ~max_words:1)
-        ());
-  rejected (fun () ->
-      Criterion.answer
-        ~expected:exact
-        ~text_rule:{ field = "note"; min_words = 2; max_words = 1 }
-        ());
   ignore (Criterion.answer ~expected:exact ());
   ignore
     (Criterion.answer
        ~expected:Response.empty
-       ~text_rule:(Criterion.text_rule ~field:"note" ~min_words:0 ~max_words:0)
+       ~text_rule:(rule ~field:"note" ~min_words:0 ~max_words:0)
        ())

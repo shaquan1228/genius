@@ -1,9 +1,2 @@
-(* Reference: known-good output used for offline verification, distinct from a
-   criterion's expected fields. Combining file edits and a completion is our mapping.
-   https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
-   https://evalscope.readthedocs.io/en/latest/advanced_guides/custom_dataset/llm.html *)
-type completion = Plain of string | Structured of Response.t
-type t = { edits : Fixture.t; completion : completion }
-
-let make ?(edits = Fixture.empty) completion = { edits; completion }
-let edits files = make ~edits:files (Plain "Reference edits applied.")
+(* Reference constructor shared by code-case builders. Ast.reference defines the fields. *)
+let edits files = { Ast.edits = files; completion = Plain "Reference edits applied." }

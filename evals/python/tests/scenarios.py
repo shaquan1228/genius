@@ -2,14 +2,15 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
+from inspect_ai.agent import Agent, AgentState, agent
 from inspect_ai.model import ChatMessage, ChatMessageUser, GenerateConfig, ModelOutput
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
 from inspect_ai.util import sandbox
 
-from evals.python.transport import Case, case_by_id
+from evals.python.transport import Case, CaseQuery, Dataset, case_by_id
 from evals.python.workspace import GIT_IDENTITY, execute
 
 Mode = Literal[
@@ -88,7 +89,12 @@ class Scripted:
     scenario: Scenario
 
     async def __call__(self, state: TaskState, generate: Generate) -> TaskState:  # noqa: PLR0917 - Inspect calls solvers positionally
-        case = case_by_id(str(state.metadata["case_id"]))
+        case = case_by_id(
+            query=CaseQuery(
+                case_id=str(state.metadata["case_id"]),
+                selection=cast(Dataset, state.metadata.get("dataset", "smoke")),
+            )
+        )
         for step in self.scenario.steps:
             await step(case)
         state.messages.append(ChatMessageUser(content=self.scenario.reply or case.answer))
@@ -98,3 +104,13 @@ class Scripted:
 @solver
 def scripted(mode: Mode = "pass") -> Solver:
     return Scripted(SCENARIOS[mode])
+
+
+@agent
+def crashing(*, message: str) -> Agent:
+    """Stand in for an agent CLI that exits nonzero before it edits the workspace."""
+
+    async def execute(state: AgentState) -> AgentState:
+        raise RuntimeError(message)
+
+    return execute

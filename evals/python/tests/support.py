@@ -13,13 +13,14 @@ from evals.python.tests.scenarios import Mode, echo_model, scripted
 
 
 def offline_run(
-    tasks: list[Task], *, mode: Mode, directory: Path, epochs: int = 1
+    tasks: list[Task], *, mode: Mode | None, directory: Path, epochs: int = 1
 ) -> list[EvalLog]:
+    """Mode None keeps each task's own agent solver."""
     model = get_model("mockllm/model", custom_outputs=echo_model)
     logs = eval(
         tasks,
         model=model,
-        solver=scripted(mode),
+        solver=None if mode is None else scripted(mode),
         sandbox="local",
         epochs=epochs,
         max_samples=1,
@@ -37,7 +38,17 @@ def offline_run(
 
 def sample_result(sample: EvalSample) -> tuple[str, object, object]:
     assert sample.scores is not None
-    return (str(sample.id), sample.scores["correctness"].value, sample.scores["scope"].value)
+    value = sample.scores["evaluation"].value
+    assert isinstance(value, dict)
+    return (str(sample.id), value["correctness"], value["scope"])
+
+
+def crash_evidence(sample: EvalSample) -> tuple[str, object, object]:
+    assert sample.scores is not None
+    score = sample.scores["evaluation"]
+    assert score.metadata is not None
+    headline = str(score.explanation).splitlines()[0]
+    return (headline, score.metadata["agent_failure"], score.metadata["verification"]["status"])
 
 
 def results(log: EvalLog) -> list[tuple[str, object, object]]:

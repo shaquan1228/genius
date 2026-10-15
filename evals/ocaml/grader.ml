@@ -1,7 +1,3 @@
-(* Grader: pure logic applying criteria to responses and observed outcomes.
-   IO, execution, and presentation remain harness responsibilities.
-   https://developers.openai.com/api/docs/guides/graders
-   https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
 let whitespace_width text index =
   let length = String.length text in
   let starts value =
@@ -46,7 +42,18 @@ let word_count text =
   in
   count 0 false 0
 
-let answer (criterion : Criterion.answer) response =
+let trim text =
+  let rec bounds index first last =
+    if index = String.length text then
+      match first with None -> "" | Some start -> String.sub text start (last - start)
+    else
+      let width = whitespace_width text index in
+      if width > 0 then bounds (index + width) first last
+      else bounds (index + 1) (match first with None -> Some index | some -> some) (index + 1)
+  in
+  bounds 0 None 0
+
+let answer (criterion : Ast.answer) response =
   match response with
   | None -> false
   | Some response ->
@@ -66,12 +73,16 @@ let answer (criterion : Criterion.answer) response =
       in
       text_valid && List.sort compare exact = List.sort compare (Response.fields criterion.expected)
 
-let grade (case : Case.t) ~response ~(outcome : Outcome.t) =
+let grade (case : Ast.case) ~response ~(outcome : Ast.outcome) =
   let correctness =
     match case.criterion with
-    | Criterion.Code _ -> outcome.code_passed
-    | Criterion.Answer criterion -> answer criterion response
+    | Ast.Code _ -> (
+        match outcome.verification with
+        | Ast.Harness_error detail -> invalid_arg ("Verification harness error: " ^ detail)
+        | Ast.Passed -> true
+        | _ -> false)
+    | Ast.Answer criterion -> answer criterion response
   in
   let allowed = List.map (fun path -> "workspace/" ^ path) case.allowed_files in
   let scope = List.for_all (fun path -> List.mem path allowed) outcome.changed_files in
-  Score.of_fields [ ("correctness", correctness); ("scope", scope) ]
+  [ ("correctness", correctness); ("scope", scope) ]
