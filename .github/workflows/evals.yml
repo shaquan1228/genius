@@ -14,7 +14,7 @@ permissions:
 jobs:
   check:
     name: Check on the hosted runtime (OCaml 4.13)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The Hugging Face Job image, so compiler and Python versions match hosted runs.
     container: ghcr.io/astral-sh/uv:python3.12-bookworm
     steps:
@@ -27,7 +27,7 @@ jobs:
 
   format:
     name: OCaml format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: ocaml/setup-ocaml@v3
