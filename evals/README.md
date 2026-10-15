@@ -64,8 +64,17 @@ make -C evals check
 This installs locked dependencies, checks strict typing, runs tests, and enforces CRAP ≤5.
 `check` runs four parts that also run alone: `check-scaffolding`, `check-ocaml-format`
 (ocamlformat style), `lint-ocaml` (compilation with every warning as an error), and
-`check-python`. `make -C evals format-ocaml` applies the pinned style from
-`ocaml/.ocamlformat`.
+`check-python` (Ruff format and lint, strict mypy, tests, coverage, Xenon).
+`make -C evals format` applies both styles: ocamlformat from `ocaml/.ocamlformat`
+and Ruff from `pyproject.toml`.
+
+Functions take at most one positional argument, usually an ID or the value they
+act on. Callers name every other argument. Ruff enforces this for Python
+(`PLR0917` with `max-positional-args = 1`), including tests, because pytest
+passes fixtures by name. Inspect calls solvers, scorers, and mock-model callbacks
+positionally, so those carry a `noqa` with the reason; methods marked
+`@override` keep their base signatures. OCaml follows the same rule with labeled
+arguments, by review.
 Tests exercise Inspect's real engine with its mock model and scripted test agents.
 They use temporary local sandboxes and need no API keys.
 Scripted passes verify the harness; they do not measure Genius performance.
@@ -181,7 +190,7 @@ let cases =
 The fixture does not choose the prompt, expectations, reference answer, or edit
 scope. Scope is declared independently of reference edits. A suite may reuse a
 fixture with different tasks or checks. `Fixture.of_files` rejects duplicate
-paths; `Fixture.overlay base overrides` explicitly replaces matching paths and
+paths; `Fixture.overlay base ~overrides` explicitly replaces matching paths and
 leaves both inputs unchanged. `Eval.case` rejects checks that read files missing
 from the fixture and reference edits outside `allowed_files`; the error names the
 case and the files.

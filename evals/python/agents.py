@@ -45,7 +45,7 @@ DEFAULT_VERSIONS: dict[AgentKind, str] = {
 }
 
 
-def coding_agent(kind: AgentKind, version: str) -> Agent:
+def coding_agent(kind: AgentKind, *, version: str) -> Agent:
     spec = AGENT_REGISTRY[kind]
     return spec.factory()(
         cwd="workspace",

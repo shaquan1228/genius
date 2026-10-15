@@ -38,9 +38,7 @@ RUNNER: Final = OCAML_ROOT / "check.sh"
 FROZEN: Final = ConfigDict(strict=True, extra="forbid", frozen=True)
 SourceName = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*\.ml$")]
 FileName = Annotated[str, Field(pattern=r"^[a-zA-Z_][a-zA-Z0-9_.-]*$")]
-Files = Annotated[
-    Mapping[FileName, str], AfterValidator(MappingProxyType), PlainSerializer(dict)
-]
+Files = Annotated[Mapping[FileName, str], AfterValidator(MappingProxyType), PlainSerializer(dict)]
 Expected = Annotated[
     Mapping[str, str | bool], AfterValidator(MappingProxyType), PlainSerializer(dict)
 ]
@@ -98,7 +96,7 @@ def decode(data: str) -> tuple[Case, ...]:
 
 
 @lru_cache(maxsize=1)
-def _export(sources: tuple[tuple[str, str], ...], runner: str) -> str:
+def _export(sources: tuple[tuple[str, str], ...], *, runner: str) -> str:
     with TemporaryDirectory(prefix="genius-suite-") as directory:
         for name, contents in (*sources, (RUNNER.name, runner)):
             (Path(directory) / name).write_text(contents)
@@ -124,7 +122,7 @@ def _suite_index(suite: Path) -> Mapping[str, Case]:
         (SUITE.name, suite.read_text()),
         (EXPORTER.name, EXPORTER.read_text()),
     )
-    return _index(_export(sources, RUNNER.read_text()))
+    return _index(_export(sources, runner=RUNNER.read_text()))
 
 
 def load_cases(suite: Path = SUITE) -> tuple[Case, ...]:

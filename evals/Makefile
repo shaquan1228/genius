@@ -1,4 +1,4 @@
-.PHONY: check check-scaffolding check-ocaml-format check-python format-ocaml lint-ocaml
+.PHONY: check check-scaffolding check-ocaml-format check-python format format-ocaml format-python lint-ocaml
 
 # Every OCaml warning is an error, except type-directed disambiguation and open shadowing.
 OCAML_FLAGS = -strict-sequence -strict-formats -w +a-4-40-41-42-44-45-70 -warn-error +a
@@ -11,11 +11,19 @@ check: check-scaffolding check-ocaml-format lint-ocaml check-python
 # Xenon's A rank requires every function to have complexity <= 5.
 check-python:
 	uv sync --extra dev --locked
+	uv run ruff format --check python
 	uv run ruff check python
 	uv run mypy
 	uv run pytest --cov --cov-branch --cov-report=term-missing --cov-report=json:results/coverage.json --cov-report=xml:results/coverage.xml --junitxml=results/tests.xml
 	uv run xenon --max-absolute A --max-modules A --max-average A python
 	uv run radon cc --show-complexity --json python > results/complexity.json
+
+format: format-ocaml format-python
+
+# pyproject.toml configures Ruff's style and lint rules.
+format-python:
+	uv run ruff format python
+	uv run ruff check --fix python
 
 # ocaml/.ocamlformat pins the formatter version and style; `make format-ocaml` applies it.
 format-ocaml:

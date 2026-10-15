@@ -12,7 +12,7 @@ from evals.python.tests.support import offline_run, results
 
 
 def test_complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
-    logs = offline_run([baseline(), genius()], "pass", tmp_path, epochs=2)
+    logs = offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
     expected = [
         (case, CORRECT, CORRECT)
         for case in ["clear-task", "known-preflight", "small-decision", "decision-review"]
@@ -23,7 +23,7 @@ def test_complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
 
 
 def test_logs_reopen_with_scores_and_model_calls(tmp_path: Path) -> None:
-    log = offline_run([baseline()], "pass", tmp_path)[0]
+    log = offline_run([baseline()], mode="pass", directory=tmp_path)[0]
     saved = read_eval_log(str(log.location))
     assert (saved.status, len(saved.samples or []), set(saved.stats.model_usage)) == (
         "success",
@@ -33,13 +33,13 @@ def test_logs_reopen_with_scores_and_model_calls(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("mode", ["extra", "committed-extra", "instructions", "tampered-checks"])
-def test_scope_rejects_extra_committed_and_instruction_edits(mode: Mode, tmp_path: Path) -> None:
-    logs = offline_run([baseline(), genius()], mode, tmp_path)
+def test_scope_rejects_extra_committed_and_instruction_edits(*, mode: Mode, tmp_path: Path) -> None:
+    logs = offline_run([baseline(), genius()], mode=mode, directory=tmp_path)
     assert [[scope for _, _, scope in results(log)] for log in logs] == [[INCORRECT] * 4] * 2
 
 
 def test_untouched_seeded_bugs_fail(tmp_path: Path) -> None:
-    log = offline_run([baseline()], "untouched", tmp_path)[0]
+    log = offline_run([baseline()], mode="untouched", directory=tmp_path)[0]
     assert results(log) == sorted(
         [
             ("clear-task", INCORRECT, CORRECT),
@@ -51,7 +51,7 @@ def test_untouched_seeded_bugs_fail(tmp_path: Path) -> None:
 
 
 def test_invalid_answers_fail(tmp_path: Path) -> None:
-    log = offline_run([baseline()], "bad-answer", tmp_path)[0]
+    log = offline_run([baseline()], mode="bad-answer", directory=tmp_path)[0]
     assert {case: correct for case, correct, _ in results(log)} == {
         "clear-task": CORRECT,
         "known-preflight": CORRECT,
@@ -61,14 +61,14 @@ def test_invalid_answers_fail(tmp_path: Path) -> None:
 
 
 def test_tampered_visible_checks_cannot_pass_seeded_bugs(tmp_path: Path) -> None:
-    log = offline_run([baseline()], "tampered-checks", tmp_path)[0]
+    log = offline_run([baseline()], mode="tampered-checks", directory=tmp_path)[0]
     coding = {case: correct for case, correct, _ in results(log)}
     assert coding["clear-task"] == INCORRECT
     assert coding["known-preflight"] == INCORRECT
 
 
 def test_early_exit_cannot_skip_heldout_assertions(tmp_path: Path) -> None:
-    log = offline_run([baseline()], "early-exit", tmp_path)[0]
+    log = offline_run([baseline()], mode="early-exit", directory=tmp_path)[0]
     scores = {case: (correct, scope) for case, correct, scope in results(log)}
     assert scores["clear-task"] == (INCORRECT, CORRECT)
     assert scores["known-preflight"] == (INCORRECT, CORRECT)

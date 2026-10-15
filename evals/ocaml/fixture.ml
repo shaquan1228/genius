@@ -11,5 +11,5 @@ let add ~path ~contents fixture =
 let of_files files =
   List.fold_left (fun fixture (path, contents) -> add ~path ~contents fixture) empty files
 
-let overlay base overrides = Files.union (fun _ _ replacement -> Some replacement) base overrides
+let overlay base ~overrides = Files.union (fun _ _ replacement -> Some replacement) base overrides
 let files = Files.bindings

@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python.answers import grade_answer, unfence
-from evals.python.profiles import BASELINE, GENIUS, content_hash, files_for, prompt_for, samples
+from evals.python.profiles import BASELINE, GENIUS, content_hash
 from evals.python.tests.support import ocaml_choice_case, ocaml_timeout_case
 from evals.python.transport import AnswerChecks, Case, case_by_id, decode, load_cases
 
@@ -25,7 +25,7 @@ def test_manifest_roundtrip() -> None:
 
 
 def test_invalid_ocaml_suite_is_rejected(
-    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+    *, tmp_path: Path, capfd: pytest.CaptureFixture[str]
 ) -> None:
     path = tmp_path / "suite.ml"
     path.write_text("this is not valid OCaml")
@@ -35,7 +35,7 @@ def test_invalid_ocaml_suite_is_rejected(
 
 
 @pytest.mark.parametrize(
-    "field,value",
+    ("field", "value"),
     [
         ("checks", {"kind": "code", "sources": ["../outside.ml"], "program": ""}),
         ("checks", {"kind": "unknown"}),
@@ -44,7 +44,7 @@ def test_invalid_ocaml_suite_is_rejected(
         ("allowed_files", ["../outside.ml"]),
     ],
 )
-def test_generated_paths_are_validated(field: str, value: object) -> None:
+def test_generated_paths_are_validated(*, field: str, value: object) -> None:
     data = load_cases()[0].model_dump()
     data[field] = value
     with pytest.raises(ValidationError):
@@ -56,35 +56,35 @@ def expected(case: Case) -> Mapping[str, str | bool]:
     return case.checks.expected
 
 
-def grade(case_id: str, text: str) -> bool:
+def grade(case_id: str, *, text: str) -> bool:
     return grade_answer(text, expected=expected(case_by_id(case_id)))
 
 
 def test_profiles_share_fixture_files() -> None:
     case = load_cases()[0]
-    baseline = files_for(case, BASELINE)
-    genius = files_for(case, GENIUS)
+    baseline = BASELINE.files(case)
+    genius = GENIUS.files(case)
     assert {key: genius[key] for key in baseline} == baseline
 
 
 def test_only_genius_receives_instructions() -> None:
     case = load_cases()[0]
     assert (
-        any(key.startswith("instructions/") for key in files_for(case, BASELINE)),
-        any(key.startswith("instructions/") for key in files_for(case, GENIUS)),
+        any(key.startswith("instructions/") for key in BASELINE.files(case)),
+        any(key.startswith("instructions/") for key in GENIUS.files(case)),
     ) == (False, True)
 
 
 def test_profile_prompts() -> None:
     case = load_cases()[0]
     assert (
-        prompt_for(case, BASELINE) == case.prompt,
-        "../instructions/skills/reasoning/SKILL.md" in prompt_for(case, GENIUS),
+        BASELINE.prompt(case) == case.prompt,
+        "../instructions/skills/reasoning/SKILL.md" in GENIUS.prompt(case),
     ) == (True, True)
 
 
 def test_samples_keep_task_ids_and_metadata() -> None:
-    assert [sample.id for sample in samples(GENIUS)] == [case.id for case in load_cases()]
+    assert [sample.id for sample in GENIUS.samples()] == [case.id for case in load_cases()]
 
 
 def test_hash_tracks_contents_and_ignores_mapping_order(tmp_path: Path) -> None:
@@ -97,7 +97,7 @@ def test_hash_tracks_contents_and_ignores_mapping_order(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "case_id,text",
+    ("case_id", "text"),
     [
         ("small-decision", '{"choice":"B","reason":"B costs less for identical service."}'),
         (
@@ -107,8 +107,8 @@ def test_hash_tracks_contents_and_ignores_mapping_order(tmp_path: Path) -> None:
         ),
     ],
 )
-def test_correct_decision_outputs(case_id: str, text: str) -> None:
-    assert grade(case_id, text)
+def test_correct_decision_outputs(*, case_id: str, text: str) -> None:
+    assert grade(case_id, text=text)
 
 
 @pytest.mark.parametrize(
@@ -125,24 +125,25 @@ def test_correct_decision_outputs(case_id: str, text: str) -> None:
     ],
 )
 def test_invalid_decisions_fail(text: str) -> None:
-    assert not grade("small-decision", text)
+    assert not grade("small-decision", text=text)
 
 
 @pytest.mark.parametrize(
-    "supported,changed", [(False, False), (False, True), (True, True), (1, 0), ("true", "false")]
+    ("supported", "changed"),
+    [(False, False), (False, True), (True, True), (1, 0), ("true", "false")],
 )
-def test_wrong_review_verdicts_fail(supported: object, changed: object) -> None:
+def test_wrong_review_verdicts_fail(*, supported: object, changed: object) -> None:
     text = json.dumps(
         {"decision_was_supported": supported, "change_rule": changed, "reason": "One loss."}
     )
-    assert not grade("decision-review", text)
+    assert not grade("decision-review", text=text)
 
 
 @pytest.mark.parametrize(
-    "text,expected",
+    ("text", "expected"),
     [("  plain  ", "plain"), ("```json\n{}\n```", "{}"), ("```json\n{}", "```json\n{}")],
 )
-def test_json_fences(text: str, expected: str) -> None:
+def test_json_fences(*, text: str, expected: str) -> None:
     assert unfence(text) == expected
 
 
@@ -161,7 +162,7 @@ def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
 
 
 def test_generated_artifacts_stay_out_of_sample_metadata() -> None:
-    for sample in samples(BASELINE):
+    for sample in BASELINE.samples():
         assert sample.metadata == {"case_id": sample.id, "profile": "baseline"}
         assert not any("heldout" in path for path in sample.files or {})
 
@@ -175,7 +176,7 @@ def test_duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "fixture,allowed_files,message",
+    ("fixture", "allowed_files", "message"),
     [
         (
             "Fixtures.Preflight.fixture ~timeout:15",
@@ -190,6 +191,7 @@ def test_duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
     ],
 )
 def test_case_parts_must_agree_on_files(
+    *,
     fixture: str,
     allowed_files: str,
     message: str,

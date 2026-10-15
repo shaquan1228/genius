@@ -15,7 +15,7 @@ class Reply(BaseModel):
     @classmethod
     def bounded_reason(cls, value: str) -> str:
         if not 1 <= len(value.split()) <= 40:
-            raise ValueError("Reason must contain 1–40 words")
+            raise ValueError("Reason must contain 1-40 words")
         return value
 
 

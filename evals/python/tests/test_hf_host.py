@@ -4,6 +4,7 @@ import asyncio
 import os
 import subprocess
 from pathlib import Path
+from threading import Event
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -29,7 +30,12 @@ def test_hf_sample_lifecycle() -> None:
     assert isinstance(environment, HfSandboxEnvironment)
     client.files.mkdir.assert_called_once_with("/eval")
     asyncio.run(
-        HfSandboxEnvironment.sample_cleanup("genius", None, {"default": environment}, False)
+        HfSandboxEnvironment.sample_cleanup(
+            task_name="genius",
+            config=None,
+            environments={"default": environment},
+            interrupted=False,
+        )
     )
     client.kill.assert_called_once_with()
 
@@ -59,9 +65,11 @@ def test_hf_sandbox_file_io() -> None:
 def test_failed_setup_kills_remote_sandbox() -> None:
     client = Mock()
     client.run.return_value = command_result(1)
-    with patch("evals.python.hf_sandbox.Sandbox.create", return_value=client):
-        with pytest.raises(RuntimeError, match="Could not install"):
-            asyncio.run(HfSandboxEnvironment.sample_init("genius", None, {}))
+    with (
+        patch("evals.python.hf_sandbox.Sandbox.create", return_value=client),
+        pytest.raises(RuntimeError, match="Could not install"),
+    ):
+        asyncio.run(HfSandboxEnvironment.sample_init("genius", None, {}))
     client.kill.assert_called_once_with()
 
 
@@ -105,7 +113,7 @@ def test_hf_job_reports_failed_profile(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_host_script_launches_job_without_exposing_key(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     launcher = tmp_path / "uvx"
     launcher.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$HF_CALLS"\n')
@@ -119,7 +127,11 @@ def test_host_script_launches_job_without_exposing_key(
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     result = subprocess.run(
-        ["sh", "evals/hf_host.sh"], cwd=REPO_ROOT, env=os.environ.copy(), capture_output=True
+        ["sh", "evals/hf_host.sh"],
+        cwd=REPO_ROOT,
+        env=os.environ.copy(),
+        capture_output=True,
+        check=False,
     )
     commands = calls.read_text()
     assert (result.returncode, commands.count("--from huggingface_hub==2.2.0 hf")) == (0, 4)
@@ -132,7 +144,7 @@ def test_host_script_launches_job_without_exposing_key(
 
 
 def test_host_script_uses_hf_model_without_provider_key(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     launcher = tmp_path / "uvx"
     launcher.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$HF_CALLS"\n')
@@ -146,7 +158,11 @@ def test_host_script_uses_hf_model_without_provider_key(
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     result = subprocess.run(
-        ["sh", "evals/hf_host.sh"], cwd=REPO_ROOT, env=os.environ.copy(), capture_output=True
+        ["sh", "evals/hf_host.sh"],
+        cwd=REPO_ROOT,
+        env=os.environ.copy(),
+        capture_output=True,
+        check=False,
     )
     commands = calls.read_text()
     assert result.returncode == 0
@@ -155,7 +171,7 @@ def test_host_script_uses_hf_model_without_provider_key(
 
 
 def test_host_script_rejects_empty_provider_key(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     launcher = tmp_path / "uvx"
     launcher.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$HF_CALLS"\n')
@@ -168,7 +184,11 @@ def test_host_script_rejects_empty_provider_key(
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     result = subprocess.run(
-        ["sh", "evals/hf_host.sh"], cwd=REPO_ROOT, env=os.environ.copy(), capture_output=True
+        ["sh", "evals/hf_host.sh"],
+        cwd=REPO_ROOT,
+        env=os.environ.copy(),
+        capture_output=True,
+        check=False,
     )
     assert (result.returncode, calls.exists()) == (2, False)
     assert b"Set OPENAI_API_KEY" in result.stderr
@@ -181,8 +201,6 @@ def test_hf_inference_provider_initializes(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_cancelled_creation_kills_eventual_sandbox() -> None:
-    from threading import Event
-
     started, release = Event(), Event()
     client = Mock()
 

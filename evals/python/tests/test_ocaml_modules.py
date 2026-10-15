@@ -6,7 +6,7 @@ from pathlib import Path
 from evals.python.transport import LIBRARY, OCAML_ROOT, RUNNER, SUITE
 
 
-def run_modules(directory: Path, modules: list[str], probe: str) -> str:
+def run_modules(directory: Path, *, modules: list[str], probe: str) -> str:
     for name in modules:
         (directory / name).write_text((OCAML_ROOT / name).read_text())
     (directory / "probe.ml").write_text(probe)
@@ -24,13 +24,13 @@ def test_fixture_is_independent_and_overlay_is_explicit(tmp_path: Path) -> None:
     assert (
         run_modules(
             tmp_path,
-            ["fixture.mli", "fixture.ml"],
-            """
+            modules=["fixture.mli", "fixture.ml"],
+            probe="""
 let () =
   let base = Fixture.of_files ["config.ml", "initial"] in
   let override = Fixture.of_files ["config.ml", "changed"] in
   assert (Fixture.files base = ["config.ml", "initial"]);
-  assert (Fixture.files (Fixture.overlay base override) = ["config.ml", "changed"]);
+  assert (Fixture.files (Fixture.overlay base ~overrides:override) = ["config.ml", "changed"]);
   assert (try ignore (Fixture.of_files ["a", "one"; "a", "two"]); false
           with Invalid_argument _ -> true)
 """,
@@ -43,8 +43,8 @@ def test_starting_projects_compile_without_eval_or_check_modules(tmp_path: Path)
     assert (
         run_modules(
             tmp_path,
-            ["fixture.mli", "fixture.ml", "fixtures.ml"],
-            """
+            modules=["fixture.mli", "fixture.ml", "fixtures.ml"],
+            probe="""
 let () =
   let project = Fixtures.Receipt.fixture ~bug:Ignore_quantity in
   assert (List.mem_assoc "receipt.ml" (Fixture.files project));
@@ -59,8 +59,8 @@ def test_checks_compile_without_fixture_modules(tmp_path: Path) -> None:
     assert (
         run_modules(
             tmp_path,
-            ["check.ml"],
-            """
+            modules=["check.ml"],
+            probe="""
 let checks = Check.Receipt.(totals [ expect ~items:[ item ~price:3.0 ~quantity:4 ] ~total:12.0 ])
 let () = match checks with
   | Check.Code { sources; program } ->
@@ -77,8 +77,8 @@ def test_suite_is_pure_and_eval_policy_does_not_change_fixture(tmp_path: Path) -
     assert (
         run_modules(
             tmp_path,
-            [path.name for path in (*LIBRARY, SUITE)],
-            """
+            modules=[path.name for path in (*LIBRARY, SUITE)],
+            probe="""
 let () =
   let original = List.hd Suite.cases in
   let changed = { original with

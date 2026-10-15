@@ -12,7 +12,9 @@ from evals.python.paths import EVALS_ROOT
 from evals.python.tests.scenarios import Mode, echo_model, scripted
 
 
-def offline_run(tasks: list[Task], mode: Mode, directory: Path, epochs: int = 1) -> list[EvalLog]:
+def offline_run(
+    tasks: list[Task], *, mode: Mode, directory: Path, epochs: int = 1
+) -> list[EvalLog]:
     model = get_model("mockllm/model", custom_outputs=echo_model)
     logs = eval(
         tasks,

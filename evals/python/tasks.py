@@ -5,14 +5,7 @@ from inspect_ai.model import GenerateConfig
 
 import evals.python.hf_sandbox  # noqa: F401 - registers the Hugging Face Sandbox provider
 from evals.python.agents import DEFAULT_VERSIONS, AgentKind, coding_agent
-from evals.python.profiles import (
-    BASELINE,
-    GENIUS,
-    Profile,
-    content_hash,
-    instruction_files,
-    samples,
-)
+from evals.python.profiles import BASELINE, GENIUS, Profile, content_hash
 from evals.python.scoring import correctness, scope
 from evals.python.transport import EXPORTER, LIBRARY, RUNNER, SUITE
 from evals.python.workspace import prepare
@@ -22,9 +15,9 @@ def build_task(profile: Profile, *, agent: AgentKind, version: str) -> Task:
     agent_version = version or DEFAULT_VERSIONS[agent]
     return Task(
         name=profile.name,
-        dataset=samples(profile),
+        dataset=profile.samples(),
         setup=prepare(),
-        solver=coding_agent(agent, agent_version),
+        solver=coding_agent(agent, version=agent_version),
         scorer=[correctness(), scope()],
         sandbox="hf",
         config=GenerateConfig(cache=False),
@@ -36,7 +29,7 @@ def build_task(profile: Profile, *, agent: AgentKind, version: str) -> Task:
             "profile": profile.name,
             "agent": agent,
             "agent_version": agent_version,
-            "instructions_sha256": content_hash(instruction_files()),
+            "instructions_sha256": content_hash(GENIUS.instruction_files()),
             "fixtures_sha256": content_hash(
                 {path.name: str(path) for path in (*LIBRARY, EXPORTER, RUNNER)}
             ),
@@ -46,10 +39,10 @@ def build_task(profile: Profile, *, agent: AgentKind, version: str) -> Task:
 
 
 @task
-def baseline(agent: AgentKind = "claude", version: str = "") -> Task:
+def baseline(*, agent: AgentKind = "claude", version: str = "") -> Task:
     return build_task(BASELINE, agent=agent, version=version)
 
 
 @task
-def genius(agent: AgentKind = "claude", version: str = "") -> Task:
+def genius(*, agent: AgentKind = "claude", version: str = "") -> Task:
     return build_task(GENIUS, agent=agent, version=version)

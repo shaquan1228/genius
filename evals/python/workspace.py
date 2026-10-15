@@ -15,14 +15,14 @@ GIT_IDENTITY = [
 ]
 
 
-async def execute(command: list[str], cwd: str | None = None) -> str:
-    result = await sandbox().exec(command, cwd=cwd, timeout=30)
+async def execute(command: list[str]) -> str:
+    result = await sandbox().exec(command, timeout=30)
     if not result.success:
         raise RuntimeError(result.stderr or result.stdout)
     return result.stdout
 
 
-async def prepare_sample(state: TaskState, generate: Generate) -> TaskState:
+async def prepare_sample(state: TaskState, generate: Generate) -> TaskState:  # noqa: PLR0917 - Inspect calls solvers positionally
     await execute(["git", "init", "-q", "-b", "eval"])
     await execute(["git", "add", "--all"])
     await execute(["git", *GIT_IDENTITY, "commit", "-q", "-m", "Eval fixture"])

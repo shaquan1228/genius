@@ -20,7 +20,7 @@ INSTALL_TOOLS = (
 )
 
 
-def completed(result: SandboxCommandResult, cmd: list[str]) -> ExecResult[str]:
+def completed(result: SandboxCommandResult, *, cmd: list[str]) -> ExecResult[str]:
     if result.timed_out:
         raise TimeoutError(f"Sandbox command timed out: {cmd[0]}")
     returncode = result.exit_code if result.exit_code is not None else 1
@@ -111,14 +111,14 @@ class HfSandboxEnvironment(SandboxEnvironment):
                 check=False,
             ),
         )
-        return completed(result, cmd)
+        return completed(result, cmd=cmd)
 
     @override
     async def write_file(self, file: str, contents: str | bytes) -> None:
         await asyncio.to_thread(self.client.files.write, self._path(file), contents)
 
     @overload
-    async def read_file(self, file: str, text: Literal[True] = True) -> str: ...
+    async def read_file(self, file: str, text: Literal[True] = True) -> str: ...  # noqa: FBT002 - Inspect's signature
 
     @overload
     async def read_file(self, file: str, text: Literal[False]) -> bytes: ...

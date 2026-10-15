@@ -20,18 +20,18 @@ def test_registered_harness_uses_shared_and_custom_settings(
         AgentSpec(default_version="1.0", factory=lambda: factory, options={"mode": "strict"}),
     )
 
-    assert coding_agent("other", "1.2") is factory.return_value
+    assert coding_agent("other", version="1.2") is factory.return_value
     factory.assert_called_once_with(cwd="workspace", version="1.2", attempts=1, mode="strict")
 
 
 @pytest.mark.parametrize("kind", ["claude", "codex"])
 def test_real_swe_bindings_accept_our_options(kind: AgentKind) -> None:
-    assert callable(coding_agent(kind, "sandbox"))
+    assert callable(coding_agent(kind, version="sandbox"))
 
 
 def test_claude_options_are_fixed() -> None:
     with patch("evals.python.agents.claude_code", wraps=claude_code) as factory:
-        coding_agent("claude", "2.1.278")
+        coding_agent("claude", version="2.1.278")
     assert factory.call_args.kwargs == {
         "cwd": "workspace",
         "version": "2.1.278",
@@ -45,7 +45,7 @@ def test_claude_options_are_fixed() -> None:
 
 def test_codex_options_disable_network() -> None:
     with patch("evals.python.agents.codex_cli", wraps=codex_cli) as factory:
-        coding_agent("codex", "0.137.0")
+        coding_agent("codex", version="0.137.0")
     assert factory.call_args.kwargs == {
         "cwd": "workspace",
         "version": "0.137.0",

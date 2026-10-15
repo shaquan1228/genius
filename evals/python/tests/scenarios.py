@@ -24,7 +24,7 @@ Mode = Literal[
 ]
 
 
-def echo_model(
+def echo_model(  # noqa: PLR0917 - Inspect calls mock model callbacks positionally
     messages: list[ChatMessage],
     tools: list[ToolInfo],
     tool_choice: ToolChoice,
@@ -87,7 +87,7 @@ SCENARIOS: dict[Mode, Scenario] = {
 class Scripted:
     scenario: Scenario
 
-    async def __call__(self, state: TaskState, generate: Generate) -> TaskState:
+    async def __call__(self, state: TaskState, generate: Generate) -> TaskState:  # noqa: PLR0917 - Inspect calls solvers positionally
         case = case_by_id(str(state.metadata["case_id"]))
         for step in self.scenario.steps:
             await step(case)
