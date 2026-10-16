@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from hashlib import sha256
 
 from inspect_ai import Task, task
 from inspect_ai.model import GenerateConfig
@@ -44,7 +45,7 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
         config=GenerateConfig(cache=spec.cache),
         epochs=spec.epochs,
         message_limit=spec.message_limit,
-        token_limit=spec.token_limit,
+        cost_limit=spec.cost_limit,
         time_limit=spec.time_limit,
         metadata={
             **({"diagnostic_epoch": diagnostic_epoch} if diagnostic_epoch else {}),
@@ -53,6 +54,9 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
             "benchmark": provenance.info.model_dump() if provenance.info else {},
             "agent": agent,
             "agent_version": agent_version,
+            "agent_system_prompt_sha256": sha256(
+                agent_adapter.AGENT_REGISTRY[agent].system_prompt.encode()
+            ).hexdigest(),
             "instruction_delivery": instruction_delivery,
             "instructions_sha256": profile_adapter.content_hash(
                 files=profile_adapter.instruction_files(

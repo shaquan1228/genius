@@ -6,7 +6,7 @@ from pathlib import Path
 
 from inspect_ai import Task, eval
 from inspect_ai.log import EvalLog, EvalSample
-from inspect_ai.model import get_model
+from inspect_ai.model import ModelCost, ModelInfo, get_model, set_model_info
 
 from evals.python import catalog, transport
 from evals.python._kernel import Case, ExecutableChecks, Reference
@@ -23,6 +23,10 @@ def offline_run(
 ) -> list[EvalLog]:
     """Mode None keeps each task's own agent solver."""
     model = get_model("mockllm/model", custom_outputs=_echo_model)
+    set_model_info(
+        str(model),
+        ModelInfo(cost=ModelCost(input=0, output=0, input_cache_write=0, input_cache_read=0)),
+    )
     logs = eval(
         tasks,
         model=model,

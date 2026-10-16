@@ -1,8 +1,8 @@
 let () =
   let experiment = Experiment.default in
   assert (experiment.epochs = 5);
-  assert (experiment.message_limit = 40);
-  assert (experiment.token_limit = 50_000);
+  assert (experiment.message_limit = None);
+  assert (experiment.cost_limit = 0.25);
   assert (experiment.time_limit = 300);
   assert (not experiment.cache);
   match experiment.profiles with
@@ -21,11 +21,11 @@ let () =
 let () =
   assert (Experiment.resolve () = Experiment.default);
   let resolved =
-    Experiment.resolve ~epochs:2 ~message_limit:8 ~token_limit:900 ~time_limit:10 ~cache:true ()
+    Experiment.resolve ~epochs:2 ~message_limit:8 ~cost_limit:0.1 ~time_limit:10 ~cache:true ()
   in
   assert (resolved.epochs = 2);
-  assert (resolved.message_limit = 8);
-  assert (resolved.token_limit = 900);
+  assert (resolved.message_limit = Some 8);
+  assert (resolved.cost_limit = 0.1);
   assert (resolved.time_limit = 10);
   assert resolved.cache;
   assert (resolved.profiles = Experiment.default.profiles);
@@ -39,6 +39,13 @@ let () =
     [
       (fun value -> Experiment.resolve ~epochs:value ());
       (fun value -> Experiment.resolve ~message_limit:value ());
-      (fun value -> Experiment.resolve ~token_limit:value ());
       (fun value -> Experiment.resolve ~time_limit:value ());
     ]
+
+let () =
+  List.iter
+    (fun value ->
+      match Experiment.resolve ~cost_limit:value () with
+      | _ -> assert false
+      | exception Invalid_argument _ -> ())
+    [ 0.; -1.; Float.infinity; Float.neg_infinity; Float.nan ]

@@ -1,6 +1,11 @@
 import asyncio
+import json
+import os
+import sys
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import PurePosixPath
+from typing import cast
 from uuid import uuid4
 
 from huggingface_hub import Sandbox, SandboxCommandResult
@@ -15,17 +20,52 @@ INSTALL_TOOLS = (
 )
 
 
-def create() -> str:
-    client = Sandbox.create(image=IMAGE, idle_timeout=900)
+def event(name: str, *, handle: str = "") -> None:
+    sys.stdout.write(
+        json.dumps({"event": name, "run_id": os.environ.get("EVAL_RUN_ID", ""), "vm_id": handle})
+        + "\n"
+    )
+    sys.stdout.flush()
+
+
+def prepared_check() -> str:
+    return (
+        "set -eu; for tool in python bash curl git ocaml ocamlfind rg; do "
+        'command -v "$tool" >/dev/null || exit 1; done'
+    )
+
+
+def provision(image: str) -> Sandbox:
+    return Sandbox.create(
+        image=image or IMAGE,
+        idle_timeout=900,
+        namespace=os.environ.get("HF_NAMESPACE") or None,
+        forward_hf_token=False,
+        labels={"genius-run": os.environ.get("EVAL_RUN_ID", "unknown")},
+    )
+
+
+def create() -> Sandbox:
+    event("vm_provisioning")
+    image = os.environ.get("EVAL_SANDBOX_IMAGE", "")
+    client = provision(image)
     try:
-        result = client.run(["sh", "-c", INSTALL_TOOLS], timeout=240, check=False)
+        setup = prepared_check() if image else INSTALL_TOOLS
+        result = client.run(["sh", "-c", setup], timeout=240, check=False)
         if result.exit_code != 0:
-            raise RuntimeError("Could not install eval tools in Hugging Face Sandbox")
+            raise RuntimeError("Could not prepare eval tools in Hugging Face Sandbox")
         client.files.mkdir(str(WORKDIR))
-        return client.id
+        event("vm_ready", handle=client.id)
+        return client
     except BaseException:
-        client.kill()
+        destroy(client)
         raise
+
+
+def destroy(client: Sandbox) -> None:
+    try:
+        client.kill()
+        event("vm_cleanup", handle=client.id)
     finally:
         client.close()
 
@@ -64,46 +104,48 @@ def completion(result: SandboxCommandResult, *, command: tuple[str, ...]) -> com
     )
 
 
-def environment(handle: str) -> commands.Environment:
-    async def execute(request: commands.Execution) -> commands.Completion:
-        def invoke() -> commands.Completion:
-            client = Sandbox.connect(handle)
-            try:
-                return run(client, request=request)
-            finally:
-                client.close()
+async def effect[T](
+    invoke: Callable[[], T], *, active: set[asyncio.Task[object]] | None = None
+) -> T:
+    pending = asyncio.create_task(asyncio.to_thread(invoke))
+    tracked = cast(asyncio.Task[object], pending)
+    if active is not None:
+        active.add(tracked)
+    try:
+        return await asyncio.shield(pending)
+    except asyncio.CancelledError:
+        with suppress(Exception):
+            await _settle(pending)
+        raise
+    finally:
+        if active is not None:
+            active.discard(tracked)
 
-        return await asyncio.to_thread(invoke)
+
+def environment(
+    handle: str, *, client: Sandbox | None = None, active: set[asyncio.Task[object]] | None = None
+) -> commands.Environment:
+    async def invoke[T](operation: Callable[[Sandbox], T]) -> T:
+        def connected() -> T:
+            current = client if client is not None else Sandbox.connect(handle)
+            try:
+                return operation(current)
+            finally:
+                if client is None:
+                    current.close()
+
+        return await effect(connected, active=active)
+
+    async def execute(request: commands.Execution) -> commands.Completion:
+        return await invoke(lambda current: run(current, request=request))
 
     async def read(file: str) -> bytes:
-        def invoke() -> bytes:
-            client = Sandbox.connect(handle)
-            try:
-                return client.files.read(str(WORKDIR / file))
-            finally:
-                client.close()
-
-        return await asyncio.to_thread(invoke)
+        return await invoke(lambda current: current.files.read(str(WORKDIR / file)))
 
     async def write(file: str, contents: bytes) -> None:  # noqa: PLR0917 - capability write port
-        def invoke() -> None:
-            client = Sandbox.connect(handle)
-            try:
-                client.files.write(str(WORKDIR / file), contents)
-            finally:
-                client.close()
-
-        await asyncio.to_thread(invoke)
+        await invoke(lambda current: current.files.write(str(WORKDIR / file), contents))
 
     return commands.Environment(execute=execute, read_bytes=read, write_bytes=write)
-
-
-def kill(handle: str) -> None:
-    client = Sandbox.connect(handle)
-    try:
-        client.kill()
-    finally:
-        client.close()
 
 
 async def _settle[T](task: asyncio.Task[T]) -> T:
@@ -115,33 +157,42 @@ async def _settle[T](task: asyncio.Task[T]) -> T:
     return task.result()
 
 
-async def _kill(handle: str) -> None:
-    pending = asyncio.create_task(asyncio.to_thread(kill, handle))
-    try:
-        await asyncio.shield(pending)
-    except asyncio.CancelledError:
-        with suppress(Exception):
-            await _settle(pending)
-        raise
+async def _kill(client: Sandbox) -> None:
+    await effect(lambda: destroy(client))
 
 
 def runtime() -> commands.Runtime:
-    owned: dict[commands.Environment, str] = {}
+    owned: dict[commands.Environment, tuple[Sandbox, set[asyncio.Task[object]]]] = {}
 
     async def allocate() -> commands.Environment:
         pending = asyncio.create_task(asyncio.to_thread(create))
         try:
-            handle = await asyncio.shield(pending)
+            client = await asyncio.shield(pending)
         except asyncio.CancelledError:
             with suppress(Exception):
-                handle = await _settle(pending)
-                await _kill(handle)
+                client = await _settle(pending)
+                await _kill(client)
             raise
-        result = environment(handle)
-        owned[result] = handle
+        active: set[asyncio.Task[object]] = set()
+        result = environment(client.id, client=client, active=active)
+        owned[result] = client, active
         return result
 
     async def cleanup(target: commands.Environment, *, interrupted: bool) -> None:
-        await _kill(owned.pop(target))
+        client, active = owned.pop(target)
+
+        async def finish() -> None:
+            for pending in tuple(active):
+                with suppress(Exception):
+                    await _settle(pending)
+            await _kill(client)
+
+        pending = asyncio.create_task(finish())
+        try:
+            await asyncio.shield(pending)
+        except asyncio.CancelledError:
+            with suppress(Exception):
+                await _settle(pending)
+            raise
 
     return commands.Runtime(create=allocate, cleanup=cleanup)

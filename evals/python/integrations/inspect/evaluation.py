@@ -1,14 +1,21 @@
 """Prepare explicit evaluation requests and execute them with Inspect."""
 
+import asyncio
+from contextlib import suppress
 from functools import partial
+from pathlib import Path
 from typing import Any, override
+from uuid import uuid4
 
 from inspect_ai import Task, eval_async
-from inspect_ai.log import EvalLog, EvalSample
+from inspect_ai.log import EvalLog
 from inspect_ai.model import GenerateConfig, get_model, modelapi
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 
+import evals.python.integrations.inspect.completeness as completeness_adapter
+import evals.python.integrations.inspect.pricing as pricing_adapter
 import evals.python.integrations.inspect.profiles as profile_adapter
+import evals.python.integrations.inspect.progress as progress_adapter
 import evals.python.integrations.inspect.remote  # noqa: F401 - register the HF sandbox
 import evals.python.integrations.inspect.tasks as task_adapter
 from evals.python import commands, query
@@ -24,15 +31,10 @@ class HfChatAPI(HFInferenceProvidersAPI):
         return params
 
 
-def crashed(sample: EvalSample) -> bool:
-    scores = sample.scores or {}
-    return any((score.metadata or {}).get("agent_failure") for score in scores.values())
-
-
 # A scored crash still counts as success, so name crashes apart from clean zeros.
 def crash_summary(log: EvalLog) -> str:
     samples = log.samples or []
-    crashes = sum(crashed(sample) for sample in samples)
+    crashes = sum(completeness_adapter.crashed(sample) for sample in samples)
     return f"{log.eval.task}: {crashes} of {len(samples)} samples had an agent crash"
 
 
@@ -94,28 +96,68 @@ def diagnostic_tasks(
 
 
 async def evaluate_async(request: commands.EvaluationSettings) -> int:
-    spec = query.ExperimentSettings(epochs=request.epochs, token_limit=request.token_limit)
+    spec = query.ExperimentSettings(epochs=request.epochs, cost_limit=request.cost_limit)
     tasks = evaluation_tasks(spec, request=request)
-    selected = selected_samples(tasks[0], request=request)
+    selected_samples(tasks[0], request=request)
     if request.model.startswith("hf-inference-providers/"):
         model = get_model(
             request.model.replace("hf-inference-providers/", "genius-hf/", 1),
             strict_tools=False,
+            stream=False,
         )
     else:
         model = get_model(request.model)
+    pricing = pricing_adapter.configure(model, request=request)
+    state = progress_adapter.Progress(run=request.run_id or uuid4().hex)
+    token = progress_adapter.current.set(state)
+    heartbeat = asyncio.create_task(state.heartbeat())
+    try:
+        state.emit(
+            "run_start",
+            settings=request.model_dump(mode="json"),
+            model_cost=pricing,
+            cost_limit=spec.cost_limit,
+        )
+        return await execute(tasks, request=request, spec=spec, model=model, state=state)
+    finally:
+        try:
+            heartbeat.cancel()
+            try:
+                with suppress(asyncio.CancelledError):
+                    await heartbeat
+            finally:
+                state.finish()
+        finally:
+            progress_adapter.current.reset(token)
+
+
+async def execute(
+    tasks: list[Task],
+    *,
+    request: commands.EvaluationSettings,
+    spec: commands.Experiment,
+    model: Any,
+    state: progress_adapter.Progress,
+) -> int:
+    epochs = 1 if request.deliveries else spec.epochs
+    expected = completeness_adapter.expected_pairs(tasks, request=request, epochs=epochs)
+    state.emit("expected", tuples=sorted(expected))
     logs = await eval_async(
         tasks,
         model=model,
-        epochs=1 if request.deliveries else spec.epochs,
+        epochs=epochs,
         sandbox=request.sandbox,
-        max_samples=1,
+        max_samples=1 if request.deliveries else request.max_samples,
         max_tasks=1,
-        sample_id=selected,
+        sample_id=selected_samples(tasks[0], request=request),
         limit=request.limit,
-        log_dir=request.log_dir,
+        log_dir=str(Path(request.log_dir) / state.run),
     )
     for log in logs:
         print(f"{log.eval.task}: {log.status} ({log.location})", flush=True)
         print(crash_summary(log), flush=True)
-    return int(any(log.status != "success" for log in logs))
+    summary = completeness_adapter.report(logs, expected=expected)
+    summary["telemetry_errors"] = state.telemetry_errors
+    summary["lifecycle_missing"] = len(expected) - state.completed
+    state.emit("completeness", **summary)
+    return int(completeness_adapter.failed(summary))

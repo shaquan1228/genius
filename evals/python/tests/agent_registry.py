@@ -137,6 +137,7 @@ def codex_options_disable_network() -> None:
         "web_search": "disabled",
         "home_dir": "/root/genius-codex",
         "network_access": False,
+        "system_prompt": AGENT_REGISTRY["codex"].system_prompt,
         "retry_refusals": 0,
         "config_overrides": {
             "model_reasoning_effort": '"medium"',
@@ -156,10 +157,10 @@ def explicit_agent_version_is_logged() -> None:
         provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
     )
     spec = experiment()
-    assert (task.epochs, task.message_limit, task.token_limit, task.time_limit) == (
+    assert (task.epochs, task.message_limit, task.cost_limit, task.time_limit) == (
         spec.epochs,
         spec.message_limit,
-        spec.token_limit,
+        spec.cost_limit,
         spec.time_limit,
     )
     metadata = task.metadata
@@ -185,3 +186,28 @@ def custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
     )
     assert task.metadata is not None
     assert (task.metadata["agent"], task.metadata["agent_version"]) == ("other", "custom-version")
+
+
+def codex_compatibility_guidance_is_conditional_and_common() -> None:
+    assert AGENT_REGISTRY["codex"].system_prompt == (
+        "Use only tools registered for this session. "
+        "If apply_patch is not registered, edit files through exec_command with cmd "
+        "as a shell command string, not an argv array. "
+        "Do not call an unregistered apply_patch tool."
+    )
+    assert AGENT_REGISTRY["claude"].system_prompt == ""
+
+
+def changed_agent_guidance_changes_task_fingerprint(monkeypatch: pytest.MonkeyPatch) -> None:
+    from hashlib import sha256  # noqa: PLC0415
+    from typing import cast  # noqa: PLC0415
+
+    from evals.python.integrations.inspect.tasks import baseline  # noqa: PLC0415
+
+    original = cast(dict[str, str], baseline(agent="codex").metadata)["agent_system_prompt_sha256"]
+    spec = AGENT_REGISTRY["codex"]
+    changed_prompt = spec.system_prompt + "\nAdditional shared compatibility guidance."
+    monkeypatch.setitem(AGENT_REGISTRY, "codex", replace(spec, system_prompt=changed_prompt))
+    changed = cast(dict[str, str], baseline(agent="codex").metadata)["agent_system_prompt_sha256"]
+    assert changed == sha256(changed_prompt.encode()).hexdigest()
+    assert changed != original

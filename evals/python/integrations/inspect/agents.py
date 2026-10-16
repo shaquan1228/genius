@@ -20,6 +20,7 @@ class AgentSpec:
     options: dict[str, Any]
     # Inspect SWE starts the RuntimeError for a failed agent process with this text.
     failure_prefix: str
+    system_prompt: str = ""
 
 
 AGENT_REGISTRY: dict[AgentKind, AgentSpec] = {
@@ -48,6 +49,12 @@ AGENT_REGISTRY: dict[AgentKind, AgentSpec] = {
             },
         },
         failure_prefix="Error executing codex cli agent",
+        system_prompt=(
+            "Use only tools registered for this session. "
+            "If apply_patch is not registered, edit files through exec_command with cmd "
+            "as a shell command string, not an argv array. "
+            "Do not call an unregistered apply_patch tool."
+        ),
     ),
 }
 DEFAULT_VERSIONS: dict[AgentKind, str] = {
@@ -57,11 +64,12 @@ DEFAULT_VERSIONS: dict[AgentKind, str] = {
 
 def coding_agent(kind: AgentKind, *, version: str) -> Agent:
     spec = AGENT_REGISTRY[kind]
+    options = spec.options | ({"system_prompt": spec.system_prompt} if spec.system_prompt else {})
     return spec.factory()(
         cwd="workspace",
         version=version,
         attempts=1,
-        **spec.options,
+        **options,
     )
 
 

@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+export PYTHONUNBUFFERED=1
 
 mkdir -p /work /results/live
 cp -R /source/. /work/

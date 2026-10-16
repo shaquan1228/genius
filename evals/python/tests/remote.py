@@ -3,6 +3,7 @@
 import asyncio
 import subprocess
 from collections.abc import Iterator
+from contextlib import nullcontext
 from pathlib import Path
 from threading import Event
 from unittest.mock import Mock, patch
@@ -49,14 +50,14 @@ def lifecycle(client: Mock) -> None:
     assert environments.environment(environment) is environment.environment
     assert environments.runtime(environment) is environment.runtime
     client.files.mkdir.assert_called_once_with("/eval")
-    client.close.assert_called_once_with()
+    client.close.assert_not_called()
     asyncio.run(
         HfSandboxEnvironment.sample_cleanup(
             "eval", None, {"default": environment}, interrupted=False
         )
     )
     client.kill.assert_called_once_with()
-    assert client.close.call_count == 2
+    assert client.close.call_count == 1
 
 
 @pytest.mark.parametrize("failure", ["exit", "mkdir"])
@@ -240,7 +241,7 @@ def cleanup_waits_for_eventual_kill_after_repeated_cancellation(client: Mock) ->
     client.kill.side_effect = kill
     asyncio.run(cancel())
     client.kill.assert_called_once_with()
-    assert client.close.call_count == 2
+    assert client.close.call_count == 1
 
 
 def inspect_event_wrapper_reuses_its_canonical_capabilities() -> None:
@@ -248,3 +249,115 @@ def inspect_event_wrapper_reuses_its_canonical_capabilities() -> None:
     wrapped = SandboxEnvironmentProxy(sandbox)
     assert environments.environment(wrapped) is sandbox.environment
     assert environments.runtime(wrapped) is sandbox.runtime
+
+
+def persistent_runtime_reuses_client(client: Mock) -> None:
+    async def exercise() -> None:
+        runtime = backend.runtime()
+        target = await runtime.create()
+        await target.execute(commands.Execution(command=("true",)))
+        await target.write_bytes("file", b"data")
+        client.files.read.return_value = b"data"
+        assert await target.read_bytes("file") == b"data"
+        client.close.assert_not_called()
+        await runtime.cleanup(target, interrupted=False)
+
+    with patch.object(Sandbox, "connect") as connect:
+        asyncio.run(exercise())
+    connect.assert_not_called()
+    client.close.assert_called_once_with()
+
+
+@pytest.mark.parametrize("valid", [False, True])
+def prepared_runtime_validation(
+    *, valid: bool, client: Mock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EVAL_SANDBOX_IMAGE", "private/prepared:fixed")
+    monkeypatch.setenv("EVAL_RUN_ID", "run-123")
+    monkeypatch.setenv("HF_NAMESPACE", "owner")
+    client.run.return_value = _result(0 if valid else 1)
+    with patch.object(Sandbox, "create", return_value=client) as create:
+        expectation = (
+            nullcontext() if valid else pytest.raises(RuntimeError, match="prepare eval tools")
+        )
+        with expectation:
+            created = backend.create()
+            backend.destroy(created)
+    assert dict(create.call_args.kwargs) == {
+        "image": "private/prepared:fixed",
+        "idle_timeout": 900,
+        "namespace": "owner",
+        "forward_hf_token": False,
+        "labels": {"genius-run": "run-123"},
+    }
+    _prepared_setup(client.run.call_args.args[0][2])
+    client.close.assert_called_once_with()
+
+
+def _prepared_setup(setup: str) -> None:
+    assert "apt-get" not in setup
+    assert "command -v" in setup
+
+
+def cleanup_failure_closes_client(client: Mock) -> None:
+    client.kill.side_effect = RuntimeError("kill failed")
+
+    async def exercise() -> None:
+        runtime = backend.runtime()
+        target = await runtime.create()
+        with pytest.raises(RuntimeError, match="kill failed"):
+            await runtime.cleanup(target, interrupted=False)
+
+    asyncio.run(exercise())
+    client.close.assert_called_once_with()
+
+
+@pytest.mark.parametrize("cancel_operation", [False, True])
+def cleanup_settles_pending_operations(*, cancel_operation: bool, client: Mock) -> None:
+    started, release = Event(), Event()
+
+    def blocked() -> bytes:
+        started.set()
+        assert release.wait(timeout=5)
+        return b"data"
+
+    async def exercise() -> None:
+        runtime = backend.runtime()
+        target = await runtime.create()
+        client.files.read.side_effect = lambda _file: blocked()
+        operation = asyncio.ensure_future(target.read_bytes("file"))
+        assert await asyncio.to_thread(started.wait, 5)
+        if cancel_operation:
+            operation.cancel()
+        cleanup = asyncio.create_task(runtime.cleanup(target, interrupted=True))
+        await asyncio.sleep(0)
+        cleanup.cancel()
+        await asyncio.sleep(0)
+        cleanup.cancel()
+        client.kill.assert_not_called()
+        release.set()
+        if cancel_operation:
+            with pytest.raises(asyncio.CancelledError):
+                await operation
+        else:
+            assert await operation == b"data"
+        with pytest.raises(asyncio.CancelledError):
+            await cleanup
+
+    asyncio.run(exercise())
+    client.kill.assert_called_once_with()
+    client.close.assert_called_once_with()
+
+
+@pytest.mark.parametrize("missing", [None, "python", "ocamlfind"])
+def prepared_check_requires_every_tool(missing: str | None, *, tmp_path: Path) -> None:
+    for tool in ("python", "bash", "curl", "git", "ocaml", "ocamlfind", "rg"):
+        if tool != missing:
+            (tmp_path / tool).symlink_to("/bin/sh")
+    checked = subprocess.run(
+        ["/bin/sh", "-c", backend.prepared_check()],
+        env={"PATH": str(tmp_path)},
+        capture_output=True,
+        check=False,
+    )
+    assert (checked.returncode == 0) == (missing is None)
