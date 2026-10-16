@@ -37,13 +37,11 @@ def verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> bo
             await agent.exec(["mkdir", "workspace"])
             for name, data in snapshot(directory).items():
                 await agent.write_file(f"workspace/{name}", data)
-            result = await commands.execute(
-                commands.VerifyCase(
-                    case_id=case.id,
-                    selection=selection,
-                    agent=environment(agent),
-                    runtime=runtime(agent),
-                )
+            result = await commands.VerifyCase(
+                case_id=case.id,
+                selection=selection,
+                agent=environment(agent),
+                runtime=runtime(agent),
             )
             return result.verification.status == "passed"
         finally:

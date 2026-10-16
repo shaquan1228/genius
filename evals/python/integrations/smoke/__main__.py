@@ -3,34 +3,31 @@ import json
 import sys
 from typing import assert_never
 
+import evals.python.query as queries
 from evals.python import commands
 from evals.python.integrations.smoke import declarations
 
 
-def response(completion: commands.PlainCompletion | commands.StructuredCompletion) -> str:
+def response(completion: queries.PlainCompletion | queries.StructuredCompletion) -> str:
     match completion:
-        case commands.PlainCompletion(text=text):
+        case queries.PlainCompletion(text=text):
             return text
-        case commands.StructuredCompletion(fields=fields):
+        case queries.StructuredCompletion(fields=fields):
             return json.dumps(dict(fields))
         case _ as unreachable:
             assert_never(unreachable)
 
 
-async def validate(definition: commands.CaseDefinition, *, dataset: commands.Dataset) -> bool:
-    result = await commands.execute(
-        commands.ValidateReference(case_id=definition.id, selection=dataset)
-    )
-    scores: commands.Scores = {}
+async def validate(definition: queries.CaseDefinition, *, dataset: queries.Dataset) -> bool:
+    result = await commands.ValidateReference(case_id=definition.id, selection=dataset)
+    scores: queries.Scores = {}
     if result.verification.status != "harness_error":
-        scores = commands.query(
-            commands.GradeCase(
-                case_id=definition.id,
-                response=response(definition.reference.completion),
-                changed_files=tuple(f"workspace/{name}" for name in definition.reference.edits),
-                verification=result.verification,
-                selection=dataset,
-            )
+        scores = queries.GradeCase(
+            case_id=definition.id,
+            response=response(definition.reference.completion),
+            changed_files=tuple(f"workspace/{name}" for name in definition.reference.edits),
+            verification=result.verification,
+            selection=dataset,
         )
     print(
         json.dumps(
@@ -46,7 +43,7 @@ async def validate(definition: commands.CaseDefinition, *, dataset: commands.Dat
 
 async def main() -> int:
     definitions = declarations.cases()
-    dataset = commands.query(commands.CompileDataset(cases=definitions))
+    dataset = queries.CompileDataset(cases=definitions)
     results = [await validate(definition, dataset=dataset) for definition in definitions]
     return int(not all(results))
 

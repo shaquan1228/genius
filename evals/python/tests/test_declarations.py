@@ -8,39 +8,39 @@ from typing import cast
 import pytest
 from pydantic import ValidationError
 
-from evals.python import catalog, commands, transport
+from evals.python import catalog, query, transport
 
 
-def declaration(*, code: bool = True) -> commands.CaseDefinition:
-    criterion: commands.CodeCriterion | commands.AnswerCriterion
+def declaration(*, code: bool = True) -> query.CaseDefinition:
+    criterion: query.CodeCriterion | query.AnswerCriterion
     if code:
-        criterion = commands.CodeCriterion(
-            verifier=commands.VerifierDefinition(
+        criterion = query.CodeCriterion(
+            verifier=query.VerifierDefinition(
                 inputs=("main.py",),
-                files={"verify.py": commands.Inline(text="private assertions")},
-                tools={"check.sh": commands.Resource(name="check.sh")},
+                files={"verify.py": query.Inline(text="private assertions")},
+                tools={"check.sh": query.Resource(name="check.sh")},
                 command=("python3", "verify.py"),
                 stdin="private stdin",
                 timeout_seconds=30,
             )
         )
     else:
-        criterion = commands.AnswerCriterion(
+        criterion = query.AnswerCriterion(
             expected={"choice": "B", "safe": True},
-            text_rule=commands.TextRule(field="reason", min_words=1, max_words=5),
+            text_rule=query.TextRule(field="reason", min_words=1, max_words=5),
         )
-    return commands.CaseDefinition(
+    return query.CaseDefinition(
         id="external",
         fixture={"main.py": "broken"},
-        instruction=commands.Instruction(skill="reasoning", prompt="Fix it: é"),
+        instruction=query.Instruction(skill="reasoning", prompt="Fix it: é"),
         criterion=criterion,
         allowed_files=("main.py",),
-        reference=commands.ReferenceDefinition(
+        reference=query.ReferenceDefinition(
             edits={"main.py": "fixed"},
             completion=(
-                commands.PlainCompletion(text="done")
+                query.PlainCompletion(text="done")
                 if code
-                else commands.StructuredCompletion(fields={"choice": "B", "safe": True})
+                else query.StructuredCompletion(fields={"choice": "B", "safe": True})
             ),
         ),
     )
@@ -63,7 +63,7 @@ def test_external_declarations_preserve_public_projection(*, code: bool) -> None
     public_files = {"main.py": "broken"}
     if code:
         public_files["check.sh"] = catalog.RUNNER.read_text()
-    assert case == commands.Case(
+    assert case == query.Case(
         id="external", skill="reasoning", prompt="Fix it: é", files=public_files
     )
     assert set(case.model_dump()) == {"id", "skill", "prompt", "files"}
@@ -103,7 +103,7 @@ def test_imported_declarations_use_existing_grading(*, code: bool) -> None:
         record=record,
         response='{"choice":"B","safe":true,"reason":"clear"}',
         changed_files=("workspace/main.py",),
-        verification=commands.Verification(status="passed"),
+        verification=query.Verification(status="passed"),
     )
     assert scores == {"correctness": True, "scope": True}
 
@@ -115,7 +115,7 @@ def test_generic_declarations_do_not_supply_cases_or_download_metadata() -> None
 
 def test_declaration_inputs_are_frozen_defensive_copies() -> None:
     fields = {"choice": "B"}
-    criterion = commands.AnswerCriterion(expected=fields)
+    criterion = query.AnswerCriterion(expected=fields)
     fields["choice"] = "A"
     assert criterion.expected == {"choice": "B"}
     with pytest.raises(TypeError):
@@ -124,9 +124,9 @@ def test_declaration_inputs_are_frozen_defensive_copies() -> None:
         criterion.kind = "answer"
     for fields_value in ({"choice": 1}, {"choice": None}):
         with pytest.raises(ValidationError):
-            commands.AnswerCriterion.model_validate({"expected": fields_value})
+            query.AnswerCriterion.model_validate({"expected": fields_value})
     with pytest.raises(ValidationError):
-        commands.CaseDefinition.model_validate({**declaration().model_dump(), "allowed_files": []})
+        query.CaseDefinition.model_validate({**declaration().model_dump(), "allowed_files": []})
     assert transport.encode_declarations(()) == ()
 
 
@@ -231,10 +231,10 @@ def test_fixture_and_artifact_mappings_retain_immutable_snapshots() -> None:
     definition = declaration()
     with pytest.raises(TypeError):
         cast(dict[str, str], definition.fixture)["main.py"] = "changed"
-    assert isinstance(definition.criterion, commands.CodeCriterion)
+    assert isinstance(definition.criterion, query.CodeCriterion)
     with pytest.raises(TypeError):
-        cast(dict[str, commands.Inline], definition.criterion.verifier.files)["verify.py"] = (
-            commands.Inline(text="changed")
+        cast(dict[str, query.Inline], definition.criterion.verifier.files)["verify.py"] = (
+            query.Inline(text="changed")
         )
     with pytest.raises(TypeError):
         cast(dict[str, str], definition.reference.edits)["main.py"] = "changed"
@@ -243,14 +243,14 @@ def test_fixture_and_artifact_mappings_retain_immutable_snapshots() -> None:
 @pytest.mark.parametrize(
     "criterion",
     [
-        commands.AnswerCriterion(expected={"choice": "B"}),
-        commands.AnswerCriterion(
-            expected={}, text_rule=commands.TextRule(field="reason", min_words=1, max_words=5)
+        query.AnswerCriterion(expected={"choice": "B"}),
+        query.AnswerCriterion(
+            expected={}, text_rule=query.TextRule(field="reason", min_words=1, max_words=5)
         ),
     ],
 )
 def test_answer_construction_supports_each_optional_rule_shape(
-    criterion: commands.AnswerCriterion,
+    criterion: query.AnswerCriterion,
 ) -> None:
     definition = declaration(code=False).model_copy(update={"criterion": criterion})
     (record,) = transport.encode_declarations((definition,))

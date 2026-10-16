@@ -7,7 +7,7 @@ from inspect_ai.util import (
     sandboxenv,
 )
 
-from evals.python import commands
+from evals.python import commands, query
 
 
 @sandboxenv(name="hf")
@@ -23,7 +23,7 @@ class HfSandboxEnvironment(SandboxEnvironment):
     async def sample_init(
         cls, task_name: str, config: object, metadata: dict[str, str]
     ) -> dict[str, SandboxEnvironment]:
-        runtime = commands.query(commands.ExecutionRuntime(provider="hf"))
+        runtime = query.ExecutionRuntime(provider="hf")
         environment = await runtime.create()
         return {"default": cls(environment, runtime)}
 

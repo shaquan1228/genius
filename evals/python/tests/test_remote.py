@@ -12,7 +12,7 @@ from huggingface_hub import Sandbox, SandboxCommandResult
 from inspect_ai.util import SandboxUserUnsupportedError
 from inspect_ai.util._sandbox.events import SandboxEnvironmentProxy
 
-from evals.python import commands
+from evals.python import commands, query
 from evals.python.integrations.hugging_face import sandbox as backend
 from evals.python.integrations.inspect import environments
 from evals.python.integrations.inspect.remote import HfSandboxEnvironment
@@ -203,7 +203,7 @@ def test_backend_allocation_owns_eventual_handle_after_repeated_cancellation(
         return client
 
     async def cancel() -> None:
-        runtime = commands.query(commands.ExecutionRuntime(provider="hf"))
+        runtime = query.ExecutionRuntime(provider="hf")
         task = asyncio.ensure_future(runtime.create())
         assert await asyncio.to_thread(started.wait, 5)
         task.cancel()
@@ -226,7 +226,7 @@ def test_cleanup_waits_for_eventual_kill_after_repeated_cancellation(client: Moc
         assert release.wait(timeout=5)
 
     async def cancel() -> None:
-        runtime = commands.query(commands.ExecutionRuntime(provider="hf"))
+        runtime = query.ExecutionRuntime(provider="hf")
         environment = await runtime.create()
         task = asyncio.create_task(runtime.cleanup(environment, interrupted=False))
         assert await asyncio.to_thread(started.wait, 5)

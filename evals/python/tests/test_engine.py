@@ -149,26 +149,25 @@ def test_scorer_maps_sdk_observation_to_public_assessment() -> None:
         patch.object(scoring, "sandbox"),
         patch.object(environments, "environment", return_value=agent),
         patch.object(environments, "runtime", return_value=runtime),
-        patch.object(commands, "execute", return_value=assessment) as execute,
+        patch.object(commands, "AssessCase", return_value=assessment) as execute,
     ):
         score = asyncio.run(scoring.score_sample(state, Target([""])))
     assert score.metadata is not None
     assert (
-        execute.call_args.args,
+        execute.call_args.kwargs,
         score.value,
         score.explanation,
         score.metadata["verifier_metadata"],
         assessment.metadata,
     ) == (
-        (
-            commands.AssessCase(
-                case_id="clear-task",
-                response="observed answer",
-                changed_files=("a.ml", "b.ml"),
-                agent=agent,
-                runtime=runtime,
-            ),
-        ),
+        {
+            "case_id": "clear-task",
+            "response": "observed answer",
+            "changed_files": ("a.ml", "b.ml"),
+            "selection": "smoke",
+            "agent": agent,
+            "runtime": runtime,
+        },
         {"correctness": CORRECT, "scope": INCORRECT},
         "canonical evidence",
         {"nested": {"items": [True, None, 4.2]}},

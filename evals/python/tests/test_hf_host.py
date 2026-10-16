@@ -20,22 +20,22 @@ from evals.python.integrations.inspect.evaluation import HfChatAPI
 from evals.python.paths import REPO_ROOT
 
 
-def configured_request() -> commands.Evaluate:
+def configured_request() -> commands.EvaluationSettings:
     environment = {"EVAL_MODEL": "openai/test-model", **os.environ}
     return configuration(environment)
 
 
-def test_hf_job_constructs_one_immutable_public_operation(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_hf_job_calls_evaluation_with_validated_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     monkeypatch.setenv("EVAL_SAMPLE_IDS", '["clear-task"]')
     monkeypatch.setenv("EVAL_DELIVERIES", '["files", "manifest"]')
     monkeypatch.setenv("EVAL_EPOCHS", "2")
     monkeypatch.setenv("EVAL_TOKEN_LIMIT", "50000")
     before = dict(os.environ)
-    with patch.object(commands, "execute", new_callable=AsyncMock, return_value=7) as execute:
+    with patch.object(commands, "Evaluate", new_callable=AsyncMock, return_value=7) as execute:
         assert run() == 7
-    request = execute.call_args.args[0]
-    assert isinstance(request, commands.Evaluate)
+    request = commands.EvaluationSettings.model_validate(execute.call_args.kwargs)
+    assert isinstance(request, commands.EvaluationSettings)
     assert (request.sample_ids, request.deliveries, request.epochs, request.token_limit) == (
         ("clear-task",),
         ("files", "manifest"),
@@ -52,7 +52,7 @@ def test_hf_job_constructs_one_immutable_public_operation(monkeypatch: pytest.Mo
 def test_inspect_evaluation_uses_request_without_reading_job_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    request = commands.Evaluate(model="openai/explicit")
+    request = commands.EvaluationSettings(model="openai/explicit")
     monkeypatch.setenv("EVAL_MODEL", "invalid-environment-model")
     monkeypatch.setenv("EVAL_AGENT", "invalid-environment-agent")
     monkeypatch.setenv("EVAL_SAMPLE_IDS", "invalid")
@@ -65,7 +65,7 @@ def test_inspect_evaluation_uses_request_without_reading_job_environment(
     ):
 
         async def execute() -> int:
-            return assert_type(await commands.execute(request), int)
+            return assert_type(await commands.Evaluate(**request.model_dump()), int)
 
         assert asyncio.run(execute()) == 0
         assert evaluate.call_args.args[0] is not None
@@ -329,7 +329,7 @@ def test_explicit_non_list_selection_never_reaches_evaluation(
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     monkeypatch.setenv(setting, value)
     with (
-        patch("evals.python.integrations.hugging_face.job.commands.execute") as dispatch,
+        patch("evals.python.integrations.hugging_face.job.commands.Evaluate") as dispatch,
         patch("evals.python.integrations.inspect.evaluation.get_model") as model,
         patch("evals.python.integrations.inspect.evaluation.eval_async") as evaluate,
         pytest.raises(ValueError, match="JSON list"),

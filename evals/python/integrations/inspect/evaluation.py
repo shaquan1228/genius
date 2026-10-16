@@ -10,7 +10,7 @@ from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvid
 import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.remote  # noqa: F401 - register the HF sandbox
 import evals.python.integrations.inspect.tasks as task_adapter
-from evals.python import commands
+from evals.python import commands, query
 
 
 @modelapi(name="genius-hf")
@@ -35,7 +35,7 @@ def crash_summary(log: EvalLog) -> str:
     return f"{log.eval.task}: {crashes} of {len(samples)} samples had an agent crash"
 
 
-def selected_samples(task: Task, *, request: commands.Evaluate) -> list[str] | None:
+def selected_samples(task: Task, *, request: commands.EvaluationSettings) -> list[str] | None:
     selected = request.sample_ids
     if selected is None:
         return None
@@ -47,7 +47,9 @@ def selected_samples(task: Task, *, request: commands.Evaluate) -> list[str] | N
     return list(selected)
 
 
-def evaluation_tasks(spec: commands.Experiment, *, request: commands.Evaluate) -> list[Task]:
+def evaluation_tasks(
+    spec: commands.Experiment, *, request: commands.EvaluationSettings
+) -> list[Task]:
     if request.deliveries:
         return diagnostic_tasks(spec, request=request)
     return [
@@ -61,7 +63,7 @@ def evaluation_tasks(spec: commands.Experiment, *, request: commands.Evaluate) -
 def make_task(
     spec: commands.Experiment,
     *,
-    request: commands.Evaluate,
+    request: commands.EvaluationSettings,
     profile: str,
     delivery: commands.InstructionDelivery,
     diagnostic_epoch: int | None = None,
@@ -80,7 +82,9 @@ def make_task(
     )
 
 
-def diagnostic_tasks(spec: commands.Experiment, *, request: commands.Evaluate) -> list[Task]:
+def diagnostic_tasks(
+    spec: commands.Experiment, *, request: commands.EvaluationSettings
+) -> list[Task]:
     modes = request.deliveries or ()
     single = spec.model_copy(update={"epochs": 1})
     return [
@@ -96,10 +100,8 @@ def diagnostic_tasks(spec: commands.Experiment, *, request: commands.Evaluate) -
     ]
 
 
-async def evaluate_async(request: commands.Evaluate) -> int:
-    spec = commands.query(
-        commands.ExperimentSettings(epochs=request.epochs, token_limit=request.token_limit)
-    )
+async def evaluate_async(request: commands.EvaluationSettings) -> int:
+    spec = query.ExperimentSettings(epochs=request.epochs, token_limit=request.token_limit)
     tasks = evaluation_tasks(spec, request=request)
     selected = selected_samples(tasks[0], request=request)
     if request.model.startswith("hf-inference-providers/"):

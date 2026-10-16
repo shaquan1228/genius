@@ -1,19 +1,19 @@
-from evals.python import commands
+from evals.python import query
 
 
-def cases() -> tuple[commands.CaseDefinition, ...]:
+def cases() -> tuple[query.CaseDefinition, ...]:
     return (
-        commands.CaseDefinition(
+        query.CaseDefinition(
             id="external-increment",
             fixture={"solution.ml": "let increment value = value\n"},
-            instruction=commands.Instruction(
+            instruction=query.Instruction(
                 skill="reasoning", prompt="Fix increment so it adds one to its integer input."
             ),
-            criterion=commands.CodeCriterion(
-                verifier=commands.VerifierDefinition(
+            criterion=query.CodeCriterion(
+                verifier=query.VerifierDefinition(
                     inputs=("solution.ml",),
-                    files={"verifier.py": commands.Resource(name="ocaml_verifier.py")},
-                    tools={"check.sh": commands.Resource(name="check.sh")},
+                    files={"verifier.py": query.Resource(name="ocaml_verifier.py")},
+                    tools={"check.sh": query.Resource(name="check.sh")},
                     command=("python3", "-I", "verifier.py", "ocaml", "solution.ml"),
                     stdin=(
                         "let () = assert (Solution.increment 0 = 1); "
@@ -23,29 +23,29 @@ def cases() -> tuple[commands.CaseDefinition, ...]:
                 )
             ),
             allowed_files=("solution.ml",),
-            reference=commands.ReferenceDefinition(
+            reference=query.ReferenceDefinition(
                 edits={"solution.ml": "let increment value = value + 1\n"},
-                completion=commands.PlainCompletion(text="Increment now adds one."),
+                completion=query.PlainCompletion(text="Increment now adds one."),
             ),
         ),
-        commands.CaseDefinition(
+        query.CaseDefinition(
             id="external-plan",
             fixture={},
-            instruction=commands.Instruction(
+            instruction=query.Instruction(
                 skill="reasoning",
                 prompt=(
                     'Reply as JSON with strategy="inspect", safe=true, and a reason '
                     "of one to eight words for checking existing behavior first."
                 ),
             ),
-            criterion=commands.AnswerCriterion(
+            criterion=query.AnswerCriterion(
                 expected={"strategy": "inspect", "safe": True},
-                text_rule=commands.TextRule(field="reason", min_words=1, max_words=8),
+                text_rule=query.TextRule(field="reason", min_words=1, max_words=8),
             ),
             allowed_files=(),
-            reference=commands.ReferenceDefinition(
+            reference=query.ReferenceDefinition(
                 edits={},
-                completion=commands.StructuredCompletion(
+                completion=query.StructuredCompletion(
                     fields={
                         "strategy": "inspect",
                         "safe": True,

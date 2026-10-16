@@ -8,7 +8,6 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import commands
 from evals.python._kernel import Verification
 from evals.python.catalog import (
     RUNNER,
@@ -16,29 +15,26 @@ from evals.python.catalog import (
     reference,
     verifier,
 )
-from evals.python.commands import GradeCase
+from evals.python.query import GradeCase
 from evals.python.transport import LIBRARY, SUITE
 
 
 def judgment(*, response: str, suite: Path = SUITE) -> bool:
-    return commands.query(
-        GradeCase(
-            case_id="small-decision",
-            response=response,
-            changed_files=(),
-            verification=Verification(status="unchecked"),
-        ).model_copy(update={"selection": suite})
+    return GradeCase(
+        case_id="small-decision",
+        response=response,
+        changed_files=(),
+        verification=Verification(status="unchecked"),
+        selection=suite,
     )["correctness"]
 
 
 def test_kernel_grades_response_and_scope() -> None:
-    scores = commands.query(
-        GradeCase(
-            case_id="small-decision",
-            response='{"choice":"B","reason":"Lower cost."}',
-            changed_files=(),
-            verification=Verification(status="unchecked"),
-        )
+    scores = GradeCase(
+        case_id="small-decision",
+        response='{"choice":"B","reason":"Lower cost."}',
+        changed_files=(),
+        verification=Verification(status="unchecked"),
     )
     assert dict(scores) == {"correctness": True, "scope": True}
     with pytest.raises(TypeError):
@@ -82,13 +78,11 @@ def test_unknown_kernel_score_names_are_rejected() -> None:
 
 def test_unknown_case_is_a_harness_error() -> None:
     with pytest.raises(subprocess.CalledProcessError):
-        commands.query(
-            GradeCase(
-                case_id="unknown",
-                response="{}",
-                changed_files=(),
-                verification=Verification(status="unchecked"),
-            )
+        GradeCase(
+            case_id="unknown",
+            response="{}",
+            changed_files=(),
+            verification=Verification(status="unchecked"),
         )
 
 
@@ -163,13 +157,11 @@ def test_additional_named_scores_cross_bridge_without_decoder_changes() -> None:
         "evals.python.transport.subprocess.run",
         return_value=subprocess.CompletedProcess([], 0, stdout=response),
     ):
-        scores = commands.query(
-            GradeCase(
-                case_id="small-decision",
-                response="{}",
-                changed_files=(),
-                verification=Verification(status="unchecked"),
-            )
+        scores = GradeCase(
+            case_id="small-decision",
+            response="{}",
+            changed_files=(),
+            verification=Verification(status="unchecked"),
         )
     assert dict(scores) == {"correctness": True, "scope": False, "new_metric": True}
 
@@ -190,13 +182,12 @@ let cases = [Case.make ~id:"reference" ~fixture:Fixture.empty
     assert verifier(case.id, selection=suite) is None
     assert dict(expected.solution) == {"result.txt": "result"}
     assert json.loads(expected.answer) == {"state": 'quote" \\ \n é', "safe": True}
-    assert commands.query(
-        GradeCase(
-            case_id="reference",
-            response=expected.answer,
-            changed_files=(),
-            verification=Verification(status="unchecked"),
-        ).model_copy(update={"selection": suite})
+    assert GradeCase(
+        case_id="reference",
+        response=expected.answer,
+        changed_files=(),
+        verification=Verification(status="unchecked"),
+        selection=suite,
     )["correctness"]
 
 

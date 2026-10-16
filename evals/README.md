@@ -12,7 +12,7 @@ Inspect adapts observations, task execution, and reporting to its SDK.
 
 ```mermaid
 flowchart LR
-  J[HF hosted entry point] --> C[Public query and execute]
+  J[HF hosted entry point] --> C[Public queries and commands]
   I[Inspect observations] --> C
   E[EvalPlus CLI] --> C
   C --> T[OCaml process transport]
@@ -36,7 +36,8 @@ flowchart LR
 | `python/integrations/datasets/` | Pinned download effects |
 | `python/integrations/smoke/` | Python-owned example case declarations and offline reference-validation CLI |
 | `python/integrations/inspect/` | SDK task/sample/score adaptation, agents, and sandbox capability adaptation |
-| `python/commands.py` | Typed public operation contracts, query/command dispatch and composition |
+| `python/query.py` | Typed public queries returning canonical values directly |
+| `python/commands.py` | Typed asynchronous commands, validated launch settings and composition |
 | `python/verification.py` | SDK-free execution capabilities, immutable results and verification lifecycle |
 | `python/integrations/hugging_face/` | Hosted Job entry point and HF SDK operations for VM lifecycle, command execution and file IO |
 | `python/integrations/evalplus/` | Benchmark reference-validation CLI, EvalPlus manifest adaptation and trusted EvalPlus driver |
@@ -64,8 +65,9 @@ A genuinely new evaluation capability may require a new primitive.
 CI and local launchers supply overrides; OCaml resolves them into one immutable experiment specification before execution.
 The HF launcher deliberately requests one epoch by default for its smoke run; direct job invocation uses the kernel default when no override is supplied.
 The generic Inspect task builder accepts a sandbox selection and defaults to local execution.
-The HF Job constructs one immutable `Evaluate` command at the environment-variable boundary.
-Public execution passes that same object to Inspect; no JSON conversion occurs between Python modules.
+The HF Job validates immutable `EvaluationSettings` at the environment-variable boundary
+and calls `Evaluate` with those settings as keyword arguments. The command passes validated
+settings to Inspect; no JSON conversion occurs between Python modules.
 SDK clients, credentials and operational state stay in integrations.
 
 Shared domain types are defined once in `ast.ml`; public `.mli` files declare functions using those types, and `.ml` files implement them.
@@ -232,30 +234,29 @@ Sandbox and verifier failures still stop the task.
 
 Python integrations can author cases using the existing kernel type bindings. The
 example in `python/integrations/smoke/declarations.py` returns immutable
-`commands.CaseDefinition` values containing fixtures, instructions, code or answer
+`query.CaseDefinition` values containing fixtures, instructions, code or answer
 criteria, allowed files, and reference solutions. `CaseDefinition` represents the
 full `Ast.case` construction contract; `Case` is its separate public read projection.
 
 ```python
 from evals.python import commands
+from evals.python import query
 from evals.python.integrations.smoke import declarations
 
 definitions = declarations.cases()
-dataset = commands.query(commands.CompileDataset(cases=definitions))
-public_cases = commands.query(commands.Cases(selection=dataset))
+dataset = query.CompileDataset(cases=definitions)
+public_cases = query.Cases(selection=dataset)
 
 # In an async caller, validate the first case's known reference offline.
-verification = await commands.execute(
-    commands.ValidateReference(case_id=public_cases[0].id, selection=dataset)
+verification = await commands.ValidateReference(
+    case_id=public_cases[0].id, selection=dataset
 )
-scores = commands.query(
-    commands.GradeCase(
-        case_id=public_cases[0].id,
-        selection=dataset,
-        response="Increment now adds one.",
-        changed_files=("workspace/solution.ml",),
-        verification=verification.verification,
-    )
+scores = query.GradeCase(
+    case_id=public_cases[0].id,
+    selection=dataset,
+    response="Increment now adds one.",
+    changed_files=("workspace/solution.ml",),
+    verification=verification.verification,
 )
 ```
 
@@ -459,36 +460,39 @@ case hash, and each sample's verifier evidence.
 
 ## Controlled instruction-delivery diagnostics
 
-Integrations use one public namespace and pass immutable operation values:
+Integrations call typed public queries and commands directly:
 
 ```python
 from evals.python import commands
+from evals.python import query
 
-cases = commands.query(commands.Cases(selection="humanevalplus"))
-settings = commands.query(commands.ExperimentSettings(epochs=2, token_limit=50_000))
+cases = query.Cases(selection="humanevalplus")
+settings = query.ExperimentSettings(epochs=2, token_limit=50_000)
 
 # At the Inspect scoring interface, after capturing public observations:
-assessment = await commands.execute(
-    commands.AssessCase(
-        case_id=case_id,
-        selection="humanevalplus",
-        response=completion,
-        changed_files=changed_files,
-        agent=environment,
-        runtime=runtime,
-    )
+assessment = await commands.AssessCase(
+    case_id=case_id,
+    selection="humanevalplus",
+    response=completion,
+    changed_files=changed_files,
+    agent=environment,
+    runtime=runtime,
 )
+
+exit_code = await commands.Evaluate(model="openai/your-model", dataset="humanevalplus")
 ```
 
-Each operation determines its result type. `Cases`, `ExperimentSettings`,
-`CompileDataset`, `DescribeDataset`, `Provenance`, `GradeCase`, and `ExecutionRuntime` are queries.
+Each callable validates its arguments and returns its declared result directly.
+`Cases`, `ExperimentSettings`, `CompileDataset`, `DescribeDataset`, `Provenance`,
+`GradeCase`, and `ExecutionRuntime` are queries.
 `VerifyCase`, `AssessCase`, `ValidateReference`, and `Evaluate` are asynchronous
 commands. `DescribeDataset` reads metadata without downloading/importing all cases;
 `Provenance` includes source and private-case fingerprints.
 
-`Evaluate` is the launch command, not an integration-owned request DTO. HF reads
-launch settings once; Inspect receives the same object and awaits its SDK's
-`eval_async`. Profile/sample/task builders consume canonical values directly.
+`Evaluate` validates launch arguments into immutable `EvaluationSettings` before
+loading the runner SDK. HF parses its environment once into the same settings type
+and passes keyword arguments to `Evaluate`; Inspect receives validated settings
+and awaits its SDK's `eval_async`. Profile/sample/task builders consume canonical values directly.
 Integrations do not import sibling implementations or private kernel projections.
 The public contract has no integration-local command handlers or dataset clients.
 

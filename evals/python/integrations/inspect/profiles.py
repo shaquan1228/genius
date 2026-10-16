@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 
 from inspect_ai.dataset import Sample
 
-from evals.python import commands
+from evals.python import commands, query
 from evals.python.paths import REPO_ROOT
 
 # A diagnostic treatment of reasoning's four required reads, without rewriting them.
@@ -106,7 +106,4 @@ def samples(
 
 
 def load_profile(name: str, *, spec: commands.Experiment | None = None) -> commands.ProfileSpec:
-    return {
-        value.name: value
-        for value in (spec or commands.query(commands.ExperimentSettings())).profiles
-    }[name]
+    return {value.name: value for value in (spec or query.ExperimentSettings()).profiles}[name]

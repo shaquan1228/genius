@@ -183,7 +183,9 @@ def test_integrations_cannot_bypass_the_public_operation_contract() -> None:
 
 def test_public_commands_and_verification_have_no_sdk_imports() -> None:
     imports = {
-        name for file in ("commands.py", "verification.py") for name in imported(PYTHON_ROOT / file)
+        name
+        for file in ("commands.py", "query.py", "verification.py")
+        for name in imported(PYTHON_ROOT / file)
     }
     assert not any(
         name.startswith(("inspect_ai", "inspect_swe", "huggingface_hub")) for name in imports
@@ -191,19 +193,27 @@ def test_public_commands_and_verification_have_no_sdk_imports() -> None:
 
 
 @pytest.mark.parametrize("path", sorted((PYTHON_ROOT / "integrations").rglob("*.py")))
-def test_integrations_import_one_public_name_per_statement(path: Path) -> None:
+def test_integrations_import_public_namespaces_or_single_values(path: Path) -> None:
     imports = [
         node
         for node in nodes(path, kind=ast.ImportFrom)
         if str(node.module).startswith("evals.python")
     ]
-    assert all(len(node.names) == 1 for node in imports)
+    assert all(
+        len(node.names) == 1
+        or (
+            node.module == "evals.python"
+            and {name.name for name in node.names} <= {"commands", "query"}
+        )
+        for node in imports
+    )
 
 
 def test_case_query_does_not_load_runner_sdks() -> None:
-    script = """from evals.python import commands
+    script = """from evals.python import query
+from evals.python import commands
 import sys
-assert commands.query(commands.Cases())
+assert query.Cases()
 assert not {'inspect_ai', 'inspect_swe', 'huggingface_hub'}.intersection(sys.modules)
 print('kernel-only')
 """
