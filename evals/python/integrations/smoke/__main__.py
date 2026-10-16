@@ -3,8 +3,7 @@ import json
 import sys
 from typing import assert_never
 
-import evals.python.query as queries
-from evals.python import commands
+from evals.python import commands, queries
 from kernel import Ast
 
 
@@ -19,11 +18,11 @@ def response(completion: Ast.completion) -> str:
 
 
 async def validate(case: Ast.case, *, dataset: queries.Dataset) -> bool:
-    reference = queries.Reference(case_id=case.id, selection=dataset)
-    result = await commands.ValidateReference(case_id=case.id, selection=dataset)
+    reference = queries.get_reference(case_id=case.id, selection=dataset)
+    result = await commands.validate_reference(case_id=case.id, selection=dataset)
     scores: queries.Scores = {}
     if not isinstance(result.verification, Ast.Harness_error):
-        scores = queries.GradeCase(
+        scores = queries.score_case(
             case_id=case.id,
             response=response(reference.completion),
             changed_files=tuple(
@@ -45,8 +44,10 @@ async def validate(case: Ast.case, *, dataset: queries.Dataset) -> bool:
 
 
 async def main() -> int:
-    dataset = queries.LoadDataset()
-    results = [await validate(case, dataset=dataset) for case in queries.Cases(selection=dataset)]
+    dataset = queries.load_dataset()
+    results = [
+        await validate(case, dataset=dataset) for case in queries.list_cases(selection=dataset)
+    ]
     return int(not all(results))
 
 

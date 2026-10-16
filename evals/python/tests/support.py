@@ -7,7 +7,7 @@ from inspect_ai import Task, eval
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import ModelCost, ModelInfo, get_model, set_model_info
 
-from evals.python import query
+from evals.python import queries
 from evals.python.datasets import humanevalplus, smoke
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.declarations import _copy_case
@@ -75,7 +75,7 @@ def choice_case(*, case_id: str, a: int, b: int) -> Ast.task:
     choice = "A" if a < b else "B"
     return Ast.task(
         id=case_id,
-        fixture=query.Fixture.empty,
+        fixture=queries.Fixture.empty,
         instruction=Ast.instruction(skill="reasoning", prompt="Choose A or B with a reason"),
         criterion=Ast.Answer(
             Ast.answer(
@@ -85,7 +85,7 @@ def choice_case(*, case_id: str, a: int, b: int) -> Ast.task:
         ),
         allowed_files=(),
         reference=Ast.reference(
-            edits=query.Fixture.empty,
+            edits=queries.Fixture.empty,
             completion=Ast.Structured(
                 [
                     ("choice", Ast.String(choice)),
@@ -96,12 +96,12 @@ def choice_case(*, case_id: str, a: int, b: int) -> Ast.task:
     )
 
 
-def import_dataset(records: tuple[str, ...]) -> query.Dataset:
-    return query.CompileDataset(cases=humanevalplus.declarations(records))
+def import_dataset(records: tuple[str, ...]) -> queries.Dataset:
+    return queries.compile_dataset(cases=humanevalplus.declarations(records))
 
 
 def import_records(records: tuple[str, ...]) -> tuple[Ast.case, ...]:
-    return query.Cases(selection=import_dataset(records))
+    return queries.list_cases(selection=import_dataset(records))
 
 
 def imported_verifier(raw: str) -> Ast.verifier | None:

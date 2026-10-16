@@ -1,6 +1,6 @@
 """Pure Python declarations for the default four-case smoke dataset."""
 
-from evals.python import query
+from evals.python import queries
 from evals.python.integrations.smoke import checks
 from kernel import Ast
 
@@ -10,7 +10,7 @@ info = None
 def receipt(*, term: str = "price") -> Ast.task:
     return Ast.task(
         id="clear-task",
-        fixture=query.Fixture.of_files(
+        fixture=queries.Fixture.of_files(
             [
                 (
                     "receipt.py",
@@ -49,7 +49,7 @@ assert total([(1.5, 2)]) == 3.0
         ),
         allowed_files=("receipt.py",),
         reference=Ast.reference(
-            edits=query.Fixture.of_files(
+            edits=queries.Fixture.of_files(
                 [
                     (
                         "receipt.py",
@@ -81,7 +81,7 @@ def timeout(*, initial: int = 15, requested: int = 30) -> Ast.task:
         raise ValueError("Timeout changes need distinct positive initial and requested values")
     return Ast.task(
         id="known-preflight",
-        fixture=query.Fixture.of_files(
+        fixture=queries.Fixture.of_files(
             [
                 ("config.py", f"timeout_seconds = {initial}\n"),
                 ("client.py", client(initial)),
@@ -134,7 +134,7 @@ for value in (0, -1):
         ),
         allowed_files=("config.py", "client.py"),
         reference=Ast.reference(
-            edits=query.Fixture.of_files(
+            edits=queries.Fixture.of_files(
                 [
                     ("config.py", f"timeout_seconds = {requested}\n"),
                     ("client.py", client(requested)),
@@ -151,7 +151,7 @@ def cases() -> tuple[Ast.task, ...]:
         timeout(),
         Ast.task(
             id="small-decision",
-            fixture=query.Fixture.empty,
+            fixture=queries.Fixture.empty,
             instruction=Ast.instruction(
                 skill="bayesian",
                 prompt=(
@@ -173,7 +173,7 @@ def cases() -> tuple[Ast.task, ...]:
             ),
             allowed_files=(),
             reference=Ast.reference(
-                edits=query.Fixture.empty,
+                edits=queries.Fixture.empty,
                 completion=Ast.Structured(
                     [
                         ("choice", Ast.String("B")),
@@ -184,7 +184,7 @@ def cases() -> tuple[Ast.task, ...]:
         ),
         Ast.task(
             id="decision-review",
-            fixture=query.Fixture.empty,
+            fixture=queries.Fixture.empty,
             instruction=Ast.instruction(
                 skill="bayesian",
                 prompt=(
@@ -207,7 +207,7 @@ def cases() -> tuple[Ast.task, ...]:
             ),
             allowed_files=(),
             reference=Ast.reference(
-                edits=query.Fixture.empty,
+                edits=queries.Fixture.empty,
                 completion=Ast.Structured(
                     [
                         ("decision_was_supported", Ast.Bool(True)),  # noqa: FBT003

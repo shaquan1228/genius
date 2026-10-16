@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
-from evals.python import commands, query
+from evals.python import commands, queries
 from evals.python.datasets import Selection
 from evals.python.datasets import smoke as declarations
 from evals.python.integrations.inspect.environments import environment, runtime
@@ -17,7 +17,7 @@ from evals.python.tests.declarations import _files, _reference_files
 from evals.python.tests.projections import reference, verifier
 from kernel import Ast
 
-CASES = {case.id: case for case in query.Cases()}
+CASES = {case.id: case for case in queries.list_cases()}
 
 
 def _snapshot(directory: Path) -> dict[str, bytes]:
@@ -34,7 +34,7 @@ def _verify(case: Ast.case, *, directory: Path, selection: Selection = "smoke") 
             await agent.exec(["mkdir", "workspace"])
             for name, data in _snapshot(directory).items():
                 await agent.write_file(f"workspace/{name}", data)
-            result = await commands.VerifyCase(
+            result = await commands.verify(
                 case_id=case.id,
                 selection=selection,
                 agent=environment(agent),
@@ -169,8 +169,8 @@ def family_variants_generate_working_seeds_and_solutions(
     fragment: str,
     tmp_path: Path,
 ) -> None:
-    dataset = query.CompileDataset(cases=(definition,))
-    case = query.Cases(selection=dataset)[0]
+    dataset = queries.compile_dataset(cases=(definition,))
+    case = queries.list_cases(selection=dataset)[0]
     assert fragment in _files(case.files)[filename]
     _write_files(tmp_path, files=_files(case.files))
     assert not _verify(case, directory=tmp_path, selection=dataset)

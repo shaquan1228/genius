@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from evals.python import commands, query
+from evals.python import commands, queries
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.humaneval import _record
@@ -29,7 +29,7 @@ def validate_reports_real_status(*, status: str, capsys: pytest.CaptureFixture[s
     case = _import_records((_record(),))[0]
     dataset = _import_dataset((_record(),))
     with (
-        patch.object(query, "LoadDataset", return_value=dataset) as load,
+        patch.object(queries, "load_dataset", return_value=dataset) as load,
         patch.object(
             benchmarks, "validate_case", new=AsyncMock(return_value={"status": status})
         ) as validate,
@@ -67,7 +67,7 @@ def reference_validation_uses_public_operation_and_thaws_only_cli_output() -> No
         verification=Ast.Passed(), metadata={"test": {"items": (True,)}}
     )
     with patch.object(
-        commands, "ValidateReference", new_callable=AsyncMock, return_value=canonical
+        commands, "validate_reference", new_callable=AsyncMock, return_value=canonical
     ) as execute:
         result = asyncio.run(benchmarks.validate_case(case, dataset=dataset))
     execute.assert_awaited_once_with(case_id=case.id, selection=dataset)

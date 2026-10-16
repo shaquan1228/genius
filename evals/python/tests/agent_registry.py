@@ -11,7 +11,7 @@ from inspect_ai.model import ModelName
 from inspect_ai.solver import TaskState
 from inspect_swe import claude_code, codex_cli
 
-from evals.python import commands, query
+from evals.python import commands, queries
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.agents import (
     AGENT_REGISTRY,
@@ -152,15 +152,15 @@ def codex_options_disable_network() -> None:
 
 def explicit_agent_version_is_logged() -> None:
     task = build_task(
-        profile=profiles.load_profile("genius", spec=query.ExperimentSettings()),
-        spec=query.ExperimentSettings(),
+        profile=profiles.load_profile("genius", spec=queries.resolve_settings()),
+        spec=queries.resolve_settings(),
         agent="codex",
         version="0.137.0",
-        catalog=query.LoadDataset(selection="smoke"),
-        instructions=profiles.load_instructions(query.ExperimentSettings()),
-        provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
+        catalog=queries.load_dataset(selection="smoke"),
+        instructions=profiles.load_instructions(queries.resolve_settings()),
+        provenance=queries.get_provenance(selection=queries.load_dataset(selection="smoke")),
     )
-    spec = query.ExperimentSettings()
+    spec = queries.resolve_settings()
     assert (task.epochs, task.message_limit, task.cost_limit, task.time_limit) == (
         spec.epochs,
         spec.message_limit,
@@ -179,14 +179,14 @@ def custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
         AGENT_REGISTRY, "other", replace(AGENT_REGISTRY["codex"], default_version="custom-version")
     )
     request = commands.EvaluationSettings(model="mockllm/model", agent="other")
-    spec = query.ExperimentSettings()
+    spec = queries.resolve_settings()
     task = build_task(
         profile=profiles.load_profile("baseline", spec=spec),
         spec=spec,
         agent=request.agent,
-        catalog=query.LoadDataset(selection="smoke"),
+        catalog=queries.load_dataset(selection="smoke"),
         instructions=profiles.load_instructions(spec),
-        provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
+        provenance=queries.get_provenance(selection=queries.load_dataset(selection="smoke")),
     )
     assert task.metadata is not None
     assert (task.metadata["agent"], task.metadata["agent_version"]) == ("other", "custom-version")

@@ -4,12 +4,12 @@ from collections.abc import Iterable
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from evals.python import query
+from evals.python import queries
 from evals.python.integrations.datasets.download import Download, cache_path, download
 from evals.python.integrations.evalplus import checks
 from kernel import Ast
 
-info = query.DatasetInfo(
+info = queries.DatasetInfo(
     source="https://github.com/evalplus/humanevalplus_release/releases/download/v0.1.10/HumanEvalPlus.jsonl.gz",
     revision="v0.1.10",
     sha256="42526ec0e7d5f3ee0b06d6ced98f8c8bae3d76519151bfb3d36f79010645bd7f",
@@ -38,7 +38,7 @@ def declaration(raw: str) -> Ast.task:
     problem = Problem.model_validate_json(raw)
     return Ast.task(
         id="humaneval-" + problem.task_id.split("/")[1],
-        fixture=query.Fixture.of_files([("solution.py", problem.prompt)]),
+        fixture=queries.Fixture.of_files([("solution.py", problem.prompt)]),
         instruction=Ast.instruction(
             skill="reasoning",
             prompt=(
@@ -51,7 +51,7 @@ def declaration(raw: str) -> Ast.task:
         ),
         allowed_files=("solution.py",),
         reference=Ast.reference(
-            edits=query.Fixture.of_files(
+            edits=queries.Fixture.of_files(
                 [("solution.py", problem.prompt + problem.canonical_solution)]
             ),
             completion=Ast.Plain(""),

@@ -33,7 +33,7 @@ flowchart LR
 | `python/integrations/datasets/` | Pinned download effects |
 | `python/integrations/smoke/` | Reusable private Python assertion driver and reference-validation CLI |
 | `python/integrations/inspect/` | SDK task/sample/score adaptation, agents, and sandbox capability adaptation |
-| `python/query.py` | Typed public queries returning canonical values directly |
+| `python/queries.py` | Typed public queries returning canonical values directly |
 | `python/commands.py` | Typed asynchronous commands, validated launch settings and composition |
 | `python/verification.py` | SDK-free execution capabilities, immutable results and verification lifecycle |
 | `python/integrations/hugging_face/` | Hosted Job entry point and HF SDK operations for VM lifecycle, command execution and file IO |
@@ -51,20 +51,20 @@ no JSON envelope, kernel executable or per-call subprocess. Dataset descriptions
 and provenance remain Python-owned queries. Grading returns named boolean scores.
 
 Dataset selection is a Python module name under `python/datasets/` or an immutable
-`Dataset` returned by `LoadDataset` or `CompileDataset`. Each bundled module supplies
+`Dataset` returned by `load_dataset` or `compile_dataset`. Each bundled module supplies
 `info` (optional provenance) and `cases()` (native `Ast.task` values).
 Python owns downloading and parsing upstream records. OCaml accepts the same
 canonical declarations for every dataset, validates them through its constructors,
 and exposes separate public, verifier, and reference projections.
 
 To add a dataset, map its Python records into `Ast.task` values and call
-`CompileDataset(cases=..., info=...)`; no OCaml adapter or selector registration is
+`compile_dataset(cases=..., info=...)`; no OCaml adapter or selector registration is
 needed. A module under `python/datasets/` makes a dataset available by name to the
 CLI. Evaluator integrations provide reusable executable checks, independently of
 which dataset supplies their inputs. Verifier programs can be inline contents or
-explicit `CompileDataset(resources=...)` resources. Dataset loading has no global
+explicit `compile_dataset(resources=...)` resources. Dataset loading has no global
 verifier list. Named modules supply inline checker contents; callers using explicit
-resources compile a dataset with `CompileDataset(resources=...)`. Load a named
+resources compile a dataset with `compile_dataset(resources=...)`. Load a named
 dataset once and reuse the resulting immutable `Dataset` for repeated queries and
 verification, as the runners and reference-validation CLIs do. A genuinely new
 grading capability may require a kernel primitive.
@@ -73,7 +73,7 @@ CI and local launchers supply overrides; OCaml resolves them into one immutable 
 The HF launcher deliberately requests one epoch by default for its smoke run; direct job invocation uses the kernel default when no override is supplied.
 The generic Inspect task builder accepts a sandbox selection and defaults to local execution.
 The HF Job validates immutable `EvaluationSettings` at the environment-variable boundary
-and calls `Evaluate` with those settings as keyword arguments. The command passes validated
+and calls `evaluate` with those settings as keyword arguments. The command passes validated
 settings to Inspect; no JSON conversion occurs between Python modules.
 SDK clients, credentials and operational state stay in integrations.
 
@@ -81,8 +81,8 @@ Shared domain types are defined once in `ast.ml`; public `.mli` files declare fu
 Dataset-record types remain private to their Python implementations.
 Raw Ast records are validated at case projection and grading boundaries, including nested criteria, verifier contracts and reference fields.
 
-Public operations carry dataset selection as context. `Cases` returns public inputs;
-`VerifyCase` and `AssessCase` resolve private checks internally. Selection stays out of
+Public operations carry dataset selection as context. `list_cases` returns public inputs;
+`verify` and `assess` resolve private checks internally. Selection stays out of
 the kernel grading observation; scoring supplies the case ID it already has.
 
 Primitive modules have no SDK dependencies. Setup builds and installs the kernel with Dune;
@@ -237,7 +237,7 @@ Each session has a model dollar limit and a 300-second time limit. There is no
 cumulative token or message cutoff by default. Required instruction reads and
 tool replies count toward Inspect message limits, so a small message cap gives
 the two profiles unequal room for task work. Explicit positive message overrides
-remain available through `query.ExperimentSettings(message_limit=...)`.
+remain available through `queries.resolve_settings(message_limit=...)`.
 Task metadata records agent versions and hashes of instructions, fixtures, and the manifest.
 Inspect logs record model usage, sample events, answers, errors, and scores.
 
@@ -254,7 +254,7 @@ Sandbox and verifier failures still stop the task.
 
 ## Author cases
 
-Python datasets construct native `query.Ast.task` values. The example in
+Python datasets construct native `queries.Ast.task` values. The example in
 `python/datasets/smoke.py` uses `Ast.instruction`, `Ast.Code` or `Ast.Answer`, and
 `Ast.reference`; `Fixture.of_files` constructs the opaque file map. Public queries
 return `Ast.case`, which excludes private checks and reference solutions.
@@ -262,18 +262,18 @@ Python-only metadata and SDK execution capabilities remain Python-owned.
 
 ```python
 from evals.python import commands
-from evals.python import query
+from evals.python import queries
 from evals.python.datasets import smoke as declarations
 
 definitions = declarations.cases()
-dataset = query.CompileDataset(cases=definitions)
-public_cases = query.Cases(selection=dataset)
+dataset = queries.compile_dataset(cases=definitions)
+public_cases = queries.list_cases(selection=dataset)
 
 # In an async caller, validate the first case's known reference offline.
-verification = await commands.ValidateReference(
+verification = await commands.validate_reference(
     case_id=public_cases[0].id, selection=dataset
 )
-scores = query.GradeCase(
+scores = queries.score_case(
     case_id=public_cases[0].id,
     selection=dataset,
     response="Each quantity now contributes to the total.",
@@ -294,10 +294,10 @@ scope, prints only IDs, verification statuses and scores, and exits nonzero on a
 unsuccessful score or harness failure. It makes no model calls or hosted requests.
 The coding cases fix receipt quantities in `receipt.py` and timeout defaults in
 `config.py` and `client.py`. The answer cases retain numeric choice and hindsight
-after one loss. Private assertions and reference solutions never enter `Cases` or
+after one loss. Private assertions and reference solutions never enter `list_cases` or
 the CLI output.
 
-`LoadDataset(selection="smoke")`, Inspect tasks, and the HF launcher's default
+`load_dataset(selection="smoke")`, Inspect tasks, and the HF launcher's default
 selection all compile these same Python declarations through the native OCaml
 constructors. Native OCaml dataset adapters and suite-path selection have
 been removed. Kernel unit tests use inert local fixtures rather than the runnable
@@ -354,7 +354,7 @@ sample metadata or the agent workspace. Reference validation stages reference
 edits in a separate temporary candidate environment; scripted test agents also
 use them for offline checks.
 
-Inspect prepares one `query.LoadDataset` snapshot, provenance, and instruction byte
+Inspect prepares one `queries.load_dataset` snapshot, provenance, and instruction byte
 snapshot before constructing an evaluation's tasks. Profile selection, prompts,
 sample files, and instruction hashes consume those supplied values. Instruction
 mounts use data URIs from the snapshot, so later source edits cannot change the
@@ -459,7 +459,7 @@ The preparation refactor at `de9725f` compares its audited slice against `bff560
 | `inspect/evaluation.py` task expansion and execution | 15 | 13 |
 | `inspect/scoring.py` runtime scoring and SDK registration | 3 | 5 |
 | `catalog.py` dataset resolution | 2 | 2 |
-| `query.py` public dataset loader | 0 | 1 |
+| `queries.py` public dataset loader | 0 | 1 |
 | `commands.py` optional-check verification dispatch | 2 | 4 |
 | Total | 51 | 37 |
 
@@ -525,14 +525,14 @@ Integrations call typed public queries and commands directly:
 
 ```python
 from evals.python import commands
-from evals.python import query
+from evals.python import queries
 
-dataset = query.LoadDataset(selection="humanevalplus")
-cases = query.Cases(selection=dataset)
-settings = query.ExperimentSettings(epochs=2, cost_limit=0.25)
+dataset = queries.load_dataset(selection="humanevalplus")
+cases = queries.list_cases(selection=dataset)
+settings = queries.resolve_settings(epochs=2, cost_limit=0.25)
 
 # At the Inspect scoring interface, after capturing public observations:
-assessment = await commands.AssessCase(
+assessment = await commands.assess(
     case_id=case_id,
     selection="humanevalplus",
     response=completion,
@@ -541,19 +541,19 @@ assessment = await commands.AssessCase(
     runtime=runtime,
 )
 
-exit_code = await commands.Evaluate(model="openai/your-model", dataset="humanevalplus")
+exit_code = await commands.evaluate(model="openai/your-model", dataset="humanevalplus")
 ```
 
 Each callable validates its arguments and returns its declared result directly.
-`LoadDataset`, `Cases`, `ExperimentSettings`, `CompileDataset`, `DescribeDataset`, `Provenance`,
-`GradeCase`, and `ExecutionRuntime` are queries.
-`VerifyCase`, `AssessCase`, `ValidateReference`, and `Evaluate` are asynchronous
-commands. `DescribeDataset` reads metadata without downloading/importing all cases;
-`Provenance` includes source and private-case fingerprints.
+`load_dataset`, `list_cases`, `resolve_settings`, `compile_dataset`, `describe_dataset`, `get_provenance`,
+`get_reference`, `score_case`, and `create_runtime` are queries.
+`verify`, `assess`, `validate_reference`, and `evaluate` are asynchronous
+commands. `describe_dataset` reads metadata without downloading/importing all cases;
+`get_provenance` includes source and private-case fingerprints.
 
-`Evaluate` validates launch arguments into immutable `EvaluationSettings` before
+`evaluate` validates launch arguments into immutable `EvaluationSettings` before
 loading the runner SDK. HF parses its environment once into the same settings type
-and passes keyword arguments to `Evaluate`; Inspect receives validated settings
+and passes keyword arguments to `evaluate`; Inspect receives validated settings
 and awaits its SDK's `eval_async`. Profile/sample/task builders consume canonical values directly.
 Integrations do not import sibling implementations or private kernel projections.
 The public contract has no integration-local command handlers or dataset clients.
@@ -622,7 +622,7 @@ Keep optimization receipts and native run logs local and uncommitted.
 
 ### Observable parallel runs
 
-Set `EVAL_MAX_SAMPLES=2` to run two samples concurrently within a profile (default `1`, maximum `16`). Profiles remain serial; instruction delivery diagnostics always use one sample at a time. The public `Evaluate(max_samples=2, ...)` entry point uses the same validation.
+Set `EVAL_MAX_SAMPLES=2` to run two samples concurrently within a profile (default `1`, maximum `16`). Profiles remain serial; instruction delivery diagnostics always use one sample at a time. The public `evaluate(max_samples=2, ...)` entry point uses the same validation.
 
 The parent prints flushed JSON events for run settings, exact expected task/case/epoch tuples, sample initialization/start/end, a heartbeat every 30 seconds, and a final completeness report. Heartbeats include active sample identities, completed count and elapsed time, including sandbox provisioning. An interrupted sample gets an `aborted` terminal event. Native Inspect logs retain scoring evidence; telemetry contains identifiers and counts, without prompts, answers or private grading material. Missing or duplicate records, sample errors, failed tasks, or incomplete lifecycle telemetry fail the run even if its process otherwise exits cleanly. Crashes and cost/time/message cutoffs are counted separately in the final report.
 

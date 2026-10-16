@@ -52,7 +52,7 @@ def configuration(environment: Mapping[str, str]) -> commands.EvaluationSettings
 
 def run() -> int:
     operation = configuration(dict(os.environ))
-    return asyncio.run(commands.Evaluate(**operation.model_dump()))
+    return asyncio.run(commands.evaluate(**operation.model_dump()))
 
 
 if __name__ == "__main__":

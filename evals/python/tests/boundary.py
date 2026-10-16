@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from evals.python import query
+from evals.python import queries
 from kernel import Ast, sources
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
@@ -97,17 +97,17 @@ def domain_modules_are_codec_free() -> None:
 
 
 def public_operations_use_native_calls_without_a_transport_layer() -> None:
-    assert "subprocess" not in _imported(PYTHON_ROOT / "query.py")
+    assert "subprocess" not in _imported(PYTHON_ROOT / "queries.py")
     assert "subprocess" not in _imported(PYTHON_ROOT / "commands.py")
     assert not (PYTHON_ROOT.parent / "kernel/build.py").exists()
     assert "subprocess" not in _imported(PYTHON_ROOT.parent / "kernel/__init__.py")
 
 
 def public_operations_carry_dataset_selection() -> None:
-    names = {"Cases", "GradeCase", "VerifyCase", "AssessCase", "ValidateReference"}
+    names = {"list_cases", "score_case", "verify", "assess", "validate_reference"}
     operations = [
         node
-        for file in ("query.py", "commands.py")
+        for file in ("queries.py", "commands.py")
         for node in _nodes(PYTHON_ROOT / file, kind=ast.FunctionDef)
         if node.name in names
     ]
@@ -207,7 +207,7 @@ def integrations_cannot_bypass_the_public_operation_contract() -> None:
 def public_commands_and_verification_have_no_sdk_imports() -> None:
     imports = {
         name
-        for file in ("commands.py", "query.py", "verification.py")
+        for file in ("commands.py", "queries.py", "verification.py")
         for name in _imported(PYTHON_ROOT / file)
     }
     assert not any(
@@ -226,17 +226,17 @@ def integrations_import_public_namespaces_or_single_values(path: Path) -> None:
         len(node.names) == 1
         or (
             node.module == "evals.python"
-            and {name.name for name in node.names} <= {"commands", "query"}
+            and {name.name for name in node.names} <= {"commands", "queries"}
         )
         for node in imports
     )
 
 
 def case_query_does_not_load_runner_sdks() -> None:
-    script = """from evals.python import query
+    script = """from evals.python import queries
 from evals.python import commands
 import sys
-assert query.Cases()
+assert queries.list_cases()
 assert not {'inspect_ai', 'inspect_swe', 'huggingface_hub'}.intersection(sys.modules)
 print('kernel-only')
 """
@@ -280,5 +280,5 @@ subprocess.run([sys.executable, "-c", "import re, pathlib"], check=True)
 
 def public_domain_values_are_native_types() -> None:
     assert not (PYTHON_ROOT / "_kernel.py").exists()
-    assert isinstance(query.Cases()[0], Ast.case)
-    assert isinstance(query.ExperimentSettings(), Ast.experiment)
+    assert isinstance(queries.list_cases()[0], Ast.case)
+    assert isinstance(queries.resolve_settings(), Ast.experiment)

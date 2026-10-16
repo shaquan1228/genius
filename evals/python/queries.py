@@ -44,22 +44,22 @@ def _candidate(text: str) -> Ast.response | None:
 
 __all__ = [
     "Ast",
-    "Cases",
-    "CompileDataset",
     "Dataset",
     "DatasetInfo",
     "DatasetProvenance",
-    "DescribeDataset",
-    "ExecutionRuntime",
-    "ExperimentSettings",
     "Fixture",
-    "GradeCase",
-    "LoadDataset",
-    "Provenance",
-    "Reference",
     "Runtime",
     "Scores",
     "Selection",
+    "compile_dataset",
+    "create_runtime",
+    "describe_dataset",
+    "get_provenance",
+    "get_reference",
+    "list_cases",
+    "load_dataset",
+    "resolve_settings",
+    "score_case",
 ]
 
 type Scores = Mapping[str, bool]
@@ -74,7 +74,7 @@ class DatasetProvenance:
 
 
 @validate_call(config=FROZEN)
-def CompileDataset(
+def compile_dataset(
     *,
     cases: tuple[Ast.task, ...],
     info: DatasetInfo | None = None,
@@ -86,22 +86,22 @@ def CompileDataset(
 
 
 @validate_call(config=FROZEN)
-def LoadDataset(*, selection: Selection = "smoke") -> Dataset:
+def load_dataset(*, selection: Selection = "smoke") -> Dataset:
     return datasets.load_dataset(selection)
 
 
 @validate_call(config=FROZEN)
-def Cases(*, selection: Selection = "smoke") -> tuple[Ast.case, ...]:
+def list_cases(*, selection: Selection = "smoke") -> tuple[Ast.case, ...]:
     return tuple(datasets.load_dataset(selection).cases.values())
 
 
 @validate_call(config=FROZEN)
-def Reference(*, case_id: str, selection: Selection = "smoke") -> Ast.reference:
+def get_reference(*, case_id: str, selection: Selection = "smoke") -> Ast.reference:
     return Projection.reference(datasets.record(case_id, selection=selection))
 
 
 @validate_call(config=FROZEN)
-def ExperimentSettings(
+def resolve_settings(
     *,
     epochs: int | None = None,
     message_limit: int | None = None,
@@ -122,12 +122,12 @@ def ExperimentSettings(
 
 
 @validate_call(config=FROZEN)
-def DescribeDataset(*, selection: Selection = "smoke") -> DatasetInfo | None:
+def describe_dataset(*, selection: Selection = "smoke") -> DatasetInfo | None:
     return datasets.dataset_info(selection)
 
 
 @validate_call(config=FROZEN)
-def Provenance(*, selection: Selection = "smoke") -> DatasetProvenance:
+def get_provenance(*, selection: Selection = "smoke") -> DatasetProvenance:
     dataset = datasets.load_dataset(selection)
     return DatasetProvenance(
         info=dataset.info,
@@ -137,7 +137,7 @@ def Provenance(*, selection: Selection = "smoke") -> DatasetProvenance:
 
 
 @validate_call(config=FROZEN)
-def GradeCase(
+def score_case(
     *,
     case_id: str,
     response: str,
@@ -158,7 +158,7 @@ def GradeCase(
 
 
 @validate_call(config=FROZEN)
-def ExecutionRuntime(*, provider: Literal["local", "hf"] = "local") -> Runtime:
+def create_runtime(*, provider: Literal["local", "hf"] = "local") -> Runtime:
     match provider:
         case "local":
             from evals.python.integrations.inspect import environments  # noqa: PLC0415 - lazy local SDK composition

@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from pydantic import AfterValidator, BaseModel, Field, InstanceOf, validate_call
 
 from evals.python import datasets
-from evals.python import query as _query
+from evals.python import queries as _queries
 from evals.python import verification as _verification
 from evals.python.datasets import Selection
 from evals.python.schema import FROZEN, DatasetInfo
@@ -22,7 +22,6 @@ from evals.python.verification import (
 from kernel import Ast, Fixture, Projection
 
 __all__ = [
-    "AssessCase",
     "Assessment",
     "Ast",
     "Cleanup",
@@ -30,16 +29,17 @@ __all__ = [
     "DatasetInfo",
     "Diagnostic",
     "Environment",
-    "Evaluate",
     "EvaluationSettings",
     "Execution",
     "Fixture",
     "InstructionDelivery",
     "ModelPricing",
     "Runtime",
-    "ValidateReference",
     "VerificationResult",
-    "VerifyCase",
+    "assess",
+    "evaluate",
+    "validate_reference",
+    "verify",
 ]
 
 
@@ -88,7 +88,7 @@ class EvaluationSettings(BaseModel):
 
 
 @validate_call(config=FROZEN)
-async def VerifyCase(
+async def verify(
     *,
     case_id: str,
     selection: Selection = "smoke",
@@ -102,7 +102,7 @@ async def VerifyCase(
 
 
 @validate_call(config=FROZEN)
-async def AssessCase(
+async def assess(
     *,
     case_id: str,
     response: str,
@@ -111,14 +111,14 @@ async def AssessCase(
     agent: InstanceOf[Environment],
     runtime: InstanceOf[Runtime],
 ) -> Assessment:
-    result = await VerifyCase(case_id=case_id, selection=selection, agent=agent, runtime=runtime)
+    result = await verify(case_id=case_id, selection=selection, agent=agent, runtime=runtime)
     if isinstance(result.verification, Ast.Harness_error):
         raise RuntimeError(f"Verification harness error: {result.verification[0]}")
     return Assessment(
         verification=result.verification,
         detail=result.detail,
         metadata=result.metadata,
-        scores=_query.GradeCase(
+        scores=_queries.score_case(
             case_id=case_id,
             response=response,
             changed_files=changed_files,
@@ -129,7 +129,7 @@ async def AssessCase(
 
 
 @validate_call(config=FROZEN)
-async def ValidateReference(
+async def validate_reference(
     *,
     case_id: str,
     selection: Selection = "smoke",
@@ -137,7 +137,7 @@ async def ValidateReference(
 ) -> VerificationResult:
     if Projection.verifier(datasets.record(case_id, selection=selection)) is None:
         return VerificationResult(verification=Ast.Unchecked())
-    runtime = runtime or _query.ExecutionRuntime()
+    runtime = runtime or _queries.create_runtime()
     try:
         async with _verification.allocated(runtime) as agent:
             await _verification.stage_reference(
@@ -148,14 +148,12 @@ async def ValidateReference(
                 ),
                 agent=agent,
             )
-            return await VerifyCase(
-                case_id=case_id, selection=selection, agent=agent, runtime=runtime
-            )
+            return await verify(case_id=case_id, selection=selection, agent=agent, runtime=runtime)
     except Exception as error:
         return VerificationResult(verification=Ast.Harness_error(str(error)))
 
 
-async def Evaluate(
+async def evaluate(
     *,
     model: str,
     run_id: str | None = None,

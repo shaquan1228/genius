@@ -7,20 +7,20 @@ from unittest.mock import patch
 import pytest
 
 import kernel as native
-from evals.python import datasets, query
+from evals.python import datasets, queries
 from evals.python.datasets import Selection
-from evals.python.query import GradeCase
+from evals.python.queries import score_case
 from evals.python.tests.declarations import _declaration, _reference_files, _reference_text
 from evals.python.tests.projections import reference, verifier
 from kernel import Ast, Response
 
 
 def commands_and_queries_use_in_process_kernel_calls() -> None:
-    dataset = query.CompileDataset(cases=(_declaration(code=False),))
+    dataset = queries.compile_dataset(cases=(_declaration(code=False),))
     with patch("subprocess.run", side_effect=AssertionError("Kernel calls must stay in process")):
-        assert query.ExperimentSettings(epochs=2).epochs == 2
-        assert query.Cases(selection=dataset)[0].id == "external"
-        assert query.GradeCase(
+        assert queries.resolve_settings(epochs=2).epochs == 2
+        assert queries.list_cases(selection=dataset)[0].id == "external"
+        assert queries.score_case(
             case_id="external",
             selection=dataset,
             response='{"choice":"B","safe":true,"reason":"clear"}',
@@ -29,7 +29,7 @@ def commands_and_queries_use_in_process_kernel_calls() -> None:
 
 
 def _judgment(*, response: str, suite: Selection = "smoke") -> bool:
-    return GradeCase(
+    return score_case(
         case_id="small-decision",
         response=response,
         changed_files=(),
@@ -39,7 +39,7 @@ def _judgment(*, response: str, suite: Selection = "smoke") -> bool:
 
 
 def kernel_grades_response_and_scope() -> None:
-    scores = GradeCase(
+    scores = score_case(
         case_id="small-decision",
         response='{"choice":"B","reason":"Lower cost."}',
         changed_files=(),
@@ -60,7 +60,7 @@ def unknown_kernel_score_names_are_rejected() -> None:
 
 def unknown_case_is_a_harness_error() -> None:
     with pytest.raises(KeyError):
-        GradeCase(
+        score_case(
             case_id="unknown",
             response="{}",
             changed_files=(),
@@ -134,7 +134,7 @@ def additional_named_scores_cross_bridge_without_decoder_changes() -> None:
         "grade",
         return_value=[("correctness", True), ("scope", False), ("new_metric", True)],
     ):
-        scores = GradeCase(
+        scores = score_case(
             case_id="small-decision",
             response="{}",
             changed_files=(),
@@ -148,27 +148,27 @@ def reference_channels_export_independently_and_escape() -> None:
     fields: dict[str, str | bool] = {"state": state, "safe": True}
     safe = True
     expected_fields = Response.of_fields([("state", Ast.String(state)), ("safe", Ast.Bool(safe))])
-    dataset = query.CompileDataset(
+    dataset = queries.compile_dataset(
         cases=(
             Ast.task(
                 id="reference",
-                fixture=query.Fixture.empty,
+                fixture=queries.Fixture.empty,
                 instruction=Ast.instruction(skill="reasoning", prompt="fields"),
                 criterion=Ast.Answer(Ast.answer(expected=expected_fields, text_rule=None)),
                 allowed_files=("result.txt",),
                 reference=Ast.reference(
-                    edits=query.Fixture.of_files([("result.txt", "result")]),
+                    edits=queries.Fixture.of_files([("result.txt", "result")]),
                     completion=Ast.Structured(expected_fields),
                 ),
             ),
         )
     )
-    case = query.Cases(selection=dataset)[0]
+    case = queries.list_cases(selection=dataset)[0]
     expected = reference(case.id, selection=dataset)
     assert verifier(case.id, selection=dataset) is None
     assert dict(_reference_files(expected)) == {"result.txt": "result"}
     assert json.loads(_reference_text(expected)) == fields
-    assert GradeCase(
+    assert score_case(
         case_id="reference",
         response=_reference_text(expected),
         changed_files=(),

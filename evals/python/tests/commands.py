@@ -32,9 +32,9 @@ def runner_entrypoint_validates_before_allocating_sandboxes(
 @pytest.mark.parametrize(
     ("operation", "arguments"),
     [
-        (commands.VerifyCase, {"case_id": "case", "agent": object(), "runtime": object()}),
+        (commands.verify, {"case_id": "case", "agent": object(), "runtime": object()}),
         (
-            commands.AssessCase,
+            commands.assess,
             {
                 "case_id": "case",
                 "response": "",
@@ -43,7 +43,7 @@ def runner_entrypoint_validates_before_allocating_sandboxes(
                 "runtime": object(),
             },
         ),
-        (commands.ValidateReference, {"case_id": "case", "runtime": object()}),
+        (commands.validate_reference, {"case_id": "case", "runtime": object()}),
     ],
 )
 def capability_commands_reject_non_capabilities(
@@ -65,7 +65,7 @@ def public_evaluation_preserves_validated_settings_at_the_sdk_edge() -> None:
 
         async def execute() -> int:
             return assert_type(
-                await commands.Evaluate(model="openai/test", sample_ids=("clear-task",)), int
+                await commands.evaluate(model="openai/test", sample_ids=("clear-task",)), int
             )
 
         assert asyncio.run(execute()) == 3
@@ -81,7 +81,7 @@ def public_evaluation_preserves_validated_settings_at_the_sdk_edge() -> None:
     "arguments", [{"limit": 0}, {"sample_ids": ()}, {"deliveries": ("files", "files")}]
 )
 def direct_evaluation_validates_before_sdk_execution(arguments: dict[str, object]) -> None:
-    operation: Callable[..., Awaitable[int]] = commands.Evaluate
+    operation: Callable[..., Awaitable[int]] = commands.evaluate
 
     async def execute() -> None:
         await operation(model="openai/test", **arguments)
@@ -100,8 +100,9 @@ def public_surface_has_no_legacy_function_aliases() -> None:
         "RunOverrides",
         "load_cases",
         "grade",
-        "verify_case",
-        "assess_case",
-        "validate_reference",
+        "VerifyCase",
+        "AssessCase",
+        "ValidateReference",
+        "Evaluate",
     ):
         assert not hasattr(commands, name)

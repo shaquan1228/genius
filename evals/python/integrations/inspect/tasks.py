@@ -8,7 +8,7 @@ import evals.python.integrations.inspect.agents as agent_adapter
 import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.scoring as scoring_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import commands, query
+from evals.python import commands, queries
 from kernel import Ast
 
 
@@ -16,9 +16,9 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
     *,
     profile: Ast.profile,
     spec: Ast.experiment,
-    catalog: query.Dataset,
+    catalog: queries.Dataset,
     instructions: Mapping[str, bytes],
-    provenance: query.DatasetProvenance,
+    provenance: queries.DatasetProvenance,
     agent: str,
     version: str = "",
     dataset: str = "smoke",
@@ -73,14 +73,14 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
 
 @task
 def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
-    spec = query.ExperimentSettings()
-    catalog = query.LoadDataset(selection=dataset)
+    spec = queries.resolve_settings()
+    catalog = queries.load_dataset(selection=dataset)
     return build_task(
         profile=profile_adapter.load_profile("baseline", spec=spec),
         spec=spec,
         catalog=catalog,
         instructions=profile_adapter.load_instructions(spec),
-        provenance=query.Provenance(selection=catalog),
+        provenance=queries.get_provenance(selection=catalog),
         agent=agent,
         version=version,
         dataset=dataset,
@@ -89,14 +89,14 @@ def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke"
 
 @task
 def genius(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
-    spec = query.ExperimentSettings()
-    catalog = query.LoadDataset(selection=dataset)
+    spec = queries.resolve_settings()
+    catalog = queries.load_dataset(selection=dataset)
     return build_task(
         profile=profile_adapter.load_profile("genius", spec=spec),
         spec=spec,
         catalog=catalog,
         instructions=profile_adapter.load_instructions(spec),
-        provenance=query.Provenance(selection=catalog),
+        provenance=queries.get_provenance(selection=catalog),
         agent=agent,
         version=version,
         dataset=dataset,

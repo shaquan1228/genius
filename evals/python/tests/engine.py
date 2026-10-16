@@ -158,7 +158,7 @@ def scorer_maps_sdk_observation_to_public_assessment() -> None:
         patch.object(scoring, "sandbox"),
         patch.object(environments, "environment", return_value=agent),
         patch.object(environments, "runtime", return_value=runtime),
-        patch.object(commands, "AssessCase", return_value=assessment) as execute,
+        patch.object(commands, "assess", return_value=assessment) as execute,
     ):
         score = asyncio.run(scoring.score_sample(state, Target([""])))
     assert score.metadata is not None

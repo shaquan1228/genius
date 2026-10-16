@@ -16,7 +16,7 @@ from inspect_ai.scorer import CORRECT, INCORRECT
 from inspect_ai.scorer._scorer import scorer_create
 from inspect_ai.solver import generate
 
-from evals.python import commands, query
+from evals.python import commands, queries
 from evals.python.integrations.inspect import evaluation, profiles, scoring
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.declarations import _copy_case, _declaration
@@ -30,7 +30,7 @@ PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 def instruction_snapshot_survives_source_changes(
     tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    spec = query.ExperimentSettings()
+    spec = queries.resolve_settings()
     monkeypatch.setattr(profiles, "REPO_ROOT", tmp_path)
     material = {name: f"{name}: unchanged é\n".encode() for name in profiles.REASONING_DOCUMENTS}
     material["skills/reasoning/image.bin"] = b"\x00\xff\x80"
@@ -45,10 +45,10 @@ def instruction_snapshot_survives_source_changes(
 
 
 def composition_uses_supplied_bytes_without_filesystem_access() -> None:
-    spec = query.ExperimentSettings()
+    spec = queries.resolve_settings()
     profile = profiles.load_profile("genius", spec=spec)
     snapshot = profiles.load_instructions(spec)
-    case = query.Cases()[0]
+    case = queries.list_cases()[0]
     expected_hash = profiles.content_hash(snapshot)
     with (
         patch.object(Path, "read_bytes", side_effect=AssertionError("late byte read")),
@@ -71,14 +71,14 @@ def composition_uses_supplied_bytes_without_filesystem_access() -> None:
 def evaluation_prepares_once_for_all_tasks(
     deliveries: tuple[commands.InstructionDelivery, ...] | None,
 ) -> None:
-    spec = query.ExperimentSettings(epochs=2)
-    original = query.LoadDataset()
+    spec = queries.resolve_settings(epochs=2)
+    original = queries.load_dataset()
     cohort = replace(original, cases={"clear-task": original.cases["clear-task"]})
     request = commands.EvaluationSettings(model="mockllm/model", deliveries=deliveries)
     with (
-        patch.object(query, "LoadDataset", return_value=cohort) as load,
+        patch.object(queries, "load_dataset", return_value=cohort) as load,
         patch.object(profiles, "load_instructions", wraps=profiles.load_instructions) as read,
-        patch.object(query, "Provenance", wraps=query.Provenance) as provenance,
+        patch.object(queries, "get_provenance", wraps=queries.get_provenance) as provenance,
     ):
         tasks = evaluation.evaluation_tasks(spec, request=request)
     hashes = {cast(Mapping[str, str], task.metadata)["instructions_sha256"] for task in tasks}
@@ -99,12 +99,12 @@ def private_tasks() -> list[Task]:
             skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
         ),
         reference=Ast.reference(
-            edits=query.Fixture.of_files([("main.py", PRIVATE_SENTINEL)]),
+            edits=queries.Fixture.of_files([("main.py", PRIVATE_SENTINEL)]),
             completion=Ast.Plain(PRIVATE_SENTINEL),
         ),
     )
     datasets = [
-        query.CompileDataset(
+        queries.compile_dataset(
             cases=(
                 _copy_case(
                     definition,
@@ -122,7 +122,7 @@ def private_tasks() -> list[Task]:
         )
         for choice in ("B", "A")
     ]
-    spec = query.ExperimentSettings(epochs=1)
+    spec = queries.resolve_settings(epochs=1)
     instructions = profiles.load_instructions(spec)
     tasks = [
         build_task(
@@ -130,7 +130,7 @@ def private_tasks() -> list[Task]:
             spec=spec,
             catalog=dataset,
             instructions=instructions,
-            provenance=query.Provenance(selection=dataset),
+            provenance=queries.get_provenance(selection=dataset),
             agent="codex",
             task_name=f"private-{index}",
         )
@@ -191,8 +191,8 @@ def native_profiles_share_fingerprinted_codex_guidance(
     monkeypatch.setitem(
         AGENT_REGISTRY, "codex", replace(AGENT_REGISTRY["codex"], factory=lambda: factory)
     )
-    spec = query.ExperimentSettings(epochs=1)
-    dataset = query.CompileDataset(cases=(_declaration(code=False),))
+    spec = queries.resolve_settings(epochs=1)
+    dataset = queries.compile_dataset(cases=(_declaration(code=False),))
     instructions = profiles.load_instructions(spec)
     tasks = [
         build_task(
@@ -201,7 +201,7 @@ def native_profiles_share_fingerprinted_codex_guidance(
             agent="codex",
             catalog=dataset,
             instructions=instructions,
-            provenance=query.Provenance(selection=dataset),
+            provenance=queries.get_provenance(selection=dataset),
         )
         for profile in spec.profiles
     ]
@@ -221,7 +221,7 @@ def _assert_guidance_logs(logs: list[EvalLog], *, digest: str) -> None:
 
 
 def unresolved_public_resource_cannot_reach_agent_files() -> None:
-    spec = query.ExperimentSettings()
+    spec = queries.resolve_settings()
     case = Ast.case(
         id="unresolved",
         skill="reasoning",
