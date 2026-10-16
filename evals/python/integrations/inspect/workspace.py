@@ -1,5 +1,7 @@
 """Initialize and inspect sample files through Inspect's sandbox API."""
 
+from pathlib import PurePosixPath
+
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.util import sandbox
 
@@ -13,6 +15,13 @@ GIT_IDENTITY = [
     "-c",
     "core.hooksPath=/dev/null",
 ]
+CACHE_DIRECTORIES = {"__pycache__", ".pytest_cache"}
+
+
+def incidental_cache(path: str) -> bool:
+    return path.endswith(".pyc") or bool(
+        CACHE_DIRECTORIES.intersection(PurePosixPath(path).parts[:-1])
+    )
 
 
 async def execute(command: list[str]) -> str:
@@ -39,4 +48,6 @@ async def changed_files(state: TaskState) -> set[str]:
     revision = str(state.metadata["initial_commit"])
     tracked = await execute(["git", "diff", "--name-only", "--no-renames", "-z", revision, "--"])
     untracked = await execute(["git", "ls-files", "--others", "-z"])
-    return set(filter(None, (tracked + untracked).split("\0")))
+    return set(filter(None, tracked.split("\0"))) | {
+        path for path in untracked.split("\0") if path and not incidental_cache(path)
+    }

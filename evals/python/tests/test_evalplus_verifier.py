@@ -24,22 +24,29 @@ def payload() -> driver.Payload:
     return {"manifest": cast(driver.Manifest, benchmark_info().model_dump()), "record": record()}
 
 
+@pytest.mark.parametrize("memory_limit", [None, "1"])
 @pytest.mark.parametrize(
     ("source", "status"),
     [
         ("def identity(x):\n    return x\n", "passed"),
         ("def identity(x):\n    return 0\n", "failed"),
+        # Pinned EvalPlus treats per-input timeouts as failed checks.
+        ("def identity(x):\n    while True:\n        pass\n", "failed"),
         ("not valid python!", "invalid_submission"),
         ("import os\nos._exit(0)\ndef identity(x):\n    return x\n", "timed_out"),
     ],
 )
-def test_official_checker(*, tmp_path: Path, source: str, status: str) -> None:
+def test_official_checker(
+    *, tmp_path: Path, source: str, status: str, memory_limit: str | None
+) -> None:
     (tmp_path / "solution.py").write_text(source)
     environment = {
         **os.environ,
         "GENIUS_VERIFIER_MARKER": "private",
-        "EVALPLUS_MAX_MEMORY_BYTES": "-1",
     }
+    environment.pop("EVALPLUS_MAX_MEMORY_BYTES", None)
+    if memory_limit is not None:
+        environment["EVALPLUS_MAX_MEMORY_BYTES"] = memory_limit
     result = subprocess.run(
         [
             sys.executable,
@@ -191,7 +198,7 @@ def test_evaluate_preserves_upstream_evidence(
     *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("EVALPLUS_MAX_MEMORY_BYTES", "-1")
+    monkeypatch.delenv("EVALPLUS_MAX_MEMORY_BYTES", raising=False)
     (tmp_path / "solution.py").write_text("def identity(x):\n    return x\n")
     evidence = driver.evaluate(payload())
     assert evidence.status == "passed", evidence.detail
@@ -228,7 +235,7 @@ def assert_runtime_evidence(metadata: dict[str, object]) -> None:
 def test_invalid_phase_inputs_are_harness_errors(
     *, missing: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("EVALPLUS_MAX_MEMORY_BYTES", "-1")
+    monkeypatch.delenv("EVALPLUS_MAX_MEMORY_BYTES", raising=False)
     data = cast(driver.Problem, json.loads(record()))
     data["plus_input"] = cast(list[object], None)
     if missing:
@@ -245,7 +252,7 @@ def test_execute_cleans_private_dependencies(
     *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("EVALPLUS_MAX_MEMORY_BYTES", "-1")
+    monkeypatch.delenv("EVALPLUS_MAX_MEMORY_BYTES", raising=False)
     (tmp_path / "solution.py").write_text("def identity(x):\n    return x\n")
     with (
         patch.object(sys, "stdin", io.StringIO(json.dumps(payload()))),
@@ -284,7 +291,7 @@ def test_expanded_inputs_can_fail_after_base_passes(
     *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("EVALPLUS_MAX_MEMORY_BYTES", "-1")
+    monkeypatch.delenv("EVALPLUS_MAX_MEMORY_BYTES", raising=False)
     (tmp_path / "solution.py").write_text(
         f"def identity(x):\n    return x if x > {2**200} else 0\n"
     )

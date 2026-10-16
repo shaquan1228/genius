@@ -156,6 +156,8 @@ def dependencies(request: Dependencies) -> None:
 
 def phase(request: Phase) -> PhaseStatus:
     record, name, code = request.record, request.name, request.code
+    # The dedicated VM bounds memory; EvalPlus's stack limit is incompatible with HF.
+    os.environ["EVALPLUS_MAX_MEMORY_BYTES"] = "-1"
     reference = cast(ReferenceAPI, importlib.import_module("evalplus.gen.util"))
     evaluator = cast(EvaluatorAPI, importlib.import_module("evalplus.eval"))
     match name:
