@@ -254,10 +254,11 @@ Sandbox and verifier failures still stop the task.
 
 ## Author cases
 
-Python datasets construct native `queries.Ast.task` values. The example in
+Python datasets construct native `Ast.task` values. The example in
 `python/datasets/smoke.py` uses `Ast.instruction`, `Ast.Code` or `Ast.Answer`, and
-`Ast.reference`; `Fixture.of_files` constructs the opaque file map. Public queries
-return `Ast.case`, which excludes private checks and reference solutions.
+`Ast.reference`; `Fixture.of_files` constructs the opaque file map. Import `Ast`
+and `Fixture` directly from `kernel`. Public queries return `Ast.case`, which
+excludes private checks and reference solutions.
 Python-only metadata and SDK execution capabilities remain Python-owned.
 
 ```python

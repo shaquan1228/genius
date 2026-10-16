@@ -4,7 +4,7 @@ import sys
 from typing import assert_never
 
 from evals.python import commands, queries
-from kernel import Ast
+from kernel import Ast, Fixture
 
 
 def response(completion: Ast.completion) -> str:
@@ -25,9 +25,7 @@ async def validate(case: Ast.case, *, dataset: queries.Dataset) -> bool:
         scores = queries.score_case(
             case_id=case.id,
             response=response(reference.completion),
-            changed_files=tuple(
-                f"workspace/{name}" for name, _ in queries.Fixture.files(reference.edits)
-            ),
+            changed_files=tuple(f"workspace/{name}" for name, _ in Fixture.files(reference.edits)),
             verification=result.verification,
             selection=dataset,
         )

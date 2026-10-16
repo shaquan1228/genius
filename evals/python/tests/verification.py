@@ -24,7 +24,7 @@ from evals.python.integrations.inspect.environments import environment, runtime
 from evals.python.queries import score_case
 from evals.python.tests.declarations import _copy_case, _declaration, _reference_files
 from evals.python.tests.projections import reference, verifier
-from kernel import Ast, InvalidArgument
+from kernel import Ast, Fixture, InvalidArgument
 
 DRIVER = """import json, os, subprocess, sys
 result = subprocess.run([sys.executable, 'solution.py'], capture_output=True, text=True)
@@ -319,10 +319,10 @@ def invalid_executable_contract_is_rejected(updates: dict[str, object]) -> None:
             cases=(
                 _copy_case(
                     case,
-                    fixture=queries.Fixture.of_files([("solution.py", "print(42)")]),
+                    fixture=Fixture.of_files([("solution.py", "print(42)")]),
                     criterion=Ast.Code(_checks(**updates)),
                     allowed_files=("solution.py",),
-                    reference=Ast.reference(edits=queries.Fixture.empty, completion=Ast.Plain("")),
+                    reference=Ast.reference(edits=Fixture.empty, completion=Ast.Plain("")),
                 ),
             )
         )
@@ -477,7 +477,7 @@ def reference_candidate_and_grader_are_both_cleaned() -> None:
             patch(
                 "kernel.Projection.reference",
                 return_value=Ast.reference(
-                    edits=queries.Fixture.of_files([("solution.py", "print(42)")]),
+                    edits=Fixture.of_files([("solution.py", "print(42)")]),
                     completion=Ast.Plain(""),
                 ),
             ),
@@ -512,7 +512,7 @@ def reference_setup_failures_preserve_lifecycle(stage: str) -> None:
             patch(
                 "kernel.Projection.reference",
                 return_value=Ast.reference(
-                    edits=queries.Fixture.of_files([("solution.py", "")]),
+                    edits=Fixture.of_files([("solution.py", "")]),
                     completion=Ast.Plain(""),
                 ),
             ),
@@ -540,7 +540,7 @@ def reference_nonzero_mkdir_is_harness_error() -> None:
             patch("kernel.Projection.verifier", return_value=_checks()),
             patch(
                 "kernel.Projection.reference",
-                return_value=Ast.reference(edits=queries.Fixture.empty, completion=Ast.Plain("")),
+                return_value=Ast.reference(edits=Fixture.empty, completion=Ast.Plain("")),
             ),
         ):
             result = await commands.validate_reference(

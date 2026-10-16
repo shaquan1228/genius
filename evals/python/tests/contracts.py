@@ -18,7 +18,7 @@ from evals.python.queries import resolve_settings, score_case
 from evals.python.tests.declarations import _reference_text
 from evals.python.tests.projections import reference, verifier
 from evals.python.tests.support import choice_case as _choice_case
-from kernel import Ast, InvalidArgument
+from kernel import Ast, Fixture, InvalidArgument
 
 
 @pytest.fixture
@@ -103,7 +103,7 @@ def all_contract_collections_are_immutable() -> None:
     with pytest.raises(TypeError):
         info.attributes["new"] = "value"  # type: ignore[index]
     with pytest.raises(TypeError):
-        queries.Fixture.files(expected.edits)[0] = ("new", "value")  # type: ignore[index]
+        Fixture.files(expected.edits)[0] = ("new", "value")  # type: ignore[index]
     spec = queries.resolve_settings()
     with pytest.raises((AttributeError, TypeError)):
         spec.profiles[0].preamble = "changed"  # type: ignore[misc]

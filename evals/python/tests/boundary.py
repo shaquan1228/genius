@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from evals.python import queries
+import kernel as native
+from evals.python import commands, queries
 from kernel import Ast, sources
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
@@ -282,3 +283,7 @@ def public_domain_values_are_native_types() -> None:
     assert not (PYTHON_ROOT / "_kernel.py").exists()
     assert isinstance(queries.list_cases()[0], Ast.case)
     assert isinstance(queries.resolve_settings(), Ast.experiment)
+
+
+def public_operations_do_not_reexport_kernel_namespaces() -> None:
+    assert set(vars(native)["__all__"]).isdisjoint(commands.__all__ + queries.__all__)

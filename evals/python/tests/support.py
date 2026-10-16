@@ -15,7 +15,7 @@ from evals.python.tests.projections import reference, verifier
 from evals.python.tests.scenarios import Mode
 from evals.python.tests.scenarios import echo_model as _echo_model
 from evals.python.tests.scenarios import scripted as _scripted
-from kernel import Ast
+from kernel import Ast, Fixture
 
 __test__ = False
 
@@ -75,7 +75,7 @@ def choice_case(*, case_id: str, a: int, b: int) -> Ast.task:
     choice = "A" if a < b else "B"
     return Ast.task(
         id=case_id,
-        fixture=queries.Fixture.empty,
+        fixture=Fixture.empty,
         instruction=Ast.instruction(skill="reasoning", prompt="Choose A or B with a reason"),
         criterion=Ast.Answer(
             Ast.answer(
@@ -85,7 +85,7 @@ def choice_case(*, case_id: str, a: int, b: int) -> Ast.task:
         ),
         allowed_files=(),
         reference=Ast.reference(
-            edits=queries.Fixture.empty,
+            edits=Fixture.empty,
             completion=Ast.Structured(
                 [
                     ("choice", Ast.String(choice)),

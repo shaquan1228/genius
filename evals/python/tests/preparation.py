@@ -22,7 +22,7 @@ from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.declarations import _copy_case, _declaration
 from evals.python.tests.support import offline_run as _offline_run
 from evals.python.tests.support import results as _results
-from kernel import Ast
+from kernel import Ast, Fixture
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
@@ -99,7 +99,7 @@ def private_tasks() -> list[Task]:
             skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
         ),
         reference=Ast.reference(
-            edits=queries.Fixture.of_files([("main.py", PRIVATE_SENTINEL)]),
+            edits=Fixture.of_files([("main.py", PRIVATE_SENTINEL)]),
             completion=Ast.Plain(PRIVATE_SENTINEL),
         ),
     )

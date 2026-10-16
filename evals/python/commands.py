@@ -23,7 +23,6 @@ from kernel import Ast, Fixture, Projection
 
 __all__ = [
     "Assessment",
-    "Ast",
     "Cleanup",
     "Completion",
     "DatasetInfo",
@@ -31,7 +30,6 @@ __all__ = [
     "Environment",
     "EvaluationSettings",
     "Execution",
-    "Fixture",
     "InstructionDelivery",
     "ModelPricing",
     "Runtime",

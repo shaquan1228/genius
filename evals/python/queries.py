@@ -12,7 +12,7 @@ from evals.python import datasets
 from evals.python.datasets import Dataset, Selection
 from evals.python.schema import FROZEN, DatasetInfo, Files
 from evals.python.verification import Runtime
-from kernel import Ast, Experiment, Fixture, Grader, InvalidArgument, Projection, Response
+from kernel import Ast, Experiment, Grader, InvalidArgument, Projection, Response
 
 if TYPE_CHECKING:
     from kernel.Experiment import ResolveArgs
@@ -43,11 +43,9 @@ def _candidate(text: str) -> Ast.response | None:
 
 
 __all__ = [
-    "Ast",
     "Dataset",
     "DatasetInfo",
     "DatasetProvenance",
-    "Fixture",
     "Runtime",
     "Scores",
     "Selection",

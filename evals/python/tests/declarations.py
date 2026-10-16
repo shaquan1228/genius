@@ -10,7 +10,7 @@ import pytest
 from evals.python import queries
 from evals.python.tests.projections import reference as private_reference
 from evals.python.tests.projections import verifier
-from kernel import Ast, InvalidArgument
+from kernel import Ast, Fixture, InvalidArgument
 
 
 def _override[T](value: T | None, *, original: T) -> T:
@@ -87,12 +87,12 @@ def _declaration(*, code: bool = True) -> Ast.task:
         )
     return Ast.task(
         id="external",
-        fixture=queries.Fixture.of_files([("main.py", "broken")]),
+        fixture=Fixture.of_files([("main.py", "broken")]),
         instruction=Ast.instruction(skill="reasoning", prompt="Fix it: é"),
         criterion=criterion,
         allowed_files=("main.py",),
         reference=Ast.reference(
-            edits=queries.Fixture.of_files([("main.py", "fixed")]),
+            edits=Fixture.of_files([("main.py", "fixed")]),
             completion=Ast.Plain("done")
             if code
             else Ast.Structured([("choice", Ast.String("B")), ("safe", Ast.Bool(True))]),
@@ -136,7 +136,7 @@ def missing_private_resource_fails_at_resolution() -> None:
 def declarations_preserve_private_reference_edits(*, code: bool) -> None:
     dataset = queries.compile_dataset(cases=(_declaration(code=code),))
     reference = private_reference("external", selection=dataset)
-    assert dict(queries.Fixture.files(reference.edits)) == {"main.py": "fixed"}
+    assert dict(Fixture.files(reference.edits)) == {"main.py": "fixed"}
 
 
 def code_declarations_preserve_plain_completion() -> None:
@@ -180,7 +180,7 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
     "invalid",
     [
         lambda c: _copy_case(c, allowed_files=()),
-        lambda c: _copy_case(c, fixture=queries.Fixture.empty),
+        lambda c: _copy_case(c, fixture=Fixture.empty),
         lambda c: _copy_case(c, criterion=Ast.Answer(Ast.answer(expected=[], text_rule=None))),
         lambda c: _copy_case(
             c,
@@ -194,7 +194,7 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
         lambda c: _copy_case(
             c,
             reference=Ast.reference(
-                edits=queries.Fixture.of_files([("outside.py", "unauthorized")]),
+                edits=Fixture.of_files([("outside.py", "unauthorized")]),
                 completion=Ast.Plain(""),
             ),
         ),
@@ -252,9 +252,9 @@ def native_fields_retain_immutable_snapshots() -> None:
     with pytest.raises((AttributeError, TypeError)):
         answer.expected = []  # type: ignore[misc]
     initial = [("main.py", "broken")]
-    fixture = queries.Fixture.of_files(initial)
+    fixture = Fixture.of_files(initial)
     initial[0] = ("main.py", "changed")
-    assert dict(queries.Fixture.files(fixture)) == {"main.py": "broken"}
+    assert dict(Fixture.files(fixture)) == {"main.py": "broken"}
     artifacts = [("verify.py", Ast.Inline("private assertions"))]
     definition = _declaration()
     assert isinstance(definition.criterion, Ast.Code)
@@ -282,7 +282,7 @@ def answer_construction_supports_each_optional_rule_shape(criterion: Ast.criteri
 
 
 def _reference_files(value: Ast.reference) -> dict[str, str]:
-    return dict(queries.Fixture.files(value.edits))
+    return dict(Fixture.files(value.edits))
 
 
 def _reference_text(value: Ast.reference) -> str:

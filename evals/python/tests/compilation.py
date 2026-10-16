@@ -19,7 +19,7 @@ from evals.python.tests.declarations import (
     _reference_files,
 )
 from evals.python.tests.projections import reference, verifier
-from kernel import Ast, InvalidArgument
+from kernel import Ast, Fixture, InvalidArgument
 
 
 def compile_dataset_exposes_canonical_public_cases() -> None:
@@ -61,7 +61,7 @@ def _independent_datasets() -> tuple[queries.Dataset, queries.Dataset]:
         first,
         criterion=Ast.Code(checks),
         reference=Ast.reference(
-            edits=queries.Fixture.of_files([("main.py", "another fixed solution")]),
+            edits=Fixture.of_files([("main.py", "another fixed solution")]),
             completion=Ast.Plain("another answer"),
         ),
     )

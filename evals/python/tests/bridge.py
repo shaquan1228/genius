@@ -12,7 +12,7 @@ from evals.python.datasets import Selection
 from evals.python.queries import score_case
 from evals.python.tests.declarations import _declaration, _reference_files, _reference_text
 from evals.python.tests.projections import reference, verifier
-from kernel import Ast, Response
+from kernel import Ast, Fixture, Response
 
 
 def commands_and_queries_use_in_process_kernel_calls() -> None:
@@ -152,12 +152,12 @@ def reference_channels_export_independently_and_escape() -> None:
         cases=(
             Ast.task(
                 id="reference",
-                fixture=queries.Fixture.empty,
+                fixture=Fixture.empty,
                 instruction=Ast.instruction(skill="reasoning", prompt="fields"),
                 criterion=Ast.Answer(Ast.answer(expected=expected_fields, text_rule=None)),
                 allowed_files=("result.txt",),
                 reference=Ast.reference(
-                    edits=queries.Fixture.of_files([("result.txt", "result")]),
+                    edits=Fixture.of_files([("result.txt", "result")]),
                     completion=Ast.Structured(expected_fields),
                 ),
             ),
