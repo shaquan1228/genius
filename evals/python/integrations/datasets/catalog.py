@@ -10,14 +10,13 @@ from evals.python.catalog import (
     cases_hash,
     compile_records,
     dataset_info,
-    experiment,
-    grade,
     load_cases,
     reference,
     source_hash,
     sources,
     verifier,
 )
+from evals.python.commands import experiment, grade
 
 __all__ = [
     "ADAPTER_ROOT",

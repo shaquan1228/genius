@@ -1,10 +1,12 @@
 """Check the hosted runner without creating paid Hugging Face Jobs."""
 
+import asyncio
 import json
 import os
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
+from typing import assert_type
 from unittest.mock import patch
 
 import pytest
@@ -12,6 +14,7 @@ from inspect_ai.model import GenerateConfig, get_model
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 from inspect_ai.scorer import Score
 
+from evals.python import commands
 from evals.python.command import command
 from evals.python.integrations.datasets.catalog import load_cases
 from evals.python.integrations.hugging_face.job import configuration, run
@@ -67,9 +70,16 @@ def test_inspect_evaluation_uses_request_without_reading_job_environment(
     monkeypatch.setenv("EVAL_DELIVERIES", "invalid")
     with (
         patch("evals.python.integrations.inspect.evaluation.get_model") as model,
-        patch("evals.python.integrations.inspect.evaluation.eval", return_value=[]) as evaluate,
+        patch(
+            "evals.python.integrations.inspect.evaluation.eval_async", return_value=[]
+        ) as evaluate,
     ):
-        assert command("inspect.evaluate", payload=request.model_dump_json()) == "0"
+
+        async def execute() -> int:
+            return assert_type(await commands.execute(request), int)
+
+        assert asyncio.run(execute()) == 0
+        assert evaluate.call_args.args[0] is not None
     model.assert_called_once_with("openai/explicit")
     tasks = evaluate.call_args.args[0]
     assert [
@@ -97,7 +107,7 @@ def test_hf_job_runs_both_profiles(provider: str, *, monkeypatch: pytest.MonkeyP
         for name in ("baseline", "genius")
     ]
     with patch(
-        "evals.python.integrations.inspect.evaluation.eval", return_value=logs
+        "evals.python.integrations.inspect.evaluation.eval_async", return_value=logs
     ) as inspect_eval:
         assert run() == 0
     assert (
@@ -129,7 +139,7 @@ def test_hf_job_reports_failed_profile(monkeypatch: pytest.MonkeyPatch) -> None:
             eval=SimpleNamespace(task="baseline"), status="error", location="log", samples=None
         )
     ]
-    with patch("evals.python.integrations.inspect.evaluation.eval", return_value=logs):
+    with patch("evals.python.integrations.inspect.evaluation.eval_async", return_value=logs):
         assert run() == 1
 
 
@@ -160,7 +170,7 @@ def test_hf_job_counts_crashed_samples(
     log = SimpleNamespace(
         eval=SimpleNamespace(task="baseline"), status="success", location="log", samples=samples
     )
-    with patch("evals.python.integrations.inspect.evaluation.eval", return_value=[log]):
+    with patch("evals.python.integrations.inspect.evaluation.eval_async", return_value=[log]):
         assert run() == 0
     assert capsys.readouterr().out.splitlines() == ["baseline: success (log)", summary]
 
@@ -290,7 +300,9 @@ def test_hf_epoch_override_is_shared_with_tasks(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("EVAL_EPOCHS", "3")
     with (
         patch("evals.python.integrations.inspect.evaluation.get_model"),
-        patch("evals.python.integrations.inspect.evaluation.eval", return_value=[]) as inspect_eval,
+        patch(
+            "evals.python.integrations.inspect.evaluation.eval_async", return_value=[]
+        ) as inspect_eval,
     ):
         assert run() == 0
     tasks = inspect_eval.call_args.args[0]
@@ -330,7 +342,7 @@ def test_explicit_non_list_selection_never_reaches_evaluation(
     with (
         patch("evals.python.integrations.hugging_face.job.command") as dispatch,
         patch("evals.python.integrations.inspect.evaluation.get_model") as model,
-        patch("evals.python.integrations.inspect.evaluation.eval") as evaluate,
+        patch("evals.python.integrations.inspect.evaluation.eval_async") as evaluate,
         pytest.raises(ValueError, match="JSON list"),
     ):
         run()
@@ -349,7 +361,7 @@ def test_explicit_cohort_validation_precedes_sandbox_allocation(
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     with (
         patch("evals.python.integrations.inspect.evaluation.get_model"),
-        patch("evals.python.integrations.inspect.evaluation.eval") as evaluate,
+        patch("evals.python.integrations.inspect.evaluation.eval_async") as evaluate,
         pytest.raises(ValueError, match=r"Unknown sample|Choose EVAL_SAMPLE_IDS"),
     ):
         run()
@@ -370,7 +382,9 @@ def test_counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort(
         patch(
             "evals.python.integrations.inspect.profiles.load_cases", return_value=load_cases()[:1]
         ),
-        patch("evals.python.integrations.inspect.evaluation.eval", return_value=[]) as evaluate,
+        patch(
+            "evals.python.integrations.inspect.evaluation.eval_async", return_value=[]
+        ) as evaluate,
     ):
         assert run() == 0
     tasks = evaluate.call_args.args[0]

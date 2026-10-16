@@ -42,7 +42,7 @@ def test_third_dataset_requires_only_adapter_and_declarations(third_dataset: str
     assert cases[0].id == "third-case"
     task = build_task(request=TaskRequest(profile="baseline", agent="codex", dataset="third"))
     assert task.dataset[0].id == "third-case"
-    assert catalog.grade(request=third_request(), selection=third_dataset) == {
+    assert commands.grade(request=third_request(), selection=third_dataset) == {
         "correctness": True,
         "scope": True,
     }
@@ -57,7 +57,7 @@ def test_default_sandbox_is_local() -> None:
 def test_third_dataset_imports_and_grades_records(third_dataset: str) -> None:
     imported = catalog.compile_records(sources=catalog.sources("third"), records=("new-case",))
     with patch.object(catalog, "_selected", return_value=imported):
-        assert catalog.grade(request=third_request(case_id="new-case"), selection=third_dataset)[
+        assert commands.grade(request=third_request(case_id="new-case"), selection=third_dataset)[
             "correctness"
         ]
         assert catalog.reference("new-case", selection="third").answer
@@ -93,7 +93,7 @@ def test_all_contract_collections_are_immutable() -> None:
 
 def test_run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
     original = catalog.experiment()
-    spec = catalog.experiment(RunOverrides(epochs=2, token_limit=1234, cache=True))
+    spec = commands.experiment(RunOverrides(epochs=2, token_limit=1234, cache=True))
     task = build_task(request=TaskRequest(profile="genius", agent="codex", experiment=spec))
     assert (task.epochs, task.token_limit, task.time_limit, task.config.cache) == (
         2,
@@ -109,7 +109,7 @@ def test_run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
 def test_kernel_rejects_invalid_run_overrides(field: str, *, value: int) -> None:
     overrides = RunOverrides.model_validate({field: value})
     with pytest.raises(subprocess.CalledProcessError):
-        catalog.experiment(overrides)
+        commands.experiment(overrides)
 
 
 @pytest.mark.parametrize("payload", [{"epochs": 1.5}, {"cache": 1}, {"unknown": 1}])
@@ -167,7 +167,7 @@ def test_verifier_projection_is_cached_but_grading_is_not() -> None:
             0,
         )
         assert (
-            catalog.grade(request=request)["correctness"],
-            catalog.grade(request=request)["correctness"],
+            commands.grade(request=request)["correctness"],
+            commands.grade(request=request)["correctness"],
         ) == (True, True)
         assert [call.args[0][1:] for call in process.call_args_list] == [["--grade"], ["--grade"]]

@@ -5,7 +5,7 @@ import json
 import subprocess
 from dataclasses import FrozenInstanceError
 from pathlib import Path
-from typing import cast
+from typing import assert_type, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -13,6 +13,7 @@ from inspect_ai.util import ExecResult
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 from pydantic import ValidationError
 
+from evals.python import commands
 from evals.python.commands import (
     Completion,
     Environment,
@@ -86,10 +87,15 @@ def runtime_port(grader: Environment) -> Runtime:
 
 async def run(agent: Environment, *, runtime: Runtime) -> VerificationResult:
     with (
-        patch("evals.python.commands.verifier", return_value=checks()),
+        patch("evals.python.catalog.verifier", return_value=checks()),
         patch("evals.python.verification.token_hex", return_value="secret"),
     ):
-        return await verify_case("python", agent=agent, runtime=runtime)
+        return assert_type(
+            await commands.execute(
+                commands.VerifyCase(case_id="python", agent=agent, runtime=runtime)
+            ),
+            commands.VerificationResult,
+        )
 
 
 @pytest.mark.parametrize("source", ["print(42)", "print(0)"])
@@ -101,7 +107,7 @@ def test_python_inputs_execute_in_fresh_workspace(source: str) -> None:
             await agent.exec(["mkdir", "workspace"])
             await agent.write_file("workspace/solution.py", source)
             await agent.write_file("workspace/grader.py", "raise Exception('tampered')")
-            with patch("evals.python.commands.verifier", return_value=checks()):
+            with patch("evals.python.catalog.verifier", return_value=checks()):
                 result = await verify_case(
                     "python", agent=environment(agent), runtime=runtime(agent)
                 )
@@ -355,8 +361,10 @@ def test_private_artifacts_are_excluded_from_public_files() -> None:
 def test_public_answer_only_verification_never_allocates() -> None:
     async def execute() -> None:
         ports = runtime_port(grader_port())
-        with patch("evals.python.commands.verifier", return_value=None):
-            result = await verify_case("answer", agent=agent_port(), runtime=ports)
+        with patch("evals.python.catalog.verifier", return_value=None):
+            result = await commands.execute(
+                commands.VerifyCase(case_id="answer", agent=agent_port(), runtime=ports)
+            )
         assert result.verification == Verification(status="unchecked")
         assert result.metadata == {}
         cast(AsyncMock, ports.create).assert_not_awaited()
@@ -369,9 +377,18 @@ def test_assessment_grades_canonical_observation_and_freezes_scores() -> None:
         request = GradeRequest(
             case_id="clear-task", response="answer", changed_files=("receipt.ml",)
         )
-        with patch("evals.python.commands.verifier", return_value=None):
-            result = await assess_case(
-                request, agent=agent_port(), runtime=runtime_port(grader_port())
+        with patch("evals.python.catalog.verifier", return_value=None):
+            result = assert_type(
+                await commands.execute(
+                    commands.AssessCase(
+                        case_id=request.case_id,
+                        response=request.response,
+                        changed_files=request.changed_files,
+                        agent=agent_port(),
+                        runtime=runtime_port(grader_port()),
+                    )
+                ),
+                commands.Assessment,
             )
         assert result.verification.status == "unchecked"
         assert result.scores == grade(request=request)
@@ -385,8 +402,8 @@ def test_assessment_grades_canonical_observation_and_freezes_scores() -> None:
 def test_assessment_refuses_harness_error_before_grading() -> None:
     async def execute() -> None:
         with (
-            patch("evals.python.commands.verifier", return_value=checks()),
-            patch("evals.python.commands.grade") as grading,
+            patch("evals.python.catalog.verifier", return_value=checks()),
+            patch("evals.python.catalog.grade") as grading,
             pytest.raises(RuntimeError, match="Verification harness error"),
         ):
             await assess_case(
@@ -424,13 +441,19 @@ def test_execution_environment_is_immutable_snapshot() -> None:
 
 
 def test_reference_uses_default_local_adapter_and_real_ocaml() -> None:
-    result = asyncio.run(validate_reference("clear-task"))
+    async def execute() -> commands.VerificationResult:
+        return assert_type(
+            await commands.execute(commands.ValidateReference(case_id="clear-task")),
+            commands.VerificationResult,
+        )
+
+    result = asyncio.run(execute())
     assert result.verification.status == "passed", result.verification.detail
 
 
 def test_answer_only_reference_never_allocates() -> None:
     ports = runtime_port(grader_port())
-    with patch("evals.python.commands.verifier", return_value=None):
+    with patch("evals.python.catalog.verifier", return_value=None):
         result = asyncio.run(validate_reference("answer", runtime=ports))
     assert result.verification.status == "unchecked"
     cast(AsyncMock, ports.create).assert_not_awaited()
@@ -442,9 +465,9 @@ def test_reference_candidate_and_grader_are_both_cleaned() -> None:
         ports = runtime_port(grader)
         cast(AsyncMock, ports.create).side_effect = [agent, grader]
         with (
-            patch("evals.python.commands.verifier", return_value=checks()),
+            patch("evals.python.catalog.verifier", return_value=checks()),
             patch(
-                "evals.python.commands.reference",
+                "evals.python.catalog.reference",
                 return_value=Reference(solution={"solution.py": "print(42)"}, answer=""),
             ),
             patch("evals.python.verification.token_hex", return_value="secret"),
@@ -474,9 +497,9 @@ def test_reference_setup_failures_preserve_lifecycle(stage: str) -> None:
         error = asyncio.CancelledError() if stage == "cancel" else TimeoutError("setup")
         cast(AsyncMock, effects[stage]).side_effect = error
         with (
-            patch("evals.python.commands.verifier", return_value=checks()),
+            patch("evals.python.catalog.verifier", return_value=checks()),
             patch(
-                "evals.python.commands.reference",
+                "evals.python.catalog.reference",
                 return_value=Reference(solution={"solution.py": ""}, answer=""),
             ),
         ):
@@ -500,10 +523,8 @@ def test_reference_nonzero_mkdir_is_harness_error() -> None:
         agent = agent_port()
         cast(AsyncMock, agent.execute).return_value = output(code=1)
         with (
-            patch("evals.python.commands.verifier", return_value=checks()),
-            patch(
-                "evals.python.commands.reference", return_value=Reference(solution={}, answer="")
-            ),
+            patch("evals.python.catalog.verifier", return_value=checks()),
+            patch("evals.python.catalog.reference", return_value=Reference(solution={}, answer="")),
         ):
             result = await validate_reference("python", runtime=runtime_port(agent))
         assert result.verification.status == "harness_error"
@@ -521,7 +542,7 @@ def test_assessment_replaces_untrusted_verification_with_execution() -> None:
             verification=Verification(status="failed"),
         )
         with (
-            patch("evals.python.commands.verifier", return_value=checks()),
+            patch("evals.python.catalog.verifier", return_value=checks()),
             patch("evals.python.verification.token_hex", return_value="secret"),
         ):
             result = await assess_case(

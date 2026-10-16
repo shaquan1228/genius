@@ -14,9 +14,9 @@ from evals.python.catalog import (
 )
 from evals.python.catalog import (
     cases_hash,
-    grade,
     load_cases,
 )
+from evals.python.commands import grade
 from evals.python.contracts import ExecutableChecks, GradeRequest, Sources, Verification
 from evals.python.integrations.evalplus.benchmarks import (
     benchmark_info,

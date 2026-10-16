@@ -10,7 +10,7 @@ from typing import Protocol
 
 from pydantic import BaseModel, JsonValue, ValidationError
 
-from evals.python.contracts import FROZEN, ExecutableChecks, Verification, VerificationStatus
+from evals.python._kernel import FROZEN, ExecutableChecks, Verification, VerificationStatus
 
 type Diagnostic = (
     str | int | float | bool | tuple[Diagnostic, ...] | Mapping[str, Diagnostic] | None

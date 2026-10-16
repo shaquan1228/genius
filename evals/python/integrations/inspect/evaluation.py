@@ -1,48 +1,19 @@
 """Prepare explicit evaluation requests and execute them with Inspect."""
 
-from typing import Annotated, Any, override
+import asyncio
+from typing import Any, override
 
-from inspect_ai import Task, eval
+from inspect_ai import Task, eval_async
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import GenerateConfig, get_model, modelapi
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
-from pydantic import AfterValidator, BaseModel, Field
 
 import evals.python.integrations.inspect.remote  # noqa: F401 - register the command-backed sandbox
-from evals.python.contracts import FROZEN, Experiment, RunOverrides
-from evals.python.integrations.inspect.agents import AgentKind
-from evals.python.integrations.inspect.datasets import experiment
+from evals.python import commands
 from evals.python.integrations.inspect.profiles import InstructionDelivery
 from evals.python.integrations.inspect.tasks import TaskRequest, build_task
 
-
-def unique[T](values: tuple[T, ...]) -> tuple[T, ...]:
-    if len(set(values)) != len(values):
-        raise ValueError("Selection must contain unique values")
-    return values
-
-
-SampleIds = Annotated[tuple[str, ...], Field(min_length=1), AfterValidator(unique)]
-Deliveries = Annotated[tuple[InstructionDelivery, ...], Field(min_length=2), AfterValidator(unique)]
-
-
-class EvaluationRequest(BaseModel):
-    """Immutable launch configuration; Inspect does not read the Job environment."""
-
-    model_config = FROZEN
-    model: str
-    agent: AgentKind = "claude"
-    version: str = ""
-    dataset: str = "smoke"
-    sandbox: str = "local"
-    instruction_root: str = "../instructions"
-    epochs: int | None = None
-    token_limit: int | None = None
-    limit: int | None = Field(default=None, gt=0)
-    sample_ids: SampleIds | None = None
-    instruction_delivery: InstructionDelivery = "files"
-    deliveries: Deliveries | None = None
-    log_dir: str = "/results/live"
+EvaluationRequest = commands.Evaluate
 
 
 @modelapi(name="genius-hf")
@@ -79,7 +50,7 @@ def selected_samples(task: Task, *, request: EvaluationRequest) -> list[str] | N
     return list(selected)
 
 
-def evaluation_tasks(spec: Experiment, *, request: EvaluationRequest) -> list[Task]:
+def evaluation_tasks(spec: commands.Experiment, *, request: EvaluationRequest) -> list[Task]:
     if request.deliveries:
         return diagnostic_tasks(spec, request=request)
     return [
@@ -91,7 +62,7 @@ def evaluation_tasks(spec: Experiment, *, request: EvaluationRequest) -> list[Ta
 
 
 def make_task(
-    spec: Experiment,
+    spec: commands.Experiment,
     *,
     request: EvaluationRequest,
     profile: str,
@@ -114,7 +85,7 @@ def make_task(
     )
 
 
-def diagnostic_tasks(spec: Experiment, *, request: EvaluationRequest) -> list[Task]:
+def diagnostic_tasks(spec: commands.Experiment, *, request: EvaluationRequest) -> list[Task]:
     modes = request.deliveries or ()
     single = spec.model_copy(update={"epochs": 1})
     return [
@@ -131,7 +102,13 @@ def diagnostic_tasks(spec: Experiment, *, request: EvaluationRequest) -> list[Ta
 
 
 def evaluate(request: EvaluationRequest) -> int:
-    spec = experiment(RunOverrides(epochs=request.epochs, token_limit=request.token_limit))
+    return asyncio.run(evaluate_async(request))
+
+
+async def evaluate_async(request: EvaluationRequest) -> int:
+    spec = commands.query(
+        commands.ExperimentSettings(epochs=request.epochs, token_limit=request.token_limit)
+    )
     tasks = evaluation_tasks(spec, request=request)
     selected = selected_samples(tasks[0], request=request)
     if request.model.startswith("hf-inference-providers/"):
@@ -141,7 +118,7 @@ def evaluate(request: EvaluationRequest) -> int:
         )
     else:
         model = get_model(request.model)
-    logs = eval(
+    logs = await eval_async(
         tasks,
         model=model,
         epochs=1 if request.deliveries else spec.epochs,

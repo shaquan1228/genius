@@ -14,20 +14,31 @@ from typing import Annotated, Final
 
 from pydantic import AfterValidator, BaseModel, Field
 
-from evals.python.contracts import (
+from evals.python._kernel import (
     FROZEN,
-    VERSION,
     Case,
     DatasetInfo,
     ExecutableChecks,
     Experiment,
-    GradeRequest,
-    Program,
     Reference,
-    RunOverrides,
-    Sources,
 )
 from evals.python.paths import EVALS_ROOT
+
+VERSION: Final = 3
+
+
+@dataclass(frozen=True, kw_only=True)
+class Program:
+    suite: Path
+    adapter: Path
+    resources: tuple[Path, ...]
+
+
+@dataclass(frozen=True, kw_only=True)
+class Sources:
+    modules: tuple[tuple[str, str], ...]
+    resources: tuple[tuple[str, str], ...]
+
 
 OCAML_ROOT: Final = EVALS_ROOT / "ocaml"
 LIBRARY: Final = tuple(
@@ -172,16 +183,10 @@ def describe(*, sources: Sources) -> DatasetInfo | None:
     )
 
 
-def experiment(*, sources: Sources, overrides: RunOverrides | None = None) -> Experiment:
+def experiment(*, sources: Sources, overrides: Mapping[str, int | bool | None]) -> Experiment:
     return (
         Envelope[Experiment]
-        .model_validate_json(
-            invoke(
-                sources=sources,
-                operation="--experiment",
-                payload=(overrides or RunOverrides()).model_dump(),
-            )
-        )
+        .model_validate_json(invoke(sources=sources, operation="--experiment", payload=overrides))
         .value
     )
 
@@ -218,14 +223,13 @@ def reference(*, sources: Sources, case_id: str, record: str | None = None) -> R
 
 
 def grade(
-    *, sources: Sources, request: GradeRequest, record: str | None = None
+    *, sources: Sources, request: Mapping[str, object], record: str | None = None
 ) -> Mapping[str, bool]:
-    payload = {"version": VERSION, **request.model_dump()}
     result = GradingResult.model_validate_json(
         invoke(
             sources=sources,
             operation="--grade",
-            payload={"record": record, "request": payload},
+            payload={"record": record, "request": {"version": VERSION, **request}},
         )
     )
     if not {"correctness", "scope"} <= result.scores.keys():

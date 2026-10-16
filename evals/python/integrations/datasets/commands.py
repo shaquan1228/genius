@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from evals.python.contracts import GradeRequest, RunOverrides
+from evals.python import commands
 from evals.python.integrations.datasets import catalog
 from evals.python.transport import fingerprint
 
@@ -16,9 +16,9 @@ def selection(request: dict[str, Any]) -> str | Path:
 
 
 def experiment(request: dict[str, Any]) -> object:
-    return catalog.experiment(RunOverrides.model_validate(request.get("overrides", {}))).model_dump(
-        mode="json"
-    )
+    return commands.query(
+        commands.ExperimentSettings.model_validate(request.get("overrides", {}))
+    ).model_dump(mode="json")
 
 
 def verifier(request: dict[str, Any]) -> object:
@@ -41,8 +41,8 @@ OPERATIONS: dict[str, Callable[[dict[str, Any]], object]] = {
         mode="json"
     ),
     "grade": lambda r: dict(
-        catalog.grade(
-            request=GradeRequest.model_validate_json(json.dumps(r["request"])),
+        commands.grade(
+            request=commands.GradeCase.model_validate_json(json.dumps(r["request"])),
             selection=selection(r),
         )
     ),

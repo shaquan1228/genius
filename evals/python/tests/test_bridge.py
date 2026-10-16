@@ -10,11 +10,11 @@ from pydantic import ValidationError
 
 from evals.python.catalog import (
     RUNNER,
-    grade,
     load_cases,
     reference,
     verifier,
 )
+from evals.python.commands import grade
 from evals.python.contracts import GradeRequest, Verification
 from evals.python.transport import LIBRARY, SUITE
 

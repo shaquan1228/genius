@@ -9,7 +9,7 @@ from typing import Annotated
 from pydantic import AfterValidator, BaseModel, TypeAdapter
 
 from evals.python import transport
-from evals.python.contracts import (
+from evals.python._kernel import (
     FROZEN,
     Attributes,
     Case,
@@ -17,14 +17,11 @@ from evals.python.contracts import (
     ExecutableChecks,
     Experiment,
     FileName,
-    GradeRequest,
-    Program,
     Reference,
-    RunOverrides,
-    Sources,
 )
 from evals.python.integrations.datasets.download import Download, cache_path, download
 from evals.python.paths import EVALS_ROOT
+from evals.python.transport import Program, Sources
 
 Selection = str | Path
 
@@ -112,10 +109,24 @@ def reference(case_id: str, *, selection: Selection = "smoke") -> Reference:
     )
 
 
-def grade(*, request: GradeRequest, selection: Selection = "smoke") -> Mapping[str, bool]:
+def grade(
+    *,
+    case_id: str,
+    response: str,
+    changed_files: tuple[str, ...],
+    verification: Mapping[str, str],
+    selection: Selection = "smoke",
+) -> Mapping[str, bool]:
     catalog = _selected(selection)
     return transport.grade(
-        sources=catalog.sources, request=request, record=catalog.records.get(request.case_id)
+        sources=catalog.sources,
+        request={
+            "case_id": case_id,
+            "response": response,
+            "changed_files": changed_files,
+            "verification": verification,
+        },
+        record=catalog.records.get(case_id),
     )
 
 
@@ -123,8 +134,24 @@ def dataset_info(selection: Selection) -> DatasetInfo | None:
     return transport.describe(sources=sources(selection))
 
 
-def experiment(overrides: RunOverrides | None = None) -> Experiment:
-    return transport.experiment(sources=sources(), overrides=overrides)
+def experiment(
+    *,
+    epochs: int | None = None,
+    message_limit: int | None = None,
+    token_limit: int | None = None,
+    time_limit: int | None = None,
+    cache: bool | None = None,
+) -> Experiment:
+    return transport.experiment(
+        sources=sources(),
+        overrides={
+            "epochs": epochs,
+            "message_limit": message_limit,
+            "token_limit": token_limit,
+            "time_limit": time_limit,
+            "cache": cache,
+        },
+    )
 
 
 def cases_hash(dataset: Selection) -> str:
