@@ -4,14 +4,13 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal, assert_never, cast
+from typing import TYPE_CHECKING, cast
 
 from pydantic import validate_call
 
 from evals.python import datasets
 from evals.python.datasets import Dataset, Selection
 from evals.python.schema import FROZEN, DatasetInfo, Files
-from evals.python.verification import Runtime
 from kernel import Ast, Experiment, Grader, InvalidArgument, Projection, Response
 
 if TYPE_CHECKING:
@@ -46,11 +45,9 @@ __all__ = [
     "Dataset",
     "DatasetInfo",
     "DatasetProvenance",
-    "Runtime",
     "Scores",
     "Selection",
     "compile_dataset",
-    "create_runtime",
     "describe_dataset",
     "get_provenance",
     "get_reference",
@@ -153,18 +150,3 @@ def score_case(
     if not {"correctness", "scope"} <= scores.keys():
         raise ValueError("Kernel omitted required score names")
     return MappingProxyType(scores)
-
-
-@validate_call(config=FROZEN)
-def create_runtime(*, provider: Literal["local", "hf"] = "local") -> Runtime:
-    match provider:
-        case "local":
-            from evals.python.integrations.inspect import environments  # noqa: PLC0415 - lazy local SDK composition
-
-            return environments.runtime()
-        case "hf":
-            from evals.python.integrations.hugging_face import sandbox  # noqa: PLC0415 - lazy HF SDK composition
-
-            return sandbox.runtime()
-        case _ as unreachable:
-            assert_never(unreachable)

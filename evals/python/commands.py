@@ -1,6 +1,6 @@
-"""Public commands own effects; kernel work goes through the native query boundary."""
+"""Public commands own execution effects and provider composition."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, assert_never
 
 from pydantic import AfterValidator, BaseModel, Field, InstanceOf, validate_call
 
@@ -8,7 +8,7 @@ from evals.python import datasets
 from evals.python import queries as _queries
 from evals.python import verification as _verification
 from evals.python.datasets import Selection
-from evals.python.schema import FROZEN, DatasetInfo
+from evals.python.schema import FROZEN
 from evals.python.verification import (
     Assessment,
     Cleanup,
@@ -25,7 +25,6 @@ __all__ = [
     "Assessment",
     "Cleanup",
     "Completion",
-    "DatasetInfo",
     "Diagnostic",
     "Environment",
     "EvaluationSettings",
@@ -35,6 +34,7 @@ __all__ = [
     "Runtime",
     "VerificationResult",
     "assess",
+    "create_runtime",
     "evaluate",
     "validate_reference",
     "verify",
@@ -83,6 +83,21 @@ class EvaluationSettings(BaseModel):
         | None
     ) = None
     log_dir: str = "/results/live"
+
+
+@validate_call(config=FROZEN)
+def create_runtime(*, provider: Literal["local", "hf"] = "local") -> Runtime:
+    match provider:
+        case "local":
+            from evals.python.integrations.inspect import environments  # noqa: PLC0415 - lazy local SDK composition
+
+            return environments.runtime()
+        case "hf":
+            from evals.python.integrations.hugging_face import sandbox  # noqa: PLC0415 - lazy HF SDK composition
+
+            return sandbox.runtime()
+        case _ as unreachable:
+            assert_never(unreachable)
 
 
 @validate_call(config=FROZEN)
@@ -135,7 +150,7 @@ async def validate_reference(
 ) -> VerificationResult:
     if Projection.verifier(datasets.record(case_id, selection=selection)) is None:
         return VerificationResult(verification=Ast.Unchecked())
-    runtime = runtime or _queries.create_runtime()
+    runtime = runtime or create_runtime()
     try:
         async with _verification.allocated(runtime) as agent:
             await _verification.stage_reference(

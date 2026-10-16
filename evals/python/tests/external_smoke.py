@@ -56,7 +56,7 @@ def python_smoke_keeps_checks_and_references_private() -> None:
 async def _assess_code(
     *, dataset: queries.Dataset, agent: commands.Environment
 ) -> tuple[commands.Assessment, ...]:
-    runtime = queries.create_runtime()
+    runtime = commands.create_runtime()
 
     async def assess(changed_files: tuple[str, ...]) -> commands.Assessment:
         return await commands.assess(
@@ -80,7 +80,7 @@ async def _assess_code(
 
 def external_seed_fails_reference_passes_and_scope_is_enforced() -> None:
     dataset = queries.compile_dataset(cases=declarations.cases())
-    runtime = queries.create_runtime()
+    runtime = commands.create_runtime()
 
     async def execute() -> tuple[commands.Assessment, ...]:
         agent = await runtime.create()

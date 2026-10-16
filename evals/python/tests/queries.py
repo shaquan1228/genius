@@ -71,28 +71,10 @@ def query_arguments_are_strict(
         operation(**arguments)
 
 
-@pytest.mark.parametrize("provider", ["hf", "local"])
-def runtime_query_returns_canonical_capability(provider: str) -> None:
-    runtime_query: Callable[..., queries.Runtime] = queries.create_runtime
-    runtime = assert_type(runtime_query(provider=provider), queries.Runtime)
-    assert isinstance(runtime, commands.Runtime)
-    with pytest.raises(ValidationError):
-        runtime_query(provider="unknown")
-
-
 def queries_are_separate_from_commands() -> None:
-    assert not hasattr(commands, "queries")
-    assert not hasattr(commands, "execute")
-    for name in (
-        "list_cases",
-        "load_dataset",
-        "describe_dataset",
-        "get_provenance",
-        "score_case",
-        "create_runtime",
-        "resolve_settings",
-    ):
-        assert not hasattr(commands, name)
+    assert not {"queries", "execute"} & vars(commands).keys()
+    assert not {"create_runtime", "Runtime"} & vars(queries).keys()
+    assert set(queries.__all__).isdisjoint(commands.__all__)
 
 
 @pytest.mark.parametrize("response", ['{"":"x"}', '{"answer": 1}', "not json"])

@@ -216,6 +216,13 @@ def public_commands_and_verification_have_no_sdk_imports() -> None:
     )
 
 
+def queries_do_not_compose_execution_adapters() -> None:
+    assert not any(
+        name.startswith(("evals.python.integrations", "evals.python.verification"))
+        for name in _imported(PYTHON_ROOT / "queries.py")
+    )
+
+
 @pytest.mark.parametrize("path", sorted((PYTHON_ROOT / "integrations").rglob("*.py")))
 def integrations_import_public_namespaces_or_single_values(path: Path) -> None:
     imports = [

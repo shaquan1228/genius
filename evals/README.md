@@ -34,7 +34,7 @@ flowchart LR
 | `python/integrations/smoke/` | Reusable private Python assertion driver and reference-validation CLI |
 | `python/integrations/inspect/` | SDK task/sample/score adaptation, agents, and sandbox capability adaptation |
 | `python/queries.py` | Typed public queries returning canonical values directly |
-| `python/commands.py` | Typed asynchronous commands, validated launch settings and composition |
+| `python/commands.py` | Execution commands, validated launch settings and runtime composition |
 | `python/verification.py` | SDK-free execution capabilities, immutable results and verification lifecycle |
 | `python/integrations/hugging_face/` | Hosted Job entry point and HF SDK operations for VM lifecycle, command execution and file IO |
 | `python/integrations/evalplus/` | Benchmark reference-validation CLI, EvalPlus manifest adaptation and trusted EvalPlus driver |
@@ -547,9 +547,12 @@ exit_code = await commands.evaluate(model="openai/your-model", dataset="humaneva
 
 Each callable validates its arguments and returns its declared result directly.
 `load_dataset`, `list_cases`, `resolve_settings`, `compile_dataset`, `describe_dataset`, `get_provenance`,
-`get_reference`, `score_case`, and `create_runtime` are queries.
+`get_reference` and `score_case` are queries. They load or derive dataset values
+and experiment settings.
+`commands.create_runtime` synchronously assembles provider execution capabilities.
 `verify`, `assess`, `validate_reference`, and `evaluate` are asynchronous
-commands. `describe_dataset` reads metadata without downloading/importing all cases;
+commands that own execution effects. `describe_dataset` reads metadata without
+downloading/importing all cases;
 `get_provenance` includes source and private-case fingerprints.
 
 `evaluate` validates launch arguments into immutable `EvaluationSettings` before

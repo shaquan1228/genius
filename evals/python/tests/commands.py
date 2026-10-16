@@ -106,3 +106,12 @@ def public_surface_has_no_legacy_function_aliases() -> None:
         "Evaluate",
     ):
         assert not hasattr(commands, name)
+
+
+@pytest.mark.parametrize("provider", ["hf", "local"])
+def runtime_factory_returns_canonical_capability(provider: str) -> None:
+    runtime_factory: Callable[..., commands.Runtime] = commands.create_runtime
+    runtime = assert_type(runtime_factory(provider=provider), commands.Runtime)
+    assert isinstance(runtime, commands.Runtime)
+    with pytest.raises(ValidationError):
+        runtime_factory(provider="unknown")
