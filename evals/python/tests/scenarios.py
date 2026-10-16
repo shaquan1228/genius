@@ -57,14 +57,14 @@ async def corrupt_instructions(case: Reference) -> None:
 
 
 async def tamper_runner(case: Reference) -> None:
-    await sandbox().write_file("workspace/check.sh", "#!/bin/sh\nexit 0\n")
+    await sandbox().write_file("workspace/test_receipt.py", "raise SystemExit(0)\n")
 
 
 async def exit_early(case: Reference) -> None:
     for name in case.solution:
         path = f"workspace/{name}"
         source = await sandbox().read_file(path)
-        await sandbox().write_file(path, "let () = exit 0\n" + source)
+        await sandbox().write_file(path, "import os\nos._exit(0)\n" + source)
 
 
 @dataclass(frozen=True)

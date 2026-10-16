@@ -31,7 +31,7 @@ def runtime_files() -> tuple[Path, ...]:
     return tuple(path for path in PYTHON_ROOT.rglob("*.py") if "tests" not in path.parts)
 
 
-def test_only_transport_and_trusted_driver_invoke_compilers() -> None:
+def test_only_transport_and_standalone_drivers_use_subprocess() -> None:
     callers = {
         str(path.relative_to(PYTHON_ROOT))
         for path in runtime_files()
@@ -40,7 +40,7 @@ def test_only_transport_and_trusted_driver_invoke_compilers() -> None:
     assert callers == {
         "transport.py",
         "integrations/evalplus/evalplus_verifier.py",
-        "integrations/ocaml/ocaml_verifier.py",
+        "integrations/smoke/verifier.py",
     }
 
 
@@ -146,9 +146,11 @@ def test_hugging_face_owns_only_its_sdk() -> None:
     )
 
 
-@pytest.mark.parametrize("framework", ["evalplus", "ocaml"])
-def test_framework_driver_is_standalone(framework: str) -> None:
-    path = PYTHON_ROOT / f"integrations/{framework}/{framework}_verifier.py"
+@pytest.mark.parametrize(
+    ("owner", "filename"), [("evalplus", "evalplus_verifier.py"), ("smoke", "verifier.py")]
+)
+def test_framework_driver_is_standalone(owner: str, *, filename: str) -> None:
+    path = PYTHON_ROOT / "integrations" / owner / filename
     assert {name.split(".")[0] for name in imported(path)} <= sys.stdlib_module_names
 
 

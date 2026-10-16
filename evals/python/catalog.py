@@ -26,10 +26,9 @@ from evals.python.paths import EVALS_ROOT
 from evals.python.transport import Program, Sources
 
 ADAPTER_ROOT = EVALS_ROOT / "ocaml/datasets"
-RUNNER = EVALS_ROOT / "ocaml/check.sh"
 DRIVERS = (
     EVALS_ROOT / "python/integrations/evalplus/evalplus_verifier.py",
-    EVALS_ROOT / "python/integrations/ocaml/ocaml_verifier.py",
+    EVALS_ROOT / "python/integrations/smoke/verifier.py",
 )
 
 
@@ -48,13 +47,15 @@ def sources(selection: Selection = "smoke") -> Sources:
     if isinstance(selection, Catalog):
         return selection.sources
     if isinstance(selection, Path):
-        suite, adapter = selection, ADAPTER_ROOT / "smoke.ml"
+        suite, adapter = selection, ADAPTER_ROOT / "suite.ml"
     else:
         name = TypeAdapter(FileName).validate_python(selection, strict=True)
+        name = "declarations" if name == "smoke" else name
         suite, adapter = transport.SUITE, ADAPTER_ROOT / f"{name}.ml"
-    return transport.sources(Program(suite=suite, adapter=adapter, resources=(RUNNER, *DRIVERS)))
+    return transport.sources(Program(suite=suite, adapter=adapter, resources=DRIVERS))
 
 
+@lru_cache(maxsize=8)
 def compile_records(*, sources: Sources, records: tuple[str, ...]) -> Catalog:
     cases = transport.cases(sources=sources, records=records)
     return Catalog(
@@ -95,7 +96,15 @@ def _catalog(sources: Sources) -> Catalog:
 
 
 def load_dataset(selection: Selection) -> Catalog:
-    return selection if isinstance(selection, Catalog) else _catalog(sources(selection))
+    match selection:
+        case Catalog():
+            return selection
+        case "smoke":
+            from evals.python.integrations.smoke import declarations  # noqa: PLC0415 - resolve dataset ownership at acquisition
+
+            return compile_declarations(declarations.cases())
+        case _:
+            return _catalog(sources(selection))
 
 
 def load_cases(*, selection: Selection = "smoke") -> tuple[Case, ...]:

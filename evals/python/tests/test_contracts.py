@@ -17,18 +17,21 @@ from evals.python.integrations.evalplus import benchmarks
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.query import ExperimentSettings, GradeCase
-from evals.python.tests.support import ocaml_choice_case
+from evals.python.tests.support import native_choice_case
 
 
 @pytest.fixture
 def third_dataset(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     adapter = tmp_path / "third.ml"
-    expression = ocaml_choice_case(case_id="third-case", a=1, b=2)
+    expression = native_choice_case(case_id="third-case", a=1, b=2)
     adapter.write_text(
         f"let info = None\nlet cases = [{expression}]\n"
         "let import raw = { (List.hd cases) with Ast.id = raw }\n"
     )
-    (tmp_path / "smoke.ml").write_text((catalog.ADAPTER_ROOT / "smoke.ml").read_text())
+    (tmp_path / "suite.ml").write_text((catalog.ADAPTER_ROOT / "suite.ml").read_text())
+    (tmp_path / "declarations.ml").write_text(
+        (catalog.ADAPTER_ROOT / "declarations.ml").read_text()
+    )
     monkeypatch.setattr(catalog, "ADAPTER_ROOT", tmp_path)
     return "third"
 
@@ -92,7 +95,7 @@ def test_public_projection_contains_no_private_material() -> None:
 
 def test_public_projection_includes_visible_tools() -> None:
     case = catalog.load_cases()[0]
-    assert "check.sh" in case.files  # The visible helper remains available to the agent.
+    assert "test_receipt.py" in case.files  # The visible helper remains available to the agent.
 
 
 def test_all_contract_collections_are_immutable() -> None:

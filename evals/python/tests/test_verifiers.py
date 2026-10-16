@@ -1,24 +1,25 @@
-"""Compile real OCaml fixtures and reject seeds, partial fixes, and invalid code."""
+"""Execute Python smoke fixtures and reject seeds, partial fixes, and invalid code."""
 
 import asyncio
 import subprocess
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
-from evals.python import commands
+from evals.python import commands, query
 from evals.python._kernel import Case, ExecutableChecks
 from evals.python.catalog import (
-    RUNNER,
     Selection,
     load_cases,
     reference,
     verifier,
 )
 from evals.python.integrations.inspect.environments import environment, runtime
-from evals.python.tests.support import ocaml_timeout_case
+from evals.python.integrations.smoke import declarations
+from evals.python.tests.support import native_timeout_case
 
 CASES = {case.id: case for case in load_cases()}
 
@@ -60,7 +61,6 @@ def write_files(directory: Path, *, files: Mapping[str, str]) -> None:
 def seed(case_id: str, *, directory: Path) -> Case:
     case = CASES[case_id]
     write_files(directory, files=case.files)
-    (directory / "check.sh").write_text(RUNNER.read_text())
     return case
 
 
@@ -74,11 +74,11 @@ def test_seeds_fail_and_solutions_pass(*, case_id: str, tmp_path: Path) -> None:
     assert snapshot(tmp_path) == before
 
 
-@pytest.mark.parametrize("term", ["price", "price *. float_of_int (max quantity 1)"])
+@pytest.mark.parametrize("term", ["price", "price * max(quantity, 1)"])
 def test_receipt_partial_fixes_fail(*, term: str, tmp_path: Path) -> None:
     case = seed("clear-task", directory=tmp_path)
-    (tmp_path / "receipt.ml").write_text(
-        f"let total items = List.fold_left (fun sum (price, quantity) -> sum +. {term}) 0. items\n"
+    (tmp_path / "receipt.py").write_text(
+        f"def total(items):\n    return sum({term} for price, quantity in items)\n"
     )
     assert not verify(case, directory=tmp_path)
 
@@ -102,18 +102,18 @@ def test_preflight_defaults_overrides_and_validation(
     tmp_path: Path,
 ) -> None:
     case = seed("known-preflight", directory=tmp_path)
-    (tmp_path / "config.ml").write_text(f"let timeout_seconds = {config}\n")
+    (tmp_path / "config.py").write_text(f"timeout_seconds = {config}\n")
     source = (
         reference(case.id)
-        .solution["client.ml"]
+        .solution["client.py"]
         .replace("= 30", f"= {client}")
-        .replace("      value\n", f"      {override}\n")
+        .replace("    return value\n", f"    return {override}\n")
     )
     if not rejection:
         source = source.replace(
-            '      if value <= 0 then invalid_arg "timeout must be positive";\n', ""
+            '    if value <= 0:\n        raise ValueError("timeout must be positive")\n', ""
         )
-    (tmp_path / "client.ml").write_text(source)
+    (tmp_path / "client.py").write_text(source)
     assert (verify(case, directory=tmp_path)) == (
         config == 30 and client == 30 and override == "value" and rejection
     )
@@ -121,31 +121,35 @@ def test_preflight_defaults_overrides_and_validation(
 
 @pytest.mark.parametrize(
     "source",
-    ["this is not OCaml", 'let total _ = failwith "broken"', "let () = exit 0\nlet total _ = 0."],
+    [
+        "def total(:",
+        'def total(items):\n    raise RuntimeError("broken")\n',
+        "import os\nos._exit(0)\ndef total(items): return 0\n",
+    ],
 )
 def test_compile_and_runtime_errors_fail(*, source: str, tmp_path: Path) -> None:
     case = seed("clear-task", directory=tmp_path)
-    (tmp_path / "receipt.ml").write_text(source)
+    (tmp_path / "receipt.py").write_text(source)
     assert not verify(case, directory=tmp_path)
 
 
 @pytest.mark.parametrize(
-    ("case_id", "modules"),
+    ("case_id", "script"),
     [
-        ("clear-task", ["receipt.ml", "test_receipt.ml"]),
-        ("known-preflight", ["config.ml", "client.ml", "test_client.ml"]),
+        ("clear-task", "test_receipt.py"),
+        ("known-preflight", "test_client.py"),
     ],
 )
 def test_visible_check_command_leaves_no_build_files(
     *,
     case_id: str,
-    modules: list[str],
+    script: str,
     tmp_path: Path,
 ) -> None:
     seed(case_id, directory=tmp_path)
     before = snapshot(tmp_path)
     result = subprocess.run(
-        ["sh", "check.sh", *modules],
+        [sys.executable, "-I", "-B", script],
         check=False,
         cwd=tmp_path,
         capture_output=True,
@@ -156,43 +160,35 @@ def test_visible_check_command_leaves_no_build_files(
 
 
 @pytest.mark.parametrize(
-    ("expression", "filename", "fragment"),
+    ("definition", "filename", "fragment"),
     [
-        (
-            ocaml_timeout_case(id_expression='"variant"', initial="7", requested="17"),
-            "config.ml",
-            "let timeout_seconds = 7",
-        ),
-        (
-            ocaml_timeout_case(id_expression='"variant"', initial="30", requested="229"),
-            "config.ml",
-            "let timeout_seconds = 30",
-        ),
-        (
-            """Case.make ~id:"variant"
-  ~fixture:(Fixtures.Receipt.fixture ~bug:Clamp_quantity) ~instruction:Scenarios.Receipt.fix_total
-  ~criterion:Scenarios.Receipt.(totals [
-    expect ~items:[ item ~price:3.0 ~quantity:0 ] ~total:0.0;
-    expect ~items:[ item ~price:3.0 ~quantity:4 ] ~total:12.0;
-  ])
-  ~allowed_files:["receipt.ml"] ~reference:Scenarios.Receipt.reference""",
-            "receipt.ml",
-            "max quantity 1",
-        ),
+        (declarations.timeout(initial=7, requested=17), "config.py", "timeout_seconds = 7"),
+        (declarations.timeout(initial=30, requested=229), "config.py", "timeout_seconds = 30"),
+        (declarations.receipt(term="price * max(quantity, 1)"), "receipt.py", "max(quantity, 1)"),
     ],
 )
 def test_family_variants_generate_working_seeds_and_solutions(
     *,
-    expression: str,
+    definition: query.CaseDefinition,
     filename: str,
     fragment: str,
     tmp_path: Path,
 ) -> None:
+    dataset = query.CompileDataset(cases=(definition,))
+    case = load_cases(selection=dataset)[0]
+    assert fragment in case.files[filename]
+    write_files(tmp_path, files=case.files)
+    assert not verify(case, directory=tmp_path, selection=dataset)
+    write_files(tmp_path, files=reference(case.id, selection=dataset).solution)
+    assert verify(case, directory=tmp_path, selection=dataset)
+
+
+def test_native_suite_can_declare_python_candidate_checks(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
+    expression = native_timeout_case(id_expression='"native"', initial="7", requested="17")
     suite.write_text(f"let cases = [{expression}]\n")
     case = load_cases(selection=suite)[0]
-    assert fragment in case.files[filename]
-    work = tmp_path / "workspace"
+    work = tmp_path / "candidate"
     work.mkdir()
     write_files(work, files=case.files)
     assert not verify(case, directory=work, selection=suite)

@@ -63,8 +63,6 @@ LIBRARY: Final = tuple(
         "reference.ml",
         "grader.mli",
         "grader.ml",
-        "fixtures.ml",
-        "scenarios.ml",
         "projection.mli",
         "projection.ml",
         "codec.ml",

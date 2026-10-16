@@ -21,6 +21,25 @@ def test_python_smoke_compiles_to_public_cases() -> None:
     assert all(set(case.model_dump()) == {"id", "skill", "prompt", "files"} for case in cases)
 
 
+def test_default_smoke_uses_python_owned_cases() -> None:
+    definitions = declarations.cases()
+    dataset = query.LoadDataset()
+    assert dataset is query.CompileDataset(cases=definitions)
+    assert tuple(dataset.cases) == (
+        "clear-task",
+        "known-preflight",
+        "small-decision",
+        "decision-review",
+    )
+    assert tuple(dataset.cases["clear-task"].files) == ("receipt.py", "test_receipt.py")
+
+
+@pytest.mark.parametrize(("initial", "requested"), [(15, 15), (0, 30), (-1, 30), (15, 0), (15, -1)])
+def test_timeout_variants_require_a_real_positive_change(initial: int, *, requested: int) -> None:
+    with pytest.raises(ValueError, match="distinct positive"):
+        declarations.timeout(initial=initial, requested=requested)
+
+
 def test_python_smoke_keeps_checks_and_references_private() -> None:
     definitions = declarations.cases()
     dataset = query.CompileDataset(cases=definitions)
@@ -28,7 +47,7 @@ def test_python_smoke_keeps_checks_and_references_private() -> None:
     code = definitions[0]
     assert isinstance(code.criterion, query.CodeCriterion)
     assert code.criterion.verifier.stdin not in cases[0].model_dump_json()
-    assert code.reference.edits["solution.ml"] not in cases[0].files.values()
+    assert code.reference.edits["receipt.py"] not in cases[0].files.values()
     assert "verifier.py" not in cases[0].files
 
 
@@ -39,7 +58,7 @@ async def assess_code(
 
     async def assess(changed_files: tuple[str, ...]) -> commands.Assessment:
         return await commands.AssessCase(
-            case_id="external-increment",
+            case_id="clear-task",
             selection=dataset,
             response="done",
             changed_files=changed_files,
@@ -47,12 +66,12 @@ async def assess_code(
             runtime=runtime,
         )
 
-    seed = await assess(("workspace/solution.ml",))
+    seed = await assess(("workspace/receipt.py",))
     definition = declarations.cases()[0]
     await agent.write_bytes(
-        "workspace/solution.ml", definition.reference.edits["solution.ml"].encode()
+        "workspace/receipt.py", definition.reference.edits["receipt.py"].encode()
     )
-    fixed = await assess(("workspace/solution.ml",))
+    fixed = await assess(("workspace/receipt.py",))
     outside = await assess(("secret",))
     return seed, fixed, outside
 
@@ -89,7 +108,7 @@ def test_external_answer_uses_kernel_rules_without_allocating() -> None:
 
     async def assess(response: str) -> commands.Assessment:
         return await commands.AssessCase(
-            case_id="external-plan",
+            case_id="decision-review",
             selection=dataset,
             response=response,
             changed_files=(),
@@ -97,7 +116,9 @@ def test_external_answer_uses_kernel_rules_without_allocating() -> None:
             runtime=runtime,
         )
 
-    response = '{"strategy":"inspect","safe":true,"reason":"Check existing behavior"}'
+    response = (
+        '{"decision_was_supported":true,"change_rule":false,"reason":"Check existing behavior"}'
+    )
     result = asyncio.run(assess(response))
     assert result.verification.status == "unchecked"
     assert result.scores == {"correctness": True, "scope": True}
@@ -121,16 +142,13 @@ def test_offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[
     output = capsys.readouterr().out
     rows = [json.loads(line) for line in output.splitlines()]
     assert rows == [
-        {
-            "id": "external-increment",
-            "verification": "passed",
-            "scores": {"correctness": True, "scope": True},
-        },
-        {
-            "id": "external-plan",
-            "verification": "unchecked",
-            "scores": {"correctness": True, "scope": True},
-        },
+        {"id": case_id, "verification": status, "scores": {"correctness": True, "scope": True}}
+        for case_id, status in (
+            ("clear-task", "passed"),
+            ("known-preflight", "passed"),
+            ("small-decision", "unchecked"),
+            ("decision-review", "unchecked"),
+        )
     ]
 
 

@@ -18,7 +18,7 @@ def declaration(*, code: bool = True) -> query.CaseDefinition:
             verifier=query.VerifierDefinition(
                 inputs=("main.py",),
                 files={"verify.py": query.Inline(text="private assertions")},
-                tools={"check.sh": query.Resource(name="check.sh")},
+                tools={"check.sh": query.Resource(name="verifier.py")},
                 command=("python3", "verify.py"),
                 stdin="private stdin",
                 timeout_seconds=30,
@@ -51,7 +51,7 @@ def sources() -> transport.Sources:
         transport.Program(
             suite=transport.SUITE,
             adapter=transport.OCAML_ROOT / "datasets/declarations.ml",
-            resources=(catalog.RUNNER, *catalog.DRIVERS),
+            resources=catalog.DRIVERS,
         )
     )
 
@@ -62,7 +62,7 @@ def test_external_declarations_preserve_public_projection(*, code: bool) -> None
     (case,) = transport.cases(sources=sources(), records=(record,))
     public_files = {"main.py": "broken"}
     if code:
-        public_files["check.sh"] = catalog.RUNNER.read_text()
+        public_files["check.sh"] = dict(catalog.sources().resources)["verifier.py"]
     assert case == query.Case(
         id="external", skill="reasoning", prompt="Fix it: é", files=public_files
     )
@@ -74,7 +74,7 @@ def test_code_declarations_preserve_private_checks_and_resolve_resources() -> No
     checks = transport.verifier(sources=sources(), case_id="external", record=record)
     assert checks is not None
     assert checks.files == {"verify.py": "private assertions"}
-    assert checks.tools == {"check.sh": catalog.RUNNER.read_text()}
+    assert checks.tools == {"check.sh": dict(catalog.sources().resources)["verifier.py"]}
     assert (checks.stdin, checks.inputs) == ("private stdin", ("main.py",))
 
 

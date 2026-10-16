@@ -192,7 +192,7 @@ def test_custom_smoke_suite_still_supported(tmp_path: Path) -> None:
     assert load_cases(selection=suite) == ()
 
 
-@pytest.mark.parametrize("driver", ["ocaml_verifier.py", "evalplus_verifier.py"])
+@pytest.mark.parametrize("driver", ["verifier.py", "evalplus_verifier.py"])
 def test_case_hash_tracks_private_verifier_code(
     *, driver: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

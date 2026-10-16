@@ -1,4 +1,68 @@
-let find id = List.find (fun (case : Ast.case) -> case.id = id) Suite.cases
+(* Kernel tests use inert values; no candidate-language runtime is required. *)
+let checks =
+  Verifier.make
+    ~inputs:[ "source.txt" ]
+    ~files:[ ("verifier.py", Ast.Inline "private checker") ]
+    ~tools:[ ("helper.txt", Ast.Resource "public-helper") ]
+    ~command:[ "checker" ]
+    ~stdin:"private input"
+    ~timeout_seconds:5
+
+let code_case =
+  Case.make
+    ~id:"clear-task"
+    ~fixture:(Fixture.of_files [ ("source.txt", "seed"); ("visible.txt", "public check") ])
+    ~instruction:{ Ast.skill = "reasoning"; prompt = "Change source.txt only." }
+    ~criterion:(Ast.Code checks)
+    ~allowed_files:[ "source.txt" ]
+    ~reference:(Reference.edits (Fixture.of_files [ ("source.txt", "fixed") ]))
+
+let decision ~id ~choice =
+  let expected = Response.of_fields [ ("choice", Ast.String choice) ] in
+  Case.make
+    ~id
+    ~fixture:Fixture.empty
+    ~instruction:{ Ast.skill = "reasoning"; prompt = "Reply with choice and reason." }
+    ~criterion:
+      (Criterion.answer
+         ~expected
+         ~text_rule:{ Ast.field = "reason"; min_words = 1; max_words = 40 }
+         ())
+    ~allowed_files:[]
+    ~reference:
+      {
+        Ast.edits = Fixture.empty;
+        completion =
+          Structured
+            (Response.of_fields
+               [ ("choice", Ast.String choice); ("reason", Ast.String "Cheaper.") ]);
+      }
+
+let review =
+  let fields = [ ("decision_was_supported", Ast.Bool true); ("change_rule", Ast.Bool false) ] in
+  Case.make
+    ~id:"decision-review"
+    ~fixture:Fixture.empty
+    ~instruction:
+      {
+        Ast.skill = "reasoning";
+        prompt = "Reply with decision_was_supported, change_rule and reason.";
+      }
+    ~criterion:
+      (Criterion.answer
+         ~expected:(Response.of_fields fields)
+         ~text_rule:{ Ast.field = "reason"; min_words = 1; max_words = 40 }
+         ())
+    ~allowed_files:[]
+    ~reference:
+      {
+        Ast.edits = Fixture.empty;
+        completion =
+          Structured (Response.of_fields (fields @ [ ("reason", Ast.String "Same odds.") ]));
+      }
+
+let cases = [ code_case; decision ~id:"small-decision" ~choice:"B"; review ]
+let find id = List.find (fun (case : Ast.case) -> case.id = id) cases
 let no_changes = { Ast.changed_files = []; verification = Unchecked }
 let scores ?(outcome = no_changes) ~response case = Grader.grade case ~response ~outcome
 
@@ -36,40 +100,39 @@ let rejection construct =
   with Invalid_argument message -> message
 
 let () =
-  let original = List.hd Suite.cases in
+  let original = List.hd cases in
   let changed =
     {
       original with
       Ast.instruction = { skill = "reasoning"; prompt = "A different instruction" };
-      criterion = Scenarios.Receipt.(totals [ expect ~items:[] ~total:99.0 ]);
+      criterion = Ast.Code { checks with stdin = "different private input" };
       allowed_files = [];
     }
   in
-  assert (List.length Suite.cases = 4);
+  assert (List.length cases = 3);
   assert (Fixture.files changed.fixture = Fixture.files original.fixture);
   assert (changed.allowed_files = []);
-  assert (original.allowed_files = [ "receipt.ml" ])
+  assert (original.allowed_files = [ "source.txt" ])
 
 let () =
   let mismatch ~fixture ~allowed_files () =
     Case.make
       ~id:"mismatch"
       ~fixture
-      ~instruction:Scenarios.Receipt.fix_total
-      ~criterion:Scenarios.Receipt.(totals [ expect ~items:[] ~total:0.0 ])
+      ~instruction:code_case.instruction
+      ~criterion:(Ast.Code checks)
       ~allowed_files
-      ~reference:Scenarios.Receipt.reference
+      ~reference:code_case.reference
   in
   assert (
     rejection
-      (mismatch ~fixture:(Fixtures.Preflight.fixture ~timeout:15) ~allowed_files:[ "receipt.ml" ])
-    = "Case mismatch: criteria read files missing from the fixture: receipt.ml");
-  assert (
-    rejection
       (mismatch
-         ~fixture:(Fixtures.Receipt.fixture ~bug:Ignore_quantity)
-         ~allowed_files:[ "config.ml" ])
-    = "Case mismatch: reference edits files outside allowed_files: receipt.ml")
+         ~fixture:(Fixture.of_files [ ("other.txt", "seed") ])
+         ~allowed_files:[ "source.txt" ])
+    = "Case mismatch: criteria read files missing from the fixture: source.txt");
+  assert (
+    rejection (mismatch ~fixture:code_case.fixture ~allowed_files:[ "other.txt" ])
+    = "Case mismatch: reference edits files outside allowed_files: source.txt")
 
 let () =
   List.iter
@@ -84,7 +147,7 @@ let () =
       List.iter
         (fun name -> assert (contains case.instruction.prompt ~fragment:name))
         (case.allowed_files @ fields))
-    Suite.cases
+    cases
 
 let () =
   List.iter
@@ -92,7 +155,7 @@ let () =
       match (case.criterion, case.reference.completion) with
       | Ast.Answer _, Ast.Structured reply -> assert (correct ~fields:(Response.fields reply) case)
       | _ -> ())
-    Suite.cases
+    cases
 
 let () =
   let receipt = find "clear-task" in
@@ -107,10 +170,10 @@ let () =
             scores ~outcome ~response:None receipt
             = [
                 ("correctness", code_passed);
-                ("scope", changed_files = [] || changed_files = [ "workspace/receipt.ml" ]);
+                ("scope", changed_files = [] || changed_files = [ "workspace/source.txt" ]);
               ]))
         [ false; true ])
-    [ []; [ "workspace/receipt.ml" ]; [ "workspace/extra.ml" ]; [ "instructions/SKILL.md" ] ]
+    [ []; [ "workspace/source.txt" ]; [ "workspace/extra.ml" ]; [ "instructions/SKILL.md" ] ]
 
 let () =
   let decision = find "small-decision" in
@@ -201,15 +264,7 @@ let () =
     [ []; [ ("note", Ast.Bool true) ]; [ ("note", Ast.String "word") ] ]
 
 let () =
-  let case =
-    Case.make
-      ~id:"new-choice"
-      ~fixture:Fixture.empty
-      ~instruction:(Scenarios.Decision.cheaper ~a:4 ~b:8)
-      ~criterion:(Scenarios.Decision.choice A)
-      ~allowed_files:[]
-      ~reference:(Scenarios.Decision.choice_reference A ~reason:"Cheaper.")
-  in
+  let case = decision ~id:"new-choice" ~choice:"A" in
   (match case.reference.completion with
   | Ast.Structured reply -> assert (correct ~fields:(Response.fields reply) case)
   | Ast.Plain _ -> assert false);
@@ -236,21 +291,21 @@ let () =
   let original = find "clear-task" in
   assert (
     rejection (fun () -> Case.validate { original with fixture = Fixture.empty })
-    = "Case clear-task: criteria read files missing from the fixture: receipt.ml")
+    = "Case clear-task: criteria read files missing from the fixture: source.txt")
 
 let () =
   let original = find "clear-task" in
   let public = Projection.case original in
   assert (public.id = original.id);
   assert (public.prompt = original.instruction.prompt);
-  assert (List.map fst public.files = [ "receipt.ml"; "test_receipt.ml"; "check.sh" ]);
+  assert (List.map fst public.files = [ "source.txt"; "visible.txt"; "helper.txt" ]);
   assert (not (List.mem_assoc "verifier.py" public.files));
-  assert (List.assoc "check.sh" public.files = Ast.Resource "check.sh");
+  assert (List.assoc "helper.txt" public.files = Ast.Resource "public-helper");
   (match Projection.verifier original with
   | Some verifier ->
       assert (List.map fst verifier.files = [ "verifier.py" ]);
       assert (verifier.stdin <> "");
-      assert (verifier.inputs = [ "receipt.ml" ])
+      assert (verifier.inputs = [ "source.txt" ])
   | None -> assert false);
   assert (Projection.reference original = original.reference);
   let decision = find "small-decision" in
@@ -259,7 +314,7 @@ let () =
   assert (Projection.reference decision = decision.reference);
   assert (
     rejection (fun () -> Projection.case { original with fixture = Fixture.empty })
-    = "Case clear-task: criteria read files missing from the fixture: receipt.ml")
+    = "Case clear-task: criteria read files missing from the fixture: source.txt")
 
 (* Ast values can be assembled directly; every consuming boundary validates them. *)
 let reject_raw_case case =

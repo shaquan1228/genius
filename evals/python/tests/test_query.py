@@ -20,7 +20,7 @@ def test_public_queries_preserve_canonical_objects() -> None:
 
 
 def test_public_queries_select_canonical_projections() -> None:
-    assert query.Cases(selection=EVALS_ROOT / "ocaml/suite.ml") == catalog.load_cases()
+    assert query.Cases(selection=EVALS_ROOT / "ocaml/suite.ml") == ()
     assert assert_type(query.DescribeDataset(), query.DatasetInfo | None) is None
     with patch("evals.python.catalog.download") as download:
         info = query.DescribeDataset(selection="humanevalplus")
@@ -47,7 +47,7 @@ def test_public_grade_preserves_input_and_result() -> None:
             query.GradeCase(
                 case_id="clear-task",
                 response="answer",
-                changed_files=("receipt.ml",),
+                changed_files=("receipt.py",),
                 verification=verification,
             ),
             query.Scores,

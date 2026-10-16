@@ -10,16 +10,17 @@ from pydantic import ValidationError
 
 from evals.python._kernel import Verification
 from evals.python.catalog import (
-    RUNNER,
+    DRIVERS,
+    Selection,
     load_cases,
     reference,
     verifier,
 )
 from evals.python.query import GradeCase
-from evals.python.transport import LIBRARY, SUITE
+from evals.python.transport import LIBRARY
 
 
-def judgment(*, response: str, suite: Path = SUITE) -> bool:
+def judgment(*, response: str, suite: Selection = "smoke") -> bool:
     return GradeCase(
         case_id="small-decision",
         response=response,
@@ -112,21 +113,20 @@ def test_grading_does_not_recompile_or_cache_results() -> None:
         assert [call.args[0][1:] for call in process.call_args_list] == [["--grade"]] * 3
 
 
-@pytest.mark.parametrize("source", [*LIBRARY, RUNNER])
+@pytest.mark.parametrize("source", [*LIBRARY, *DRIVERS])
 def test_kernel_cache_tracks_every_trusted_source(*, source: Path, tmp_path: Path) -> None:
     copied = tmp_path / source.name
     copied.write_text(source.read_text() + "\n")
     judgment(response="{}")
     library = tuple({source: copied}.get(path, path) for path in LIBRARY)
-    runner = {source: copied}.get(RUNNER, RUNNER)
+    drivers = tuple({source: copied}.get(path, path) for path in DRIVERS)
     with (
         patch("evals.python.transport.LIBRARY", library),
-        patch("evals.python.catalog.RUNNER", runner),
+        patch("evals.python.catalog.DRIVERS", drivers),
         patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as process,
     ):
         assert judgment(response='{"choice":"B","reason":"Cheap"}')
-        assert process.call_count == 4
-        assert process.call_args_list[0].args[0][0] == "ocamlfind"
+        assert (process.call_count, process.call_args_list[0].args[0][0]) == (3, "ocamlfind")
 
 
 @pytest.mark.parametrize(
@@ -201,19 +201,3 @@ let cases = [Case.make ~id:"reference" ~fixture:Fixture.empty
 )
 def test_nonstandard_json_is_an_incorrect_candidate(response: str) -> None:
     assert not judgment(response=response)
-
-
-def test_kernel_cache_tracks_trusted_python_runtime(tmp_path: Path) -> None:
-    judgment(response="{}")
-    runtime = tmp_path / "ocaml_verifier.py"
-    driver = RUNNER.parent.parent / "python/integrations/ocaml/ocaml_verifier.py"
-    runtime.write_text(driver.read_text() + "\n")
-    with (
-        patch(
-            "evals.python.catalog.DRIVERS",
-            (runtime, RUNNER.parent.parent / "python/integrations/evalplus/evalplus_verifier.py"),
-        ),
-        patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as process,
-    ):
-        assert judgment(response='{"choice":"B","reason":"Cheap"}')
-        assert process.call_count == 4

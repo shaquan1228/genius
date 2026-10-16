@@ -31,8 +31,8 @@ from evals.python.integrations.inspect.profiles import (
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.paths import REPO_ROOT
 from evals.python.query import GradeCase
-from evals.python.tests.support import ocaml_choice_case, ocaml_timeout_case
-from evals.python.transport import SUITE, decode
+from evals.python.tests.support import native_choice_case, native_timeout_case
+from evals.python.transport import decode
 
 
 def encode(cases: list[dict[str, object]]) -> str:
@@ -75,7 +75,7 @@ def grade(case_id: str, *, text: str, suite: Path | None = None) -> bool:
         response=text,
         changed_files=(),
         verification=Verification(status="unchecked"),
-        selection=SUITE if suite is None else suite,
+        selection="smoke" if suite is None else suite,
     )["correctness"]
 
 
@@ -163,7 +163,7 @@ def test_json_fences(text: str) -> None:
 
 def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
-    expression = ocaml_timeout_case(
+    expression = native_timeout_case(
         id_expression='Printf.sprintf "timeout-%d" i',
         initial="15",
         requested="30 + i",
@@ -172,8 +172,7 @@ def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
     cases = load_cases(selection=suite)
     assert len(cases) == 200
     assert (
-        reference(cases[199].id, selection=suite).solution["config.ml"]
-        == "let timeout_seconds = 229\n"
+        reference(cases[199].id, selection=suite).solution["config.py"] == "timeout_seconds = 229\n"
     )
     assert [path.name for path in tmp_path.iterdir()] == ["suite.ml"]
 
@@ -194,7 +193,7 @@ def test_generated_artifacts_stay_out_of_sample_metadata() -> None:
 
 def test_duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
-    expression = ocaml_choice_case(case_id="duplicate", a=10, b=8)
+    expression = native_choice_case(case_id="duplicate", a=10, b=8)
     suite.write_text(f"let c = {expression}\nlet cases = [c; c]\n")
     with pytest.raises(subprocess.CalledProcessError):
         load_cases(selection=suite)
@@ -202,7 +201,7 @@ def test_duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
 
 def test_exporter_escapes_strings(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
-    expression = ocaml_choice_case(case_id="escaped", a=10, b=8)
+    expression = native_choice_case(case_id="escaped", a=10, b=8)
     suite.write_text(
         f"let c = {expression}\n"
         + r"""
@@ -221,9 +220,9 @@ def test_cases_are_immutable() -> None:
     with pytest.raises(ValidationError):
         case.id = "changed"
     with pytest.raises(TypeError):
-        case.files["receipt.ml"] = "changed"  # type: ignore[index]
+        case.files["receipt.py"] = "changed"  # type: ignore[index]
     with pytest.raises(TypeError):
-        reference(case.id).solution["receipt.ml"] = "changed"  # type: ignore[index]
+        reference(case.id).solution["receipt.py"] = "changed"  # type: ignore[index]
     checks = verifier(case.id)
     assert checks is not None
     with pytest.raises(ValidationError):
@@ -234,14 +233,14 @@ def test_cases_are_immutable() -> None:
 
 def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
-    expression = ocaml_choice_case(case_id="cache", a=10, b=8)
+    expression = native_choice_case(case_id="cache", a=10, b=8)
     source = f"let cases = [{expression}]\n"
     suite.write_text(source)
     with patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as compiler:
         first = load_cases(selection=suite)
         assert load_cases(selection=suite) == first
         assert compiler.call_count == 3
-        changed = ocaml_choice_case(case_id="cache", a=4, b=8)
+        changed = native_choice_case(case_id="cache", a=4, b=8)
         suite.write_text(f"let cases = [{changed}]\n")
         assert json.loads(reference("cache", selection=suite).answer)["choice"] == "A"
         assert compiler.call_count == 7
@@ -302,7 +301,7 @@ def test_record_updates_cannot_bypass_kernel_validation(
     *, grade_only: bool, tmp_path: Path, capfd: pytest.CaptureFixture[str]
 ) -> None:
     suite = tmp_path / "suite.ml"
-    expression = ocaml_timeout_case(id_expression='"updated"', initial="15", requested="30")
+    expression = native_timeout_case(id_expression='"updated"', initial="15", requested="30")
     suite.write_text(f"let c = {expression}\nlet cases = [{{c with fixture = Fixture.empty}}]\n")
     operation: Callable[[], object]
     if grade_only:

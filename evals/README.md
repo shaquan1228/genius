@@ -35,15 +35,14 @@ flowchart LR
 | `python/transport.py` | Trusted source compilation, content-keyed executable caches, protocol encoding/decoding |
 | `python/catalog.py` | Adapter composition, immutable catalogs, trusted record retention and content fingerprints |
 | `python/integrations/datasets/` | Pinned download effects |
-| `python/integrations/smoke/` | Python-owned example case declarations and offline reference-validation CLI |
+| `python/integrations/smoke/` | Default Python smoke declarations, private execution driver and reference-validation CLI |
 | `python/integrations/inspect/` | SDK task/sample/score adaptation, agents, and sandbox capability adaptation |
 | `python/query.py` | Typed public queries returning canonical values directly |
 | `python/commands.py` | Typed asynchronous commands, validated launch settings and composition |
 | `python/verification.py` | SDK-free execution capabilities, immutable results and verification lifecycle |
 | `python/integrations/hugging_face/` | Hosted Job entry point and HF SDK operations for VM lifecycle, command execution and file IO |
 | `python/integrations/evalplus/` | Benchmark reference-validation CLI, EvalPlus manifest adaptation and trusted EvalPlus driver |
-| `python/integrations/ocaml/` | Trusted standalone candidate compilation and execution |
-| `bin/` | Local launch, hosted bootstrap and OCaml enforcement scripts |
+| `bin/` | Local launch and hosted bootstrap scripts |
 
 Public `Case` values contain only ID, skill, prompt, and public files, including visible helper tools.
 Reference solutions, expected answers, private verifier programs and private inputs use separate projections.
@@ -55,7 +54,7 @@ Every response is versioned. A grading request carries the case ID, raw response
 It returns named boolean scores. Dataset-specific CLI operations and branches are absent from both transports.
 The old combined case manifest is intentionally unsupported; native historical Inspect logs are unchanged.
 
-Dataset selection is an adapter name, a trusted suite path, or an immutable `Dataset` returned by the public `CompileDataset` query.
+Dataset selection is the Python-owned `smoke` dataset, an adapter name, a trusted suite path, or an immutable `Dataset` returned by `LoadDataset` or `CompileDataset`.
 An adapter under `ocaml/datasets/<name>.ml` implements `dataset.mli`, compiles as `Dataset`, and constructs ordinary kernel values.
 Its `info` is absent for local declarations or contains a pinned gzip JSONL source plus flat provenance attributes.
 Its `import` function maps a raw record to a validated case; raw private benchmark JSON is retained byte-for-byte.
@@ -79,7 +78,7 @@ Public operations carry dataset selection as context. `Cases` returns public inp
 `VerifyCase` and `AssessCase` resolve private checks internally. Selection stays out of
 the kernel grading observation; scoring supplies the case ID it already has.
 
-Primitive modules have no codec or SDK dependencies. Only transport compiles/invokes the kernel; the standalone verifier compiles candidate OCaml in its isolated grading workspace.
+Primitive modules have no codec or SDK dependencies. Only transport compiles/invokes OCaml. The default smoke driver executes Python candidates and private assertions in its isolated grading workspace.
 Kernel domain projections are nonrecursive. Recursive diagnostics are frozen in public
 results and converted to JSON values only at process or SDK output interfaces.
 Boundary tests enforce these imports and the absence of dataset/provider knowledge in the transport.
@@ -255,13 +254,13 @@ verification = await commands.ValidateReference(
 scores = query.GradeCase(
     case_id=public_cases[0].id,
     selection=dataset,
-    response="Increment now adds one.",
-    changed_files=("workspace/solution.ml",),
+    response="Each quantity now contributes to the total.",
+    changed_files=("workspace/receipt.py",),
     verification=verification.verification,
 )
 ```
 
-Run both example references from the repository root, with the compiler environment
+Run all four smoke references from the repository root, with the kernel compiler environment
 configured as above:
 
 ```sh
@@ -271,74 +270,28 @@ uv run --project evals python -m evals.python.integrations.smoke
 The CLI compiles the declarations, validates each reference, grades correctness and
 scope, prints only IDs, verification statuses and scores, and exits nonzero on an
 unsuccessful score or harness failure. It makes no model calls or hosted requests.
-One case fixes OCaml candidate code through the existing standalone OCaml driver;
-the other grades a structured answer without allocating a sandbox. Python owns
-these declarations, independently of the language being tested. Private assertions
-and reference solutions never enter `Cases` or the CLI output.
+The coding cases fix receipt quantities in `receipt.py` and timeout defaults in
+`config.py` and `client.py`. The answer cases retain numeric choice and hindsight
+after one loss. Private assertions and reference solutions never enter `Cases` or
+the CLI output.
 
-Compiled datasets are public in-process selections for case, metadata, provenance,
-grading and verification operations. `Evaluate` and the Inspect/HF launch interfaces
-continue accepting their existing string selectors; this example does not replace
-the original `smoke` suite or add a launch registry entry.
+`LoadDataset(selection="smoke")`, Inspect tasks, and the HF launcher's default
+selection all compile these same Python declarations through the existing generic
+OCaml declaration adapter. `ocaml/suite.ml` is an empty placeholder for adapters;
+a trusted native suite path uses `ocaml/datasets/suite.ml`. Kernel unit tests use
+inert local fixtures rather than the runnable smoke dataset.
 
-An OCaml suite can also declare the parts of a case explicitly:
+The fixture, instruction, criterion, edit scope, and reference remain independent
+values. Use `declarations.receipt(term=...)` and
+`declarations.timeout(initial=..., requested=...)` for parameterized smoke examples,
+and replace IDs when composing multiple variants into one dataset. The kernel
+rejects checks that read missing fixture files and reference edits outside the
+allowed scope. Add a genuinely new success condition to `ast.ml`, its validating
+constructor to `criterion.ml`, and its pure grading logic to `grader.ml`.
 
-```ocaml
-let cases =
-  [
-    Case.make
-      ~id:"quantity"
-      ~fixture:(Fixtures.Receipt.fixture ~bug:Ignore_quantity)
-      ~instruction:Scenarios.Receipt.fix_total
-      ~criterion:
-        Scenarios.Receipt.(
-          totals
-            [
-              expect ~items:[ item ~price:3.0 ~quantity:4 ] ~total:12.0;
-              expect ~items:[ item ~price:3.0 ~quantity:0 ] ~total:0.0;
-            ])
-      ~allowed_files:[ "receipt.ml" ]
-      ~reference:Scenarios.Receipt.reference;
-  ]
-```
-
-The fixture does not choose the prompt, expectations, reference answer, or edit
-scope. Scope is declared independently of reference edits. A suite may reuse a
-fixture with different tasks or checks. `Fixture.of_files` rejects duplicate
-paths; `Fixture.overlay base ~overrides` explicitly replaces matching paths and
-leaves both inputs unchanged. `Case.make` rejects checks that read files missing
-from the fixture and reference edits outside `allowed_files`; the error names the
-case and the files.
-
-Use helpers inside a suite to describe larger parameter sets:
-
-```ocaml
-let timeout_case i =
-  let requested = 30 + i in
-  Case.make
-    ~id:(Printf.sprintf "timeout-%d" i)
-    ~fixture:(Fixtures.Preflight.fixture ~timeout:15)
-    ~instruction:(Scenarios.Preflight.change_timeout ~initial:15 ~requested)
-    ~criterion:(Scenarios.Preflight.defaults ~timeout:requested)
-    ~allowed_files:[ "config.ml"; "client.ml" ]
-    ~reference:(Scenarios.Preflight.reference ~timeout:requested)
-
-let cases = List.init 200 timeout_case
-```
-
-For OCaml-authored suites, reusable starting projects belong in `ocaml/fixtures.ml`;
-scenario instructions, assertions and reference outputs belong in `scenarios.ml`.
-Python-authored integrations own those values in their declaration module. Add a reusable success condition to
-`ast.ml`, its validating constructor to `criterion.ml`, and its pure evaluation to
-`grader.ml`. Case IDs have no matching directory
-or Python registry entry.
-
-For a new structured answer, use `Response.of_fields` to declare string/boolean values
-and `Criterion.answer` for its expectation. An optional `Ast.text_rule` record declares
-a named string field and inclusive word bounds; `Criterion.answer` validates it. A field
-named `reason` has no special meaning unless the criterion declares it. Reference replies
-use `Ast.Structured`.
-Adding answer fields does not require Python or transport changes.
+Structured answers use `AnswerCriterion` with explicitly named expected fields
+and an optional `TextRule`. A field named `reason` has no special meaning unless
+the criterion declares it. Adding answer fields does not require transport changes.
 
 ## Execution boundary
 
@@ -346,8 +299,8 @@ The host compiles the fixed OCaml module set in a temporary directory.
 `ocaml/transport.ml` consumes the selected `Dataset` adapter and emits versioned JSON projections; `python/transport.py`
 decodes those projections into frozen values. Importing `Suite` itself has no output or
 execution side effects. Compilation and validated case indexes are cached
-by source contents; changing any module, interface, or the runner invalidates
-the cache.
+by source contents and serialized declarations; changing a module, interface,
+trusted driver, or declaration invalidates the relevant cache.
 No generated files are written into this checkout. Both local checks and the
 hosted Job need OCaml 4.13+; the hosted bootstrap installs Debian's `ocaml-nox`, `ocaml-findlib`, and `libjsonm-ocaml-dev`.
 
@@ -372,13 +325,12 @@ scorer remains available for named-dataset rescoring using the public dataset
 selection in sample metadata. Reconstructing an externally authored in-memory
 dataset requires supplying that dataset again.
 
-`bin/enforce` is the shared compiler runner. It compiles temporary copies and cleans
-up after success or failure, leaving no compiler artifacts in the measured
-worktree. Evaluation tasks receive it as `check.sh`, so a generated workspace can
-run its visible checks with, for example:
+Smoke workspaces include public Python checks. Run them without creating bytecode
+artifacts in the measured worktree:
 
 ```sh
-sh check.sh receipt.ml test_receipt.ml
+python3 -I -B test_receipt.py
+python3 -I -B test_client.py
 ```
 
 After the agent finishes, the harness creates a fresh grading sandbox using the
@@ -388,9 +340,10 @@ a structured outcome with a fresh completion marker. Provisioning and transfer
 timeouts are harness errors; the verifier command's deadline is a distinct timeout
 outcome. The grading sandbox is cleaned up after success, failure, or cancellation.
 
-The OCaml verifier is one instance of this contract. It uses a separate inner
-completion marker after all private assertions, so an early successful exit fails
-correctness. Agent edits to public helper scripts do not alter the trusted grader
+The smoke verifier runs private Python assertions in a child process. It uses a
+separate inner completion marker after all assertions, so an early successful exit
+fails correctness. The child does not inherit the host completion marker, and the
+verifier kills and reaps its child process group on termination. Agent edits to public helper scripts do not alter the trusted grader
 copies. Completion markers do not isolate hostile code sharing the grader process.
 
 Scope checks compare the final worktree against its original commit.
@@ -417,8 +370,8 @@ At full coverage, CRAP equals complexity, so those gates enforce CRAP ≤5.
 Radon exports measured complexity to `results/complexity.json`.
 
 Python coverage and complexity include all adapter runtime code, harness tests,
-and scripted helpers. OCaml checks are verified by compiling and executing the
-seeds, solved fixtures, partial fixes, malformed code, and visible test commands.
+and scripted helpers. Python smoke checks execute seeds, solved fixtures, partial
+fixes, malformed code, and visible test commands.
 `make test-ocaml` checks module boundaries, case relationships, and grading policy.
 Neither is included in Python coverage or the Python CRAP calculation.
 Strict mypy checks the Python modules without type-ignore exceptions; `ocamlc`
@@ -453,7 +406,7 @@ composition, and verify that shared inputs are acquired once per evaluation.
 Explicit matching remains appropriate where alternatives select execution.
 The existing recursive diagnostic-value conversion is outside this refactor.
 
-The preparation refactor's audited slice compares against `bff5602`:
+The preparation refactor at `de9725f` compares its audited slice against `bff5602`:
 
 | Responsibility | Before EC | After EC |
 | --- | ---: | ---: |

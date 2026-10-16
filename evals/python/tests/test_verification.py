@@ -359,13 +359,13 @@ def test_public_answer_only_verification_never_allocates() -> None:
 
 def test_assessment_grades_canonical_observation_and_freezes_scores() -> None:
     async def execute() -> None:
-        expected = GradeCase(case_id="clear-task", response="answer", changed_files=("receipt.ml",))
+        expected = GradeCase(case_id="clear-task", response="answer", changed_files=("receipt.py",))
         with patch("evals.python.catalog.verifier", return_value=None):
             result = assert_type(
                 await commands.AssessCase(
                     case_id="clear-task",
                     response="answer",
-                    changed_files=("receipt.ml",),
+                    changed_files=("receipt.py",),
                     agent=agent_port(),
                     runtime=runtime_port(grader_port()),
                 ),
