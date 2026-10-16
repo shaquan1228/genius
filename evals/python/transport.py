@@ -21,6 +21,7 @@ from evals.python._kernel import (
     ExecutableChecks,
     Experiment,
     Reference,
+    Verification,
 )
 from evals.python.paths import EVALS_ROOT
 
@@ -222,14 +223,29 @@ def reference(*, sources: Sources, case_id: str, record: str | None = None) -> R
     )
 
 
-def grade(
-    *, sources: Sources, request: Mapping[str, object], record: str | None = None
+def grade(  # noqa: PLR0913 - kernel grading fields and trusted compiler context
+    *,
+    sources: Sources,
+    case_id: str,
+    response: str,
+    changed_files: tuple[str, ...],
+    verification: Verification,
+    record: str | None = None,
 ) -> Mapping[str, bool]:
     result = GradingResult.model_validate_json(
         invoke(
             sources=sources,
             operation="--grade",
-            payload={"record": record, "request": {"version": VERSION, **request}},
+            payload={
+                "record": record,
+                "request": {
+                    "version": VERSION,
+                    "case_id": case_id,
+                    "response": response,
+                    "changed_files": changed_files,
+                    "verification": verification.model_dump(),
+                },
+            },
         )
     )
     if not {"correctness", "scope"} <= result.scores.keys():

@@ -224,10 +224,7 @@ def _query_catalog(
                 case_id=operation.case_id,
                 response=operation.response,
                 changed_files=operation.changed_files,
-                verification={
-                    "status": operation.verification.status,
-                    "detail": operation.verification.detail,
-                },
+                verification=operation.verification,
                 selection=operation.selection,
             )
         case _ as unreachable:

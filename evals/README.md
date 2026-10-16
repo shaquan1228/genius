@@ -6,19 +6,20 @@ Hugging Face provides hosted Jobs, model access, and per-sample sandboxes; CI ca
 Model calls and hosted compute can cost money. The test suite uses local sandboxes and mock models.
 
 OCaml defines and validates evaluations, resolves run settings, and grades observations.
-Python integrations execute its immutable projections through one transport boundary.
-The kernel is a compiler and pure grader; Inspect retains execution and reporting.
+Python integrations consume canonical projections through typed public queries and commands.
+The kernel is a compiler and pure grader. Public commands own verification and assessment;
+Inspect adapts observations, task execution, and reporting to its SDK.
 
 ```mermaid
-flowchart TB
-  D[Dataset adapters and declarations] --> K[OCaml primitives and pure grading]
-  K <--> T[Versioned transport and immutable DTOs]
-  T <--> I[Inspect execution and reporting]
-  I --> Q[JSON command boundary]
-  Q --> H[Hugging Face sandbox integration]
-  C[CI or local launch inputs] --> J[Hugging Face Job integration]
-  J --> Q
-  Q --> I
+flowchart LR
+  J[HF hosted entry point] --> C[Public query and execute]
+  I[Inspect observations] --> C
+  E[EvalPlus CLI] --> C
+  C --> T[OCaml process transport]
+  T --> K[Pure kernel and dataset adapters]
+  C --> V[Verification lifecycle]
+  V --> P[Typed execution capabilities]
+  P --> A[Local or HF SDK effects]
 ```
 
 | Boundary | Owns |
@@ -29,11 +30,13 @@ flowchart TB
 | `ocaml/experiment.mli` | Immutable defaults and validated launch overrides |
 | `ocaml/dataset.mli`, `ocaml/datasets/` | Common adapter interface; dataset-specific records and provenance |
 | `ocaml/codec.ml`, `ocaml/transport.ml` | JSON syntax and generic protocol operations |
-| `python/contracts.py` | Frozen, deeply immutable wire projections; no SDK objects or grading rules |
+| `python/_kernel.py` | Private immutable Python projections of the OCaml domain; no integration imports |
 | `python/transport.py` | Trusted source compilation, content-keyed executable caches, protocol encoding/decoding |
-| `python/integrations/datasets/` | Adapter discovery, pinned downloads, immutable catalogs and trusted record retention |
-| `python/integrations/inspect/` | Evaluation commands, tasks, profiles, agents, remote sandbox adaptation, verification and reporting |
-| `python/command.py` | One JSON command boundary with fixed, lazy integration endpoints |
+| `python/catalog.py` | Adapter composition, immutable catalogs, trusted record retention and content fingerprints |
+| `python/integrations/datasets/` | Pinned download effects |
+| `python/integrations/inspect/` | SDK task/sample/score adaptation, agents, and sandbox capability adaptation |
+| `python/commands.py` | Typed public operation contracts, query/command dispatch and composition |
+| `python/verification.py` | SDK-free execution capabilities, immutable results and verification lifecycle |
 | `python/integrations/hugging_face/` | Hosted Job entry point and HF SDK operations for VM lifecycle, command execution and file IO |
 | `python/integrations/evalplus/` | Benchmark reference-validation CLI, EvalPlus manifest adaptation and trusted EvalPlus driver |
 | `python/integrations/ocaml/` | Trusted standalone candidate compilation and execution |
@@ -59,18 +62,21 @@ A genuinely new evaluation capability may require a new primitive.
 CI and local launchers supply overrides; OCaml resolves them into one immutable experiment specification before execution.
 The HF launcher deliberately requests one epoch by default for its smoke run; direct job invocation uses the kernel default when no override is supplied.
 The generic Inspect task builder accepts a sandbox selection and defaults to local execution.
-The HF Job selects the hosted sandbox through a JSON evaluation request; Inspect adapts that request to its sandbox interface.
+The HF Job constructs one immutable `Evaluate` command at the environment-variable boundary.
+Public execution passes that same object to Inspect; no JSON conversion occurs between Python modules.
 SDK clients, credentials and operational state stay in integrations.
 
 Shared domain types are defined once in `ast.ml`; public `.mli` files declare functions using those types, and `.ml` files implement them.
 Dataset-record and codec helper types remain private to their implementations.
 Raw Ast records are validated at case projection and grading boundaries, including nested criteria, verifier contracts and reference fields.
 
-Catalog lookup is explicit: `catalog.case(case_id, selection=dataset)` and `catalog.reference(case_id, selection=dataset)` return immutable `Case` and `Reference` values.
-Dataset selection stays out of the grading observation DTO; scoring uses the case ID it already has.
+Public operations carry dataset selection as context. `Cases` returns public inputs;
+`VerifyCase` and `AssessCase` resolve private checks internally. Selection stays out of
+the kernel grading observation; scoring supplies the case ID it already has.
 
 Primitive modules have no codec or SDK dependencies. Only transport compiles/invokes the kernel; the standalone verifier compiles candidate OCaml in its isolated grading workspace.
-Domain DTOs are nonrecursive, while recursive JSON trees are confined to the codec implementation.
+Kernel domain projections are nonrecursive. Recursive diagnostics are frozen in public
+results and converted to JSON values only at process or SDK output interfaces.
 Boundary tests enforce these imports and the absence of dataset/provider knowledge in the transport.
 Source contents, adapter declarations, private records and verifier resources participate in provenance or cache keys.
 Invalid candidate submissions produce unsuccessful outcomes; provisioning, transfer, driver and protocol failures remain harness errors.
@@ -291,10 +297,11 @@ the cache.
 No generated files are written into this checkout. Both local checks and the
 hosted Job need OCaml 4.13+; the hosted bootstrap installs Debian's `ocaml-nox`, `ocaml-findlib`, and `libjsonm-ocaml-dev`.
 
-Inspect receives only public project files, selected skill instructions, and a
-case ID. Private checks and reference edits stay in the host's case index; they
-are not copied into sample metadata or the agent workspace. Only the offline
-scripted test agent applies the reference edits.
+Agent samples receive only public project files, selected skill instructions, and
+a case ID. Private checks and reference edits remain host-side and do not enter
+sample metadata or the agent workspace. Reference validation stages reference
+edits in a separate temporary candidate environment; scripted test agents also
+use them for offline checks.
 
 `bin/enforce` is the shared compiler runner. It compiles temporary copies and cleans
 up after success or failure, leaving no compiler artifacts in the measured
@@ -362,8 +369,8 @@ uv run --project evals python -m evals.python.integrations.evalplus.benchmarks v
 
 On macOS, trusted reference validation can explicitly work around EvalPlus's
 incompatible memory guard with `--trusted-macos-memory-workaround`. This flag is
-only for the bundled upstream reference code. Live candidate evaluation keeps
-EvalPlus's default memory guard in the Linux grading sandbox.
+only for the bundled upstream reference code. The verifier disables EvalPlus's
+incompatible memory guard; the HF grading VM supplies the memory bound.
 
 Each agent sees only `solution.py`, containing the original prompt and function
 signature. Baseline and Genius receive the same public problem. Canonical
@@ -400,15 +407,51 @@ case hash, and each sample's verifier evidence.
 
 ## Controlled instruction-delivery diagnostics
 
-Integrations do not import sibling implementations. `command(name, payload=...)`
-accepts and returns JSON strings; each owner keeps its SDK objects and operation
-schemas private. Shared immutable wire declarations describe kernel projections.
-Inspect owns task construction, the model adapter, log reporting, and its
-`SandboxEnvironment` adapter. HF owns the hosted Job and VM operations and never imports Inspect.
-The bootstrap defaults to the HF Job entry point, which reads launch settings once
-and passes a JSON request to `inspect.evaluate`. Inspect receives immutable configuration
-and builds tasks from it. Its `datasets.py` client decodes dataset-command results;
-the kernel remains in OCaml.
+Integrations use one public namespace and pass immutable operation values:
+
+```python
+from evals.python import commands
+
+cases = commands.query(commands.Cases(selection="humanevalplus"))
+settings = commands.query(commands.ExperimentSettings(epochs=2, token_limit=50_000))
+
+# At the Inspect scoring interface, after capturing public observations:
+assessment = await commands.execute(
+    commands.AssessCase(
+        case_id=case_id,
+        selection="humanevalplus",
+        response=completion,
+        changed_files=changed_files,
+        agent=environment,
+        runtime=runtime,
+    )
+)
+```
+
+Each operation determines its result type. `Cases`, `ExperimentSettings`,
+`DescribeDataset`, `Provenance`, `GradeCase`, and `ExecutionRuntime` are queries.
+`VerifyCase`, `AssessCase`, `ValidateReference`, and `Evaluate` are asynchronous
+commands. `DescribeDataset` reads metadata without downloading/importing all cases;
+`Provenance` includes source and private-case fingerprints.
+
+`Evaluate` is the launch command, not an integration-owned request DTO. HF reads
+launch settings once; Inspect receives the same object and awaits its SDK's
+`eval_async`. Profile/sample/task builders consume canonical values directly.
+Integrations do not import sibling implementations or private kernel projections.
+The public contract has no integration-local command handlers or dataset clients.
+
+Verification owns candidate reads, fresh grader allocation, trusted artifact
+staging, execution, result decoding and cancellation-safe cleanup. Environment
+capabilities expose only execute, read bytes and write bytes; runtime capabilities
+allocate and clean up environments. SDK clients remain inside their adapters.
+Missing candidate input is invalid submission, setup/transfer failures are harness
+errors, and a verifier command deadline is timed out. Answer-only cases allocate
+no grader. Assessment then asks OCaml to grade the canonical outcome.
+
+JSON is used for the OCaml process protocol, standalone verifier output, CLI
+input/output and persisted logs. It is not an internal Python routing protocol.
+Standalone drivers require no project imports in their isolated `python -I`
+environments; the public process interface decodes their wire results once.
 
 Keep the historical file-loading treatment as the default. For a small HF
 comparison of the same reasoning documents with explicit reference paths:

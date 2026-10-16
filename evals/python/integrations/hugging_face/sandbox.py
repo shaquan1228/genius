@@ -1,5 +1,3 @@
-"""Adapt Hugging Face Sandbox effects to canonical execution capabilities."""
-
 import asyncio
 from contextlib import suppress
 from pathlib import PurePosixPath

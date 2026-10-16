@@ -1,5 +1,3 @@
-"""Translate the hosted Job environment into a typed public evaluation command."""
-
 import asyncio
 import json
 import os

@@ -54,8 +54,8 @@ def test_public_grade_preserves_request_and_result() -> None:
     )
     with patch("evals.python.transport.grade", return_value={"correctness": True}) as grade:
         result = assert_type(commands.query(operation), commands.Scores)
-    assert grade.call_args.kwargs["request"]["case_id"] == operation.case_id
-    assert grade.call_args.kwargs["request"]["verification"] == {"status": "passed", "detail": ""}
+    assert grade.call_args.kwargs["case_id"] == operation.case_id
+    assert grade.call_args.kwargs["verification"] is operation.verification
     assert result is grade.return_value
 
 

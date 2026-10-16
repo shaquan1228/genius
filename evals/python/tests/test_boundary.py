@@ -2,6 +2,7 @@
 
 import ast
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -165,3 +166,53 @@ def test_integrations_use_typed_public_operations_without_legacy_facades() -> No
         name for path in (PYTHON_ROOT / "integrations").rglob("*.py") for name in imported(path)
     }
     assert not any(name.startswith("evals.python.verification") for name in imports)
+
+
+def test_integrations_cannot_bypass_the_public_operation_contract() -> None:
+    private = (
+        "evals.python._kernel",
+        "evals.python.catalog",
+        "evals.python.transport",
+        "evals.python.verification",
+    )
+    imports = {
+        name for path in (PYTHON_ROOT / "integrations").rglob("*.py") for name in imported(path)
+    }
+    assert not any(name.startswith(private) for name in imports)
+
+
+def test_public_commands_and_verification_have_no_sdk_imports() -> None:
+    imports = {
+        name for file in ("commands.py", "verification.py") for name in imported(PYTHON_ROOT / file)
+    }
+    assert not any(
+        name.startswith(("inspect_ai", "inspect_swe", "huggingface_hub")) for name in imports
+    )
+
+
+@pytest.mark.parametrize("path", sorted((PYTHON_ROOT / "integrations").rglob("*.py")))
+def test_integrations_import_one_public_name_per_statement(path: Path) -> None:
+    imports = [
+        node
+        for node in nodes(path, kind=ast.ImportFrom)
+        if str(node.module).startswith("evals.python")
+    ]
+    assert all(len(node.names) == 1 for node in imports)
+
+
+def test_case_query_does_not_load_runner_sdks() -> None:
+    script = """from evals.python import commands
+import sys
+assert commands.query(commands.Cases())
+assert not {'inspect_ai', 'inspect_swe', 'huggingface_hub'}.intersection(sys.modules)
+print('kernel-only')
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=PYTHON_ROOT.parent.parent,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    assert result.stdout.strip() == "kernel-only"

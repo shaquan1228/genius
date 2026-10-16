@@ -1,5 +1,3 @@
-"""Translate Inspect observations and canonical assessments at the SDK edge."""
-
 from collections.abc import Mapping
 from typing import cast
 

@@ -18,6 +18,7 @@ from evals.python._kernel import (
     Experiment,
     FileName,
     Reference,
+    Verification,
 )
 from evals.python.integrations.datasets.download import Download, cache_path, download
 from evals.python.paths import EVALS_ROOT
@@ -114,18 +115,16 @@ def grade(
     case_id: str,
     response: str,
     changed_files: tuple[str, ...],
-    verification: Mapping[str, str],
+    verification: Verification,
     selection: Selection = "smoke",
 ) -> Mapping[str, bool]:
     catalog = _selected(selection)
     return transport.grade(
         sources=catalog.sources,
-        request={
-            "case_id": case_id,
-            "response": response,
-            "changed_files": changed_files,
-            "verification": verification,
-        },
+        case_id=case_id,
+        response=response,
+        changed_files=changed_files,
+        verification=verification,
         record=catalog.records.get(case_id),
     )
 

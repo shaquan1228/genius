@@ -1,5 +1,3 @@
-"""Convert Inspect sandbox effects to the public execution capability interface."""
-
 from collections.abc import Callable
 from typing import cast
 

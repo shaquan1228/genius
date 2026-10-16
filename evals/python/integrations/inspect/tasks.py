@@ -1,5 +1,3 @@
-"""Registered Inspect tasks built directly from canonical experiment values."""
-
 from inspect_ai import Task, task
 from inspect_ai.model import GenerateConfig
 

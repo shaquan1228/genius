@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from secrets import token_hex
 from types import MappingProxyType
-from typing import Protocol
+from typing import Protocol, cast
 
 from pydantic import BaseModel, JsonValue, ValidationError
 
@@ -108,9 +108,8 @@ def completion(result: Completion, *, marker: str) -> VerificationResult:
         )
     return VerificationResult(
         verification=Verification(status=evidence.status, detail=evidence.detail),
-        metadata=MappingProxyType(
-            {key: _freeze(value) for key, value in (evidence.metadata or {}).items()}
-        ),
+        # The constructor normalizes validated wire JSON into immutable diagnostics.
+        metadata=cast(Mapping[str, Diagnostic], evidence.metadata or {}),
     )
 
 
@@ -156,7 +155,6 @@ async def _execute(
 
 
 async def _settle[T](task: asyncio.Future[T]) -> T:
-    """Retain ownership until an effect finishes, including repeated cancellation."""
     while not task.done():
         try:
             await asyncio.shield(task)

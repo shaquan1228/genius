@@ -1,5 +1,3 @@
-"""Adapt canonical HF execution capabilities to Inspect's sandbox SDK."""
-
 from typing import Literal, overload, override
 
 from inspect_ai.util import (
