@@ -6,22 +6,28 @@ import json
 import os
 import subprocess
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal, Protocol, TypedDict, Unpack, assert_never, cast
 
-Status = Literal["passed", "failed", "invalid_submission", "timed_out", "harness_error"]
 PhaseName = Literal["base", "plus"]
 PhaseStatus = Literal["pass", "fail", "timeout"]
 PHASES: tuple[PhaseName, ...] = ("base", "plus")
 
 
-@dataclass(frozen=True, kw_only=True)
-class Result:
-    status: Status
-    detail: str = ""
-    metadata: dict[str, object] = field(default_factory=dict)
+class WireResult(TypedDict):
+    """JSON process envelope; decoded to canonical verification by the host."""
+
+    status: str
+    detail: str
+    metadata: dict[str, object]
+
+
+def wire_result(
+    *, status: str, detail: str = "", metadata: dict[str, object] | None = None
+) -> WireResult:
+    return {"status": status, "detail": detail, "metadata": metadata or {}}
 
 
 class Manifest(TypedDict):
@@ -177,7 +183,7 @@ def phase(request: Phase) -> PhaseStatus:
             raise RuntimeError(f"Unexpected EvalPlus status: {status}")
 
 
-def outcome(statuses: dict[PhaseName, PhaseStatus]) -> Status:
+def outcome(statuses: dict[PhaseName, PhaseStatus]) -> str:
     status: PhaseStatus = min(
         statuses.values(), key=("timeout", "fail", "pass").index, default="fail"
     )
@@ -192,7 +198,7 @@ def outcome(statuses: dict[PhaseName, PhaseStatus]) -> Status:
             assert_never(unreachable)
 
 
-def evaluate(payload: Payload) -> Result:
+def evaluate(payload: Payload) -> WireResult:
     manifest = payload["manifest"]
     record = cast(Problem, json.loads(payload["record"]))
     metadata: dict[str, object] = {"dataset": manifest, "task_id": record["task_id"]}
@@ -200,11 +206,11 @@ def evaluate(payload: Payload) -> Result:
         code = Path("solution.py").read_text(encoding="utf-8")
         compile(code, "solution.py", "exec")
     except (SyntaxError, UnicodeError) as error:
-        return Result(status="invalid_submission", detail=str(error), metadata=metadata)
+        return wire_result(status="invalid_submission", detail=str(error), metadata=metadata)
     return evaluate_phases(request=Evaluation(record=record, code=code, metadata=metadata))
 
 
-def evaluate_phases(request: Evaluation) -> Result:
+def evaluate_phases(request: Evaluation) -> WireResult:
     record, code, metadata = request.record, request.code, request.metadata
     statuses: dict[PhaseName, PhaseStatus] = {}
     metadata["phases"] = statuses
@@ -212,7 +218,7 @@ def evaluate_phases(request: Evaluation) -> Result:
         for name in PHASES:
             statuses[name] = phase(request=Phase(record=record, name=name, code=code))
     except Exception as error:
-        return Result(
+        return wire_result(
             status="harness_error", detail=f"EvalPlus {name} phase: {error}", metadata=metadata
         )
     metadata.update(
@@ -227,14 +233,14 @@ def evaluate_phases(request: Evaluation) -> Result:
             },
         }
     )
-    return Result(
+    return wire_result(
         status=outcome(statuses=statuses),
         detail=json.dumps(statuses, sort_keys=True),
         metadata=metadata,
     )
 
 
-def execute() -> Result:
+def execute() -> WireResult:
     payload = cast(Payload, json.load(sys.stdin))
     with TemporaryDirectory(prefix="genius-evaluator-", dir=Path.cwd()) as destination:
         dependencies(request=Dependencies(manifest=payload["manifest"], destination=destination))
@@ -247,10 +253,8 @@ def main() -> None:
             raise ValueError("Expected verifier mode: evalplus")
         result = execute()
     except Exception as error:
-        result = Result(status="harness_error", detail=str(error))
-    print(
-        json.dumps({"marker": os.environ["GENIUS_VERIFIER_MARKER"], **asdict(result)}), flush=True
-    )
+        result = wire_result(status="harness_error", detail=str(error))
+    print(json.dumps({"marker": os.environ["GENIUS_VERIFIER_MARKER"], **result}), flush=True)
 
 
 if __name__ == "__main__":

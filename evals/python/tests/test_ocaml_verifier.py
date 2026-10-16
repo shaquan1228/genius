@@ -13,10 +13,10 @@ import pytest
 from evals.python.integrations.ocaml.ocaml_verifier import (
     Compilation,
     Invocation,
-    Result,
     classify,
     compile_ocaml,
     main,
+    wire_result,
 )
 from evals.python.paths import EVALS_ROOT
 
@@ -38,7 +38,7 @@ def test_classification(*, code: int, stdout: str, status: str) -> None:
 
 def test_missing_compiler_is_harness_error() -> None:
     with patch("evals.python.integrations.ocaml.ocaml_verifier.shutil.which", return_value=None):
-        assert compile_ocaml(invocation=Invocation()) == Result(
+        assert compile_ocaml(invocation=Invocation()) == wire_result(
             status="harness_error", detail="OCaml compiler is unavailable"
         )
 
@@ -60,7 +60,9 @@ def test_trusted_driver_uses_separate_inner_marker() -> None:
             "evals.python.integrations.ocaml.ocaml_verifier.subprocess.run", return_value=result
         ) as process,
     ):
-        assert compile_ocaml(invocation=Invocation()) == Result(status="passed", detail="inner\n")
+        assert compile_ocaml(invocation=Invocation()) == wire_result(
+            status="passed", detail="inner\n"
+        )
     assert "inner" in process.call_args.kwargs["input"]
 
 
@@ -71,7 +73,7 @@ def test_main_emits_generic_envelope(
     with (
         patch(
             "evals.python.integrations.ocaml.ocaml_verifier.compile_ocaml",
-            return_value=Result(status="passed", detail="done"),
+            return_value=wire_result(status="passed", detail="done"),
             side_effect=failure,
         ),
         patch.dict("os.environ", {"GENIUS_VERIFIER_MARKER": "outer"}),

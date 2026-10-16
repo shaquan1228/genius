@@ -159,7 +159,7 @@ def test_encoding_error_invalid_submission() -> None:
     data = payload()
     with patch.object(Path, "read_text", side_effect=UnicodeError("encoding")):
         evidence = driver.evaluate(data)
-    assert (evidence.status, evidence.detail) == ("invalid_submission", "encoding")
+    assert (evidence["status"], evidence["detail"]) == ("invalid_submission", "encoding")
 
 
 def test_phase_exception_retains_provenance() -> None:
@@ -172,9 +172,9 @@ def test_phase_exception_retains_provenance() -> None:
                 metadata=metadata,
             )
         )
-    assert evidence.status == "harness_error"
-    assert evidence.detail == "EvalPlus plus phase: reference failed"
-    assert evidence.metadata == {"dataset": {"sha256": "digest"}, "phases": {"base": "pass"}}
+    assert evidence["status"] == "harness_error"
+    assert evidence["detail"] == "EvalPlus plus phase: reference failed"
+    assert evidence["metadata"] == {"dataset": {"sha256": "digest"}, "phases": {"base": "pass"}}
 
 
 @pytest.mark.parametrize("dependency", ["numpy", "psutil"])
@@ -201,15 +201,15 @@ def test_evaluate_preserves_upstream_evidence(
     monkeypatch.delenv("EVALPLUS_MAX_MEMORY_BYTES", raising=False)
     (tmp_path / "solution.py").write_text("def identity(x):\n    return x\n")
     evidence = driver.evaluate(payload())
-    assert evidence.status == "passed", evidence.detail
-    assert evidence.metadata["dataset"] == benchmark_info().model_dump()
-    assert evidence.metadata["task_id"] == "HumanEval/0"
+    assert evidence["status"] == "passed", evidence["detail"]
+    assert evidence["metadata"]["dataset"] == benchmark_info().model_dump()
+    assert evidence["metadata"]["task_id"] == "HumanEval/0"
     assert (
-        json.loads(evidence.detail)
-        == evidence.metadata["phases"]
+        json.loads(evidence["detail"])
+        == evidence["metadata"]["phases"]
         == {"base": "pass", "plus": "pass"}
     )
-    assert_runtime_evidence(evidence.metadata)
+    assert_runtime_evidence(evidence["metadata"])
 
 
 def test_syntax_error_retains_provenance(
@@ -218,9 +218,12 @@ def test_syntax_error_retains_provenance(
     monkeypatch.chdir(tmp_path)
     (tmp_path / "solution.py").write_text("invalid python!")
     evidence = driver.evaluate(payload())
-    assert evidence.status == "invalid_submission"
-    assert "invalid syntax" in evidence.detail
-    assert evidence.metadata == {"dataset": benchmark_info().model_dump(), "task_id": "HumanEval/0"}
+    assert evidence["status"] == "invalid_submission"
+    assert "invalid syntax" in evidence["detail"]
+    assert evidence["metadata"] == {
+        "dataset": benchmark_info().model_dump(),
+        "task_id": "HumanEval/0",
+    }
 
 
 def assert_runtime_evidence(metadata: dict[str, object]) -> None:
@@ -243,9 +246,9 @@ def test_invalid_phase_inputs_are_harness_errors(
     evidence = driver.evaluate_phases(
         request=driver.Evaluation(record=data, code="def identity(x):\n    return x\n", metadata={})
     )
-    assert evidence.status == "harness_error"
-    assert evidence.detail.startswith("EvalPlus plus phase:")
-    assert evidence.metadata["phases"] == {"base": "pass"}
+    assert evidence["status"] == "harness_error"
+    assert evidence["detail"].startswith("EvalPlus plus phase:")
+    assert evidence["metadata"]["phases"] == {"base": "pass"}
 
 
 def test_execute_cleans_private_dependencies(
@@ -259,8 +262,8 @@ def test_execute_cleans_private_dependencies(
         patch.object(driver, "dependencies") as dependencies,
     ):
         evidence = driver.execute()
-    assert evidence.status == "passed", evidence.detail
-    assert evidence.metadata["phases"] == {"base": "pass", "plus": "pass"}
+    assert evidence["status"] == "passed", evidence["detail"]
+    assert evidence["metadata"]["phases"] == {"base": "pass", "plus": "pass"}
     destination = Path(dependencies.call_args.kwargs["request"].destination)
     assert (destination.parent, destination.exists(), tuple(tmp_path.iterdir())) == (
         tmp_path,
@@ -309,7 +312,7 @@ def test_expanded_inputs_can_fail_after_base_passes(
         f"def identity(x):\n    return x if x > {2**200} else 0\n"
     )
     evidence = driver.evaluate(payload())
-    assert (evidence.status, evidence.metadata["phases"]) == (
+    assert (evidence["status"], evidence["metadata"]["phases"]) == (
         "failed",
         {"base": "pass", "plus": "fail"},
     )

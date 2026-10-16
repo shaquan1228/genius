@@ -97,7 +97,7 @@ class GradeRequest(BaseModel):
     case_id: str
     response: str
     changed_files: tuple[str, ...]
-    verification: Verification
+    verification: Verification = Verification(status="unchecked")
 
 
 @dataclass(frozen=True, kw_only=True)

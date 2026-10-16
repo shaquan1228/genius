@@ -6,17 +6,22 @@ import secrets
 import shutil
 import subprocess
 import sys
-from dataclasses import asdict, dataclass, field
-from typing import Literal
-
-Status = Literal["passed", "failed", "invalid_submission", "timed_out", "harness_error"]
+from dataclasses import dataclass
+from typing import TypedDict
 
 
-@dataclass(frozen=True, kw_only=True)
-class Result:
-    status: Status
-    detail: str = ""
-    metadata: dict[str, object] = field(default_factory=dict)
+class WireResult(TypedDict):
+    """JSON process envelope; decoded to canonical verification by the host."""
+
+    status: str
+    detail: str
+    metadata: dict[str, object]
+
+
+def wire_result(
+    *, status: str, detail: str = "", metadata: dict[str, object] | None = None
+) -> WireResult:
+    return {"status": status, "detail": detail, "metadata": metadata or {}}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -30,9 +35,9 @@ class Compilation:
     marker: str
 
 
-def compile_ocaml(invocation: Invocation) -> Result:
+def compile_ocaml(invocation: Invocation) -> WireResult:
     if shutil.which("ocamlc") is None:
-        return Result(status="harness_error", detail="OCaml compiler is unavailable")
+        return wire_result(status="harness_error", detail="OCaml compiler is unavailable")
     marker = secrets.token_hex(24)
     program = sys.stdin.read() + '\nlet () = print_endline "\\n' + marker + '"\n'
     result = subprocess.run(
@@ -42,13 +47,13 @@ def compile_ocaml(invocation: Invocation) -> Result:
         text=True,
         check=False,
     )
-    return Result(
+    return wire_result(
         status=classify(compilation=Compilation(result=result, marker=marker)),
         detail=(result.stdout + result.stderr)[-2000:],
     )
 
 
-def classify(compilation: Compilation) -> Status:
+def classify(compilation: Compilation) -> str:
     result, marker = compilation.result, compilation.marker
     match result.returncode:
         case 65:
@@ -70,10 +75,8 @@ def main() -> None:
                 raise ValueError("Expected verifier mode: ocaml <sources...>")
         result = compile_ocaml(invocation=invocation)
     except Exception as error:
-        result = Result(status="harness_error", detail=str(error))
-    print(
-        json.dumps({"marker": os.environ["GENIUS_VERIFIER_MARKER"], **asdict(result)}), flush=True
-    )
+        result = wire_result(status="harness_error", detail=str(error))
+    print(json.dumps({"marker": os.environ["GENIUS_VERIFIER_MARKER"], **result}), flush=True)
 
 
 if __name__ == "__main__":

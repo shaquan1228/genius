@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
+from evals.python.commands import verify_case
 from evals.python.contracts import Case, ExecutableChecks
 from evals.python.integrations.datasets.catalog import (
     RUNNER,
@@ -16,7 +17,7 @@ from evals.python.integrations.datasets.catalog import (
     reference,
     verifier,
 )
-from evals.python.integrations.inspect.verification import Verifier
+from evals.python.integrations.inspect.environments import environment, runtime
 from evals.python.tests.support import ocaml_timeout_case
 
 CASES = {case.id: case for case in load_cases()}
@@ -36,8 +37,10 @@ def verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> bo
             await agent.exec(["mkdir", "workspace"])
             for name, data in snapshot(directory).items():
                 await agent.write_file(f"workspace/{name}", data)
-            result, _ = await Verifier(checks=checks, agent=agent).verify()
-            return result.status == "passed"
+            result = await verify_case(
+                case.id, selection=selection, agent=environment(agent), runtime=runtime(agent)
+            )
+            return result.verification.status == "passed"
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
                 "test", None, {"default": agent}, interrupted=False
