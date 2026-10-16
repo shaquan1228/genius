@@ -5,7 +5,7 @@ import evals.python.integrations.inspect.agents as agent_adapter
 import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.scoring as scoring_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import commands
+from evals.python import commands, query
 
 
 def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
@@ -22,12 +22,12 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
     diagnostic_epoch: int | None = None,
 ) -> Task:
     agent_version = version or agent_adapter.AGENT_REGISTRY[agent].default_version
-    provenance = commands.query(commands.Provenance(selection=dataset))
+    provenance = query.Provenance(selection=dataset)
     return Task(
         name=task_name or profile.name,
         dataset=profile_adapter.samples(
             profile,
-            cases=commands.query(commands.Cases(selection=dataset)),
+            cases=query.Cases(selection=dataset),
             dataset=dataset,
             delivery=instruction_delivery,
             instruction_root=instruction_root,
@@ -62,7 +62,7 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
 
 @task
 def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
-    spec = commands.query(commands.ExperimentSettings())
+    spec = query.ExperimentSettings()
     return build_task(
         profile=profile_adapter.load_profile("baseline", spec=spec),
         spec=spec,
@@ -74,7 +74,7 @@ def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke"
 
 @task
 def genius(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
-    spec = commands.query(commands.ExperimentSettings())
+    spec = query.ExperimentSettings()
     return build_task(
         profile=profile_adapter.load_profile("genius", spec=spec),
         spec=spec,

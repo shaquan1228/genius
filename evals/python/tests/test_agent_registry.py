@@ -11,7 +11,7 @@ from inspect_ai.model import ModelName
 from inspect_ai.solver import TaskState
 from inspect_swe import claude_code, codex_cli
 
-from evals.python import commands
+from evals.python import commands, query
 from evals.python.catalog import experiment
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.agents import (
@@ -147,8 +147,8 @@ def test_codex_options_disable_network() -> None:
 
 def test_explicit_agent_version_is_logged() -> None:
     task = build_task(
-        profile=profiles.load_profile("genius", spec=commands.query(commands.ExperimentSettings())),
-        spec=commands.query(commands.ExperimentSettings()),
+        profile=profiles.load_profile("genius", spec=query.ExperimentSettings()),
+        spec=query.ExperimentSettings(),
         agent="codex",
         version="0.137.0",
     )
@@ -170,8 +170,8 @@ def test_custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
     monkeypatch.setitem(
         AGENT_REGISTRY, "other", replace(AGENT_REGISTRY["codex"], default_version="custom-version")
     )
-    request = commands.Evaluate(model="mockllm/model", agent="other")
-    spec = commands.query(commands.ExperimentSettings())
+    request = commands.EvaluationSettings(model="mockllm/model", agent="other")
+    spec = query.ExperimentSettings()
     task = build_task(
         profile=profiles.load_profile("baseline", spec=spec), spec=spec, agent=request.agent
     )

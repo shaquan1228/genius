@@ -59,12 +59,10 @@ def test_reference_validation_uses_public_operation_and_thaws_only_cli_output() 
         verification=commands.Verification(status="passed"), metadata={"test": {"items": (True,)}}
     )
     with patch.object(
-        commands, "execute", new_callable=AsyncMock, return_value=canonical
+        commands, "ValidateReference", new_callable=AsyncMock, return_value=canonical
     ) as execute:
         result = asyncio.run(benchmarks.validate_case(case))
-    assert execute.call_args.args == (
-        commands.ValidateReference(case_id=case.id, selection="humanevalplus"),
-    )
+    execute.assert_awaited_once_with(case_id=case.id, selection="humanevalplus")
     assert result == {
         "case_id": case.id,
         "status": "passed",

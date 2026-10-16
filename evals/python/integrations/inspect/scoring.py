@@ -34,15 +34,13 @@ async def score_sample(state: TaskState, target: Target) -> Score:  # noqa: PLR0
     completion = state.output.completion
     changed = tuple(sorted(await workspace_adapter.changed_files(state)))
     current = sandbox()
-    result = await commands.execute(
-        commands.AssessCase(
-            case_id=str(state.metadata["case_id"]),
-            response=completion,
-            changed_files=changed,
-            selection=cast(str, state.metadata.get("dataset", "smoke")),
-            agent=environments_adapter.environment(current),
-            runtime=environments_adapter.runtime(current),
-        )
+    result = await commands.AssessCase(
+        case_id=str(state.metadata["case_id"]),
+        response=completion,
+        changed_files=changed,
+        selection=cast(str, state.metadata.get("dataset", "smoke")),
+        agent=environments_adapter.environment(current),
+        runtime=environments_adapter.runtime(current),
     )
     explanation = (
         completion if result.verification.status == "unchecked" else result.verification.detail

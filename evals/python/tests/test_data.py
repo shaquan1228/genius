@@ -11,7 +11,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import commands, transport
+from evals.python import commands, query, transport
 from evals.python._kernel import Verification
 from evals.python.catalog import (
     case as catalog_case,
@@ -22,7 +22,6 @@ from evals.python.catalog import (
     reference,
     verifier,
 )
-from evals.python.commands import GradeCase
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import (
     REASONING_DOCUMENTS,
@@ -31,6 +30,7 @@ from evals.python.integrations.inspect.profiles import (
 )
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.paths import REPO_ROOT
+from evals.python.query import GradeCase
 from evals.python.tests.support import ocaml_choice_case, ocaml_timeout_case
 from evals.python.transport import SUITE, decode
 
@@ -70,18 +70,17 @@ def test_generated_paths_are_validated(*, field: str, value: object) -> None:
 
 
 def grade(case_id: str, *, text: str, suite: Path | None = None) -> bool:
-    return commands.query(
-        GradeCase(
-            case_id=case_id,
-            response=text,
-            changed_files=(),
-            verification=Verification(status="unchecked"),
-        ).model_copy(update={"selection": SUITE if suite is None else suite})
+    return GradeCase(
+        case_id=case_id,
+        response=text,
+        changed_files=(),
+        verification=Verification(status="unchecked"),
+        selection=SUITE if suite is None else suite,
     )["correctness"]
 
 
 def test_profiles_share_fixture_files() -> None:
-    spec = commands.query(commands.ExperimentSettings())
+    spec = query.ExperimentSettings()
     assert load_profile("genius", spec=spec) is spec.profiles[1]
     case = load_cases()[0]
     baseline = profiles.files(load_profile(name="baseline"), case=case)
@@ -114,10 +113,7 @@ def test_profile_prompts() -> None:
 
 def test_samples_keep_task_ids_and_metadata() -> None:
     assert [
-        sample.id
-        for sample in profiles.samples(
-            load_profile(name="genius"), cases=commands.query(commands.Cases())
-        )
+        sample.id for sample in profiles.samples(load_profile(name="genius"), cases=query.Cases())
     ] == [case.id for case in load_cases()]
 
 
@@ -156,9 +152,7 @@ def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
 
 
 def test_generated_artifacts_stay_out_of_sample_metadata() -> None:
-    for sample in profiles.samples(
-        load_profile(name="baseline"), cases=commands.query(commands.Cases())
-    ):
+    for sample in profiles.samples(load_profile(name="baseline"), cases=query.Cases()):
         assert sample.metadata == {
             "case_id": sample.id,
             "profile": "baseline",
@@ -256,10 +250,8 @@ def test_experiment_cache_tracks_native_configuration(tmp_path: Path) -> None:
     library = tuple({source: copied}.get(path, path) for path in transport.LIBRARY)
     with patch("evals.python.transport.LIBRARY", library):
         task = build_task(
-            profile=profiles.load_profile(
-                "genius", spec=commands.query(commands.ExperimentSettings())
-            ),
-            spec=commands.query(commands.ExperimentSettings()),
+            profile=profiles.load_profile("genius", spec=query.ExperimentSettings()),
+            spec=query.ExperimentSettings(),
             agent="codex",
         )
         assert (
@@ -278,15 +270,11 @@ def test_record_updates_cannot_bypass_kernel_validation(
     suite = tmp_path / "suite.ml"
     expression = ocaml_timeout_case(id_expression='"updated"', initial="15", requested="30")
     suite.write_text(f"let c = {expression}\nlet cases = [{{c with fixture = Fixture.empty}}]\n")
-    request = GradeCase(
-        case_id="updated",
-        response="",
-        changed_files=(),
-        verification=Verification(status="unchecked"),
-    )
     operation: Callable[[], object]
     if grade_only:
-        operation = partial(commands.query, request.model_copy(update={"selection": suite}))
+        operation = partial(
+            GradeCase, case_id="updated", response="", changed_files=(), selection=suite
+        )
     else:
         operation = partial(load_cases, selection=suite)
     with pytest.raises(subprocess.CalledProcessError):

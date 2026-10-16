@@ -1,12 +1,11 @@
-"""Immutable public operations and their canonical, correlated results."""
+"""Typed public commands perform effects and return canonical results directly."""
 
-from collections.abc import Mapping
-from dataclasses import dataclass
-from typing import Annotated, Literal, assert_never, overload
+from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, Field, InstanceOf
+from pydantic import AfterValidator, BaseModel, Field, InstanceOf, validate_call
 
 from evals.python import catalog
+from evals.python import query as _query
 from evals.python import verification as _verification
 from evals.python._kernel import (
     FROZEN,
@@ -32,35 +31,24 @@ __all__ = [
     "AssessCase",
     "Assessment",
     "Case",
-    "Cases",
     "Cleanup",
     "Completion",
     "DatasetInfo",
-    "DatasetProvenance",
-    "DescribeDataset",
     "Diagnostic",
     "Environment",
     "Evaluate",
+    "EvaluationSettings",
     "Execution",
-    "ExecutionRuntime",
     "Experiment",
-    "ExperimentSettings",
-    "GradeCase",
     "InstructionDelivery",
     "ProfileSpec",
-    "Provenance",
     "Runtime",
-    "Scores",
-    "Selection",
     "ValidateReference",
     "Verification",
     "VerificationResult",
     "VerifyCase",
-    "execute",
-    "query",
 ]
 
-type Scores = Mapping[str, bool]
 type InstructionDelivery = Literal["files", "manifest", "inline"]
 
 
@@ -70,77 +58,7 @@ def _unique[T](values: tuple[T, ...]) -> tuple[T, ...]:
     return values
 
 
-class ExecutionRuntime(BaseModel):
-    model_config = FROZEN
-    provider: Literal["local", "hf"] = "local"
-
-
-class Cases(BaseModel):
-    model_config = FROZEN
-    selection: Selection = "smoke"
-
-
-class ExperimentSettings(BaseModel):
-    model_config = FROZEN
-    epochs: int | None = None
-    message_limit: int | None = None
-    token_limit: int | None = None
-    time_limit: int | None = None
-    cache: bool | None = None
-
-
-class DescribeDataset(BaseModel):
-    model_config = FROZEN
-    selection: Selection = "smoke"
-
-
-class Provenance(BaseModel):
-    model_config = FROZEN
-    selection: Selection = "smoke"
-
-
-@dataclass(frozen=True, kw_only=True)
-class DatasetProvenance:
-    info: DatasetInfo | None
-    source_hash: str
-    cases_hash: str
-
-
-class GradeCase(BaseModel):
-    model_config = FROZEN
-    case_id: str
-    response: str
-    changed_files: tuple[str, ...]
-    verification: Verification = Verification(status="unchecked")
-    selection: Selection = "smoke"
-
-
-class VerifyCase(BaseModel):
-    model_config = FROZEN
-    case_id: str
-    selection: Selection = "smoke"
-    agent: InstanceOf[Environment]
-    runtime: InstanceOf[Runtime]
-
-
-class AssessCase(BaseModel):
-    model_config = FROZEN
-    case_id: str
-    response: str
-    changed_files: tuple[str, ...]
-    selection: Selection = "smoke"
-    agent: InstanceOf[Environment]
-    runtime: InstanceOf[Runtime]
-
-
-class ValidateReference(BaseModel):
-    model_config = FROZEN
-    case_id: str
-    selection: Selection = "smoke"
-    runtime: InstanceOf[Runtime] | None = None
-
-
-class Evaluate(BaseModel):
+class EvaluationSettings(BaseModel):
     model_config = FROZEN
     model: str
     agent: str = "claude"
@@ -162,174 +80,64 @@ class Evaluate(BaseModel):
     log_dir: str = "/results/live"
 
 
-@overload
-def query(operation: ExecutionRuntime) -> Runtime: ...
-
-
-@overload
-def query(operation: Cases) -> tuple[Case, ...]: ...
-
-
-@overload
-def query(operation: ExperimentSettings) -> Experiment: ...
-
-
-@overload
-def query(operation: DescribeDataset) -> DatasetInfo | None: ...
-
-
-@overload
-def query(operation: Provenance) -> DatasetProvenance: ...
-
-
-@overload
-def query(operation: GradeCase) -> Scores: ...
-
-
-def query(
-    operation: Cases
-    | ExperimentSettings
-    | DescribeDataset
-    | Provenance
-    | GradeCase
-    | ExecutionRuntime,
-) -> tuple[Case, ...] | Experiment | DatasetInfo | DatasetProvenance | Scores | Runtime | None:
-    match operation:
-        case ExecutionRuntime():
-            return _runtime(operation)
-        case DescribeDataset() | Provenance():
-            return _describe(operation)
-        case Cases() | ExperimentSettings() | GradeCase():
-            return _query_catalog(operation)
-        case _:
-            assert_never(operation)
-
-
-def _query_catalog(
-    operation: Cases | ExperimentSettings | GradeCase,
-) -> tuple[Case, ...] | Experiment | Scores:
-    match operation:
-        case Cases():
-            return catalog.load_cases(selection=operation.selection)
-        case ExperimentSettings():
-            return catalog.experiment(
-                epochs=operation.epochs,
-                message_limit=operation.message_limit,
-                token_limit=operation.token_limit,
-                time_limit=operation.time_limit,
-                cache=operation.cache,
-            )
-        case GradeCase():
-            return catalog.grade(
-                case_id=operation.case_id,
-                response=operation.response,
-                changed_files=operation.changed_files,
-                verification=operation.verification,
-                selection=operation.selection,
-            )
-        case _ as unreachable:
-            assert_never(unreachable)
-
-
-def _describe(operation: DescribeDataset | Provenance) -> DatasetInfo | DatasetProvenance | None:
-    info = catalog.dataset_info(operation.selection)
-    match operation:
-        case DescribeDataset():
-            return info
-        case Provenance():
-            return DatasetProvenance(
-                info=info,
-                source_hash=catalog.source_hash(operation.selection),
-                cases_hash=catalog.cases_hash(operation.selection),
-            )
-        case _ as unreachable:
-            assert_never(unreachable)
-
-
-@overload
-async def execute(operation: VerifyCase) -> VerificationResult: ...
-
-
-@overload
-async def execute(operation: AssessCase) -> Assessment: ...
-
-
-@overload
-async def execute(operation: ValidateReference) -> VerificationResult: ...
-
-
-@overload
-async def execute(operation: Evaluate) -> int: ...
-
-
-async def execute(
-    operation: VerifyCase | AssessCase | ValidateReference | Evaluate,
-) -> VerificationResult | Assessment | int:
-    match operation:
-        case VerifyCase():
-            return await _verify(operation)
-        case AssessCase():
-            return await _assess(operation)
-        case ValidateReference():
-            return await _validate_reference(operation)
-        case Evaluate():
-            from evals.python.integrations.inspect import evaluation  # noqa: PLC0415 - lazy SDK composition
-
-            return await evaluation.evaluate_async(operation)
-        case _:
-            assert_never(operation)
-
-
-async def _verify(operation: VerifyCase) -> VerificationResult:
-    checks = catalog.verifier(operation.case_id, selection=operation.selection)
+@validate_call(config=FROZEN)
+async def VerifyCase(
+    *,
+    case_id: str,
+    selection: Selection = "smoke",
+    agent: InstanceOf[Environment],
+    runtime: InstanceOf[Runtime],
+) -> VerificationResult:
+    checks = catalog.verifier(case_id, selection=selection)
     if checks is None:
         return VerificationResult(verification=Verification(status="unchecked"))
-    return await _verification.verify(checks, agent=operation.agent, runtime=operation.runtime)
+    return await _verification.verify(checks, agent=agent, runtime=runtime)
 
 
-async def _assess(operation: AssessCase) -> Assessment:
-    result = await execute(
-        VerifyCase(
-            case_id=operation.case_id,
-            selection=operation.selection,
-            agent=operation.agent,
-            runtime=operation.runtime,
-        )
-    )
+@validate_call(config=FROZEN)
+async def AssessCase(
+    *,
+    case_id: str,
+    response: str,
+    changed_files: tuple[str, ...],
+    selection: Selection = "smoke",
+    agent: InstanceOf[Environment],
+    runtime: InstanceOf[Runtime],
+) -> Assessment:
+    result = await VerifyCase(case_id=case_id, selection=selection, agent=agent, runtime=runtime)
     if result.verification.status == "harness_error":
         raise RuntimeError(f"Verification harness error: {result.verification.detail}")
     return Assessment(
         verification=result.verification,
         metadata=result.metadata,
-        scores=query(
-            GradeCase(
-                case_id=operation.case_id,
-                response=operation.response,
-                changed_files=operation.changed_files,
-                verification=result.verification,
-                selection=operation.selection,
-            )
+        scores=_query.GradeCase(
+            case_id=case_id,
+            response=response,
+            changed_files=changed_files,
+            verification=result.verification,
+            selection=selection,
         ),
     )
 
 
-async def _validate_reference(operation: ValidateReference) -> VerificationResult:
-    if catalog.verifier(operation.case_id, selection=operation.selection) is None:
+@validate_call(config=FROZEN)
+async def ValidateReference(
+    *,
+    case_id: str,
+    selection: Selection = "smoke",
+    runtime: InstanceOf[Runtime] | None = None,
+) -> VerificationResult:
+    if catalog.verifier(case_id, selection=selection) is None:
         return VerificationResult(verification=Verification(status="unchecked"))
-    runtime = operation.runtime or query(ExecutionRuntime())
+    runtime = runtime or _query.ExecutionRuntime()
     try:
         async with _verification.allocated(runtime) as agent:
             await _verification.stage_reference(
-                catalog.reference(operation.case_id, selection=operation.selection).solution,
+                catalog.reference(case_id, selection=selection).solution,
                 agent=agent,
             )
-            return await execute(
-                VerifyCase(
-                    case_id=operation.case_id,
-                    selection=operation.selection,
-                    agent=agent,
-                    runtime=runtime,
-                )
+            return await VerifyCase(
+                case_id=case_id, selection=selection, agent=agent, runtime=runtime
             )
     except Exception as error:
         return VerificationResult(
@@ -337,15 +145,37 @@ async def _validate_reference(operation: ValidateReference) -> VerificationResul
         )
 
 
-def _runtime(operation: ExecutionRuntime) -> Runtime:
-    match operation.provider:
-        case "local":
-            from evals.python.integrations.inspect import environments  # noqa: PLC0415 - lazy local SDK composition
+async def Evaluate(
+    *,
+    model: str,
+    agent: str = "claude",
+    version: str = "",
+    dataset: str = "smoke",
+    sandbox: str = "local",
+    instruction_root: str = "../instructions",
+    epochs: int | None = None,
+    token_limit: int | None = None,
+    limit: int | None = None,
+    sample_ids: tuple[str, ...] | None = None,
+    instruction_delivery: InstructionDelivery = "files",
+    deliveries: tuple[InstructionDelivery, ...] | None = None,
+    log_dir: str = "/results/live",
+) -> int:
+    settings = EvaluationSettings(
+        model=model,
+        agent=agent,
+        version=version,
+        dataset=dataset,
+        sandbox=sandbox,
+        instruction_root=instruction_root,
+        epochs=epochs,
+        token_limit=token_limit,
+        limit=limit,
+        sample_ids=sample_ids,
+        instruction_delivery=instruction_delivery,
+        deliveries=deliveries,
+        log_dir=log_dir,
+    )
+    from evals.python.integrations.inspect import evaluation  # noqa: PLC0415 - lazy SDK composition
 
-            return environments.runtime()
-        case "hf":
-            from evals.python.integrations.hugging_face import sandbox  # noqa: PLC0415 - lazy HF SDK composition
-
-            return sandbox.runtime()
-        case _ as unreachable:
-            assert_never(unreachable)
+    return await evaluation.evaluate_async(settings)

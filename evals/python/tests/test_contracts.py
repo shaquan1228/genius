@@ -2,18 +2,21 @@
 
 import json
 import subprocess
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
 
-from evals.python import catalog, commands, transport
+from evals.python import catalog, query, transport
 from evals.python._kernel import Verification
-from evals.python.commands import ExperimentSettings, GradeCase
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.tasks import build_task
+from evals.python.query import ExperimentSettings, GradeCase
 from evals.python.tests.support import ocaml_choice_case
 
 
@@ -30,9 +33,10 @@ def third_dataset(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     return "third"
 
 
-def third_request(*, case_id: str = "third-case") -> GradeCase:
+def third_grade(*, case_id: str = "third-case", selection: str) -> query.Scores:
     return GradeCase(
         case_id=case_id,
+        selection=selection,
         response='{"choice":"A","reason":"Less"}',
         changed_files=(),
         verification=Verification(status="unchecked"),
@@ -43,15 +47,13 @@ def test_third_dataset_requires_only_adapter_and_declarations(third_dataset: str
     cases = catalog.load_cases(selection=third_dataset)
     assert cases[0].id == "third-case"
     task = build_task(
-        profile=profiles.load_profile(
-            "baseline", spec=commands.query(commands.ExperimentSettings())
-        ),
-        spec=commands.query(commands.ExperimentSettings()),
+        profile=profiles.load_profile("baseline", spec=query.ExperimentSettings()),
+        spec=query.ExperimentSettings(),
         agent="codex",
         dataset="third",
     )
     assert task.dataset[0].id == "third-case"
-    assert commands.query(third_request().model_copy(update={"selection": third_dataset})) == {
+    assert third_grade(selection=third_dataset) == {
         "correctness": True,
         "scope": True,
     }
@@ -59,10 +61,8 @@ def test_third_dataset_requires_only_adapter_and_declarations(third_dataset: str
 
 def test_default_sandbox_is_local() -> None:
     task = build_task(
-        profile=profiles.load_profile(
-            "baseline", spec=commands.query(commands.ExperimentSettings())
-        ),
-        spec=commands.query(commands.ExperimentSettings()),
+        profile=profiles.load_profile("baseline", spec=query.ExperimentSettings()),
+        spec=query.ExperimentSettings(),
         agent="codex",
     )
     assert task.sandbox is not None
@@ -72,9 +72,7 @@ def test_default_sandbox_is_local() -> None:
 def test_third_dataset_imports_and_grades_records(third_dataset: str) -> None:
     imported = catalog.compile_records(sources=catalog.sources("third"), records=("new-case",))
     with patch.object(catalog, "_selected", return_value=imported):
-        assert commands.query(
-            third_request(case_id="new-case").model_copy(update={"selection": third_dataset})
-        )["correctness"]
+        assert third_grade(case_id="new-case", selection=third_dataset)["correctness"]
         assert catalog.reference("new-case", selection="third").answer
         assert catalog.verifier("new-case", selection="third") is None
 
@@ -108,7 +106,7 @@ def test_all_contract_collections_are_immutable() -> None:
 
 def test_run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
     original = catalog.experiment()
-    spec = commands.query(ExperimentSettings(epochs=2, token_limit=1234, cache=True))
+    spec = ExperimentSettings(epochs=2, token_limit=1234, cache=True)
     task = build_task(profile=profiles.load_profile("genius", spec=spec), spec=spec, agent="codex")
     assert (task.epochs, task.token_limit, task.time_limit, task.config.cache) == (
         2,
@@ -122,9 +120,9 @@ def test_run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
 @pytest.mark.parametrize("field", ["epochs", "message_limit", "token_limit", "time_limit"])
 @pytest.mark.parametrize("value", [0, -1])
 def test_kernel_rejects_invalid_run_overrides(field: str, *, value: int) -> None:
-    overrides = ExperimentSettings.model_validate({field: value})
+    operation = cast(Callable[..., query.Experiment], ExperimentSettings)
     with pytest.raises(subprocess.CalledProcessError):
-        commands.query(overrides)
+        operation(**{field: value})
 
 
 @pytest.mark.parametrize("payload", [{"epochs": 1.5}, {"cache": 1}, {"unknown": 1}])
@@ -141,9 +139,9 @@ def test_public_projection_requires_exact_protocol_version(version: object) -> N
 
 def test_unknown_or_unsafe_dataset_is_rejected() -> None:
     with pytest.raises(FileNotFoundError):
-        commands.query(commands.Cases(selection="does-not-exist"))
+        query.Cases(selection="does-not-exist")
     with pytest.raises(ValidationError):
-        commands.query(commands.Cases(selection="../outside"))
+        query.Cases(selection="../outside")
 
 
 def test_benchmark_adapter_requires_provenance() -> None:
@@ -163,7 +161,8 @@ def test_transport_rejects_duplicate_export_ids() -> None:
 def test_verifier_projection_is_cached_but_grading_is_not() -> None:
     case_id = "clear-task"
     checks = catalog.verifier(case_id)
-    request = GradeCase(
+    grade = partial(
+        GradeCase,
         case_id=case_id,
         response="",
         changed_files=(),
@@ -180,7 +179,7 @@ def test_verifier_projection_is_cached_but_grading_is_not() -> None:
             0,
         )
         assert (
-            commands.query(request)["correctness"],
-            commands.query(request)["correctness"],
+            grade()["correctness"],
+            grade()["correctness"],
         ) == (True, True)
         assert [call.args[0][1:] for call in process.call_args_list] == [["--grade"], ["--grade"]]

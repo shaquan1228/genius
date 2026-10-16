@@ -19,8 +19,8 @@ def optional_json(value: str | None) -> tuple[object, ...] | None:
     return tuple(parsed)
 
 
-def configuration(environment: Mapping[str, str]) -> commands.Evaluate:
-    return commands.Evaluate.model_validate(
+def configuration(environment: Mapping[str, str]) -> commands.EvaluationSettings:
+    return commands.EvaluationSettings.model_validate(
         {
             "model": environment["EVAL_MODEL"],
             "agent": environment.get("EVAL_AGENT", "claude"),
@@ -41,7 +41,7 @@ def configuration(environment: Mapping[str, str]) -> commands.Evaluate:
 
 def run() -> int:
     operation = configuration(dict(os.environ))
-    return asyncio.run(commands.execute(operation))
+    return asyncio.run(commands.Evaluate(**operation.model_dump()))
 
 
 if __name__ == "__main__":

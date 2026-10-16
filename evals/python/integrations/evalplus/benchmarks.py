@@ -10,7 +10,7 @@ from typing import Literal, assert_never
 
 from pydantic import BaseModel, ConfigDict
 
-from evals.python import commands
+from evals.python import commands, query
 
 
 class BenchmarkInfo(BaseModel):
@@ -25,7 +25,7 @@ class BenchmarkInfo(BaseModel):
 
 
 def benchmark_info() -> BenchmarkInfo:
-    info = commands.query(commands.DescribeDataset(selection="humanevalplus"))
+    info = query.DescribeDataset(selection="humanevalplus")
     if info is None:
         raise ValueError("Benchmark adapter must declare provenance")
     return BenchmarkInfo.model_validate(
@@ -34,9 +34,7 @@ def benchmark_info() -> BenchmarkInfo:
 
 
 async def validate_case(case: commands.Case) -> dict[str, object]:
-    result = await commands.execute(
-        commands.ValidateReference(case_id=case.id, selection="humanevalplus")
-    )
+    result = await commands.ValidateReference(case_id=case.id, selection="humanevalplus")
     return {
         "case_id": case.id,
         **result.verification.model_dump(),
@@ -86,7 +84,7 @@ def validate(arguments: Options) -> int:
     configure_memory(arguments=arguments)
     results = [
         asyncio.run(validate_case(case=case))
-        for case in commands.query(commands.Cases(selection="humanevalplus"))[: arguments.limit]
+        for case in query.Cases(selection="humanevalplus")[: arguments.limit]
     ]
     print(json.dumps({"provenance": benchmark_info().model_dump(), "results": results}, indent=2))
     return int(any(result["status"] != "passed" for result in results))
