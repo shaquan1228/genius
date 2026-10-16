@@ -124,7 +124,7 @@ def run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
         instructions=profiles.load_instructions(spec),
         provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
     )
-    assert task.token_limit is None
+    assert (task.token_limit, task.message_limit) == (None, None)
     assert (task.epochs, task.cost_limit, task.time_limit, task.config.cache) == (
         2,
         0.1,
@@ -132,6 +132,7 @@ def run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
         True,
     )
     assert catalog.experiment() == original
+    assert ExperimentSettings(message_limit=8).message_limit == 8
 
 
 @pytest.mark.parametrize("field", ["epochs", "message_limit", "cost_limit", "time_limit"])

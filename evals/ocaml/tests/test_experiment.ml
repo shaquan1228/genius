@@ -1,7 +1,7 @@
 let () =
   let experiment = Experiment.default in
   assert (experiment.epochs = 5);
-  assert (experiment.message_limit = 40);
+  assert (experiment.message_limit = None);
   assert (experiment.cost_limit = 0.25);
   assert (experiment.time_limit = 300);
   assert (not experiment.cache);
@@ -24,7 +24,7 @@ let () =
     Experiment.resolve ~epochs:2 ~message_limit:8 ~cost_limit:0.1 ~time_limit:10 ~cache:true ()
   in
   assert (resolved.epochs = 2);
-  assert (resolved.message_limit = 8);
+  assert (resolved.message_limit = Some 8);
   assert (resolved.cost_limit = 0.1);
   assert (resolved.time_limit = 10);
   assert resolved.cache;

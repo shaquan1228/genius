@@ -215,7 +215,11 @@ Login shells are disabled so shell startup files do not discard the helper's `PA
 The agent's `attempts=1` prevents retries after a failed submission within one
 session; epochs provide independent attempts for estimating pass rates.
 Agent retries and model-response caching are disabled. Provider transport retries retain Inspect defaults.
-Each session allows 40 messages, 50,000 tokens, and 300 seconds.
+Each session has a model dollar limit and a 300-second time limit. There is no
+cumulative token or message cutoff by default. Required instruction reads and
+tool replies count toward Inspect message limits, so a small message cap gives
+the two profiles unequal room for task work. Explicit positive message overrides
+remain available through `query.ExperimentSettings(message_limit=...)`.
 Task metadata records agent versions and hashes of instructions, fixtures, and the manifest.
 Inspect logs record model usage, sample events, answers, errors, and scores.
 
@@ -551,8 +555,8 @@ reasoning cases; they reject other skills rather than silently replacing them.
 For a normal baseline/Genius run with a chosen delivery mode, leave
 `EVAL_DELIVERIES` unset and set `EVAL_INSTRUCTION_DELIVERY` instead.
 `EVAL_COST_LIMIT` sets the same model dollar limit per sample and epoch in every arm
-(default `$0.25`). There is no cumulative token cutoff. Time and message limits
-remain active. For example, `EVAL_COST_LIMIT=0.10` allows ten cents per attempt.
+(default `$0.25`). There is no cumulative token cutoff. The 300-second time limit
+remains active. For example, `EVAL_COST_LIMIT=0.10` allows ten cents per attempt.
 This covers model usage, not HF parent/child VM charges. A 20-problem, two-arm,
 one-epoch run has 40 independently capped attempts.
 

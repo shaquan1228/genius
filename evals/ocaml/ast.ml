@@ -89,7 +89,7 @@ type profile = { name : string; preamble : string; instructions : string list }
 type experiment = {
   profiles : profile list;
   epochs : int;
-  message_limit : int;
+  message_limit : int option;
   cost_limit : float;
   time_limit : int;
   cache : bool;

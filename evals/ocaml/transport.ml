@@ -122,7 +122,7 @@ let experiment value =
     [
       ("profiles", `List (List.map profile spec.profiles));
       ("epochs", number spec.epochs);
-      ("message_limit", number spec.message_limit);
+      ("message_limit", Option.fold ~none:`Null ~some:number spec.message_limit);
       ("cost_limit", `Float spec.cost_limit);
       ("time_limit", number spec.time_limit);
       ("cache", `Bool spec.cache);
