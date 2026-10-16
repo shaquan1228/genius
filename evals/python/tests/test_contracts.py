@@ -134,7 +134,7 @@ def test_unknown_or_unsafe_dataset_is_rejected() -> None:
 
 def test_benchmark_adapter_requires_provenance() -> None:
     with (
-        patch.object(benchmarks, "dataset_info", return_value=None),
+        patch.object(catalog, "dataset_info", return_value=None),
         pytest.raises(ValueError, match="provenance"),
     ):
         benchmarks.benchmark_info()

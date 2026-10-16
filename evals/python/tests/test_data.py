@@ -5,6 +5,7 @@ import subprocess
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -22,8 +23,14 @@ from evals.python.integrations.datasets.catalog import (
     verifier,
 )
 from evals.python.integrations.datasets.catalog import grade as kernel_grade
-from evals.python.integrations.inspect.profiles import content_hash, load_profile
+from evals.python.integrations.inspect.profiles import (
+    REASONING_DOCUMENTS,
+    InstructionDelivery,
+    content_hash,
+    load_profile,
+)
 from evals.python.integrations.inspect.tasks import TaskRequest, build_task
+from evals.python.paths import REPO_ROOT
 from evals.python.tests.support import ocaml_choice_case, ocaml_timeout_case
 from evals.python.transport import SUITE, decode
 
@@ -266,3 +273,26 @@ def test_record_updates_cannot_bypass_kernel_validation(
     with pytest.raises(subprocess.CalledProcessError):
         operation()
     assert "criteria read files missing from the fixture" in capfd.readouterr().err
+
+
+@pytest.mark.parametrize("delivery", ["manifest", "inline"])
+@pytest.mark.parametrize("name", REASONING_DOCUMENTS)
+def test_delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, name: str) -> None:
+    mode = cast(InstructionDelivery, delivery)
+    case = load_cases()[0]
+    root = "/eval/instructions"
+    profile = load_profile(name="genius")
+    before = profile.files(case)
+    prompt = profile.prompt(case, delivery=mode, instruction_root=root)
+    assert (
+        prompt.endswith(case.prompt),
+        profile.files(case),
+        load_profile(name="baseline").prompt(case, delivery=mode),
+    ) == (True, before, case.prompt)
+    assert f"{root}/{name}" in prompt
+    assert ((REPO_ROOT / name).read_text() in prompt) == (delivery == "inline")
+
+
+def test_delivery_rejects_unimplemented_skill_instead_of_silently_changing_it() -> None:
+    with pytest.raises(ValueError, match="reasoning only"):
+        load_profile(name="genius").prompt(load_cases()[1], delivery="inline")

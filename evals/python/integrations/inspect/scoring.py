@@ -8,7 +8,7 @@ from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
 
 from evals.python.contracts import ExecutableChecks, GradeRequest, Verification
-from evals.python.integrations.datasets.catalog import grade, verifier
+from evals.python.integrations.inspect.kernel import grade, verifier
 from evals.python.integrations.inspect.verification import Verifier
 from evals.python.integrations.inspect.workspace import changed_files
 

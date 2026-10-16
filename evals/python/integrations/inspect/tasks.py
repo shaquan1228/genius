@@ -5,17 +5,20 @@ from inspect_ai.model import GenerateConfig
 from pydantic import BaseModel, ConfigDict
 
 from evals.python.contracts import Experiment
-from evals.python.integrations.datasets.catalog import (
+from evals.python.integrations.inspect.agents import DEFAULT_VERSIONS, AgentKind, contained_agent
+from evals.python.integrations.inspect.kernel import (
     benchmark_metadata,
     cases_hash,
     experiment,
-    sources,
+    source_hash,
 )
-from evals.python.integrations.inspect.agents import DEFAULT_VERSIONS, AgentKind, contained_agent
-from evals.python.integrations.inspect.profiles import content_hash, load_profile
+from evals.python.integrations.inspect.profiles import (
+    InstructionDelivery,
+    content_hash,
+    load_profile,
+)
 from evals.python.integrations.inspect.scoring import evaluation
 from evals.python.integrations.inspect.workspace import prepare
-from evals.python.transport import fingerprint
 
 
 class TaskRequest(BaseModel):
@@ -27,6 +30,9 @@ class TaskRequest(BaseModel):
     dataset: str = "smoke"
     sandbox: str = "local"
     experiment: Experiment | None = None
+    instruction_delivery: InstructionDelivery = "files"
+    instruction_root: str = "../instructions"
+    task_name: str | None = None
 
 
 def build_task(*, request: TaskRequest) -> Task:
@@ -35,8 +41,12 @@ def build_task(*, request: TaskRequest) -> Task:
     agent, version, dataset = request.agent, request.version, request.dataset
     agent_version = version or DEFAULT_VERSIONS[agent]
     return Task(
-        name=profile.name,
-        dataset=profile.samples(dataset=dataset),
+        name=request.task_name or profile.name,
+        dataset=profile.samples(
+            dataset=dataset,
+            delivery=request.instruction_delivery,
+            instruction_root=request.instruction_root,
+        ),
         setup=prepare(),
         solver=contained_agent(agent, version=agent_version),
         scorer=evaluation(),
@@ -52,10 +62,11 @@ def build_task(*, request: TaskRequest) -> Task:
             "benchmark": benchmark_metadata(dataset=dataset),
             "agent": agent,
             "agent_version": agent_version,
+            "instruction_delivery": request.instruction_delivery,
             "instructions_sha256": content_hash(
                 files=load_profile(name="genius", spec=spec).instruction_files()
             ),
-            "fixtures_sha256": fingerprint(sources(dataset)),
+            "fixtures_sha256": source_hash(dataset),
             "cases_sha256": cases_hash(dataset=dataset),
         },
     )

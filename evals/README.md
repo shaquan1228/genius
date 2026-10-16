@@ -31,8 +31,9 @@ flowchart TB
 | `python/contracts.py` | Frozen, deeply immutable wire projections; no SDK objects or grading rules |
 | `python/transport.py` | Trusted source compilation, content-keyed executable caches, protocol encoding/decoding |
 | `python/integrations/datasets/` | Adapter discovery, pinned downloads, immutable catalogs and trusted record retention |
-| `python/integrations/inspect/` | Tasks, profiles, agents, workspace observations, verification lifecycle and score reporting |
-| `python/integrations/hugging_face/` | Job entry point, model adaptation and Sandbox provider |
+| `python/integrations/inspect/` | Evaluation entry point, tasks, profiles, agents, remote sandbox adaptation, verification and reporting |
+| `python/command.py` | One JSON command boundary with fixed, lazy integration endpoints |
+| `python/integrations/hugging_face/` | HF SDK operations for VM lifecycle, command execution and file IO |
 | `python/integrations/evalplus/` | Benchmark reference-validation CLI and EvalPlus manifest adaptation |
 | `python/integrations/verifiers/` | Trusted standalone OCaml/EvalPlus execution driver |
 
@@ -393,3 +394,42 @@ problems per profile and epoch. `EVAL_JOB_TIMEOUT` defaults to `4h` and can be
 explicitly increased for larger runs. No model calls or paid Jobs are made by the
 `benchmarks` CLI. Inspect logs include the dataset selection, pinned provenance,
 case hash, and each sample's verifier evidence.
+
+## Controlled instruction-delivery diagnostics
+
+Integrations do not import sibling implementations. `command(name, payload=...)`
+accepts and returns JSON strings; each owner keeps its SDK objects and operation
+schemas private. Shared immutable wire declarations describe kernel projections.
+Inspect owns task construction, the model adapter, log reporting, and its
+`SandboxEnvironment` adapter. HF owns SDK operations and never imports Inspect.
+The bootstrap launches the configured `EVAL_RUNNER_MODULE` (Inspect by default).
+
+Keep the historical file-loading treatment as the default. For a small HF
+comparison of the same reasoning documents with explicit reference paths:
+
+```sh
+export EVAL_DATASET=humanevalplus
+export EVAL_SAMPLE_IDS='["humaneval-20","humaneval-38"]'
+export EVAL_EPOCHS=2
+export EVAL_DELIVERIES='["files","manifest"]'
+sh evals/hf_host.sh
+```
+
+`EVAL_SAMPLE_IDS` must be a nonempty JSON list of unique known IDs and cannot
+be combined with `EVAL_LIMIT`. Invalid cohorts fail before sandbox allocation.
+`EVAL_DELIVERIES` creates separate Genius tasks for each treatment and repeat,
+reverses treatment order on even repeats, and runs tasks and samples serially.
+These are instruction-delivery comparisons, not baseline-versus-Genius trials.
+The logs retain delivery and diagnostic-repeat metadata.
+
+`files` preserves the original prompt. `manifest` adds the absolute paths of
+reasoning's four required documents. `inline` embeds their complete unchanged
+bytes in the initial prompt. All modes mount the same files and keep private
+checks outside the agent VM. Explicit delivery modes currently support only
+reasoning cases; they reject other skills rather than silently replacing them.
+For a normal baseline/Genius run with a chosen delivery mode, leave
+`EVAL_DELIVERIES` unset and set `EVAL_INSTRUCTION_DELIVERY` instead.
+`EVAL_TOKEN_LIMIT` applies the same validated cumulative token cap to every arm.
+Cached history still counts toward that cap; a billed model response can cross
+it before the proxy dispatches its requested tools. Generated patches are not
+proof of executed edits. Report cutoffs separately from agent crashes and errors.

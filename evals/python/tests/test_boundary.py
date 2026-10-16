@@ -110,3 +110,27 @@ def test_shared_domain_types_live_in_ast() -> None:
 def test_public_interfaces_only_declare_operations() -> None:
     interfaces = [path.read_text() for path in OCAML_ROOT.glob("*.mli")]
     assert not any(re.search(r"^type ", body, re.M) for body in interfaces)
+
+
+def test_integrations_do_not_import_sibling_implementations() -> None:
+    for path in runtime_files():
+        if "integrations" not in path.parts:
+            continue
+        owner = path.relative_to(PYTHON_ROOT / "integrations").parts[0]
+        prefix = f"evals.python.integrations.{owner}"
+        assert all(
+            not name.startswith("evals.python.integrations.") or name.startswith(prefix + ".")
+            for name in imported(path)
+        ), str(path)
+
+
+def test_hugging_face_owns_only_its_sdk() -> None:
+    dependencies = {
+        name
+        for path in (PYTHON_ROOT / "integrations/hugging_face").glob("*.py")
+        for name in imported(path)
+    }
+    assert not any(
+        name.startswith(("inspect_ai", "inspect_swe", "evals.python.contracts"))
+        for name in dependencies
+    )

@@ -8,12 +8,10 @@ import platform
 from collections.abc import Sequence
 from typing import Literal, assert_never
 
-from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 
-from evals.python.contracts import Case, ExecutableChecks
-from evals.python.integrations.datasets.catalog import dataset_info, load_cases, reference, verifier
-from evals.python.integrations.inspect.verification import Verifier
+from evals.python.command import command
+from evals.python.contracts import Case, DatasetInfo
 
 
 class BenchmarkInfo(BaseModel):
@@ -28,7 +26,9 @@ class BenchmarkInfo(BaseModel):
 
 
 def benchmark_info() -> BenchmarkInfo:
-    info = dataset_info("humanevalplus")
+    info = TypeAdapter(DatasetInfo | None).validate_json(
+        command("dataset.metadata", payload='{"selection":"humanevalplus"}')
+    )
     if info is None:
         raise ValueError("Benchmark adapter must declare provenance")
     return BenchmarkInfo.model_validate(
@@ -36,25 +36,17 @@ def benchmark_info() -> BenchmarkInfo:
     )
 
 
+def load_cases(*, selection: str) -> tuple[Case, ...]:
+    return TypeAdapter(tuple[Case, ...]).validate_json(
+        command("dataset.cases", payload=json.dumps({"selection": selection}))
+    )
+
+
 async def validate_case(case: Case) -> dict[str, object]:
-    match verifier(case.id, selection="humanevalplus"):
-        case ExecutableChecks() as checks:
-            pass
-        case None:
-            raise ValueError("Reference validation requires executable checks")
-        case _ as unreachable:
-            assert_never(unreachable)
-    agent = LocalSandboxEnvironment()
-    try:
-        await agent.exec(["mkdir", "workspace"])
-        for name, contents in reference(case.id, selection="humanevalplus").solution.items():
-            await agent.write_file(f"workspace/{name}", contents)
-        evidence, metadata = await Verifier(checks=checks, agent=agent).verify()
-        return {"case_id": case.id, **evidence.model_dump(), "metadata": metadata}
-    finally:
-        await LocalSandboxEnvironment.sample_cleanup(
-            "reference-validation", None, {"default": agent}, interrupted=False
-        )
+    result = await asyncio.to_thread(
+        command, "inspect.validate_reference", payload=json.dumps({"case_id": case.id})
+    )
+    return TypeAdapter(dict[str, object]).validate_json(result)
 
 
 def parser() -> argparse.ArgumentParser:

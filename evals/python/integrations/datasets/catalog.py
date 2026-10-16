@@ -120,11 +120,6 @@ def dataset_info(selection: Selection) -> DatasetInfo | None:
     return transport.describe(sources=sources(selection))
 
 
-def benchmark_metadata(dataset: Selection) -> dict[str, object]:
-    info = dataset_info(dataset)
-    return {} if info is None else info.model_dump()
-
-
 def experiment(overrides: RunOverrides | None = None) -> Experiment:
     return transport.experiment(sources=sources(), overrides=overrides)
 

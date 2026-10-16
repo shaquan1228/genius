@@ -13,6 +13,7 @@ import pytest
 from evals.python.contracts import Verification
 from evals.python.integrations.datasets.catalog import load_cases
 from evals.python.integrations.evalplus import benchmarks
+from evals.python.integrations.inspect import benchmarks as inspect_benchmarks
 from evals.python.integrations.inspect.verification import Verifier
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.support import import_records, imported_reference, imported_verifier
@@ -63,8 +64,8 @@ def test_reference_workspace_cleanup() -> None:
             "verify",
             new=AsyncMock(return_value=(Verification(status="passed"), {"test": True})),
         ),
-        patch.object(benchmarks, "verifier", return_value=imported_verifier(record())),
-        patch.object(benchmarks, "reference", return_value=imported_reference(record())),
+        patch.object(inspect_benchmarks, "verifier", return_value=imported_verifier(record())),
+        patch.object(inspect_benchmarks, "reference", return_value=imported_reference(record())),
     ):
         result = asyncio.run(benchmarks.validate_case(case))
     assert result == {
@@ -74,7 +75,7 @@ def test_reference_workspace_cleanup() -> None:
         "metadata": {"test": True},
     }
     with (
-        patch.object(benchmarks, "verifier", return_value=None),
+        patch.object(inspect_benchmarks, "verifier", return_value=None),
         pytest.raises(ValueError, match="executable"),
     ):
         asyncio.run(benchmarks.validate_case(load_cases()[2]))

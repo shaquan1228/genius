@@ -1,140 +1,25 @@
 """Check the hosted runner without creating paid Hugging Face Jobs."""
 
-import asyncio
 import os
 import subprocess
 from pathlib import Path
-from threading import Event
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
-from huggingface_hub import SandboxCommandResult
 from inspect_ai.model import GenerateConfig, get_model
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 from inspect_ai.scorer import Score
-from inspect_ai.util import SandboxUserUnsupportedError
 
-from evals.python.integrations.hugging_face.job import HfChatAPI, run, sample_limit
-from evals.python.integrations.hugging_face.sandbox import HfSandboxEnvironment
+from evals.python.integrations.datasets.catalog import experiment, load_cases
+from evals.python.integrations.inspect.job import (
+    HfChatAPI,
+    job_tasks,
+    run,
+    sample_ids,
+    sample_limit,
+)
 from evals.python.paths import REPO_ROOT
-
-
-def command_result(code: int | None = 0, *, timed_out: bool = False) -> SandboxCommandResult:
-    return SandboxCommandResult(exit_code=code, stdout="done", stderr="", timed_out=timed_out)
-
-
-def test_hf_sample_lifecycle() -> None:
-    client = Mock()
-    client.run.return_value = command_result()
-    with patch(
-        "evals.python.integrations.hugging_face.sandbox.Sandbox.create", return_value=client
-    ):
-        environment = asyncio.run(HfSandboxEnvironment.sample_init("genius", None, {}))["default"]
-    assert isinstance(environment, HfSandboxEnvironment)
-    client.files.mkdir.assert_called_once_with("/eval")
-    asyncio.run(
-        HfSandboxEnvironment.sample_cleanup(
-            task_name="genius",
-            config=None,
-            environments={"default": environment},
-            interrupted=False,
-        )
-    )
-    client.kill.assert_called_once_with()
-
-
-def test_hf_sandbox_command_io() -> None:
-    client = Mock()
-    client.run.return_value = command_result()
-    environment = HfSandboxEnvironment(client)
-    result = asyncio.run(environment.exec(["python3", "-V"], input="hello", cwd="workspace"))
-    assert (result.success, result.stdout) == (True, "done")
-    assert (client.run.call_args.kwargs["cwd"], client.run.call_args.kwargs["stdin"]) == (
-        "/eval/workspace",
-        "hello",
-    )
-    assert client.run.call_args.args[0] == ["python3", "-V"]
-
-
-@pytest.mark.parametrize("payload", [b"\x1f\x8b\x00\xff\r\n", b""])
-def test_hf_sandbox_binary_stdin(payload: bytes) -> None:
-    client = Mock()
-
-    def execute(cmd: list[str], **kwargs: object) -> SandboxCommandResult:
-        assert kwargs["stdin"] is None
-        result = subprocess.run(
-            cmd,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        return SandboxCommandResult(
-            exit_code=result.returncode, stdout=result.stdout, stderr=result.stderr
-        )
-
-    client.run.side_effect = execute
-    client.files.write.side_effect = lambda path, data, **_kwargs: Path(path).write_bytes(data)
-    client.files.delete.side_effect = lambda path: Path(path).unlink()
-    environment = HfSandboxEnvironment(client)
-    result = asyncio.run(
-        environment.exec(
-            [
-                "python3",
-                "-c",
-                "import sys; print(sys.stdin.buffer.read().hex()); print(sys.argv[1]); sys.exit(7)",
-                "literal ; $HOME ' argument",
-            ],
-            input=payload,
-        )
-    )
-    assert (result.stdout, result.returncode) == (
-        f"{payload.hex()}\nliteral ; $HOME ' argument\n",
-        7,
-    )
-    path = client.files.write.call_args.args[0]
-    assert (client.files.write.call_args.args[1], client.files.write.call_args.kwargs) == (
-        payload,
-        {"mode": "0600"},
-    )
-    client.files.delete.assert_called_once_with(path)
-    assert not Path(path).exists()
-
-
-def test_hf_sandbox_file_io() -> None:
-    client = Mock()
-    client.files.read.return_value = b"line\r\n"
-    environment = HfSandboxEnvironment(client)
-    asyncio.run(environment.write_file("workspace/test.py", "print(1)"))
-    client.files.write.assert_called_once_with("/eval/workspace/test.py", "print(1)")
-    assert asyncio.run(environment.read_file("/eval/workspace/test.py")) == "line\r\n"
-    assert asyncio.run(environment.read_file("workspace/test.py", text=False)) == b"line\r\n"
-
-
-def test_failed_setup_kills_remote_sandbox() -> None:
-    client = Mock()
-    client.run.return_value = command_result(1)
-    with (
-        patch("evals.python.integrations.hugging_face.sandbox.Sandbox.create", return_value=client),
-        pytest.raises(RuntimeError, match="Could not install"),
-    ):
-        asyncio.run(HfSandboxEnvironment.sample_init("genius", None, {}))
-    client.kill.assert_called_once_with()
-
-
-def test_exec_failure_timeout_and_unsupported_user() -> None:
-    client = Mock()
-    environment = HfSandboxEnvironment(client)
-    client.run.return_value = command_result(3)
-    assert not asyncio.run(environment.exec(["false"])).success
-    client.run.return_value = command_result(None)
-    assert asyncio.run(environment.exec(["killed"])).returncode == 1
-    client.run.return_value = command_result(timed_out=True)
-    with pytest.raises(TimeoutError):
-        asyncio.run(environment.exec(["sleep", "10"], input=b"binary"))
-    client.files.delete.assert_called_once_with(client.files.write.call_args.args[0])
-    with pytest.raises(SandboxUserUnsupportedError):
-        asyncio.run(environment.exec(["id"], user="nobody"))
 
 
 @pytest.mark.parametrize("provider", ["openai", "hf-inference-providers"])
@@ -152,9 +37,7 @@ def test_hf_job_runs_both_profiles(provider: str, *, monkeypatch: pytest.MonkeyP
         )
         for name in ("baseline", "genius")
     ]
-    with patch(
-        "evals.python.integrations.hugging_face.job.eval", return_value=logs
-    ) as inspect_eval:
+    with patch("evals.python.integrations.inspect.job.eval", return_value=logs) as inspect_eval:
         assert run() == 0
     assert (
         [task.name for task in inspect_eval.call_args.args[0]],
@@ -185,7 +68,7 @@ def test_hf_job_reports_failed_profile(monkeypatch: pytest.MonkeyPatch) -> None:
             eval=SimpleNamespace(task="baseline"), status="error", location="log", samples=None
         )
     ]
-    with patch("evals.python.integrations.hugging_face.job.eval", return_value=logs):
+    with patch("evals.python.integrations.inspect.job.eval", return_value=logs):
         assert run() == 1
 
 
@@ -216,7 +99,7 @@ def test_hf_job_counts_crashed_samples(
     log = SimpleNamespace(
         eval=SimpleNamespace(task="baseline"), status="success", location="log", samples=samples
     )
-    with patch("evals.python.integrations.hugging_face.job.eval", return_value=[log]):
+    with patch("evals.python.integrations.inspect.job.eval", return_value=[log]):
         assert run() == 0
     assert capsys.readouterr().out.splitlines() == ["baseline: success (log)", summary]
 
@@ -321,28 +204,6 @@ def test_hf_inference_provider_initializes(monkeypatch: pytest.MonkeyPatch) -> N
     )
 
 
-def test_cancelled_creation_kills_eventual_sandbox() -> None:
-    started, release = Event(), Event()
-    client = Mock()
-
-    def create(**_kwargs: object) -> Mock:
-        started.set()
-        assert release.wait(timeout=5)
-        return client
-
-    async def cancel_during_creation() -> None:
-        task = asyncio.create_task(HfSandboxEnvironment.sample_init("genius", None, {}))
-        assert await asyncio.to_thread(started.wait, 5)
-        task.cancel()
-        release.set()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-
-    with patch("evals.python.integrations.hugging_face.sandbox.Sandbox.create", side_effect=create):
-        asyncio.run(cancel_during_creation())
-    client.kill.assert_called_once_with()
-
-
 @pytest.mark.parametrize(("value", "expected"), [("3", 3), ("", None), (None, None)])
 def test_hf_sample_limit(
     *, monkeypatch: pytest.MonkeyPatch, value: str | None, expected: int | None
@@ -364,8 +225,8 @@ def test_hf_epoch_override_is_shared_with_tasks(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     monkeypatch.setenv("EVAL_EPOCHS", "3")
     with (
-        patch("evals.python.integrations.hugging_face.job.get_model"),
-        patch("evals.python.integrations.hugging_face.job.eval", return_value=[]) as inspect_eval,
+        patch("evals.python.integrations.inspect.job.get_model"),
+        patch("evals.python.integrations.inspect.job.eval", return_value=[]) as inspect_eval,
     ):
         assert run() == 0
     tasks = inspect_eval.call_args.args[0]
@@ -373,3 +234,76 @@ def test_hf_epoch_override_is_shared_with_tasks(monkeypatch: pytest.MonkeyPatch)
         [3, 3],
         3,
     )
+
+
+@pytest.mark.parametrize("value", ["[]", '["x", "x"]', "[1]", '"x"', "invalid"])
+def test_explicit_cohort_rejects_invalid_json_or_duplicates(
+    value: str, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+
+    monkeypatch.setenv("EVAL_SAMPLE_IDS", value)
+    with pytest.raises(ValueError, match=r"unique|validation error"):
+        sample_ids()
+
+
+@pytest.mark.parametrize("deliveries", ["[]", '["files"]', '["files", "files"]', '["typo"]'])
+def test_delivery_comparison_rejects_invalid_modes(
+    deliveries: str, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+
+    monkeypatch.setenv("EVAL_DELIVERIES", deliveries)
+    with pytest.raises(ValueError, match=r"unique|validation error"):
+        job_tasks(experiment())
+
+
+@pytest.mark.parametrize("limit", ["", "1"])
+def test_explicit_cohort_validation_precedes_sandbox_allocation(
+    limit: str, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+
+    monkeypatch.setenv("EVAL_SAMPLE_IDS", '["missing-case"]')
+    monkeypatch.setenv("EVAL_LIMIT", limit)
+    monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
+    with (
+        patch("evals.python.integrations.inspect.job.get_model"),
+        patch("evals.python.integrations.inspect.job.eval") as evaluate,
+        pytest.raises(ValueError, match=r"Unknown sample|Choose EVAL_SAMPLE_IDS"),
+    ):
+        run()
+    evaluate.assert_not_called()
+
+
+def test_counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    monkeypatch.setenv("EVAL_SAMPLE_IDS", '["clear-task"]')
+    monkeypatch.setenv("EVAL_DELIVERIES", '["files", "manifest"]')
+    monkeypatch.setenv("EVAL_EPOCHS", "2")
+    monkeypatch.setenv("EVAL_TOKEN_LIMIT", "50000")
+    monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
+    with (
+        patch("evals.python.integrations.inspect.job.get_model"),
+        patch(
+            "evals.python.integrations.inspect.profiles.load_cases", return_value=load_cases()[:1]
+        ),
+        patch("evals.python.integrations.inspect.job.eval", return_value=[]) as evaluate,
+    ):
+        assert run() == 0
+    tasks = evaluate.call_args.args[0]
+    assert [
+        (t.name, t.epochs, t.token_limit, t.time_limit, t.metadata["diagnostic_epoch"])
+        for t in tasks
+    ] == [
+        ("genius-files-r1", 1, 50000, 300, 1),
+        ("genius-manifest-r1", 1, 50000, 300, 1),
+        ("genius-manifest-r2", 1, 50000, 300, 2),
+        ("genius-files-r2", 1, 50000, 300, 2),
+    ]
+    options = evaluate.call_args.kwargs
+    assert {k: options[k] for k in ["sample_id", "epochs", "max_tasks", "max_samples"]} == {
+        "sample_id": ["clear-task"],
+        "epochs": 1,
+        "max_tasks": 1,
+        "max_samples": 1,
+    }

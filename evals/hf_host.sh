@@ -46,4 +46,7 @@ hf jobs run --name genius-evals --namespace "$HF_NAMESPACE" --timeout "${EVAL_JO
   --env "EVAL_VERSION=${EVAL_VERSION:-}" \
   --env "EVAL_EPOCHS=$EVAL_EPOCHS" \
   --env "EVAL_DATASET=${EVAL_DATASET:-smoke}" --env "EVAL_LIMIT=${EVAL_LIMIT:-}" \
+  --env "EVAL_SAMPLE_IDS=${EVAL_SAMPLE_IDS:-}" --env "EVAL_TOKEN_LIMIT=${EVAL_TOKEN_LIMIT:-}" \
+  --env "EVAL_INSTRUCTION_DELIVERY=${EVAL_INSTRUCTION_DELIVERY:-files}" \
+  --env "EVAL_DELIVERIES=${EVAL_DELIVERIES:-}" \
   ghcr.io/astral-sh/uv:python3.12-bookworm sh /source/evals/hf_bootstrap.sh
