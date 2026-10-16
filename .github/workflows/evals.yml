@@ -21,7 +21,7 @@ jobs:
       - name: Install OCaml and build tools
         run: |
           apt-get update -qq
-          apt-get install -y --no-install-recommends git make opam build-essential pkg-config ocaml-nox
+          apt-get install -y --no-install-recommends git make opam build-essential pkg-config ocaml-nox rsync
       - uses: actions/checkout@v4
       - name: Check setup, generated bindings, and Python
         run: make -C evals check-scaffolding check-python
