@@ -10,26 +10,24 @@ import pytest
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
 from evals.python import commands, query
-from evals.python._kernel import Case, ExecutableChecks
-from evals.python.catalog import (
-    Selection,
-    load_cases,
-    reference,
-    verifier,
-)
+from evals.python.datasets import Selection
 from evals.python.datasets import smoke as declarations
 from evals.python.integrations.inspect.environments import environment, runtime
+from evals.python.tests.declarations import _files, _reference_files
+from evals.python.tests.projections import reference, verifier
 
-CASES = {case.id: case for case in load_cases()}
+CASES = {case.id: case for case in query.Cases()}
 
 
 def _snapshot(directory: Path) -> dict[str, bytes]:
     return {path.name: path.read_bytes() for path in directory.iterdir()}
 
 
-def _verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> bool:
+def _verify(
+    case: query.Ast.public_case, *, directory: Path, selection: Selection = "smoke"
+) -> bool:
     checks = verifier(case.id, selection=selection)
-    assert isinstance(checks, ExecutableChecks)
+    assert isinstance(checks, query.Ast.verifier)
 
     async def execute() -> bool:
         agent = LocalSandboxEnvironment()
@@ -43,7 +41,7 @@ def _verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> b
                 agent=environment(agent),
                 runtime=runtime(agent),
             )
-            return result.verification.status == "passed"
+            return isinstance(result.verification, query.Ast.Passed)
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
                 "test", None, {"default": agent}, interrupted=False
@@ -57,9 +55,9 @@ def _write_files(directory: Path, *, files: Mapping[str, str]) -> None:
         (directory / name).write_text(text)
 
 
-def _seed(case_id: str, *, directory: Path) -> Case:
+def _seed(case_id: str, *, directory: Path) -> query.Ast.public_case:
     case = CASES[case_id]
-    _write_files(directory, files=case.files)
+    _write_files(directory, files=_files(case.files))
     return case
 
 
@@ -67,7 +65,7 @@ def _seed(case_id: str, *, directory: Path) -> Case:
 def seeds_fail_and_solutions_pass(*, case_id: str, tmp_path: Path) -> None:
     case = _seed(case_id, directory=tmp_path)
     assert not _verify(case, directory=tmp_path)
-    _write_files(tmp_path, files=reference(case.id).solution)
+    _write_files(tmp_path, files=_reference_files(reference(case.id)))
     before = _snapshot(tmp_path)
     assert _verify(case, directory=tmp_path)
     assert _snapshot(tmp_path) == before
@@ -103,8 +101,7 @@ def preflight_defaults_overrides_and_validation(
     case = _seed("known-preflight", directory=tmp_path)
     (tmp_path / "config.py").write_text(f"timeout_seconds = {config}\n")
     source = (
-        reference(case.id)
-        .solution["client.py"]
+        _reference_files(reference(case.id))["client.py"]
         .replace("= 30", f"= {client}")
         .replace("    return value\n", f"    return {override}\n")
     )
@@ -168,15 +165,15 @@ def visible_check_command_leaves_no_build_files(
 )
 def family_variants_generate_working_seeds_and_solutions(
     *,
-    definition: query.CaseDefinition,
+    definition: query.Ast.case,
     filename: str,
     fragment: str,
     tmp_path: Path,
 ) -> None:
     dataset = query.CompileDataset(cases=(definition,))
-    case = load_cases(selection=dataset)[0]
-    assert fragment in case.files[filename]
-    _write_files(tmp_path, files=case.files)
+    case = query.Cases(selection=dataset)[0]
+    assert fragment in _files(case.files)[filename]
+    _write_files(tmp_path, files=_files(case.files))
     assert not _verify(case, directory=tmp_path, selection=dataset)
-    _write_files(tmp_path, files=reference(case.id, selection=dataset).solution)
+    _write_files(tmp_path, files=_reference_files(reference(case.id, selection=dataset)))
     assert _verify(case, directory=tmp_path, selection=dataset)

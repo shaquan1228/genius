@@ -13,8 +13,8 @@ from evals.python import commands, query
 
 def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
     *,
-    profile: commands.ProfileSpec,
-    spec: commands.Experiment,
+    profile: commands.Ast.profile,
+    spec: commands.Ast.experiment,
     catalog: query.Dataset,
     instructions: Mapping[str, bytes],
     provenance: query.DatasetProvenance,

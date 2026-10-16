@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "genius-evals"
 version = "0.1.0"
@@ -11,6 +15,9 @@ dependencies = [
   "inspect-swe==0.2.71",
   "openai>=3.4,<4",
 ]
+
+[tool.setuptools]
+packages = ["kernel"]
 
 [project.optional-dependencies]
 dev = [
@@ -35,6 +42,7 @@ ignore = ["PLR2004"]
 "python/commands.py" = ["N802", "PLR0913"]
 "python/query.py" = ["N802"]
 "conftest.py" = ["PLR0917"]
+"kernel/*.pyi" = ["F401", "N801", "N818", "N999"]
 
 [tool.ruff.lint.pylint]
 # Only the first parameter may be positional, so callers name every other argument.
@@ -56,7 +64,8 @@ pythonpath = [".."]
 
 [tool.coverage.run]
 branch = true
-source = ["python"]
+source = ["python", "kernel"]
+omit = ["kernel/generate.py"]
 
 [tool.coverage.report]
 fail_under = 100

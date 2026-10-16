@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import assert_type
@@ -408,7 +409,7 @@ def counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort(
     monkeypatch.setenv("EVAL_COST_LIMIT", "0.25")
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     catalog = query.LoadDataset()
-    cohort = catalog.model_copy(update={"cases": {"clear-task": catalog.cases["clear-task"]}})
+    cohort = replace(catalog, cases={"clear-task": catalog.cases["clear-task"]})
     with (
         patch(
             "evals.python.integrations.inspect.evaluation.get_model",

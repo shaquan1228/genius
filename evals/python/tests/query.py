@@ -7,15 +7,15 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import catalog, commands, query
+from evals.python import commands, datasets, query
 
 
 def public_queries_preserve_canonical_objects() -> None:
     dataset = assert_type(query.LoadDataset(), query.Dataset)
     assert query.LoadDataset(selection=dataset) is dataset
-    cases = assert_type(query.Cases(), tuple[query.Case, ...])
+    cases = assert_type(query.Cases(), tuple[query.Ast.public_case, ...])
     assert cases[0] is dataset.cases[cases[0].id]
-    assert all(set(case.model_dump()) == {"id", "skill", "prompt", "files"} for case in cases)
+    assert all(isinstance(case, query.Ast.public_case) for case in cases)
 
 
 def public_queries_select_canonical_projections() -> None:
@@ -28,20 +28,22 @@ def public_queries_select_canonical_projections() -> None:
 
 
 def public_experiment_resolves_canonical_overrides() -> None:
-    spec = assert_type(query.ExperimentSettings(epochs=2), query.Experiment)
+    spec = assert_type(query.ExperimentSettings(epochs=2), query.Ast.experiment)
     assert spec.epochs == 2
 
 
 def public_hashes_match_existing_provenance() -> None:
     provenance = assert_type(query.Provenance(), query.DatasetProvenance)
     assert provenance.info is None
-    assert provenance.source_hash == catalog.source_hash("smoke")
-    assert provenance.cases_hash == catalog.cases_hash("smoke")
+    assert provenance.source_hash == datasets.fingerprint(query.LoadDataset().sources)
+    assert provenance.cases_hash == datasets.cases_hash(query.LoadDataset())
 
 
 def public_grade_preserves_input_and_result() -> None:
-    verification = query.Verification(status="passed")
-    with patch("evals.python.transport.grade", return_value={"correctness": True}) as grade:
+    verification = query.Ast.Passed()
+    with patch(
+        "kernel.Grader.grade", return_value=[("correctness", True), ("scope", True)]
+    ) as grade:
         result = assert_type(
             query.GradeCase(
                 case_id="clear-task",
@@ -51,9 +53,9 @@ def public_grade_preserves_input_and_result() -> None:
             ),
             query.Scores,
         )
-    assert grade.call_args.kwargs["case_id"] == "clear-task"
-    assert grade.call_args.kwargs["verification"] is verification
-    assert result is grade.return_value
+    assert grade.call_args.args[0] is query.LoadDataset().records["clear-task"]
+    assert isinstance(grade.call_args.kwargs["outcome"].verification, query.Ast.Passed)
+    assert result == dict(grade.return_value)
 
 
 @pytest.mark.parametrize(

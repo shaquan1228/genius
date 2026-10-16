@@ -1,29 +1,38 @@
-.PHONY: check check-scaffolding check-ocaml-format check-python format format-ocaml format-python lint-ocaml test-ocaml
+.PHONY: check check-scaffolding check-ocaml-format check-python format format-ocaml format-python lint-ocaml setup-kernel test-ocaml
+
+KERNEL_SWITCH ?= genius-kernel-414
+KERNEL_RUN = opam exec --switch=$(KERNEL_SWITCH) -- uv run --no-sync
 
 # Every OCaml warning is an error, except type-directed disambiguation and open shadowing.
 OCAML_FLAGS = -strict-sequence -strict-formats -w +a-4-40-41-42-44-45-70 -warn-error +a
 
 # The full local gate. CI runs check-ocaml-format in its own job, because the hosted
-# runtime image has OCaml 4.13 but no ocamlformat.
+# runtime image has no ocamlformat.
 check: check-scaffolding check-ocaml-format lint-ocaml test-ocaml check-python
 
 # With full statement/branch coverage, CRAP equals cyclomatic complexity.
 # Xenon's A rank requires every function to have complexity <= 5.
 check-python:
-	uv sync --extra dev --locked
-	uv run ruff format --check python
-	uv run ruff check python
-	uv run mypy
-	uv run pytest --cov --cov-branch --cov-report=term-missing --cov-report=json:results/coverage.json --cov-report=xml:results/coverage.xml --junitxml=results/tests.xml
-	uv run xenon --max-absolute A --max-modules A --max-average A python
-	uv run radon cc --show-complexity --json python > results/complexity.json
+	uv sync --python 3.12 --extra dev --locked --inexact
+	$(MAKE) setup-kernel
+	$(KERNEL_RUN) python kernel/generate.py
+	$(KERNEL_RUN) ruff format --check python kernel
+	$(KERNEL_RUN) ruff check python kernel
+	$(KERNEL_RUN) mypy
+	$(KERNEL_RUN) pytest --cov --cov-branch --cov-report=term-missing --cov-report=json:results/coverage.json --cov-report=xml:results/coverage.xml --junitxml=results/tests.xml
+	$(KERNEL_RUN) xenon --max-absolute A --max-modules A --max-average A python kernel/build.py kernel/__init__.py
+	$(KERNEL_RUN) radon cc --show-complexity --json python kernel/build.py kernel/__init__.py > results/complexity.json
+
+# Sync Python dependencies first; the bridge is installed from the pinned opam package.
+setup-kernel:
+	KERNEL_SWITCH=$(KERNEL_SWITCH) sh bin/kernel_setup.sh
 
 format: format-ocaml format-python
 
 # pyproject.toml configures Ruff's style and lint rules.
 format-python:
-	uv run ruff format python
-	uv run ruff check --fix python
+	uv run ruff format python kernel
+	uv run ruff check --fix python kernel
 
 # ocaml/.ocamlformat pins the formatter version and style; `make format-ocaml` applies it.
 format-ocaml:
@@ -35,14 +44,14 @@ check-ocaml-format:
 
 # Compile temporary copies in dependency order so no build files enter the checkout.
 lint-ocaml:
-	@command -v ocamlfind >/dev/null || { echo "Install OCaml 4.13+, ocamlfind and Jsonm for kernel checks." >&2; exit 1; }
+	@command -v ocamlc >/dev/null || { echo "Install OCaml 4.13+ for kernel checks." >&2; exit 1; }
 	@build_dir=$$(mktemp -d) && \
 	  (trap 'rm -rf "$$build_dir"' EXIT; \
 	    cp ocaml/*.mli ocaml/*.ml "$$build_dir" && cd "$$build_dir" && \
-	    ocamlfind ocamlc -package jsonm $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml))
+	    ocamlc $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml))
 
-# Pure kernel modules, excluding the process boundary, in dependency order.
-KERNEL = $(shell cd ocaml && ocamldep -sort $(filter-out transport.ml codec.ml declaration.mli declaration.ml,$(notdir $(wildcard ocaml/*.mli ocaml/*.ml))))
+# Pure kernel modules in dependency order.
+KERNEL = $(shell cd ocaml && ocamldep -sort $(notdir $(wildcard ocaml/*.mli ocaml/*.ml)))
 
 # Link a test with only the modules it may use, so a new dependency fails to compile.
 ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
@@ -59,4 +68,5 @@ test-ocaml:
 check-scaffolding:
 	sh -n bin/hf_host.sh
 	sh -n bin/hf_bootstrap.sh
+	sh -n bin/kernel_setup.sh
 	uv lock --check

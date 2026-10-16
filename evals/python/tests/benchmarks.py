@@ -29,7 +29,6 @@ def validate_reports_real_status(*, status: str, capsys: pytest.CaptureFixture[s
     dataset = _import_dataset((_record(),))
     with (
         patch.object(query, "LoadDataset", return_value=dataset) as load,
-        patch("evals.python.catalog.load_cases", return_value=(case,)),
         patch.object(
             benchmarks, "validate_case", new=AsyncMock(return_value={"status": status})
         ) as validate,
@@ -64,7 +63,7 @@ def reference_validation_uses_public_operation_and_thaws_only_cli_output() -> No
     case = _import_records((_record(),))[0]
     dataset = _import_dataset((_record(),))
     canonical = commands.VerificationResult(
-        verification=commands.Verification(status="passed"), metadata={"test": {"items": (True,)}}
+        verification=query.Ast.Passed(), metadata={"test": {"items": (True,)}}
     )
     with patch.object(
         commands, "ValidateReference", new_callable=AsyncMock, return_value=canonical

@@ -1,7 +1,10 @@
 """Prepared inputs stay consistent through composition, scoring, and native logs."""
+# Native boolean variants have a single positional payload.
+# ruff: noqa: FBT003
 
 import base64
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 from unittest.mock import patch
@@ -16,7 +19,7 @@ from inspect_ai.solver import generate
 from evals.python import commands, query
 from evals.python.integrations.inspect import evaluation, profiles, scoring
 from evals.python.integrations.inspect.tasks import build_task
-from evals.python.tests.declarations import _declaration
+from evals.python.tests.declarations import _copy_case, _declaration
 from evals.python.tests.support import offline_run as _offline_run
 from evals.python.tests.support import results as _results
 
@@ -69,7 +72,7 @@ def evaluation_prepares_once_for_all_tasks(
 ) -> None:
     spec = query.ExperimentSettings(epochs=2)
     original = query.LoadDataset()
-    cohort = original.model_copy(update={"cases": {"clear-task": original.cases["clear-task"]}})
+    cohort = replace(original, cases={"clear-task": original.cases["clear-task"]})
     request = commands.EvaluationSettings(model="mockllm/model", deliveries=deliveries)
     with (
         patch.object(query, "LoadDataset", return_value=cohort) as load,
@@ -89,27 +92,30 @@ def evaluation_prepares_once_for_all_tasks(
 
 @pytest.fixture
 def private_tasks() -> list[Task]:
-    definition = _declaration(code=False).model_copy(
-        update={
-            "instruction": query.Instruction(
-                skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
-            ),
-            "reference": query.ReferenceDefinition(
-                edits={"main.py": PRIVATE_SENTINEL},
-                completion=query.PlainCompletion(text=PRIVATE_SENTINEL),
-            ),
-        }
+    definition = _copy_case(
+        _declaration(code=False),
+        instruction=query.Ast.instruction(
+            skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
+        ),
+        reference=query.Ast.reference(
+            edits=query.Fixture.of_files([("main.py", PRIVATE_SENTINEL)]),
+            completion=query.Ast.Plain(PRIVATE_SENTINEL),
+        ),
     )
     datasets = [
         query.CompileDataset(
             cases=(
-                definition.model_copy(
-                    update={
-                        "criterion": query.AnswerCriterion(
-                            expected={"choice": choice, "safe": True},
-                            text_rule=query.TextRule(field="reason", min_words=1, max_words=5),
+                _copy_case(
+                    definition,
+                    criterion=query.Ast.Answer(
+                        query.Ast.answer(
+                            expected=[
+                                ("choice", query.Ast.String(choice)),
+                                ("safe", query.Ast.Bool(True)),
+                            ],
+                            text_rule=query.Ast.text_rule(field="reason", min_words=1, max_words=5),
                         )
-                    }
+                    ),
                 ),
             )
         )
@@ -137,7 +143,9 @@ def private_tasks() -> list[Task]:
 def native_logs_keep_private_snapshots_out_and_score_each_dataset(
     private_tasks: list[Task], *, tmp_path: Path
 ) -> None:
-    with patch("evals.python.catalog.sources", side_effect=AssertionError("late source read")):
+    with patch(
+        "evals.python.datasets.kernel_sources", side_effect=AssertionError("late source read")
+    ):
         logs = _offline_run(private_tasks, mode=None, directory=tmp_path)
     assert (
         [_results(read_eval_log(str(log.location))) for log in logs],

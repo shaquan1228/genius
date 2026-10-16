@@ -1,68 +1,68 @@
-"""Typed public queries return canonical values directly."""
+"""Typed public queries adapt the native kernel through immutable dataset snapshots."""
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, assert_never
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Literal, assert_never, cast
 
 from pydantic import validate_call
 
-from evals.python import catalog
-from evals.python._kernel import (
-    FROZEN,
-    AnswerCriterion,
-    Case,
-    CaseDefinition,
-    CodeCriterion,
-    DatasetInfo,
-    Experiment,
-    Files,
-    Inline,
-    Instruction,
-    PlainCompletion,
-    ReferenceDefinition,
-    Resource,
-    StructuredCompletion,
-    TextRule,
-    Verification,
-    VerifierDefinition,
-)
-from evals.python.catalog import Catalog as Dataset
-from evals.python.catalog import Selection
+from evals.python import datasets
+from evals.python.datasets import Dataset, Selection
+from evals.python.schema import FROZEN, DatasetInfo, Files
 from evals.python.verification import Runtime
+from kernel import Ast, Experiment, Fixture, Grader, Response
+
+if TYPE_CHECKING:
+    from kernel.Experiment import ResolveArgs
+
+
+def _scalar(value: object) -> Ast.response_value:
+    if isinstance(value, bool):
+        return Ast.Bool(value)
+    if isinstance(value, str):
+        return Ast.String(value)
+    raise ValueError("Response fields must be strings or booleans")
+
+
+def _response(fields: object) -> Ast.response:
+    if not isinstance(fields, dict):
+        raise ValueError("Expected response object")
+    return Response.of_fields([(name, _scalar(value)) for name, value in fields.items()])
+
+
+def _candidate(text: str) -> Ast.response | None:
+    text = Grader.trim(text)
+    if text.startswith("```json\n") and text.endswith("\n```"):
+        text = text[8:-4]
+    try:
+        return _response(json.loads(text))
+    except (ValueError, RecursionError):
+        return None
+
 
 __all__ = [
-    "AnswerCriterion",
-    "Case",
-    "CaseDefinition",
+    "Ast",
     "Cases",
-    "CodeCriterion",
     "CompileDataset",
     "Dataset",
     "DatasetInfo",
     "DatasetProvenance",
     "DescribeDataset",
     "ExecutionRuntime",
-    "Experiment",
     "ExperimentSettings",
+    "Fixture",
     "GradeCase",
-    "Inline",
-    "Instruction",
     "LoadDataset",
-    "PlainCompletion",
     "Provenance",
-    "ReferenceDefinition",
-    "Resource",
     "Runtime",
     "Scores",
     "Selection",
-    "StructuredCompletion",
-    "TextRule",
-    "Verification",
-    "VerifierDefinition",
 ]
 
 type Scores = Mapping[str, bool]
-_UNCHECKED = Verification(status="unchecked")
+_UNCHECKED = Ast.Unchecked()
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -75,23 +75,23 @@ class DatasetProvenance:
 @validate_call(config=FROZEN)
 def CompileDataset(
     *,
-    cases: tuple[CaseDefinition, ...],
+    cases: tuple[Ast.case, ...],
     info: DatasetInfo | None = None,
     resources: Files | None = None,
 ) -> Dataset:
-    return catalog.compile_declarations(
+    return datasets.compile_declarations(
         cases, info=info, resources={} if resources is None else resources
     )
 
 
 @validate_call(config=FROZEN)
 def LoadDataset(*, selection: Selection = "smoke") -> Dataset:
-    return catalog.load_dataset(selection)
+    return datasets.load_dataset(selection)
 
 
 @validate_call(config=FROZEN)
-def Cases(*, selection: Selection = "smoke") -> tuple[Case, ...]:
-    return catalog.load_cases(selection=selection)
+def Cases(*, selection: Selection = "smoke") -> tuple[Ast.public_case, ...]:
+    return tuple(datasets.load_dataset(selection).cases.values())
 
 
 @validate_call(config=FROZEN)
@@ -102,27 +102,31 @@ def ExperimentSettings(
     cost_limit: float | None = None,
     time_limit: int | None = None,
     cache: bool | None = None,
-) -> Experiment:
-    return catalog.experiment(
-        epochs=epochs,
-        message_limit=message_limit,
-        cost_limit=cost_limit,
-        time_limit=time_limit,
-        cache=cache,
+) -> Ast.experiment:
+    options = {
+        "epochs": epochs,
+        "message_limit": message_limit,
+        "cost_limit": cost_limit,
+        "time_limit": time_limit,
+        "cache": cache,
+    }
+    return Experiment.resolve(
+        **cast("ResolveArgs", {name: value for name, value in options.items() if value is not None})
     )
 
 
 @validate_call(config=FROZEN)
 def DescribeDataset(*, selection: Selection = "smoke") -> DatasetInfo | None:
-    return catalog.dataset_info(selection)
+    return datasets.dataset_info(selection)
 
 
 @validate_call(config=FROZEN)
 def Provenance(*, selection: Selection = "smoke") -> DatasetProvenance:
+    dataset = datasets.load_dataset(selection)
     return DatasetProvenance(
-        info=catalog.dataset_info(selection),
-        source_hash=catalog.source_hash(selection),
-        cases_hash=catalog.cases_hash(selection),
+        info=dataset.info,
+        source_hash=datasets.fingerprint(dataset.sources),
+        cases_hash=datasets.cases_hash(dataset),
     )
 
 
@@ -132,16 +136,19 @@ def GradeCase(
     case_id: str,
     response: str,
     changed_files: tuple[str, ...],
-    verification: Verification = _UNCHECKED,
+    verification: Ast.verification = _UNCHECKED,
     selection: Selection = "smoke",
 ) -> Scores:
-    return catalog.grade(
-        case_id=case_id,
-        response=response,
-        changed_files=changed_files,
-        verification=verification,
-        selection=selection,
+    scores = dict(
+        Grader.grade(
+            datasets.record(case_id, selection=selection),
+            response=_candidate(response),
+            outcome=Ast.outcome(changed_files=changed_files, verification=verification),
+        )
     )
+    if not {"correctness", "scope"} <= scores.keys():
+        raise ValueError("Kernel omitted required score names")
+    return MappingProxyType(scores)
 
 
 @validate_call(config=FROZEN)

@@ -22,7 +22,7 @@ REASONING_DOCUMENTS = (
 )
 
 
-def load_instructions(spec: commands.Experiment) -> Mapping[str, bytes]:
+def load_instructions(spec: commands.Ast.experiment) -> Mapping[str, bytes]:
     return MappingProxyType(
         {
             f"instructions/{path.relative_to(REPO_ROOT).as_posix()}": path.read_bytes()
@@ -67,16 +67,16 @@ def content_hash(files: Mapping[str, bytes]) -> str:
 
 
 def instruction_files(
-    profile: commands.ProfileSpec, *, instructions: Mapping[str, bytes]
+    profile: commands.Ast.profile, *, instructions: Mapping[str, bytes]
 ) -> dict[str, bytes]:
     prefixes = tuple(f"instructions/{folder}/" for folder in profile.instructions)
     return {name: contents for name, contents in instructions.items() if name.startswith(prefixes)}
 
 
 def prompt(
-    profile: commands.ProfileSpec,
+    profile: commands.Ast.profile,
     *,
-    case: commands.Case,
+    case: commands.Ast.public_case,
     instructions: Mapping[str, bytes],
     delivery: commands.InstructionDelivery = "files",
     instruction_root: str = "../instructions",
@@ -93,12 +93,16 @@ def prompt(
 
 
 def files(
-    profile: commands.ProfileSpec, *, case: commands.Case, instructions: Mapping[str, bytes]
+    profile: commands.Ast.profile,
+    *,
+    case: commands.Ast.public_case,
+    instructions: Mapping[str, bytes],
 ) -> dict[str, str]:
-    workspace = {
-        f"workspace/{name}": inline_file(contents=text.encode())
-        for name, text in case.files.items()
-    }
+    workspace = {}
+    for name, content in case.files:
+        if not isinstance(content, commands.Ast.Inline):
+            raise ValueError(f"Unresolved resource in public case {case.id}: {name}")
+        workspace[f"workspace/{name}"] = inline_file(contents=content[0].encode())
     return {
         "workspace/.gitkeep": inline_file(contents=b""),
         **workspace,
@@ -110,9 +114,9 @@ def files(
 
 
 def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery options
-    profile: commands.ProfileSpec,
+    profile: commands.Ast.profile,
     *,
-    cases: tuple[commands.Case, ...],
+    cases: tuple[commands.Ast.public_case, ...],
     instructions: Mapping[str, bytes],
     dataset: str = "smoke",
     delivery: commands.InstructionDelivery = "files",
@@ -135,5 +139,5 @@ def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery optio
     ]
 
 
-def load_profile(name: str, *, spec: commands.Experiment) -> commands.ProfileSpec:
+def load_profile(name: str, *, spec: commands.Ast.experiment) -> commands.Ast.profile:
     return {value.name: value for value in spec.profiles}[name]

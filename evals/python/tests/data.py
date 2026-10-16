@@ -1,7 +1,6 @@
 """Validate schemas and keep the comparison's inputs controlled."""
 
 import json
-import subprocess
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -11,17 +10,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import commands, query, transport
-from evals.python._kernel import Verification
-from evals.python.catalog import (
-    case as catalog_case,
-)
-from evals.python.catalog import (
-    experiment,
-    load_cases,
-    reference,
-    verifier,
-)
+from evals.python import commands, datasets, query
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import (
     REASONING_DOCUMENTS,
@@ -31,22 +20,19 @@ from evals.python.integrations.inspect.profiles import (
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.paths import REPO_ROOT
 from evals.python.query import GradeCase
+from evals.python.tests.declarations import _copy_case, _files, _reference_files, _reference_text
+from evals.python.tests.projections import public_case, reference, verifier
 from evals.python.tests.support import (
     choice_case as _choice_case,
 )
 from evals.python.tests.support import (
     timeout_case as _timeout_case,
 )
-from evals.python.transport import decode
+from kernel import Grader, InvalidArgument, load
 
 
-def _encode(cases: list[dict[str, object]]) -> str:
-    return json.dumps({"version": 3, "value": cases})
-
-
-def manifest_roundtrip() -> None:
-    cases = load_cases()
-    assert decode(_encode([case.model_dump() for case in cases])) == cases
+def public_projection_uses_native_types() -> None:
+    assert all(isinstance(case, query.Ast.public_case) for case in query.Cases())
 
 
 def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
@@ -57,19 +43,12 @@ def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
         operation(selection=path)
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("checks", {"sources": ["../outside.ml"], "program": ""}),
-        ("files", {"../outside.ml": "bad"}),
-        ("solution", {"../outside.ml": "bad"}),
-    ],
-)
-def generated_paths_are_validated(*, field: str, value: object) -> None:
-    data = load_cases()[0].model_dump()
-    data[field] = value
-    with pytest.raises(ValidationError):
-        decode(_encode([data]))
+@pytest.mark.parametrize("path", ["../outside.ml", "/outside.ml"])
+def generated_paths_are_validated(path: str) -> None:
+    declaration = _choice_case(case_id="paths", a=1, b=2)
+    invalid = _copy_case(declaration, fixture=query.Fixture.of_files([(path, "bad")]))
+    with pytest.raises(InvalidArgument):
+        query.CompileDataset(cases=(invalid,))
 
 
 def _grade(case_id: str, *, text: str) -> bool:
@@ -77,15 +56,15 @@ def _grade(case_id: str, *, text: str) -> bool:
         case_id=case_id,
         response=text,
         changed_files=(),
-        verification=Verification(status="unchecked"),
+        verification=query.Ast.Unchecked(),
         selection="smoke",
     )["correctness"]
 
 
 def profiles_share_fixture_files() -> None:
     spec = query.ExperimentSettings()
-    assert load_profile("genius", spec=spec) is spec.profiles[1]
-    case = load_cases()[0]
+    assert load_profile("genius", spec=spec).name == spec.profiles[1].name
+    case = query.Cases()[0]
     baseline = profiles.files(
         load_profile(name="baseline", spec=query.ExperimentSettings()),
         case=case,
@@ -100,7 +79,7 @@ def profiles_share_fixture_files() -> None:
 
 
 def only_genius_receives_instructions() -> None:
-    case = load_cases()[0]
+    case = query.Cases()[0]
     assert (
         any(
             key.startswith("instructions/")
@@ -122,7 +101,7 @@ def only_genius_receives_instructions() -> None:
 
 
 def profile_prompts() -> None:
-    case = load_cases()[0]
+    case = query.Cases()[0]
     assert (
         profiles.prompt(
             load_profile(name="baseline", spec=query.ExperimentSettings()),
@@ -147,7 +126,7 @@ def samples_keep_task_ids_and_metadata() -> None:
             cases=query.Cases(),
             instructions=profiles.load_instructions(query.ExperimentSettings()),
         )
-    ] == [case.id for case in load_cases()]
+    ] == [case.id for case in query.Cases()]
 
 
 def hash_tracks_contents_and_ignores_mapping_order() -> None:
@@ -170,10 +149,10 @@ def cases_200_cases_are_python_values() -> None:
             _timeout_case(case_id=f"timeout-{i}", initial=15, requested=30 + i) for i in range(200)
         )
     )
-    cases = load_cases(selection=dataset)
+    cases = query.Cases(selection=dataset)
     assert len(cases) == 200
     assert (
-        reference(cases[199].id, selection=dataset).solution["config.py"]
+        _reference_files(reference(cases[199].id, selection=dataset))["config.py"]
         == "timeout_seconds = 229\n"
     )
 
@@ -194,136 +173,138 @@ def generated_artifacts_stay_out_of_sample_metadata() -> None:
 
 def duplicate_case_ids_are_rejected() -> None:
     definition = _choice_case(case_id="duplicate", a=10, b=8)
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(ValueError, match="unique"):
         query.CompileDataset(cases=(definition, definition))
 
 
-def exporter_escapes_strings() -> None:
+def native_projection_preserves_strings() -> None:
     text = 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
-    definition = _choice_case(case_id="escaped", a=10, b=8).model_copy(
-        update={"instruction": query.Instruction(skill="reasoning", prompt=text)}
+    definition = _copy_case(
+        _choice_case(case_id="escaped", a=10, b=8),
+        instruction=query.Ast.instruction(skill="reasoning", prompt=text),
     )
     dataset = query.CompileDataset(cases=(definition,))
-    assert load_cases(selection=dataset)[0].prompt == text
+    assert query.Cases(selection=dataset)[0].prompt == text
 
 
 def cases_are_immutable() -> None:
-    case = catalog_case("clear-task")
-    with pytest.raises(ValidationError):
-        case.id = "changed"
+    case = public_case("clear-task")
+    with pytest.raises((AttributeError, TypeError)):
+        case.id = "changed"  # type: ignore[misc]
     with pytest.raises(TypeError):
-        case.files["receipt.py"] = "changed"  # type: ignore[index]
+        case.files[0] = ("receipt.py", query.Ast.Inline("changed"))  # type: ignore[index]
     with pytest.raises(TypeError):
-        reference(case.id).solution["receipt.py"] = "changed"  # type: ignore[index]
+        query.Fixture.files(reference(case.id).edits)[0] = ("receipt.py", "changed")  # type: ignore[index]
     checks = verifier(case.id)
     assert checks is not None
-    with pytest.raises(ValidationError):
-        checks.stdin = "changed"
-    assert isinstance(checks.inputs, tuple)
-    assert catalog_case("clear-task") is case
+    with pytest.raises((AttributeError, TypeError)):
+        checks.stdin = "changed"  # type: ignore[misc]
+    assert tuple(checks.inputs) == ("receipt.py",)
+    assert public_case("clear-task") is case
 
 
 def compilation_cache_invalidates_when_declarations_change() -> None:
     definition = _choice_case(case_id="cache", a=10, b=8)
     first = query.CompileDataset(cases=(definition,))
-    with patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as compiler:
+    with patch(
+        "kernel.build.subprocess.run",
+        side_effect=AssertionError("Declarations must not compile code"),
+    ) as compiler:
         assert query.CompileDataset(cases=(definition,)) is first
         assert compiler.call_count == 0
         changed = query.CompileDataset(cases=(_choice_case(case_id="cache", a=4, b=8),))
-        assert json.loads(reference("cache", selection=changed).answer)["choice"] == "A"
-        assert compiler.call_count == 2
+        assert json.loads(_reference_text(reference("cache", selection=changed)))["choice"] == "A"
+        assert compiler.call_count == 0
 
 
 def generic_python_case_exports_without_language_restriction() -> None:
-    definition = query.CaseDefinition(
+    definition = query.Ast.case(
         id="python-case",
-        fixture={"solution.py": "print(42)"},
-        instruction=query.Instruction(skill="reasoning", prompt="Return 42"),
-        criterion=query.CodeCriterion(
-            verifier=query.VerifierDefinition(
+        fixture=query.Fixture.of_files([("solution.py", "print(42)")]),
+        instruction=query.Ast.instruction(skill="reasoning", prompt="Return 42"),
+        criterion=query.Ast.Code(
+            query.Ast.verifier(
                 inputs=("solution.py",),
-                files={"grader.py": query.Inline(text="trusted")},
-                tools={},
+                files=[("grader.py", query.Ast.Inline("trusted"))],
+                tools=[],
                 command=("python3", "grader.py"),
                 stdin="private",
                 timeout_seconds=5,
             )
         ),
         allowed_files=("solution.py",),
-        reference=query.ReferenceDefinition(
-            edits={}, completion=query.PlainCompletion(text="done")
+        reference=query.Ast.reference(
+            edits=query.Fixture.empty, completion=query.Ast.Plain("done")
         ),
     )
     dataset = query.CompileDataset(cases=(definition,))
-    case = load_cases(selection=dataset)[0]
+    case = query.Cases(selection=dataset)[0]
     checks = verifier(case.id, selection=dataset)
     assert checks is not None
-    assert checks.model_dump() == {
-        "inputs": ("solution.py",),
-        "files": {"grader.py": "trusted"},
-        "tools": {},
-        "command": ("python3", "grader.py"),
-        "stdin": "private",
-        "timeout_seconds": 5,
-    }
+    assert tuple(checks.inputs) == ("solution.py",)
+    assert _files(checks.files) == {"grader.py": "trusted"}
+    assert tuple(checks.tools) == ()
+    assert tuple(checks.command) == ("python3", "grader.py")
+    assert (checks.stdin, checks.timeout_seconds) == ("private", 5)
 
 
-def experiment_cache_tracks_native_configuration(tmp_path: Path) -> None:
-    before = experiment()
-    source = transport.OCAML_ROOT / "experiment.ml"
-    copied = tmp_path / source.name
-    copied.write_text(
-        source.read_text().replace("epochs = 5", "epochs = 7").replace("Apply that", "Follow that")
+def experiment_cache_tracks_native_configuration() -> None:
+    before = query.ExperimentSettings()
+    original = datasets.kernel_sources()
+    changed = datasets.Sources(
+        modules=tuple(
+            (
+                name,
+                text.replace("epochs = 5", "epochs = 7").replace("Apply that", "Follow that")
+                if name == "experiment.ml"
+                else text,
+            )
+            for name, text in original.modules
+        ),
+        resources=original.resources,
     )
-    library = tuple({source: copied}.get(path, path) for path in transport.LIBRARY)
-    with patch("evals.python.transport.LIBRARY", library):
-        task = build_task(
-            profile=profiles.load_profile("genius", spec=query.ExperimentSettings()),
-            spec=query.ExperimentSettings(),
-            agent="codex",
-            catalog=query.LoadDataset(selection="smoke"),
-            instructions=profiles.load_instructions(query.ExperimentSettings()),
-            provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
-        )
-        assert (
-            experiment().epochs,
-            task.epochs,
-            "Follow that" in str(task.dataset[0].input),
-            "Follow that" in load_profile(name="genius", spec=query.ExperimentSettings()).preamble,
-        ) == (7, 7, True, True)
-    assert experiment() == before
+    spec = load(changed.modules).Experiment.resolve()
+    task = build_task(
+        profile=profiles.load_profile("genius", spec=spec),
+        spec=spec,
+        agent="codex",
+        catalog=query.LoadDataset(selection="smoke"),
+        instructions=profiles.load_instructions(spec),
+        provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
+    )
+    assert (
+        spec.epochs,
+        task.epochs,
+        "Follow that" in str(task.dataset[0].input),
+        "Follow that" in profiles.load_profile("genius", spec=spec).preamble,
+    ) == (7, 7, True, True)
+    assert query.ExperimentSettings().epochs == before.epochs
 
 
 @pytest.mark.parametrize("grade_only", [False, True])
-def record_updates_cannot_bypass_kernel_validation(
-    *, grade_only: bool, capfd: pytest.CaptureFixture[str]
-) -> None:
+def record_updates_cannot_bypass_kernel_validation(*, grade_only: bool) -> None:
     definition = _timeout_case(case_id="updated", initial=15, requested=30)
-    invalid = definition.model_copy(update={"fixture": {}})
-    records = transport.encode_declarations((invalid,))
+    invalid = _copy_case(definition, fixture=query.Fixture.empty)
+    records = (invalid,)
     operation: Callable[[], object]
     if grade_only:
         operation = partial(
-            transport.grade,
-            sources=transport.sources(),
-            record=records[0],
-            case_id="updated",
-            response="",
-            changed_files=(),
-            verification=Verification(status="unchecked"),
+            Grader.grade,
+            records[0],
+            response=None,
+            outcome=query.Ast.outcome(changed_files=(), verification=query.Ast.Unchecked()),
         )
     else:
-        operation = partial(transport.cases, sources=transport.sources(), records=records)
-    with pytest.raises(subprocess.CalledProcessError):
+        operation = partial(query.CompileDataset, cases=records)
+    with pytest.raises(InvalidArgument, match="criteria read files missing from the fixture"):
         operation()
-    assert "criteria read files missing from the fixture" in capfd.readouterr().err
 
 
 @pytest.mark.parametrize("delivery", ["manifest", "inline"])
 @pytest.mark.parametrize("name", REASONING_DOCUMENTS)
 def delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, name: str) -> None:
     mode = cast(commands.InstructionDelivery, delivery)
-    case = load_cases()[0]
+    case = query.Cases()[0]
     root = "/eval/instructions"
     profile = load_profile(name="genius", spec=query.ExperimentSettings())
     before = profiles.files(
@@ -356,7 +337,7 @@ def delivery_rejects_unimplemented_skill_instead_of_silently_changing_it() -> No
     with pytest.raises(ValueError, match="reasoning only"):
         profiles.prompt(
             load_profile(name="genius", spec=query.ExperimentSettings()),
-            case=load_cases()[1],
+            case=query.Cases()[1],
             delivery="inline",
             instructions=profiles.load_instructions(query.ExperimentSettings()),
         )

@@ -8,24 +8,24 @@ from evals.python import commands
 from evals.python.datasets import smoke as declarations
 
 
-def response(completion: queries.PlainCompletion | queries.StructuredCompletion) -> str:
-    match completion:
-        case queries.PlainCompletion(text=text):
-            return text
-        case queries.StructuredCompletion(fields=fields):
-            return json.dumps(dict(fields))
-        case _ as unreachable:
-            assert_never(unreachable)
+def response(completion: queries.Ast.completion) -> str:
+    if isinstance(completion, queries.Ast.Plain):
+        return completion[0]
+    if isinstance(completion, queries.Ast.Structured):
+        return json.dumps({name: value[0] for name, value in completion[0]})
+    assert_never(completion)
 
 
-async def validate(definition: queries.CaseDefinition, *, dataset: queries.Dataset) -> bool:
+async def validate(definition: queries.Ast.case, *, dataset: queries.Dataset) -> bool:
     result = await commands.ValidateReference(case_id=definition.id, selection=dataset)
     scores: queries.Scores = {}
-    if result.verification.status != "harness_error":
+    if not isinstance(result.verification, queries.Ast.Harness_error):
         scores = queries.GradeCase(
             case_id=definition.id,
             response=response(definition.reference.completion),
-            changed_files=tuple(f"workspace/{name}" for name in definition.reference.edits),
+            changed_files=tuple(
+                f"workspace/{name}" for name, _ in queries.Fixture.files(definition.reference.edits)
+            ),
             verification=result.verification,
             selection=dataset,
         )
@@ -33,12 +33,14 @@ async def validate(definition: queries.CaseDefinition, *, dataset: queries.Datas
         json.dumps(
             {
                 "id": definition.id,
-                "verification": result.verification.status,
+                "verification": type(result.verification).__name__.lower(),
                 "scores": dict(scores),
             }
         )
     )
-    return result.verification.status in ("passed", "unchecked") and all(scores.values())
+    return isinstance(result.verification, (queries.Ast.Passed, queries.Ast.Unchecked)) and all(
+        scores.values()
+    )
 
 
 async def main() -> int:

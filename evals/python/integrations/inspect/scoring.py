@@ -48,13 +48,16 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
         runtime=environments_adapter.runtime(current),
     )
     explanation = (
-        completion if result.verification.status == "unchecked" else result.verification.detail
+        completion if isinstance(result.verification, commands.Ast.Unchecked) else result.detail
     )
     return Score(
         value=score_values(result.scores),
         explanation=with_failure(explanation, failure=failure),
         metadata={
-            "verification": result.verification.model_dump(),
+            "verification": {
+                "status": type(result.verification).__name__.lower(),
+                "detail": result.detail,
+            },
             "verifier_metadata": diagnostic(result.metadata),
             "changed_files": changed,
             "agent_failure": failure,

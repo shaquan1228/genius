@@ -1,22 +1,14 @@
-"""Typed public commands perform effects and return canonical results directly."""
+"""Public commands own effects; kernel work goes through the native query boundary."""
 
-from typing import Annotated, Literal, assert_never
+from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, InstanceOf, validate_call
 
-from evals.python import catalog
+from evals.python import datasets
 from evals.python import query as _query
 from evals.python import verification as _verification
-from evals.python._kernel import (
-    FROZEN,
-    Case,
-    DatasetInfo,
-    ExecutableChecks,
-    Experiment,
-    ProfileSpec,
-    Verification,
-)
-from evals.python.catalog import Selection
+from evals.python.datasets import Selection
+from evals.python.schema import FROZEN, DatasetInfo
 from evals.python.verification import (
     Assessment,
     Cleanup,
@@ -27,11 +19,12 @@ from evals.python.verification import (
     Runtime,
     VerificationResult,
 )
+from kernel import Ast, Fixture, Projection
 
 __all__ = [
     "AssessCase",
     "Assessment",
-    "Case",
+    "Ast",
     "Cleanup",
     "Completion",
     "DatasetInfo",
@@ -40,16 +33,15 @@ __all__ = [
     "Evaluate",
     "EvaluationSettings",
     "Execution",
-    "Experiment",
+    "Fixture",
     "InstructionDelivery",
     "ModelPricing",
-    "ProfileSpec",
     "Runtime",
     "ValidateReference",
-    "Verification",
     "VerificationResult",
     "VerifyCase",
 ]
+
 
 type InstructionDelivery = Literal["files", "manifest", "inline"]
 
@@ -103,14 +95,10 @@ async def VerifyCase(
     agent: InstanceOf[Environment],
     runtime: InstanceOf[Runtime],
 ) -> VerificationResult:
-    checks = catalog.verifier(case_id, selection=selection)
-    match checks:
-        case None:
-            return VerificationResult(verification=Verification(status="unchecked"))
-        case ExecutableChecks():
-            return await _verification.verify(checks, agent=agent, runtime=runtime)
-        case _ as unreachable:
-            assert_never(unreachable)
+    checks = Projection.verifier(datasets.record(case_id, selection=selection))
+    if checks is None:
+        return VerificationResult(verification=Ast.Unchecked())
+    return await _verification.verify(checks, agent=agent, runtime=runtime)
 
 
 @validate_call(config=FROZEN)
@@ -124,10 +112,11 @@ async def AssessCase(
     runtime: InstanceOf[Runtime],
 ) -> Assessment:
     result = await VerifyCase(case_id=case_id, selection=selection, agent=agent, runtime=runtime)
-    if result.verification.status == "harness_error":
-        raise RuntimeError(f"Verification harness error: {result.verification.detail}")
+    if isinstance(result.verification, Ast.Harness_error):
+        raise RuntimeError(f"Verification harness error: {result.verification[0]}")
     return Assessment(
         verification=result.verification,
+        detail=result.detail,
         metadata=result.metadata,
         scores=_query.GradeCase(
             case_id=case_id,
@@ -146,22 +135,24 @@ async def ValidateReference(
     selection: Selection = "smoke",
     runtime: InstanceOf[Runtime] | None = None,
 ) -> VerificationResult:
-    if catalog.verifier(case_id, selection=selection) is None:
-        return VerificationResult(verification=Verification(status="unchecked"))
+    if Projection.verifier(datasets.record(case_id, selection=selection)) is None:
+        return VerificationResult(verification=Ast.Unchecked())
     runtime = runtime or _query.ExecutionRuntime()
     try:
         async with _verification.allocated(runtime) as agent:
             await _verification.stage_reference(
-                catalog.reference(case_id, selection=selection).solution,
+                dict(
+                    Fixture.files(
+                        Projection.reference(datasets.record(case_id, selection=selection)).edits
+                    )
+                ),
                 agent=agent,
             )
             return await VerifyCase(
                 case_id=case_id, selection=selection, agent=agent, runtime=runtime
             )
     except Exception as error:
-        return VerificationResult(
-            verification=Verification(status="harness_error", detail=str(error))
-        )
+        return VerificationResult(verification=Ast.Harness_error(str(error)))
 
 
 async def Evaluate(

@@ -15,7 +15,7 @@ flowchart LR
   J[HF hosted entry point] --> C[Public queries and commands]
   I[Inspect observations] --> C
   E[EvalPlus CLI] --> C
-  C --> T[OCaml process transport]
+  C --> T[In-process typed bridge]
   T --> K[Pure kernel and declaration validation]
   C --> V[Verification lifecycle]
   V --> P[Typed execution capabilities]
@@ -28,12 +28,8 @@ flowchart LR
 | Primitive `.mli` / `.ml` files | Public operation signatures / executable constructors, validation and pure grading |
 | `ocaml/projection.mli` | Separate public case, trusted verifier, and offline reference projections |
 | `ocaml/experiment.mli` | Immutable defaults and validated launch overrides |
-| `python/datasets/` | Dataset records, provenance, and canonical case construction |
-| `ocaml/codec.ml`, `ocaml/transport.ml` | JSON syntax and generic protocol operations |
-| `ocaml/declaration.mli`, `ocaml/declaration.ml` | Narrow declaration decoder interface and private implementation, returning validated `Ast.case` values |
-| `python/_kernel.py` | Private immutable Python bindings for canonical declarations and projections; no integration imports |
-| `python/transport.py` | Trusted source compilation, content-keyed executable caches, protocol encoding/decoding |
-| `python/catalog.py` | Canonical compilation, immutable catalogs, trusted declaration retention and content fingerprints |
+| `python/datasets/` | Dataset loading, native case snapshots, resource resolution, provenance, and case construction |
+| `kernel/` | Native OCaml module loading, content-addressed builds, and generated Python typing declarations |
 | `python/integrations/datasets/` | Pinned download effects |
 | `python/integrations/smoke/` | Reusable private Python assertion driver and reference-validation CLI |
 | `python/integrations/inspect/` | SDK task/sample/score adaptation, agents, and sandbox capability adaptation |
@@ -44,30 +40,29 @@ flowchart LR
 | `python/integrations/evalplus/` | Benchmark reference-validation CLI, EvalPlus manifest adaptation and trusted EvalPlus driver |
 | `bin/` | Local launch and hosted bootstrap scripts |
 
-Public `Case` values contain only ID, skill, prompt, and public files, including visible helper tools.
+Public `Ast.public_case` values contain only ID, skill, prompt, and public files, including visible helper tools.
 Reference solutions, expected answers, private verifier programs and private inputs use separate projections.
 Only the trusted host or fresh grading sandbox receives those projections; agent samples and metadata receive public inputs and identifiers.
-Python construction bindings express the existing kernel declaration types; validation and grading policy remain in OCaml.
+Commands and queries accept and return the OCaml-backed types directly; validation and grading policy remain in OCaml.
 
-Protocol version 3 exposes generic cases, verifier, reference, experiment, and grade operations.
-Dataset descriptions and provenance are Python-owned queries.
-Every response is versioned. A grading request carries the case ID, raw response text, changed paths, and trusted execution evidence.
-It returns named boolean scores. Dataset-specific CLI operations and branches are absent from both transports.
-The old combined case manifest is intentionally unsupported; native historical Inspect logs are unchanged.
+The public command and query operations remain. Their signatures use native
+`Ast.case`, `Ast.public_case`, `Ast.experiment` and `Ast.verification` values directly; projection, settings and grading calls stay in the same process. There is
+no JSON envelope, kernel executable or per-call subprocess. Dataset descriptions
+and provenance remain Python-owned queries. Grading returns named boolean scores.
 
 Dataset selection is a Python module name under `python/datasets/` or an immutable
 `Dataset` returned by `LoadDataset` or `CompileDataset`. Each bundled module supplies
-`info` (optional provenance) and `cases()` (canonical `CaseDefinition` values).
+`info` (optional provenance) and `cases()` (native `Ast.case` values).
 Python owns downloading and parsing upstream records. OCaml accepts the same
 canonical declarations for every dataset, validates them through its constructors,
 and exposes separate public, verifier, and reference projections.
 
-To add a dataset, map its Python records into `CaseDefinition` values and call
+To add a dataset, map its Python records into `Ast.case` values and call
 `CompileDataset(cases=..., info=...)`; no OCaml adapter or selector registration is
 needed. A module under `python/datasets/` makes a dataset available by name to the
 CLI. Evaluator integrations provide reusable executable checks, independently of
 which dataset supplies their inputs. Verifier programs can be inline contents or
-explicit `CompileDataset(resources=...)` resources. The catalog has no global
+explicit `CompileDataset(resources=...)` resources. Dataset loading has no global
 verifier list. Named modules supply inline checker contents; callers using explicit
 resources compile a dataset with `CompileDataset(resources=...)`. Load a named
 dataset once and reuse the resulting immutable `Dataset` for repeated queries and
@@ -83,38 +78,43 @@ settings to Inspect; no JSON conversion occurs between Python modules.
 SDK clients, credentials and operational state stay in integrations.
 
 Shared domain types are defined once in `ast.ml`; public `.mli` files declare functions using those types, and `.ml` files implement them.
-Dataset-record and codec helper types remain private to their implementations.
+Dataset-record types remain private to their Python implementations.
 Raw Ast records are validated at case projection and grading boundaries, including nested criteria, verifier contracts and reference fields.
 
 Public operations carry dataset selection as context. `Cases` returns public inputs;
 `VerifyCase` and `AssessCase` resolve private checks internally. Selection stays out of
 the kernel grading observation; scoring supplies the case ID it already has.
 
-Primitive modules have no codec or SDK dependencies. Only transport compiles/invokes OCaml. The default smoke driver executes Python candidates and private assertions in its isolated grading workspace.
+Primitive modules have no SDK dependencies. Only `kernel/build.py` invokes the compiler;
+ordinary command/query calls invoke the bound OCaml operations directly. The default smoke driver executes Python candidates and private assertions in its isolated grading workspace.
 Kernel domain projections are nonrecursive. Recursive diagnostics are frozen in public
 results and converted to JSON values only at process or SDK output interfaces.
-Boundary tests enforce these imports and the absence of dataset/provider knowledge in the transport.
+Boundary tests enforce these imports and the separation of dataset loading from SDK integration code.
 Kernel source contents, canonical declarations, private records, provenance and verifier resources participate in provenance or cache keys.
-Invalid candidate submissions produce unsuccessful outcomes; provisioning, transfer, driver and protocol failures remain harness errors.
+Invalid candidate submissions produce unsuccessful outcomes; provisioning, transfer, driver and bridge failures remain harness errors.
 
 ## Check the harness offline
 
-Install OCaml 4.13+ (`ocamlc`), ocamlfind, Jsonm, Python 3.12+, [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, and Make.
-Install [ocamlformat](https://github.com/ocaml-ppx/ocamlformat) 0.29.0 through opam; Homebrew does not package it.
-A separate opam switch can reuse the system compiler:
+Install opam, Python 3.12, [uv](https://docs.astral.sh/uv/getting-started/installation/),
+Git, Make and a C compiler. The setup script creates the isolated
+`genius-kernel-414` switch with OCaml 4.14.2 and installs a pinned
+`ocaml-in-python` bridge. A small pinned patch keeps its compiler scratch files
+out of the working directory.
 
 ```sh
-brew install opam
 opam init --bare --no-setup
-opam switch create evals-fmt ocaml-system
-opam install --switch evals-fmt ocamlformat.0.29.0 ocamlfind jsonm
-export PATH="$(opam var --switch evals-fmt bin):$PATH"
+uv sync --project evals --python 3.12 --extra dev --locked --inexact
+make -C evals setup-kernel
+opam install --switch genius-kernel-414 --yes ocamlformat.0.29.0
+opam exec --switch=genius-kernel-414 -- make -C evals check
 ```
 
-From the repository root:
+Python entrypoints below run under that same opam switch. `check-python`
+generates `.pyi` files from `ocaml/ast.ml` and the public `.mli` signatures before
+running mypy; the generated files are ignored by Git. To regenerate them alone:
 
 ```sh
-make -C evals check
+opam exec --switch=genius-kernel-414 -- uv run --project evals python evals/kernel/generate.py
 ```
 
 This installs locked dependencies, checks strict typing, runs tests, and enforces CRAP ≤5.
@@ -145,7 +145,7 @@ GitHub Actions minutes are free for this public repository.
 - `.github/workflows/evals.yml` runs on pushes and pull requests that touch
   `evals/`, `docs/`, or `skills/`. Its `check` job runs `check-scaffolding`,
   `lint-ocaml`, `test-ocaml`, and `check-python` in the Hugging Face Job image
-  (`ghcr.io/astral-sh/uv:python3.12-bookworm` with Debian's OCaml 4.13, ocamlfind and Jsonm). Its
+  (`ghcr.io/astral-sh/uv:python3.12-bookworm` with the same pinned OCaml 4.14 bridge setup). Its
   `format` job runs `check-ocaml-format` with ocamlformat 0.29.0.
 - `.github/workflows/hf-evals.yml` launches a paid hosted run on manual dispatch
   (Actions → HF evals → Run workflow). It runs the `evals.yml` checks first, then
@@ -248,11 +248,11 @@ Sandbox and verifier failures still stop the task.
 
 ## Author cases
 
-Python integrations can author cases using the existing kernel type bindings. The
-example in `python/datasets/smoke.py` returns immutable
-`query.CaseDefinition` values containing fixtures, instructions, code or answer
-criteria, allowed files, and reference solutions. `CaseDefinition` represents the
-full `Ast.case` construction contract; `Case` is its separate public read projection.
+Python datasets construct native `query.Ast.case` values. The example in
+`python/datasets/smoke.py` uses `Ast.instruction`, `Ast.Code` or `Ast.Answer`, and
+`Ast.reference`; `Fixture.of_files` constructs the opaque file map. Public queries
+return `Ast.public_case`, which excludes private checks and reference solutions.
+Python-only metadata and SDK execution capabilities remain Python-owned.
 
 ```python
 from evals.python import commands
@@ -280,7 +280,7 @@ Run all four smoke references from the repository root, with the kernel compiler
 configured as above:
 
 ```sh
-uv run --project evals python -m evals.python.integrations.smoke
+opam exec --switch=genius-kernel-414 -- uv run --project evals python -m evals.python.integrations.smoke
 ```
 
 The CLI compiles the declarations, validates each reference, grades correctness and
@@ -292,8 +292,8 @@ after one loss. Private assertions and reference solutions never enter `Cases` o
 the CLI output.
 
 `LoadDataset(selection="smoke")`, Inspect tasks, and the HF launcher's default
-selection all compile these same Python declarations through the shared OCaml
-declaration decoder. Native OCaml dataset adapters and suite-path selection have
+selection all compile these same Python declarations through the native OCaml
+constructors. Native OCaml dataset adapters and suite-path selection have
 been removed. Kernel unit tests use inert local fixtures rather than the runnable
 smoke dataset.
 
@@ -305,20 +305,30 @@ rejects checks that read missing fixture files and reference edits outside the
 allowed scope. Add a genuinely new success condition to `ast.ml`, its validating
 constructor to `criterion.ml`, and its pure grading logic to `grader.ml`.
 
-Structured answers use `AnswerCriterion` with explicitly named expected fields
-and an optional `TextRule`. A field named `reason` has no special meaning unless
-the criterion declares it. Adding answer fields does not require transport changes.
+Structured answers use `Ast.Answer(Ast.answer(...))` with named `Ast.String`/`Ast.Bool`
+expected fields and an optional `Ast.text_rule`. A field named `reason` has no special meaning unless
+the criterion declares it. Adding answer fields does not require a new binding or API operation.
 
 ## Execution boundary
 
-The host compiles the fixed OCaml module set in a temporary directory.
-`ocaml/transport.ml` consumes canonical case declarations and emits versioned JSON
-projections; `python/transport.py` decodes those projections into frozen values.
-The same compiled kernel serves every dataset. Compilation and validated case indexes are cached
-by source contents and serialized declarations; changing a module, interface,
-trusted driver, or declaration invalidates the relevant cache.
-No generated files are written into this checkout. Both local checks and the
-hosted Job need OCaml 4.13+; the hosted bootstrap installs Debian's `ocaml-nox`, `ocaml-findlib`, and `libjsonm-ocaml-dev`.
+`from kernel import Ast, Grader, Projection` exposes bindings derived from the
+compiled OCaml interfaces. The build generates one export signature, keeping the
+functor-backed fixture opaque, and packs the pure modules to avoid name collisions
+with the bridge runtime. The AST and public `.mli` files remain authoritative.
+
+The host compiles immutable source snapshots into native plugins cached under
+`$XDG_CACHE_HOME/genius-evals/kernel` (or `~/.cache/genius-evals/kernel`). Restart Python after changing kernel sources;
+the native type identities are fixed for each process. Compiler files stay outside the checkout;
+generated `.pyi` files are the only local binding artifacts and are ignored.
+Dataset snapshots retain typed declarations and explicit resources. Resource
+changes invalidate consumer projections without rebuilding native code.
+
+Queries and commands call the native OCaml operations directly. Dataset loading,
+private snapshots and resource resolution live in `python/datasets/__init__.py`.
+SDK adapters convert native values only at their IO boundary; there is no Python
+domain-model mirror, catalog façade or transport layer. The loader preserves the
+host's environment when initializing the OCaml/Python runtime. CI and the hosted
+bootstrap install the same pinned toolchain before running the harness.
 
 Agent samples receive only public project files, selected skill instructions, and
 a case ID. Private checks and reference edits remain host-side and do not enter
@@ -448,8 +458,8 @@ public and requires no API key. The free commands below show the pinned provenan
 checksum-verify the dataset into the user cache and validate three references:
 
 ```sh
-uv run --project evals python -m evals.python.integrations.evalplus.benchmarks info
-uv run --project evals python -m evals.python.integrations.evalplus.benchmarks validate --limit 3
+opam exec --switch=genius-kernel-414 -- uv run --project evals python -m evals.python.integrations.evalplus.benchmarks info
+opam exec --switch=genius-kernel-414 -- uv run --project evals python -m evals.python.integrations.evalplus.benchmarks validate --limit 3
 ```
 
 On macOS, trusted reference validation can explicitly work around EvalPlus's
@@ -538,8 +548,9 @@ Missing candidate input is invalid submission, setup/transfer failures are harne
 errors, and a verifier command deadline is timed out. Answer-only cases allocate
 no grader. Assessment then asks OCaml to grade the canonical outcome.
 
-JSON is used for the OCaml process protocol, standalone verifier output, CLI
-input/output and persisted logs. It is not an internal Python routing protocol.
+JSON is used for dataset records, candidate structured replies, standalone verifier
+output, CLI input/output, provenance hashes and persisted logs. Kernel calls pass
+native typed values directly.
 Standalone drivers require no project imports in their isolated `python -I`
 environments; the public process interface decodes their wire results once.
 

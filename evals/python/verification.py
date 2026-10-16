@@ -6,11 +6,16 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from secrets import token_hex
 from types import MappingProxyType
-from typing import Protocol, cast
+from typing import Literal, Protocol, cast, runtime_checkable
 
 from pydantic import BaseModel, JsonValue, ValidationError
 
-from evals.python._kernel import FROZEN, ExecutableChecks, Verification, VerificationStatus
+from evals.python.schema import FROZEN
+from kernel import Ast
+
+VerificationStatus = Literal[
+    "unchecked", "passed", "failed", "invalid_submission", "timed_out", "harness_error"
+]
 
 type Diagnostic = (
     str | int | float | bool | tuple[Diagnostic, ...] | Mapping[str, Diagnostic] | None
@@ -51,6 +56,7 @@ class Environment:
     write_bytes: Callable[[str, bytes], Awaitable[None]]
 
 
+@runtime_checkable
 class Cleanup(Protocol):
     async def __call__(self, environment: Environment, /, *, interrupted: bool) -> None: ...
 
@@ -63,10 +69,13 @@ class Runtime:
 
 @dataclass(frozen=True, kw_only=True)
 class VerificationResult:
-    verification: Verification
+    verification: Ast.verification
+    detail: str = ""
     metadata: Mapping[str, Diagnostic] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        if isinstance(self.verification, Ast.Harness_error) and not self.detail:
+            object.__setattr__(self, "detail", self.verification[0])
         object.__setattr__(
             self,
             "metadata",
@@ -96,24 +105,25 @@ def completion(result: Completion, *, marker: str) -> VerificationResult:
         evidence = _Evidence.model_validate_json(result.stdout.strip().splitlines()[-1])
     except (ValidationError, IndexError) as error:
         return VerificationResult(
-            verification=Verification(
-                status="harness_error", detail=f"Invalid verifier evidence: {error}"
-            )
+            verification=Ast.Harness_error(f"Invalid verifier evidence: {error}")
         )
     if not all((evidence.marker == marker, result.returncode == 0, evidence.status != "unchecked")):
         return VerificationResult(
-            verification=Verification(
-                status="harness_error", detail="Verifier completion was not authenticated"
-            )
+            verification=Ast.Harness_error("Verifier completion was not authenticated")
         )
     return VerificationResult(
-        verification=Verification(status=evidence.status, detail=evidence.detail),
+        verification=(
+            Ast.Harness_error(evidence.detail)
+            if evidence.status == "harness_error"
+            else cast(Ast.verification, getattr(Ast, evidence.status.capitalize())())
+        ),
+        detail=evidence.detail,
         # The constructor normalizes validated wire JSON into immutable diagnostics.
         metadata=cast(Mapping[str, Diagnostic], evidence.metadata or {}),
     )
 
 
-async def _inputs(checks: ExecutableChecks, *, agent: Environment) -> dict[str, bytes]:
+async def _inputs(checks: Ast.verifier, *, agent: Environment) -> dict[str, bytes]:
     result = {}
     for name in checks.inputs:
         path = f"workspace/{name}"
@@ -126,15 +136,21 @@ async def _inputs(checks: ExecutableChecks, *, agent: Environment) -> dict[str, 
     return result
 
 
+def _contents(value: Ast.content) -> str:
+    if not isinstance(value, Ast.Inline):
+        raise ValueError("Verifier resources must be resolved before execution")
+    return value[0]
+
+
 async def _execute(
-    checks: ExecutableChecks, *, grader: Environment, inputs: dict[str, bytes]
+    checks: Ast.verifier, *, grader: Environment, inputs: dict[str, bytes]
 ) -> VerificationResult:
     setup = await grader.execute(Execution(command=("mkdir", "-p", "workspace")))
     if setup.returncode != 0:
         raise RuntimeError(f"Could not create verifier workspace: {setup.stderr}")
     artifacts = {
         **inputs,
-        **{name: value.encode() for name, value in {**checks.tools, **checks.files}.items()},
+        **{name: _contents(value).encode() for name, value in (*checks.tools, *checks.files)},
     }
     for name, contents in artifacts.items():
         await grader.write_bytes(f"workspace/{name}", contents)
@@ -142,7 +158,7 @@ async def _execute(
     try:
         result = await grader.execute(
             Execution(
-                command=checks.command,
+                command=tuple(checks.command),
                 input=checks.stdin,
                 cwd="workspace",
                 env={"GENIUS_VERIFIER_MARKER": marker},
@@ -150,7 +166,7 @@ async def _execute(
             )
         )
     except TimeoutError as error:
-        return VerificationResult(verification=Verification(status="timed_out", detail=str(error)))
+        return VerificationResult(verification=Ast.Timed_out(), detail=str(error))
     return completion(result, marker=marker)
 
 
@@ -206,23 +222,19 @@ async def allocated(
 
 
 async def verify(
-    checks: ExecutableChecks, *, agent: Environment, runtime: Runtime
+    checks: Ast.verifier, *, agent: Environment, runtime: Runtime
 ) -> VerificationResult:
     try:
         try:
             inputs = await _inputs(checks, agent=agent)
         except FileNotFoundError as error:
             return VerificationResult(
-                verification=Verification(
-                    status="invalid_submission", detail=f"Missing required input: {error}"
-                )
+                verification=Ast.Invalid_submission(), detail=f"Missing required input: {error}"
             )
         async with allocated(runtime, candidate=agent) as grader:
             return await _execute(checks, grader=grader, inputs=inputs)
     except Exception as error:
-        return VerificationResult(
-            verification=Verification(status="harness_error", detail=str(error))
-        )
+        return VerificationResult(verification=Ast.Harness_error(str(error)))
 
 
 async def stage_reference(files: Mapping[str, str], *, agent: Environment) -> None:

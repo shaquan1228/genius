@@ -6,21 +6,27 @@ from evals.python.integrations.smoke import checks
 info = None
 
 
-def receipt(*, term: str = "price") -> query.CaseDefinition:
-    return query.CaseDefinition(
+def receipt(*, term: str = "price") -> query.Ast.case:
+    return query.Ast.case(
         id="clear-task",
-        fixture={
-            "receipt.py": (
-                f"def total(items):\n    return sum({term} for price, quantity in items)\n"
-            ),
-            "test_receipt.py": """import runpy
+        fixture=query.Fixture.of_files(
+            [
+                (
+                    "receipt.py",
+                    f"def total(items):\n    return sum({term} for price, quantity in items)\n",
+                ),
+                (
+                    "test_receipt.py",
+                    """import runpy
 
 total = runpy.run_path("receipt.py")["total"]
 assert total([]) == 0
 assert total([(3.0, 1), (4.0, 1)]) == 7.0
 """,
-        },
-        instruction=query.Instruction(
+                ),
+            ]
+        ),
+        instruction=query.Ast.instruction(
             skill="reasoning",
             prompt=(
                 "Fix total in receipt.py so each item's quantity contributes to the total. "
@@ -41,14 +47,17 @@ assert total([(1.5, 2)]) == 3.0
 """,
         ),
         allowed_files=("receipt.py",),
-        reference=query.ReferenceDefinition(
-            edits={
-                "receipt.py": (
-                    "def total(items):\n"
-                    "    return sum(price * quantity for price, quantity in items)\n"
-                )
-            },
-            completion=query.PlainCompletion(text="Each quantity now contributes to the total."),
+        reference=query.Ast.reference(
+            edits=query.Fixture.of_files(
+                [
+                    (
+                        "receipt.py",
+                        "def total(items):\n"
+                        "    return sum(price * quantity for price, quantity in items)\n",
+                    )
+                ]
+            ),
+            completion=query.Ast.Plain("Each quantity now contributes to the total."),
         ),
     )
 
@@ -66,15 +75,18 @@ def timeout(value=None):
 """
 
 
-def timeout(*, initial: int = 15, requested: int = 30) -> query.CaseDefinition:
+def timeout(*, initial: int = 15, requested: int = 30) -> query.Ast.case:
     if initial <= 0 or requested <= 0 or initial == requested:
         raise ValueError("Timeout changes need distinct positive initial and requested values")
-    return query.CaseDefinition(
+    return query.Ast.case(
         id="known-preflight",
-        fixture={
-            "config.py": f"timeout_seconds = {initial}\n",
-            "client.py": client(initial),
-            "test_client.py": """import runpy
+        fixture=query.Fixture.of_files(
+            [
+                ("config.py", f"timeout_seconds = {initial}\n"),
+                ("client.py", client(initial)),
+                (
+                    "test_client.py",
+                    """import runpy
 
 config = runpy.run_path("config.py")
 client = runpy.run_path("client.py")
@@ -87,8 +99,10 @@ except ValueError:
 else:
     raise AssertionError("nonpositive timeout accepted")
 """,
-        },
-        instruction=query.Instruction(
+                ),
+            ]
+        ),
+        instruction=query.Ast.instruction(
             skill="preflight",
             prompt=(
                 f"On branch eval, change the default timeout from {initial} to {requested} seconds "
@@ -118,21 +132,26 @@ for value in (0, -1):
 """,
         ),
         allowed_files=("config.py", "client.py"),
-        reference=query.ReferenceDefinition(
-            edits={"config.py": f"timeout_seconds = {requested}\n", "client.py": client(requested)},
-            completion=query.PlainCompletion(text="Updated both defaults and preserved overrides."),
+        reference=query.Ast.reference(
+            edits=query.Fixture.of_files(
+                [
+                    ("config.py", f"timeout_seconds = {requested}\n"),
+                    ("client.py", client(requested)),
+                ]
+            ),
+            completion=query.Ast.Plain("Updated both defaults and preserved overrides."),
         ),
     )
 
 
-def cases() -> tuple[query.CaseDefinition, ...]:
+def cases() -> tuple[query.Ast.case, ...]:
     return (
         receipt(),
         timeout(),
-        query.CaseDefinition(
+        query.Ast.case(
             id="small-decision",
-            fixture={},
-            instruction=query.Instruction(
+            fixture=query.Fixture.empty,
+            instruction=query.Ast.instruction(
                 skill="bayesian",
                 prompt=(
                     "Choose a service for a one-month trial. A costs $10 total; B costs $8 total. "
@@ -141,26 +160,31 @@ def cases() -> tuple[query.CaseDefinition, ...]:
                     "Do not change files."
                 ),
             ),
-            criterion=query.AnswerCriterion(
-                expected={"choice": "B"},
-                text_rule=query.TextRule(
-                    field="reason",
-                    min_words=1,
-                    max_words=40,
-                ),
+            criterion=query.Ast.Answer(
+                query.Ast.answer(
+                    expected=[("choice", query.Ast.String("B"))],
+                    text_rule=query.Ast.text_rule(
+                        field="reason",
+                        min_words=1,
+                        max_words=40,
+                    ),
+                )
             ),
             allowed_files=(),
-            reference=query.ReferenceDefinition(
-                edits={},
-                completion=query.StructuredCompletion(
-                    fields={"choice": "B", "reason": "B costs less for identical service."},
+            reference=query.Ast.reference(
+                edits=query.Fixture.empty,
+                completion=query.Ast.Structured(
+                    [
+                        ("choice", query.Ast.String("B")),
+                        ("reason", query.Ast.String("B costs less for identical service.")),
+                    ]
                 ),
             ),
         ),
-        query.CaseDefinition(
+        query.Ast.case(
             id="decision-review",
-            fixture={},
-            instruction=query.Instruction(
+            fixture=query.Fixture.empty,
+            instruction=query.Ast.instruction(
                 skill="bayesian",
                 prompt=(
                     "I took a one-time $1 bet with a known 80% chance of winning $1 profit "
@@ -171,19 +195,24 @@ def cases() -> tuple[query.CaseDefinition, ...]:
                     "change_rule (boolean), and reason (one sentence). Do not change files."
                 ),
             ),
-            criterion=query.AnswerCriterion(
-                expected={"decision_was_supported": True, "change_rule": False},
-                text_rule=query.TextRule(field="reason", min_words=1, max_words=40),
+            criterion=query.Ast.Answer(
+                query.Ast.answer(
+                    expected=[
+                        ("decision_was_supported", query.Ast.Bool(True)),  # noqa: FBT003
+                        ("change_rule", query.Ast.Bool(False)),  # noqa: FBT003
+                    ],
+                    text_rule=query.Ast.text_rule(field="reason", min_words=1, max_words=40),
+                )
             ),
             allowed_files=(),
-            reference=query.ReferenceDefinition(
-                edits={},
-                completion=query.StructuredCompletion(
-                    fields={
-                        "decision_was_supported": True,
-                        "change_rule": False,
-                        "reason": "One loss did not change the known odds.",
-                    },
+            reference=query.Ast.reference(
+                edits=query.Fixture.empty,
+                completion=query.Ast.Structured(
+                    [
+                        ("decision_was_supported", query.Ast.Bool(True)),  # noqa: FBT003
+                        ("change_rule", query.Ast.Bool(False)),  # noqa: FBT003
+                        ("reason", query.Ast.String("One loss did not change the known odds.")),
+                    ]
                 ),
             ),
         ),

@@ -29,16 +29,16 @@ class Problem(BaseModel):
     canonical_solution: str
 
 
-def declarations(records: Iterable[str]) -> tuple[query.CaseDefinition, ...]:
+def declarations(records: Iterable[str]) -> tuple[query.Ast.case, ...]:
     return tuple(declaration(raw) for raw in records)
 
 
-def declaration(raw: str) -> query.CaseDefinition:
+def declaration(raw: str) -> query.Ast.case:
     problem = Problem.model_validate_json(raw)
-    return query.CaseDefinition(
+    return query.Ast.case(
         id="humaneval-" + problem.task_id.split("/")[1],
-        fixture={"solution.py": problem.prompt},
-        instruction=query.Instruction(
+        fixture=query.Fixture.of_files([("solution.py", problem.prompt)]),
+        instruction=query.Ast.instruction(
             skill="reasoning",
             prompt=(
                 "Implement the specified function in solution.py. Preserve its signature and edit "
@@ -49,14 +49,16 @@ def declaration(raw: str) -> query.CaseDefinition:
             record=raw, manifest={**info.model_dump(exclude={"attributes"}), **info.attributes}
         ),
         allowed_files=("solution.py",),
-        reference=query.ReferenceDefinition(
-            edits={"solution.py": problem.prompt + problem.canonical_solution},
-            completion=query.PlainCompletion(text=""),
+        reference=query.Ast.reference(
+            edits=query.Fixture.of_files(
+                [("solution.py", problem.prompt + problem.canonical_solution)]
+            ),
+            completion=query.Ast.Plain(""),
         ),
     )
 
 
-def cases() -> tuple[query.CaseDefinition, ...]:
+def cases() -> tuple[query.Ast.case, ...]:
     data = download(
         request=Download(
             source=info.source, sha256=info.sha256, destination=cache_path(info.sha256)

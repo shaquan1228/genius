@@ -1,0 +1,15 @@
+--- a/ocaml/ocaml_in_python.ml
++++ b/ocaml/ocaml_in_python.ml
+@@ -145,8 +145,11 @@
+           Format.eprintf "%a@." Pprintast.structure structure;
+         end;
+       Compilenv.reset module_name;
++      let cmi_file = Filename.temp_file "ocaml-in-python" ".cmi" in
++      let output_prefix = Filename.chop_extension cmi_file in
+       let impl =
+-        Typemod.type_implementation "" "" module_name ocaml_env structure in
++        Fun.protect ~finally:(fun () -> Sys.remove cmi_file) (fun () ->
++          Typemod.type_implementation "" output_prefix module_name ocaml_env structure) in
+       let transl_implementation =
+         if Config.flambda then
+           Translmod.transl_implementation_flambda

@@ -10,9 +10,10 @@ from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
 from inspect_ai.util import sandbox
 
-from evals.python._kernel import Reference
-from evals.python.catalog import reference
+from evals.python import query
 from evals.python.integrations.inspect.workspace import GIT_IDENTITY, execute
+from evals.python.tests.declarations import _reference_files, _reference_text
+from evals.python.tests.projections import reference
 
 __test__ = False
 
@@ -37,33 +38,33 @@ def echo_model(  # noqa: PLR0917 - Inspect calls mock model callbacks positional
     return ModelOutput.from_content("mockllm/model", messages[-1].text)
 
 
-Step = Callable[[Reference], Awaitable[None]]
+Step = Callable[[query.Ast.reference], Awaitable[None]]
 
 
-async def apply_solution(case: Reference) -> None:
-    for name, text in case.solution.items():
+async def apply_solution(case: query.Ast.reference) -> None:
+    for name, text in _reference_files(case).items():
         await sandbox().write_file(f"workspace/{name}", text)
 
 
-async def write_extra(case: Reference) -> None:
+async def write_extra(case: query.Ast.reference) -> None:
     await sandbox().write_file("workspace/unrequested.txt", "Extra change")
 
 
-async def commit(case: Reference) -> None:
+async def commit(case: query.Ast.reference) -> None:
     await execute(["git", "add", "--all"])
     await execute(["git", *GIT_IDENTITY, "commit", "-q", "-m", "Agent commit"])
 
 
-async def corrupt_instructions(case: Reference) -> None:
+async def corrupt_instructions(case: query.Ast.reference) -> None:
     await sandbox().write_file("instructions/skills/reasoning/SKILL.md", "Corrupted")
 
 
-async def tamper_runner(case: Reference) -> None:
+async def tamper_runner(case: query.Ast.reference) -> None:
     await sandbox().write_file("workspace/test_receipt.py", "raise SystemExit(0)\n")
 
 
-async def exit_early(case: Reference) -> None:
-    for name in case.solution:
+async def exit_early(case: query.Ast.reference) -> None:
+    for name in _reference_files(case):
         path = f"workspace/{name}"
         source = await sandbox().read_file(path)
         await sandbox().write_file(path, "import os\nos._exit(0)\n" + source)
@@ -98,7 +99,7 @@ class Scripted:
         )
         for step in self.scenario.steps:
             await step(case)
-        state.messages.append(ChatMessageUser(content=self.scenario.reply or case.answer))
+        state.messages.append(ChatMessageUser(content=self.scenario.reply or _reference_text(case)))
         return await generate(state)
 
 

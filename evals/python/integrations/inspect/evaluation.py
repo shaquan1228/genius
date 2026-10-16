@@ -51,7 +51,7 @@ def selected_samples(task: Task, *, request: commands.EvaluationSettings) -> lis
 
 
 def evaluation_tasks(
-    spec: commands.Experiment, *, request: commands.EvaluationSettings
+    spec: commands.Ast.experiment, *, request: commands.EvaluationSettings
 ) -> list[Task]:
     catalog = query.LoadDataset(selection=request.dataset)
     instructions = profile_adapter.load_instructions(spec)
@@ -77,10 +77,17 @@ def evaluation_tasks(
 
 
 def diagnostic_tasks(
-    spec: commands.Experiment, *, request: commands.EvaluationSettings, build: partial[Task]
+    spec: commands.Ast.experiment, *, request: commands.EvaluationSettings, build: partial[Task]
 ) -> list[Task]:
     modes = request.deliveries or ()
-    single = spec.model_copy(update={"epochs": 1})
+    single = commands.Ast.experiment(
+        profiles=spec.profiles,
+        epochs=1,
+        message_limit=spec.message_limit,
+        token_limit=spec.token_limit,
+        time_limit=spec.time_limit,
+        cache=spec.cache,
+    )
     profile = profile_adapter.load_profile("genius", spec=spec)
     return [
         build(
