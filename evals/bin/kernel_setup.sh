@@ -9,7 +9,7 @@ cd "$evals_root"
 command -v opam >/dev/null || { echo "Install opam before setting up the OCaml kernel." >&2; exit 1; }
 test -x .venv/bin/python || { echo "Run uv sync --python 3.12 --locked --inexact first." >&2; exit 1; }
 
-if ! opam var root >/dev/null 2>&1; then
+if ! opam var --global root >/dev/null 2>&1; then
     opam init --bare --no-setup --disable-sandboxing --yes
 fi
 if ! opam switch list --short | grep -Fx "$kernel_switch" >/dev/null; then
@@ -20,7 +20,7 @@ fi
 export PATH="$evals_root/.venv/bin:$PATH"
 # Keep the pinned bridge's generated compiler files out of callers' working directories.
 bridge_patch=$(.venv/bin/python -c 'import hashlib, pathlib; print(hashlib.sha256(pathlib.Path("kernel/bridge.patch").read_bytes()).hexdigest()[:16])')
-bridge_source="$(opam var root)/genius-kernel-bridge-$bridge_commit-$bridge_patch"
+bridge_source="$(opam var --global root)/genius-kernel-bridge-$bridge_commit-$bridge_patch"
 if ! test -d "$bridge_source/.git"; then
     git clone --no-checkout https://github.com/ocamllibs/ocaml-in-python.git "$bridge_source"
     git -C "$bridge_source" checkout --detach "$bridge_commit"
