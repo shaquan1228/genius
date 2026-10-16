@@ -13,7 +13,7 @@ from evals.python.integrations.smoke import __main__ as cli
 from evals.python.integrations.smoke import declarations
 
 
-def test_python_smoke_compiles_to_public_cases() -> None:
+def python_smoke_compiles_to_public_cases_test() -> None:
     definitions = declarations.cases()
     dataset = query.CompileDataset(cases=definitions)
     cases = query.Cases(selection=dataset)
@@ -21,7 +21,7 @@ def test_python_smoke_compiles_to_public_cases() -> None:
     assert all(set(case.model_dump()) == {"id", "skill", "prompt", "files"} for case in cases)
 
 
-def test_default_smoke_uses_python_owned_cases() -> None:
+def default_smoke_uses_python_owned_cases_test() -> None:
     definitions = declarations.cases()
     dataset = query.LoadDataset()
     assert dataset is query.CompileDataset(cases=definitions)
@@ -35,12 +35,12 @@ def test_default_smoke_uses_python_owned_cases() -> None:
 
 
 @pytest.mark.parametrize(("initial", "requested"), [(15, 15), (0, 30), (-1, 30), (15, 0), (15, -1)])
-def test_timeout_variants_require_a_real_positive_change(initial: int, *, requested: int) -> None:
+def timeout_variants_require_a_real_positive_change_test(initial: int, *, requested: int) -> None:
     with pytest.raises(ValueError, match="distinct positive"):
         declarations.timeout(initial=initial, requested=requested)
 
 
-def test_python_smoke_keeps_checks_and_references_private() -> None:
+def python_smoke_keeps_checks_and_references_private_test() -> None:
     definitions = declarations.cases()
     dataset = query.CompileDataset(cases=definitions)
     cases = query.Cases(selection=dataset)
@@ -76,7 +76,7 @@ async def assess_code(
     return seed, fixed, outside
 
 
-def test_external_seed_fails_reference_passes_and_scope_is_enforced() -> None:
+def external_seed_fails_reference_passes_and_scope_is_enforced_test() -> None:
     dataset = query.CompileDataset(cases=declarations.cases())
     runtime = query.ExecutionRuntime()
 
@@ -99,7 +99,7 @@ def test_external_seed_fails_reference_passes_and_scope_is_enforced() -> None:
     )
 
 
-def test_external_answer_uses_kernel_rules_without_allocating() -> None:
+def external_answer_uses_kernel_rules_without_allocating_test() -> None:
     dataset = query.CompileDataset(cases=declarations.cases())
     agent = commands.Environment(
         execute=AsyncMock(), read_bytes=AsyncMock(), write_bytes=AsyncMock()
@@ -137,7 +137,7 @@ def run_cli() -> int:
     return cast(int, exited.value.code)
 
 
-def test_offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[str]) -> None:
+def offline_cli_validates_real_references_test(*, capsys: pytest.CaptureFixture[str]) -> None:
     assert run_cli() == 0
     output = capsys.readouterr().out
     rows = [json.loads(line) for line in output.splitlines()]
@@ -152,7 +152,7 @@ def test_offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[
     ]
 
 
-def test_offline_cli_exits_nonzero_on_grading_failure(
+def offline_cli_exits_nonzero_on_grading_failure_test(
     *, capsys: pytest.CaptureFixture[str]
 ) -> None:
     with patch.object(query, "GradeCase", return_value={"correctness": False, "scope": True}):
@@ -163,7 +163,7 @@ def test_offline_cli_exits_nonzero_on_grading_failure(
     )
 
 
-def test_offline_cli_reports_harness_failure_without_success(
+def offline_cli_reports_harness_failure_without_success_test(
     *, capsys: pytest.CaptureFixture[str]
 ) -> None:
     result = commands.VerificationResult(

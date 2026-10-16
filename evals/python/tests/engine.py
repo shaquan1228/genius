@@ -19,10 +19,10 @@ from evals.python.integrations.inspect.agents import AGENT_REGISTRY
 from evals.python.integrations.inspect.tasks import baseline, genius
 from evals.python.tests.scenarios import Mode, crashing
 from evals.python.tests.support import crash_evidence, offline_run, results
-from evals.python.tests.test_verification import agent_port, grader_port, runtime_port
+from evals.python.tests.verification import agent_port, grader_port, runtime_port
 
 
-def test_complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
+def complete_suite_repeats_and_saves_logs_test(tmp_path: Path) -> None:
     with patch("evals.python.catalog.grade", wraps=grade) as grading:
         logs = offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
     assert grading.call_count == 16
@@ -35,7 +35,7 @@ def test_complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
     ] * 2
 
 
-def test_logs_reopen_with_scores_and_model_calls(tmp_path: Path) -> None:
+def logs_reopen_with_scores_and_model_calls_test(tmp_path: Path) -> None:
     log = offline_run([baseline()], mode="pass", directory=tmp_path)[0]
     saved = read_eval_log(str(log.location))
     assert saved.results is not None
@@ -48,12 +48,12 @@ def test_logs_reopen_with_scores_and_model_calls(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("mode", ["extra", "committed-extra", "instructions", "tampered-checks"])
-def test_scope_rejects_extra_committed_and_instruction_edits(*, mode: Mode, tmp_path: Path) -> None:
+def scope_rejects_extra_committed_and_instruction_edits_test(*, mode: Mode, tmp_path: Path) -> None:
     logs = offline_run([baseline(), genius()], mode=mode, directory=tmp_path)
     assert [[scope for _, _, scope in results(log)] for log in logs] == [[INCORRECT] * 4] * 2
 
 
-def test_untouched_seeded_bugs_fail(tmp_path: Path) -> None:
+def untouched_seeded_bugs_fail_test(tmp_path: Path) -> None:
     log = offline_run([baseline()], mode="untouched", directory=tmp_path)[0]
     assert results(log) == sorted(
         [
@@ -65,7 +65,7 @@ def test_untouched_seeded_bugs_fail(tmp_path: Path) -> None:
     )
 
 
-def test_invalid_answers_fail(tmp_path: Path) -> None:
+def invalid_answers_fail_test(tmp_path: Path) -> None:
     log = offline_run([baseline()], mode="bad-answer", directory=tmp_path)[0]
     assert {case: correct for case, correct, _ in results(log)} == {
         "clear-task": CORRECT,
@@ -75,21 +75,21 @@ def test_invalid_answers_fail(tmp_path: Path) -> None:
     }
 
 
-def test_tampered_visible_checks_cannot_pass_seeded_bugs(tmp_path: Path) -> None:
+def tampered_visible_checks_cannot_pass_seeded_bugs_test(tmp_path: Path) -> None:
     log = offline_run([baseline()], mode="tampered-checks", directory=tmp_path)[0]
     coding = {case: correct for case, correct, _ in results(log)}
     assert coding["clear-task"] == INCORRECT
     assert coding["known-preflight"] == INCORRECT
 
 
-def test_early_exit_cannot_skip_heldout_assertions(tmp_path: Path) -> None:
+def early_exit_cannot_skip_heldout_assertions_test(tmp_path: Path) -> None:
     log = offline_run([baseline()], mode="early-exit", directory=tmp_path)[0]
     scores = {case: (correct, scope) for case, correct, scope in results(log)}
     assert scores["clear-task"] == (INCORRECT, CORRECT)
     assert scores["known-preflight"] == (INCORRECT, CORRECT)
 
 
-def test_crashed_agent_is_scored_on_its_workspace(
+def crashed_agent_is_scored_on_its_workspace_test(
     *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     message = "Error executing codex cli agent 1: tool 'apply_patch' was not in request.tools"
@@ -114,7 +114,7 @@ def test_crashed_agent_is_scored_on_its_workspace(
     }
 
 
-def test_verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
+def verifier_infrastructure_failure_is_sample_error_test(tmp_path: Path) -> None:
     with patch(
         "evals.python.verification.verify",
         return_value=commands.VerificationResult(
@@ -127,7 +127,7 @@ def test_verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None
     assert "grader failed to import" in log.error.message
 
 
-def test_scorer_maps_sdk_observation_to_public_assessment() -> None:
+def scorer_maps_sdk_observation_to_public_assessment_test() -> None:
 
     state = TaskState(
         model=ModelName("mockllm/model"),

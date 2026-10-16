@@ -11,10 +11,10 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import catalog, commands, query
-from evals.python.tests.test_declarations import declaration
+from evals.python.tests.declarations import declaration
 
 
-def test_compile_dataset_exposes_canonical_public_cases() -> None:
+def compile_dataset_exposes_canonical_public_cases_test() -> None:
     definition = declaration()
     dataset = assert_type(query.CompileDataset(cases=(definition,)), query.Dataset)
     assert isinstance(dataset, catalog.Catalog)
@@ -22,7 +22,7 @@ def test_compile_dataset_exposes_canonical_public_cases() -> None:
     assert cases[0] is dataset.cases[definition.id]
 
 
-def test_compiled_cases_separate_construction_from_public_projection() -> None:
+def compiled_cases_separate_construction_from_public_projection_test() -> None:
     dataset = query.CompileDataset(cases=(declaration(),))
     (case,) = query.Cases(selection=dataset)
     assert not isinstance(case, query.CaseDefinition)
@@ -30,13 +30,13 @@ def test_compiled_cases_separate_construction_from_public_projection() -> None:
     assert "verify.py" not in case.files
 
 
-def test_compiled_selection_reuses_the_compilation_snapshot() -> None:
+def compiled_selection_reuses_the_compilation_snapshot_test() -> None:
     dataset = query.CompileDataset(cases=(declaration(),))
     assert catalog.sources(dataset) is dataset.sources
     assert catalog.load_dataset(dataset) is dataset
 
 
-def test_compile_query_forwards_canonical_values_and_results() -> None:
+def compile_query_forwards_canonical_values_and_results_test() -> None:
     definition = declaration()
     dataset = query.CompileDataset(cases=(definition,))
     with patch("evals.python.catalog.compile_declarations", return_value=dataset) as compile_cases:
@@ -65,7 +65,7 @@ def independent_datasets() -> tuple[query.Dataset, query.Dataset]:
     return (a, b)
 
 
-def test_compilation_preserves_independent_private_inputs() -> None:
+def compilation_preserves_independent_private_inputs_test() -> None:
     a, b = independent_datasets()
     assert query.Cases(selection=a) == query.Cases(selection=b)
     assert catalog.verifier("external", selection=a) != catalog.verifier("external", selection=b)
@@ -75,7 +75,7 @@ def test_compilation_preserves_independent_private_inputs() -> None:
     }
 
 
-def test_compiled_metadata_queries_do_not_download() -> None:
+def compiled_metadata_queries_do_not_download_test() -> None:
     a, b = independent_datasets()
     with patch("evals.python.catalog.download") as download:
         assert query.DescribeDataset(selection=a) is None
@@ -86,7 +86,7 @@ def test_compiled_metadata_queries_do_not_download() -> None:
     assert b_provenance.info is None
 
 
-def test_compilation_provenance_retains_sources_and_private_records() -> None:
+def compilation_provenance_retains_sources_and_private_records_test() -> None:
     a, b = independent_datasets()
     a_provenance = query.Provenance(selection=a)
     b_provenance = query.Provenance(selection=b)
@@ -96,7 +96,7 @@ def test_compilation_provenance_retains_sources_and_private_records() -> None:
     assert a_provenance.cases_hash == catalog.cases_hash(a)
 
 
-def test_compilation_hashes_include_trusted_source_changes() -> None:
+def compilation_hashes_include_trusted_source_changes_test() -> None:
     dataset = query.CompileDataset(cases=(declaration(),))
     changed = dataset.model_copy(
         update={
@@ -121,7 +121,7 @@ def grade(*, dataset: query.Dataset, verification: query.Verification) -> query.
     )
 
 
-def test_compiled_cases_use_existing_grading_policy() -> None:
+def compiled_cases_use_existing_grading_policy_test() -> None:
     dataset = query.CompileDataset(cases=(declaration(),))
     assert grade(dataset=dataset, verification=query.Verification(status="passed")) == {
         "correctness": True,
@@ -129,7 +129,7 @@ def test_compiled_cases_use_existing_grading_policy() -> None:
     }
 
 
-def test_compiled_grading_preserves_canonical_inputs_and_results() -> None:
+def compiled_grading_preserves_canonical_inputs_and_results_test() -> None:
     dataset = query.CompileDataset(cases=(declaration(),))
     verification = query.Verification(status="passed")
     with patch("evals.python.transport.grade", return_value={"correctness": True}) as kernel_grade:
@@ -139,7 +139,7 @@ def test_compiled_grading_preserves_canonical_inputs_and_results() -> None:
     assert kernel_grade.call_args.kwargs["verification"] is verification
 
 
-def test_compiled_dataset_is_immutable() -> None:
+def compiled_dataset_is_immutable_test() -> None:
     dataset = query.CompileDataset(cases=(declaration(),))
     with pytest.raises(ValidationError):
         dataset.records = {}
@@ -155,7 +155,7 @@ def test_compiled_dataset_is_immutable() -> None:
         dataset.sources.resources[0] = ("changed", "changed")  # type: ignore[index]
 
 
-def test_empty_and_duplicate_compilation() -> None:
+def empty_and_duplicate_compilation_test() -> None:
     dataset = query.CompileDataset(cases=())
     assert query.Cases(selection=dataset) == ()
     assert dataset.records == {}
@@ -163,7 +163,7 @@ def test_empty_and_duplicate_compilation() -> None:
         query.CompileDataset(cases=(declaration(), declaration()))
 
 
-def test_compile_query_validates_its_boundary_without_bypassing_kernel() -> None:
+def compile_query_validates_its_boundary_without_bypassing_kernel_test() -> None:
     compile_dataset: Callable[..., query.Dataset] = query.CompileDataset
     with pytest.raises(ValidationError):
         compile_dataset(cases=[declaration()])
@@ -175,7 +175,7 @@ def test_compile_query_validates_its_boundary_without_bypassing_kernel() -> None
         query.CompileDataset(cases=(invalid,))
 
 
-def test_unknown_case_in_compiled_dataset_fails_closed() -> None:
+def unknown_case_in_compiled_dataset_fails_closed_test() -> None:
     dataset = query.CompileDataset(cases=(declaration(),))
     with pytest.raises(KeyError):
         catalog.case("absent", selection=dataset)
@@ -183,7 +183,7 @@ def test_unknown_case_in_compiled_dataset_fails_closed() -> None:
         query.GradeCase(case_id="absent", response="", changed_files=(), selection=dataset)
 
 
-def test_compiled_selection_flows_through_all_verification_commands() -> None:
+def compiled_selection_flows_through_all_verification_commands_test() -> None:
     dataset = query.CompileDataset(cases=(declaration(code=False),))
     agent = commands.Environment(
         execute=AsyncMock(), read_bytes=AsyncMock(), write_bytes=AsyncMock()

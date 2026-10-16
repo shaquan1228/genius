@@ -37,7 +37,7 @@ def run_crash(kind: AgentKind, *, message: str, monkeypatch: pytest.MonkeyPatch)
     return asyncio.run(contained_agent(kind, version="test")(state, Mock()))
 
 
-def test_registered_harness_uses_shared_and_custom_settings(
+def registered_harness_uses_shared_and_custom_settings_test(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     factory = Mock(return_value=Mock())
@@ -57,7 +57,7 @@ def test_registered_harness_uses_shared_and_custom_settings(
 
 
 @pytest.mark.parametrize("kind", ["claude", "codex"])
-def test_real_swe_bindings_accept_our_options(kind: AgentKind) -> None:
+def real_swe_bindings_accept_our_options_test(kind: AgentKind) -> None:
     assert callable(coding_agent(kind, version="sandbox"))
     assert callable(contained_agent(kind, version="sandbox"))
 
@@ -69,13 +69,13 @@ def test_real_swe_bindings_accept_our_options(kind: AgentKind) -> None:
         ("codex", "inspect_swe._codex_cli.codex_cli"),
     ],
 )
-def test_failure_prefix_matches_inspect_swe(kind: AgentKind, *, module: str) -> None:
+def failure_prefix_matches_inspect_swe_test(kind: AgentKind, *, module: str) -> None:
     source = inspect.getsource(importlib.import_module(module))
     assert f'f"{AGENT_REGISTRY[kind].failure_prefix} {{' in source
 
 
 @pytest.mark.parametrize("kind", ["claude", "codex"])
-def test_agent_crash_is_recorded_for_scoring(
+def agent_crash_is_recorded_for_scoring_test(
     kind: AgentKind, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     message = (
@@ -94,14 +94,14 @@ def test_agent_crash_is_recorded_for_scoring(
         ("codex", "Error executing claude code agent 1: other kind"),
     ],
 )
-def test_other_runtime_errors_still_abort(
+def other_runtime_errors_still_abort_test(
     kind: AgentKind, *, message: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     with pytest.raises(RuntimeError, match=message):
         run_crash(kind, message=message, monkeypatch=monkeypatch)
 
 
-def test_long_failure_keeps_exit_code_and_provider_error() -> None:
+def long_failure_keeps_exit_code_and_provider_error_test() -> None:
     message = "Error executing codex cli agent 1: " + "log line\n" * 1000 + "HTTP 400 apply_patch"
     summary = truncated(message)
     assert (summary[:35], summary[-20:], len(summary) < len(message)) == (
@@ -111,7 +111,7 @@ def test_long_failure_keeps_exit_code_and_provider_error() -> None:
     )
 
 
-def test_claude_options_are_fixed() -> None:
+def claude_options_are_fixed_test() -> None:
     with patch(
         "evals.python.integrations.inspect.agents.claude_code", wraps=claude_code
     ) as factory:
@@ -127,7 +127,7 @@ def test_claude_options_are_fixed() -> None:
     }
 
 
-def test_codex_options_disable_network() -> None:
+def codex_options_disable_network_test() -> None:
     with patch("evals.python.integrations.inspect.agents.codex_cli", wraps=codex_cli) as factory:
         coding_agent("codex", version="0.137.0")
     assert factory.call_args.kwargs == {
@@ -145,7 +145,7 @@ def test_codex_options_disable_network() -> None:
     }
 
 
-def test_explicit_agent_version_is_logged() -> None:
+def explicit_agent_version_is_logged_test() -> None:
     task = build_task(
         profile=profiles.load_profile("genius", spec=query.ExperimentSettings()),
         spec=query.ExperimentSettings(),
@@ -167,7 +167,7 @@ def test_explicit_agent_version_is_logged() -> None:
     assert (metadata["agent"], metadata["agent_version"]) == ("codex", "0.137.0")
 
 
-def test_custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
+def custom_agent_registry_stays_open_through_public_evaluation_and_tasks_test(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setitem(

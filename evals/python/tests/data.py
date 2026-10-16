@@ -39,12 +39,12 @@ def encode(cases: list[dict[str, object]]) -> str:
     return json.dumps({"version": 3, "value": cases})
 
 
-def test_manifest_roundtrip() -> None:
+def manifest_roundtrip_test() -> None:
     cases = load_cases()
     assert decode(encode([case.model_dump() for case in cases])) == cases
 
 
-def test_invalid_ocaml_suite_is_rejected(
+def invalid_ocaml_suite_is_rejected_test(
     *, tmp_path: Path, capfd: pytest.CaptureFixture[str]
 ) -> None:
     path = tmp_path / "suite.ml"
@@ -62,7 +62,7 @@ def test_invalid_ocaml_suite_is_rejected(
         ("solution", {"../outside.ml": "bad"}),
     ],
 )
-def test_generated_paths_are_validated(*, field: str, value: object) -> None:
+def generated_paths_are_validated_test(*, field: str, value: object) -> None:
     data = load_cases()[0].model_dump()
     data[field] = value
     with pytest.raises(ValidationError):
@@ -79,7 +79,7 @@ def grade(case_id: str, *, text: str, suite: Path | None = None) -> bool:
     )["correctness"]
 
 
-def test_profiles_share_fixture_files() -> None:
+def profiles_share_fixture_files_test() -> None:
     spec = query.ExperimentSettings()
     assert load_profile("genius", spec=spec) is spec.profiles[1]
     case = load_cases()[0]
@@ -96,7 +96,7 @@ def test_profiles_share_fixture_files() -> None:
     assert {key: genius[key] for key in baseline} == baseline
 
 
-def test_only_genius_receives_instructions() -> None:
+def only_genius_receives_instructions_test() -> None:
     case = load_cases()[0]
     assert (
         any(
@@ -118,7 +118,7 @@ def test_only_genius_receives_instructions() -> None:
     ) == (False, True)
 
 
-def test_profile_prompts() -> None:
+def profile_prompts_test() -> None:
     case = load_cases()[0]
     assert (
         profiles.prompt(
@@ -136,7 +136,7 @@ def test_profile_prompts() -> None:
     ) == (True, True)
 
 
-def test_samples_keep_task_ids_and_metadata() -> None:
+def samples_keep_task_ids_and_metadata_test() -> None:
     assert [
         sample.id
         for sample in profiles.samples(
@@ -147,7 +147,7 @@ def test_samples_keep_task_ids_and_metadata() -> None:
     ] == [case.id for case in load_cases()]
 
 
-def test_hash_tracks_contents_and_ignores_mapping_order() -> None:
+def hash_tracks_contents_and_ignores_mapping_order_test() -> None:
     before = content_hash({"a": b"before", "b": b"before"})
     assert content_hash({"b": b"before", "a": b"before"}) == before
     assert content_hash({"a": b"after", "b": b"before"}) != before
@@ -157,11 +157,11 @@ def test_hash_tracks_contents_and_ignores_mapping_order() -> None:
     "text",
     ['  {"choice":"B","reason":"Cheap"}  ', '```json\n{"choice":"B","reason":"Cheap"}\n```'],
 )
-def test_json_fences(text: str) -> None:
+def json_fences_test(text: str) -> None:
     assert grade("small-decision", text=text)
 
 
-def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
+def _200_cases_are_values_in_one_ocaml_suite_test(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
     expression = native_timeout_case(
         id_expression='Printf.sprintf "timeout-%d" i',
@@ -177,7 +177,7 @@ def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
     assert [path.name for path in tmp_path.iterdir()] == ["suite.ml"]
 
 
-def test_generated_artifacts_stay_out_of_sample_metadata() -> None:
+def generated_artifacts_stay_out_of_sample_metadata_test() -> None:
     for sample in profiles.samples(
         load_profile(name="baseline", spec=query.ExperimentSettings()),
         cases=query.Cases(),
@@ -191,7 +191,7 @@ def test_generated_artifacts_stay_out_of_sample_metadata() -> None:
         assert not any("heldout" in path for path in sample.files or {})
 
 
-def test_duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
+def duplicate_case_ids_are_rejected_test(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
     expression = native_choice_case(case_id="duplicate", a=10, b=8)
     suite.write_text(f"let c = {expression}\nlet cases = [c; c]\n")
@@ -199,7 +199,7 @@ def test_duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
         load_cases(selection=suite)
 
 
-def test_exporter_escapes_strings(tmp_path: Path) -> None:
+def exporter_escapes_strings_test(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
     expression = native_choice_case(case_id="escaped", a=10, b=8)
     suite.write_text(
@@ -215,7 +215,7 @@ let cases = [{ c with instruction = { c.instruction with prompt = text } }]
     )
 
 
-def test_cases_are_immutable() -> None:
+def cases_are_immutable_test() -> None:
     case = catalog_case("clear-task")
     with pytest.raises(ValidationError):
         case.id = "changed"
@@ -231,7 +231,7 @@ def test_cases_are_immutable() -> None:
     assert catalog_case("clear-task") is case
 
 
-def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> None:
+def compilation_cache_invalidates_when_suite_changes_test(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
     expression = native_choice_case(case_id="cache", a=10, b=8)
     source = f"let cases = [{expression}]\n"
@@ -246,7 +246,7 @@ def test_compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> Non
         assert compiler.call_count == 7
 
 
-def test_generic_python_case_exports_without_language_restriction(tmp_path: Path) -> None:
+def generic_python_case_exports_without_language_restriction_test(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
     suite.write_text("""let cases = [Case.make ~id:"python-case"
       ~fixture:(Fixture.of_files ["solution.py", "print(42)"])
@@ -270,7 +270,7 @@ def test_generic_python_case_exports_without_language_restriction(tmp_path: Path
     }
 
 
-def test_experiment_cache_tracks_native_configuration(tmp_path: Path) -> None:
+def experiment_cache_tracks_native_configuration_test(tmp_path: Path) -> None:
     before = experiment()
     source = transport.OCAML_ROOT / "experiment.ml"
     copied = tmp_path / source.name
@@ -297,7 +297,7 @@ def test_experiment_cache_tracks_native_configuration(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("grade_only", [False, True])
-def test_record_updates_cannot_bypass_kernel_validation(
+def record_updates_cannot_bypass_kernel_validation_test(
     *, grade_only: bool, tmp_path: Path, capfd: pytest.CaptureFixture[str]
 ) -> None:
     suite = tmp_path / "suite.ml"
@@ -317,7 +317,7 @@ def test_record_updates_cannot_bypass_kernel_validation(
 
 @pytest.mark.parametrize("delivery", ["manifest", "inline"])
 @pytest.mark.parametrize("name", REASONING_DOCUMENTS)
-def test_delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, name: str) -> None:
+def delivery_preserves_instruction_bytes_and_baseline_test(delivery: str, *, name: str) -> None:
     mode = cast(commands.InstructionDelivery, delivery)
     case = load_cases()[0]
     root = "/eval/instructions"
@@ -348,7 +348,7 @@ def test_delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, nam
     assert ((REPO_ROOT / name).read_text() in prompt) == (delivery == "inline")
 
 
-def test_delivery_rejects_unimplemented_skill_instead_of_silently_changing_it() -> None:
+def delivery_rejects_unimplemented_skill_instead_of_silently_changing_it_test() -> None:
     with pytest.raises(ValueError, match="reasoning only"):
         profiles.prompt(
             load_profile(name="genius", spec=query.ExperimentSettings()),

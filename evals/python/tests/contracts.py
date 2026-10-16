@@ -46,7 +46,7 @@ def third_grade(*, case_id: str = "third-case", selection: str) -> query.Scores:
     )
 
 
-def test_third_dataset_requires_only_adapter_and_declarations(third_dataset: str) -> None:
+def third_dataset_requires_only_adapter_and_declarations_test(third_dataset: str) -> None:
     cases = catalog.load_cases(selection=third_dataset)
     assert cases[0].id == "third-case"
     task = build_task(
@@ -65,7 +65,7 @@ def test_third_dataset_requires_only_adapter_and_declarations(third_dataset: str
     }
 
 
-def test_default_sandbox_is_local() -> None:
+def default_sandbox_is_local_test() -> None:
     task = build_task(
         profile=profiles.load_profile("baseline", spec=query.ExperimentSettings()),
         spec=query.ExperimentSettings(),
@@ -78,7 +78,7 @@ def test_default_sandbox_is_local() -> None:
     assert task.sandbox.type == "local"
 
 
-def test_third_dataset_imports_and_grades_records(third_dataset: str) -> None:
+def third_dataset_imports_and_grades_records_test(third_dataset: str) -> None:
     imported = catalog.compile_records(sources=catalog.sources("third"), records=("new-case",))
     with patch.object(catalog, "load_dataset", return_value=imported):
         assert third_grade(case_id="new-case", selection=third_dataset)["correctness"]
@@ -86,19 +86,19 @@ def test_third_dataset_imports_and_grades_records(third_dataset: str) -> None:
         assert catalog.verifier("new-case", selection="third") is None
 
 
-def test_public_projection_contains_no_private_material() -> None:
+def public_projection_contains_no_private_material_test() -> None:
     for case in catalog.load_cases():
         assert set(case.model_dump()) == {"id", "skill", "prompt", "files"}
         assert "canonical_solution" not in case.model_dump_json()
         assert "verifier.py" not in case.files
 
 
-def test_public_projection_includes_visible_tools() -> None:
+def public_projection_includes_visible_tools_test() -> None:
     case = catalog.load_cases()[0]
     assert "test_receipt.py" in case.files  # The visible helper remains available to the agent.
 
 
-def test_all_contract_collections_are_immutable() -> None:
+def all_contract_collections_are_immutable_test() -> None:
     case_id = "clear-task"
     reference = catalog.reference(case_id)
     info = catalog.dataset_info("humanevalplus")
@@ -113,7 +113,7 @@ def test_all_contract_collections_are_immutable() -> None:
     assert isinstance(spec.profiles[0].instructions, tuple)
 
 
-def test_run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
+def run_overrides_are_resolved_once_and_shared_with_inspect_test() -> None:
     original = catalog.experiment()
     spec = ExperimentSettings(epochs=2, token_limit=1234, cache=True)
     task = build_task(
@@ -135,32 +135,32 @@ def test_run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
 
 @pytest.mark.parametrize("field", ["epochs", "message_limit", "token_limit", "time_limit"])
 @pytest.mark.parametrize("value", [0, -1])
-def test_kernel_rejects_invalid_run_overrides(field: str, *, value: int) -> None:
+def kernel_rejects_invalid_run_overrides_test(field: str, *, value: int) -> None:
     operation = cast(Callable[..., query.Experiment], ExperimentSettings)
     with pytest.raises(subprocess.CalledProcessError):
         operation(**{field: value})
 
 
 @pytest.mark.parametrize("payload", [{"epochs": 1.5}, {"cache": 1}, {"unknown": 1}])
-def test_protocol_rejects_malformed_run_overrides(payload: dict[str, object]) -> None:
+def protocol_rejects_malformed_run_overrides_test(payload: dict[str, object]) -> None:
     with pytest.raises(subprocess.CalledProcessError):
         transport.invoke(sources=catalog.sources(), operation="--experiment", payload=payload)
 
 
 @pytest.mark.parametrize("version", [2, 4, True])
-def test_public_projection_requires_exact_protocol_version(version: object) -> None:
+def public_projection_requires_exact_protocol_version_test(version: object) -> None:
     with pytest.raises(ValidationError):
         transport.decode(json.dumps({"version": version, "value": []}))
 
 
-def test_unknown_or_unsafe_dataset_is_rejected() -> None:
+def unknown_or_unsafe_dataset_is_rejected_test() -> None:
     with pytest.raises(FileNotFoundError):
         query.Cases(selection="does-not-exist")
     with pytest.raises(ValidationError):
         query.Cases(selection="../outside")
 
 
-def test_benchmark_adapter_requires_provenance() -> None:
+def benchmark_adapter_requires_provenance_test() -> None:
     with (
         patch("evals.python.catalog.dataset_info", return_value=None),
         pytest.raises(ValueError, match="provenance"),
@@ -168,13 +168,13 @@ def test_benchmark_adapter_requires_provenance() -> None:
         benchmarks.benchmark_info()
 
 
-def test_transport_rejects_duplicate_export_ids() -> None:
+def transport_rejects_duplicate_export_ids_test() -> None:
     case = catalog.load_cases()[0].model_dump()
     with pytest.raises(ValueError, match="unique"):
         transport.decode(json.dumps({"version": 3, "value": [case, case]}))
 
 
-def test_verifier_projection_is_cached_but_grading_is_not() -> None:
+def verifier_projection_is_cached_but_grading_is_not_test() -> None:
     case_id = "clear-task"
     checks = catalog.verifier(case_id)
     grade = partial(

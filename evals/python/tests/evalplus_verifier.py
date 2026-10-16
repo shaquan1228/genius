@@ -17,7 +17,7 @@ import pytest
 from evals.python.integrations.evalplus import evalplus_verifier as driver
 from evals.python.integrations.evalplus.benchmarks import benchmark_info
 from evals.python.paths import EVALS_ROOT
-from evals.python.tests.test_humaneval import record
+from evals.python.tests.humaneval import record
 
 
 def payload() -> driver.Payload:
@@ -36,7 +36,7 @@ def payload() -> driver.Payload:
         ("import os\nos._exit(0)\ndef identity(x):\n    return x\n", "timed_out"),
     ],
 )
-def test_official_checker(
+def official_checker_test(
     *, tmp_path: Path, source: str, status: str, memory_limit: str | None
 ) -> None:
     (tmp_path / "solution.py").write_text(source)
@@ -68,7 +68,7 @@ def test_official_checker(
     assert evidence["metadata"]["dataset"]["sha256"] == benchmark_info().sha256
 
 
-def test_installed_revision() -> None:
+def installed_revision_test() -> None:
     distribution = Mock()
     distribution.read_text.return_value = '{"vcs_info":{"commit_id":"abc"}}'
     with patch("importlib.metadata.distribution", return_value=distribution):
@@ -80,7 +80,7 @@ def test_installed_revision() -> None:
         assert not driver.installed("abc")
 
 
-def test_dependency_bootstrap_uses_private_target() -> None:
+def dependency_bootstrap_uses_private_target_test() -> None:
     manifest = payload()["manifest"]
     with (
         patch.object(driver, "installed", return_value=False),
@@ -114,13 +114,13 @@ def test_dependency_bootstrap_uses_private_target() -> None:
         ({"base": "timeout", "plus": "fail"}, "timed_out"),
     ],
 )
-def test_phase_statuses(
+def phase_statuses_test(
     *, statuses: dict[driver.PhaseName, driver.PhaseStatus], expected: str
 ) -> None:
     assert driver.outcome(statuses) == expected
 
 
-def test_unknown_upstream_status_rejected() -> None:
+def unknown_upstream_status_rejected_test() -> None:
     reference, evaluator = (Mock(), Mock())
     reference.trusted_exec.return_value = ([1], [0.1])
     evaluator.untrusted_check.return_value = ("unknown", [])
@@ -137,7 +137,7 @@ def test_unknown_upstream_status_rejected() -> None:
     assert evaluator.untrusted_check.call_args.kwargs["fast_check"] is True
 
 
-def test_driver_reports_json_errors(
+def driver_reports_json_errors_test(
     *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("GENIUS_VERIFIER_MARKER", "marker")
@@ -155,14 +155,14 @@ def test_driver_reports_json_errors(
     }
 
 
-def test_encoding_error_invalid_submission() -> None:
+def encoding_error_invalid_submission_test() -> None:
     data = payload()
     with patch.object(Path, "read_text", side_effect=UnicodeError("encoding")):
         evidence = driver.evaluate(data)
     assert (evidence["status"], evidence["detail"]) == ("invalid_submission", "encoding")
 
 
-def test_phase_exception_retains_provenance() -> None:
+def phase_exception_retains_provenance_test() -> None:
     metadata: dict[str, object] = {"dataset": {"sha256": "digest"}}
     with patch.object(driver, "phase", side_effect=["pass", RuntimeError("reference failed")]):
         evidence = driver.evaluate_phases(
@@ -178,7 +178,7 @@ def test_phase_exception_retains_provenance() -> None:
 
 
 @pytest.mark.parametrize("dependency", ["numpy", "psutil"])
-def test_missing_runtime_dependency(dependency: str) -> None:
+def missing_runtime_dependency_test(dependency: str) -> None:
     manifest = payload()["manifest"]
     versions = {"numpy": manifest["numpy_version"], "psutil": manifest["psutil_version"]}
 
@@ -194,7 +194,7 @@ def test_missing_runtime_dependency(dependency: str) -> None:
         assert not driver.installed_runtime(manifest)
 
 
-def test_evaluate_preserves_upstream_evidence(
+def evaluate_preserves_upstream_evidence_test(
     *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -212,7 +212,7 @@ def test_evaluate_preserves_upstream_evidence(
     assert_runtime_evidence(evidence["metadata"])
 
 
-def test_syntax_error_retains_provenance(
+def syntax_error_retains_provenance_test(
     *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -235,7 +235,7 @@ def assert_runtime_evidence(metadata: dict[str, object]) -> None:
 
 
 @pytest.mark.parametrize("missing", [True, False])
-def test_invalid_phase_inputs_are_harness_errors(
+def invalid_phase_inputs_are_harness_errors_test(
     *, missing: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("EVALPLUS_MAX_MEMORY_BYTES", raising=False)
@@ -251,7 +251,7 @@ def test_invalid_phase_inputs_are_harness_errors(
     assert evidence["metadata"]["phases"] == {"base": "pass"}
 
 
-def test_execute_cleans_private_dependencies(
+def execute_cleans_private_dependencies_test(
     *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -280,7 +280,7 @@ def test_execute_cleans_private_dependencies(
         (["ocaml"], "Expected verifier mode: evalplus"),
     ],
 )
-def test_driver_entrypoint(
+def driver_entrypoint_test(
     *,
     arguments: list[str],
     expected_error: str,
@@ -303,7 +303,7 @@ def test_driver_entrypoint(
     assert expected_error in evidence["detail"]
 
 
-def test_expanded_inputs_can_fail_after_base_passes(
+def expanded_inputs_can_fail_after_base_passes_test(
     *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)

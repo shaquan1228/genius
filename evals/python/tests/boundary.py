@@ -31,7 +31,7 @@ def runtime_files() -> tuple[Path, ...]:
     return tuple(path for path in PYTHON_ROOT.rglob("*.py") if "tests" not in path.parts)
 
 
-def test_only_transport_and_standalone_drivers_use_subprocess() -> None:
+def only_transport_and_standalone_drivers_use_subprocess_test() -> None:
     callers = {
         str(path.relative_to(PYTHON_ROOT))
         for path in runtime_files()
@@ -44,7 +44,7 @@ def test_only_transport_and_standalone_drivers_use_subprocess() -> None:
     }
 
 
-def test_core_cannot_import_integrations_or_sdks() -> None:
+def core_cannot_import_integrations_or_sdks_test() -> None:
     dependencies = {
         name for file in ("_kernel.py", "transport.py") for name in imported(PYTHON_ROOT / file)
     }
@@ -54,14 +54,14 @@ def test_core_cannot_import_integrations_or_sdks() -> None:
     )
 
 
-def test_transport_has_no_dataset_or_provider_dispatch() -> None:
+def transport_has_no_dataset_or_provider_dispatch_test() -> None:
     assert not re.search(r"humaneval|evalplus|hugging|inspect_ai", EXPORTER.read_text(), re.I)
     assert not re.search(
         r"humaneval|evalplus|hugging|inspect_ai", (PYTHON_ROOT / "transport.py").read_text(), re.I
     )
 
 
-def test_inspect_integration_does_not_select_hugging_face() -> None:
+def inspect_integration_does_not_select_hugging_face_test() -> None:
     imports = {
         name
         for path in (PYTHON_ROOT / "integrations/inspect").glob("*.py")
@@ -70,13 +70,13 @@ def test_inspect_integration_does_not_select_hugging_face() -> None:
     assert not any(name.startswith("evals.python.integrations.hugging_face") for name in imports)
 
 
-def test_transport_internals_stay_private() -> None:
+def transport_internals_stay_private_test() -> None:
     names = {name for path in runtime_files() for name in imported(path)}
     assert not any(name.startswith("evals.python.transport._") for name in names)
     assert not any(name.startswith("evals.python.tests") for name in names)
 
 
-def test_domain_modules_are_codec_free() -> None:
+def domain_modules_are_codec_free_test() -> None:
     assert sorted(OCAML_ROOT.glob("*.ml*")) == sorted(
         (*LIBRARY, SUITE, DATASET_INTERFACE, EXPORTER)
     )
@@ -85,12 +85,12 @@ def test_domain_modules_are_codec_free() -> None:
     assert not any(re.search(r"Jsonm|Codec|print_", path.read_text()) for path in domain)
 
 
-def test_only_codec_uses_json_library() -> None:
+def only_codec_uses_json_library_test() -> None:
     users = {path.name for path in LIBRARY if re.search(r"\bJsonm\b", path.read_text())}
     assert users == {"codec.ml"}
 
 
-def test_integration_entry_points_use_explicit_catalog_selection() -> None:
+def integration_entry_points_use_explicit_catalog_selection_test() -> None:
     expected = {"case": (1, 1), "reference": (1, 1), "verifier": (1, 1), "grade": (0, 5)}
     signatures = {
         node.name: (len(node.args.args), len(node.args.kwonlyargs))
@@ -100,7 +100,7 @@ def test_integration_entry_points_use_explicit_catalog_selection() -> None:
     assert signatures == expected
 
 
-def test_shared_domain_types_live_in_ast() -> None:
+def shared_domain_types_live_in_ast_test() -> None:
     operations = (
         "fixture",
         "response",
@@ -117,12 +117,12 @@ def test_shared_domain_types_live_in_ast() -> None:
     assert not re.search(r"^let |^module ", (OCAML_ROOT / "ast.ml").read_text(), re.M)
 
 
-def test_public_interfaces_only_declare_operations() -> None:
+def public_interfaces_only_declare_operations_test() -> None:
     interfaces = [path.read_text() for path in OCAML_ROOT.glob("*.mli")]
     assert not any(re.search(r"^type ", body, re.M) for body in interfaces)
 
 
-def test_integrations_do_not_import_sibling_implementations() -> None:
+def integrations_do_not_import_sibling_implementations_test() -> None:
     for path in runtime_files():
         if "integrations" not in path.parts:
             continue
@@ -134,7 +134,7 @@ def test_integrations_do_not_import_sibling_implementations() -> None:
         ), str(path)
 
 
-def test_hugging_face_owns_only_its_sdk() -> None:
+def hugging_face_owns_only_its_sdk_test() -> None:
     dependencies = {
         name
         for path in (PYTHON_ROOT / "integrations/hugging_face").glob("*.py")
@@ -149,12 +149,12 @@ def test_hugging_face_owns_only_its_sdk() -> None:
 @pytest.mark.parametrize(
     ("owner", "filename"), [("evalplus", "evalplus_verifier.py"), ("smoke", "verifier.py")]
 )
-def test_framework_driver_is_standalone(owner: str, *, filename: str) -> None:
+def framework_driver_is_standalone_test(owner: str, *, filename: str) -> None:
     path = PYTHON_ROOT / "integrations" / owner / filename
     assert {name.split(".")[0] for name in imported(path)} <= sys.stdlib_module_names
 
 
-def test_integrations_use_typed_public_operations_without_legacy_facades() -> None:
+def integrations_use_typed_public_operations_without_legacy_facades_test() -> None:
     obsolete = (
         "command.py",
         "contracts.py",
@@ -172,7 +172,7 @@ def test_integrations_use_typed_public_operations_without_legacy_facades() -> No
     assert not any(name.startswith("evals.python.verification") for name in imports)
 
 
-def test_integrations_cannot_bypass_the_public_operation_contract() -> None:
+def integrations_cannot_bypass_the_public_operation_contract_test() -> None:
     private = (
         "evals.python._kernel",
         "evals.python.catalog",
@@ -185,7 +185,7 @@ def test_integrations_cannot_bypass_the_public_operation_contract() -> None:
     assert not any(name.startswith(private) for name in imports)
 
 
-def test_public_commands_and_verification_have_no_sdk_imports() -> None:
+def public_commands_and_verification_have_no_sdk_imports_test() -> None:
     imports = {
         name
         for file in ("commands.py", "query.py", "verification.py")
@@ -197,7 +197,7 @@ def test_public_commands_and_verification_have_no_sdk_imports() -> None:
 
 
 @pytest.mark.parametrize("path", sorted((PYTHON_ROOT / "integrations").rglob("*.py")))
-def test_integrations_import_public_namespaces_or_single_values(path: Path) -> None:
+def integrations_import_public_namespaces_or_single_values_test(path: Path) -> None:
     imports = [
         node
         for node in nodes(path, kind=ast.ImportFrom)
@@ -213,7 +213,7 @@ def test_integrations_import_public_namespaces_or_single_values(path: Path) -> N
     )
 
 
-def test_case_query_does_not_load_runner_sdks() -> None:
+def case_query_does_not_load_runner_sdks_test() -> None:
     script = """from evals.python import query
 from evals.python import commands
 import sys

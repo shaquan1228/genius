@@ -65,7 +65,7 @@ def seed(case_id: str, *, directory: Path) -> Case:
 
 
 @pytest.mark.parametrize("case_id", ["clear-task", "known-preflight"])
-def test_seeds_fail_and_solutions_pass(*, case_id: str, tmp_path: Path) -> None:
+def seeds_fail_and_solutions_pass_test(*, case_id: str, tmp_path: Path) -> None:
     case = seed(case_id, directory=tmp_path)
     assert not verify(case, directory=tmp_path)
     write_files(tmp_path, files=reference(case.id).solution)
@@ -75,7 +75,7 @@ def test_seeds_fail_and_solutions_pass(*, case_id: str, tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("term", ["price", "price * max(quantity, 1)"])
-def test_receipt_partial_fixes_fail(*, term: str, tmp_path: Path) -> None:
+def receipt_partial_fixes_fail_test(*, term: str, tmp_path: Path) -> None:
     case = seed("clear-task", directory=tmp_path)
     (tmp_path / "receipt.py").write_text(
         f"def total(items):\n    return sum({term} for price, quantity in items)\n"
@@ -93,7 +93,7 @@ def test_receipt_partial_fixes_fail(*, term: str, tmp_path: Path) -> None:
         (30, 30, "value", False),
     ],
 )
-def test_preflight_defaults_overrides_and_validation(
+def preflight_defaults_overrides_and_validation_test(
     *,
     config: int,
     client: int,
@@ -127,7 +127,7 @@ def test_preflight_defaults_overrides_and_validation(
         "import os\nos._exit(0)\ndef total(items): return 0\n",
     ],
 )
-def test_compile_and_runtime_errors_fail(*, source: str, tmp_path: Path) -> None:
+def compile_and_runtime_errors_fail_test(*, source: str, tmp_path: Path) -> None:
     case = seed("clear-task", directory=tmp_path)
     (tmp_path / "receipt.py").write_text(source)
     assert not verify(case, directory=tmp_path)
@@ -140,7 +140,7 @@ def test_compile_and_runtime_errors_fail(*, source: str, tmp_path: Path) -> None
         ("known-preflight", "test_client.py"),
     ],
 )
-def test_visible_check_command_leaves_no_build_files(
+def visible_check_command_leaves_no_build_files_test(
     *,
     case_id: str,
     script: str,
@@ -167,7 +167,7 @@ def test_visible_check_command_leaves_no_build_files(
         (declarations.receipt(term="price * max(quantity, 1)"), "receipt.py", "max(quantity, 1)"),
     ],
 )
-def test_family_variants_generate_working_seeds_and_solutions(
+def family_variants_generate_working_seeds_and_solutions_test(
     *,
     definition: query.CaseDefinition,
     filename: str,
@@ -183,7 +183,7 @@ def test_family_variants_generate_working_seeds_and_solutions(
     assert verify(case, directory=tmp_path, selection=dataset)
 
 
-def test_native_suite_can_declare_python_candidate_checks(tmp_path: Path) -> None:
+def native_suite_can_declare_python_candidate_checks_test(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
     expression = native_timeout_case(id_expression='"native"', initial="7", requested="17")
     suite.write_text(f"let cases = [{expression}]\n")

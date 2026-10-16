@@ -90,7 +90,7 @@ async def run(agent: Environment, *, runtime: Runtime) -> VerificationResult:
 
 
 @pytest.mark.parametrize("source", ["print(42)", "print(0)"])
-def test_python_inputs_execute_in_fresh_workspace(source: str) -> None:
+def python_inputs_execute_in_fresh_workspace_test(source: str) -> None:
     async def execute() -> None:
         agent = LocalSandboxEnvironment()
         directory = Path(agent.directory.name)
@@ -128,7 +128,7 @@ def test_python_inputs_execute_in_fresh_workspace(source: str) -> None:
         (envelope(marker="forged", metadata={"untrusted": True}), 0),
     ],
 )
-def test_invalid_completion_discards_metadata(*, stdout: str, code: int) -> None:
+def invalid_completion_discards_metadata_test(*, stdout: str, code: int) -> None:
     async def execute() -> None:
         result = await run(
             agent_port(), runtime=runtime_port(grader_port(stdout=stdout, code=code))
@@ -139,7 +139,7 @@ def test_invalid_completion_discards_metadata(*, stdout: str, code: int) -> None
     asyncio.run(execute())
 
 
-def test_valid_completion_allows_prior_stdout_and_freezes_nested_metadata() -> None:
+def valid_completion_allows_prior_stdout_and_freezes_nested_metadata_test() -> None:
     async def execute() -> None:
         result = await run(
             agent_port(),
@@ -161,7 +161,7 @@ def test_valid_completion_allows_prior_stdout_and_freezes_nested_metadata() -> N
 
 
 @pytest.mark.parametrize("missing", ["inspection", "read"])
-def test_missing_candidate_is_invalid_before_allocation(missing: str) -> None:
+def missing_candidate_is_invalid_before_allocation_test(missing: str) -> None:
     async def execute() -> None:
         agent = agent_port()
         if missing == "inspection":
@@ -181,7 +181,7 @@ def test_missing_candidate_is_invalid_before_allocation(missing: str) -> None:
 
 @pytest.mark.parametrize("stage", ["inspection", "read", "provision", "mkdir", "transfer"])
 @pytest.mark.parametrize("error", [TimeoutError("slow"), RuntimeError("server")])
-def test_infrastructure_failures_are_harness_errors(*, stage: str, error: Exception) -> None:
+def infrastructure_failures_are_harness_errors_test(*, stage: str, error: Exception) -> None:
     async def execute() -> None:
         agent, grader = agent_port(), grader_port()
         ports = runtime_port(grader)
@@ -201,7 +201,7 @@ def test_infrastructure_failures_are_harness_errors(*, stage: str, error: Except
     asyncio.run(execute())
 
 
-def test_workspace_creation_failure_is_reported_and_cleaned() -> None:
+def workspace_creation_failure_is_reported_and_cleaned_test() -> None:
     async def execute() -> None:
         grader = grader_port()
         cast(AsyncMock, grader.execute).side_effect = [output(code=1)]
@@ -214,7 +214,7 @@ def test_workspace_creation_failure_is_reported_and_cleaned() -> None:
     asyncio.run(execute())
 
 
-def test_only_verifier_execution_deadline_is_timed_out() -> None:
+def only_verifier_execution_deadline_is_timed_out_test() -> None:
     async def execute() -> None:
         grader = grader_port()
         cast(AsyncMock, grader.execute).side_effect = [output(), TimeoutError("command deadline")]
@@ -226,7 +226,7 @@ def test_only_verifier_execution_deadline_is_timed_out() -> None:
     asyncio.run(execute())
 
 
-def test_same_environment_is_rejected_without_destroying_candidate() -> None:
+def same_environment_is_rejected_without_destroying_candidate_test() -> None:
     async def execute() -> None:
         agent = agent_port()
         ports = runtime_port(agent)
@@ -237,7 +237,7 @@ def test_same_environment_is_rejected_without_destroying_candidate() -> None:
     asyncio.run(execute())
 
 
-def test_cancellation_cleans_created_environment() -> None:
+def cancellation_cleans_created_environment_test() -> None:
     async def execute() -> None:
         grader = grader_port()
         cast(AsyncMock, grader.execute).side_effect = asyncio.CancelledError()
@@ -250,7 +250,7 @@ def test_cancellation_cleans_created_environment() -> None:
 
 
 @pytest.mark.parametrize("fails", [False, True])
-def test_cancelled_allocation_waits_for_eventual_environment(*, fails: bool) -> None:
+def cancelled_allocation_waits_for_eventual_environment_test(*, fails: bool) -> None:
     async def execute() -> None:
         started, release = asyncio.Event(), asyncio.Event()
         grader = grader_port()
@@ -278,7 +278,7 @@ def test_cancelled_allocation_waits_for_eventual_environment(*, fails: bool) -> 
     asyncio.run(execute())
 
 
-def test_cleanup_finishes_after_repeated_cancellation() -> None:
+def cleanup_finishes_after_repeated_cancellation_test() -> None:
     async def execute() -> None:
         started, release, finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
 
@@ -310,7 +310,7 @@ def test_cleanup_finishes_after_repeated_cancellation() -> None:
         {"timeout_seconds": 0},
     ],
 )
-def test_invalid_executable_contract_is_rejected(updates: dict[str, object]) -> None:
+def invalid_executable_contract_is_rejected_test(updates: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         checks(**updates)
 
@@ -318,7 +318,7 @@ def test_invalid_executable_contract_is_rejected(updates: dict[str, object]) -> 
 @pytest.mark.parametrize(
     "status", ["unchecked", "passed", "failed", "invalid_submission", "timed_out"]
 )
-def test_typed_status_reaches_kernel(status: str) -> None:
+def typed_status_reaches_kernel_test(status: str) -> None:
     scores = GradeCase(
         case_id="clear-task",
         response="",
@@ -328,7 +328,7 @@ def test_typed_status_reaches_kernel(status: str) -> None:
     assert scores["correctness"] == (status == "passed")
 
 
-def test_kernel_refuses_harness_error() -> None:
+def kernel_refuses_harness_error_test() -> None:
     with pytest.raises(subprocess.CalledProcessError):
         GradeCase(
             case_id="clear-task",
@@ -338,14 +338,14 @@ def test_kernel_refuses_harness_error() -> None:
         )
 
 
-def test_private_artifacts_are_excluded_from_public_files() -> None:
+def private_artifacts_are_excluded_from_public_files_test() -> None:
     for case in load_cases():
         executable = verifier(case.id)
         if isinstance(executable, ExecutableChecks):
             assert not executable.files.keys() & case.files.keys()
 
 
-def test_public_answer_only_verification_never_allocates() -> None:
+def public_answer_only_verification_never_allocates_test() -> None:
     async def execute() -> None:
         ports = runtime_port(grader_port())
         with patch("evals.python.catalog.verifier", return_value=None):
@@ -357,7 +357,7 @@ def test_public_answer_only_verification_never_allocates() -> None:
     asyncio.run(execute())
 
 
-def test_assessment_grades_canonical_observation_and_freezes_scores() -> None:
+def assessment_grades_canonical_observation_and_freezes_scores_test() -> None:
     async def execute() -> None:
         expected = GradeCase(case_id="clear-task", response="answer", changed_files=("receipt.py",))
         with patch("evals.python.catalog.verifier", return_value=None):
@@ -379,7 +379,7 @@ def test_assessment_grades_canonical_observation_and_freezes_scores() -> None:
     asyncio.run(execute())
 
 
-def test_assessment_refuses_harness_error_before_grading() -> None:
+def assessment_refuses_harness_error_before_grading_test() -> None:
     async def execute() -> None:
         with (
             patch("evals.python.catalog.verifier", return_value=checks()),
@@ -399,7 +399,7 @@ def test_assessment_refuses_harness_error_before_grading() -> None:
 
 
 @pytest.mark.parametrize("code", [0, 1, 2])
-def test_candidate_inspection_classifies_missing_and_infrastructure(code: int) -> None:
+def candidate_inspection_classifies_missing_and_infrastructure_test(code: int) -> None:
     async def execute() -> None:
         sandbox = AsyncMock(spec=LocalSandboxEnvironment)
         sandbox.exec.return_value = ExecResult(
@@ -417,14 +417,14 @@ def test_candidate_inspection_classifies_missing_and_infrastructure(code: int) -
     asyncio.run(execute())
 
 
-def test_execution_environment_is_immutable_snapshot() -> None:
+def execution_environment_is_immutable_snapshot_test() -> None:
     values = {"marker": "original"}
     request = Execution(command=("python3",), env=values)
     values["marker"] = "changed"
     assert request.env == {"marker": "original"}
 
 
-def test_reference_uses_default_local_adapter_and_real_ocaml() -> None:
+def reference_uses_default_local_adapter_and_real_ocaml_test() -> None:
     async def execute() -> commands.VerificationResult:
         return assert_type(
             await commands.ValidateReference(case_id="clear-task"),
@@ -435,7 +435,7 @@ def test_reference_uses_default_local_adapter_and_real_ocaml() -> None:
     assert result.verification.status == "passed", result.verification.detail
 
 
-def test_answer_only_reference_never_allocates() -> None:
+def answer_only_reference_never_allocates_test() -> None:
     ports = runtime_port(grader_port())
     with patch("evals.python.catalog.verifier", return_value=None):
         result = asyncio.run(commands.ValidateReference(case_id="answer", runtime=ports))
@@ -443,7 +443,7 @@ def test_answer_only_reference_never_allocates() -> None:
     cast(AsyncMock, ports.create).assert_not_awaited()
 
 
-def test_reference_candidate_and_grader_are_both_cleaned() -> None:
+def reference_candidate_and_grader_are_both_cleaned_test() -> None:
     async def execute() -> None:
         agent, grader = agent_port(), grader_port()
         ports = runtime_port(grader)
@@ -468,7 +468,7 @@ def test_reference_candidate_and_grader_are_both_cleaned() -> None:
 
 
 @pytest.mark.parametrize("stage", ["allocation", "mkdir", "transfer", "cancel"])
-def test_reference_setup_failures_preserve_lifecycle(stage: str) -> None:
+def reference_setup_failures_preserve_lifecycle_test(stage: str) -> None:
     async def execute() -> None:
         agent = agent_port()
         ports = runtime_port(agent)
@@ -502,7 +502,7 @@ def test_reference_setup_failures_preserve_lifecycle(stage: str) -> None:
     asyncio.run(execute())
 
 
-def test_reference_nonzero_mkdir_is_harness_error() -> None:
+def reference_nonzero_mkdir_is_harness_error_test() -> None:
     async def execute() -> None:
         agent = agent_port()
         cast(AsyncMock, agent.execute).return_value = output(code=1)
@@ -517,7 +517,7 @@ def test_reference_nonzero_mkdir_is_harness_error() -> None:
     asyncio.run(execute())
 
 
-def test_assessment_replaces_untrusted_verification_with_execution() -> None:
+def assessment_replaces_untrusted_verification_with_execution_test() -> None:
     async def execute() -> None:
         untrusted = Verification(status="failed")
         prior_scores = GradeCase(
@@ -545,7 +545,7 @@ def test_assessment_replaces_untrusted_verification_with_execution() -> None:
     asyncio.run(execute())
 
 
-def test_assessment_runs_actual_private_checks_before_grading() -> None:
+def assessment_runs_actual_private_checks_before_grading_test() -> None:
     async def execute() -> None:
         agent = LocalSandboxEnvironment()
         try:
@@ -570,7 +570,7 @@ def test_assessment_runs_actual_private_checks_before_grading() -> None:
 
 
 @pytest.mark.parametrize("cancelled", [False, True])
-def test_cleanup_failure_preserves_cancellation(*, cancelled: bool) -> None:
+def cleanup_failure_preserves_cancellation_test(*, cancelled: bool) -> None:
     async def execute() -> None:
         grader = grader_port()
         if cancelled:
@@ -589,7 +589,7 @@ def test_cleanup_failure_preserves_cancellation(*, cancelled: bool) -> None:
     asyncio.run(execute())
 
 
-def test_cancelled_cleanup_failure_still_propagates_cancellation() -> None:
+def cancelled_cleanup_failure_still_propagates_cancellation_test() -> None:
     async def execute() -> None:
         started, release = asyncio.Event(), asyncio.Event()
 
@@ -609,7 +609,7 @@ def test_cancelled_cleanup_failure_still_propagates_cancellation() -> None:
     asyncio.run(execute())
 
 
-def test_cancelled_allocation_never_cleans_candidate() -> None:
+def cancelled_allocation_never_cleans_candidate_test() -> None:
     async def execute() -> None:
         started, release = asyncio.Event(), asyncio.Event()
         agent = agent_port()

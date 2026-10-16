@@ -17,12 +17,12 @@ from evals.python import commands, query
 from evals.python.integrations.inspect import evaluation, profiles, scoring
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.support import offline_run, results
-from evals.python.tests.test_declarations import declaration
+from evals.python.tests.declarations import declaration
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
 
-def test_instruction_snapshot_survives_source_changes(
+def instruction_snapshot_survives_source_changes_test(
     tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     spec = query.ExperimentSettings()
@@ -39,7 +39,7 @@ def test_instruction_snapshot_survives_source_changes(
     assert dict(snapshot) == {f"instructions/{name}": data for name, data in material.items()}
 
 
-def test_composition_uses_supplied_bytes_without_filesystem_access() -> None:
+def composition_uses_supplied_bytes_without_filesystem_access_test() -> None:
     spec = query.ExperimentSettings()
     profile = profiles.load_profile("genius", spec=spec)
     snapshot = profiles.load_instructions(spec)
@@ -63,7 +63,7 @@ def test_composition_uses_supplied_bytes_without_filesystem_access() -> None:
 
 
 @pytest.mark.parametrize("deliveries", [None, ("files", "manifest")])
-def test_evaluation_prepares_once_for_all_tasks(
+def evaluation_prepares_once_for_all_tasks_test(
     deliveries: tuple[commands.InstructionDelivery, ...] | None,
 ) -> None:
     spec = query.ExperimentSettings(epochs=2)
@@ -133,7 +133,7 @@ def private_tasks() -> list[Task]:
     return tasks
 
 
-def test_native_logs_keep_private_snapshots_out_and_score_each_dataset(
+def native_logs_keep_private_snapshots_out_and_score_each_dataset_test(
     private_tasks: list[Task], *, tmp_path: Path
 ) -> None:
     with patch("evals.python.catalog.sources", side_effect=AssertionError("late source read")):
@@ -147,5 +147,5 @@ def test_native_logs_keep_private_snapshots_out_and_score_each_dataset(
     )
 
 
-def test_registered_scorer_remains_reconstructible_after_binding(private_tasks: list[Task]) -> None:
+def registered_scorer_remains_reconstructible_after_binding_test(private_tasks: list[Task]) -> None:
     assert scorer_create("evaluation") is scoring.score_sample

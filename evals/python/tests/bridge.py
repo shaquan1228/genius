@@ -30,7 +30,7 @@ def judgment(*, response: str, suite: Selection = "smoke") -> bool:
     )["correctness"]
 
 
-def test_kernel_grades_response_and_scope() -> None:
+def kernel_grades_response_and_scope_test() -> None:
     scores = GradeCase(
         case_id="small-decision",
         response='{"choice":"B","reason":"Lower cost."}',
@@ -53,7 +53,7 @@ def test_kernel_grades_response_and_scope() -> None:
         '{"version":3,"scores":{"correctness":true,"scope":true},"extra":1}',
     ],
 )
-def test_invalid_kernel_output_is_a_harness_error(response: str) -> None:
+def invalid_kernel_output_is_a_harness_error_test(response: str) -> None:
     judgment(response="{}")
     with (
         patch(
@@ -65,7 +65,7 @@ def test_invalid_kernel_output_is_a_harness_error(response: str) -> None:
         judgment(response="{}")
 
 
-def test_unknown_kernel_score_names_are_rejected() -> None:
+def unknown_kernel_score_names_are_rejected_test() -> None:
     judgment(response="{}")
     with (
         patch(
@@ -77,7 +77,7 @@ def test_unknown_kernel_score_names_are_rejected() -> None:
         judgment(response="{}")
 
 
-def test_unknown_case_is_a_harness_error() -> None:
+def unknown_case_is_a_harness_error_test() -> None:
     with pytest.raises(subprocess.CalledProcessError):
         GradeCase(
             case_id="unknown",
@@ -88,7 +88,7 @@ def test_unknown_case_is_a_harness_error() -> None:
 
 
 @pytest.mark.parametrize("error", [TimeoutError("timeout"), subprocess.CalledProcessError(1, [])])
-def test_kernel_process_errors_propagate(error: Exception) -> None:
+def kernel_process_errors_propagate_test(error: Exception) -> None:
     judgment(response="{}")
     with (
         patch("evals.python.transport.subprocess.run", side_effect=error),
@@ -97,14 +97,14 @@ def test_kernel_process_errors_propagate(error: Exception) -> None:
         judgment(response="{}")
 
 
-def test_candidate_response_cannot_execute_code(tmp_path: Path) -> None:
+def candidate_response_cannot_execute_code_test(tmp_path: Path) -> None:
     sentinel = tmp_path / "candidate-ran"
     candidate = f'let () = let c = open_out "{sentinel}" in close_out c'
     assert not judgment(response=candidate)
     assert not sentinel.exists()
 
 
-def test_grading_does_not_recompile_or_cache_results() -> None:
+def grading_does_not_recompile_or_cache_results_test() -> None:
     judgment(response="{}")
     responses = ("invalid", '{"choice":"B","reason":"Cheap"}', '{"choice":"A","reason":"Cheap"}')
     with patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as process:
@@ -114,7 +114,7 @@ def test_grading_does_not_recompile_or_cache_results() -> None:
 
 
 @pytest.mark.parametrize("source", [*LIBRARY, *DRIVERS])
-def test_kernel_cache_tracks_every_trusted_source(*, source: Path, tmp_path: Path) -> None:
+def kernel_cache_tracks_every_trusted_source_test(*, source: Path, tmp_path: Path) -> None:
     copied = tmp_path / source.name
     copied.write_text(source.read_text() + "\n")
     judgment(response="{}")
@@ -142,15 +142,15 @@ def test_kernel_cache_tracks_every_trusted_source(*, source: Path, tmp_path: Pat
         "[" * 10_000 + "]" * 10_000,
     ],
 )
-def test_invalid_candidate_values_fail_without_harness_error(response: str) -> None:
+def invalid_candidate_values_fail_without_harness_error_test(response: str) -> None:
     assert not judgment(response=response)
 
 
-def test_candidate_duplicate_keys_keep_last_value() -> None:
+def candidate_duplicate_keys_keep_last_value_test() -> None:
     assert judgment(response='{"choice":"A","choice":"B","reason":"Cheap"}')
 
 
-def test_additional_named_scores_cross_bridge_without_decoder_changes() -> None:
+def additional_named_scores_cross_bridge_without_decoder_changes_test() -> None:
     judgment(response="{}")
     response = '{"version":3,"scores":{"correctness":true,"scope":false,"new_metric":true}}'
     with patch(
@@ -166,7 +166,7 @@ def test_additional_named_scores_cross_bridge_without_decoder_changes() -> None:
     assert dict(scores) == {"correctness": True, "scope": False, "new_metric": True}
 
 
-def test_reference_channels_export_independently_and_escape(tmp_path: Path) -> None:
+def reference_channels_export_independently_and_escape_test(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
     suite.write_text(r"""let fields = Response.of_fields [
       "state", Ast.String "quote\" \\ \n é";
@@ -199,5 +199,5 @@ let cases = [Case.make ~id:"reference" ~fixture:Fixture.empty
         '{"choice":"B","reason":"ok",}',
     ],
 )
-def test_nonstandard_json_is_an_incorrect_candidate(response: str) -> None:
+def nonstandard_json_is_an_incorrect_candidate_test(response: str) -> None:
     assert not judgment(response=response)

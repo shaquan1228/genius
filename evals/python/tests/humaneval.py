@@ -43,7 +43,7 @@ def record(**updates: object) -> str:
     )
 
 
-def test_import_preserves_original_private_json() -> None:
+def import_preserves_original_private_json_test() -> None:
     raw = record()
     checks = imported_verifier(raw)
     assert isinstance(checks, ExecutableChecks)
@@ -51,7 +51,7 @@ def test_import_preserves_original_private_json() -> None:
     assert str(2**326 + 17) in checks.stdin
 
 
-def test_imported_case_keeps_grader_private() -> None:
+def imported_case_keeps_grader_private_test() -> None:
     case = import_records((record(),))[0]
     assert case.id == "humaneval-0"
     assert imported_reference(record()).solution["solution.py"].endswith("    return x\n")
@@ -62,7 +62,7 @@ def test_imported_case_keeps_grader_private() -> None:
     ) == (False, False)
 
 
-def test_imported_profile_public_inputs_match() -> None:
+def imported_profile_public_inputs_match_test() -> None:
     case = import_records((record(),))[0]
     assert {
         name: profiles.files(
@@ -94,12 +94,12 @@ def test_imported_profile_public_inputs_match() -> None:
         ("[]",),
     ],
 )
-def test_malformed_import_rejected(records: tuple[str, ...]) -> None:
+def malformed_import_rejected_test(records: tuple[str, ...]) -> None:
     with pytest.raises(subprocess.CalledProcessError):
         import_records(records)
 
 
-def test_dataset_selector_grades_one_trusted_record() -> None:
+def dataset_selector_grades_one_trusted_record_test() -> None:
     raw = record()
     case = import_records((raw,))[0]
     compiled = catalog.compile_records(sources=catalog.sources("humanevalplus"), records=(raw,))
@@ -126,7 +126,7 @@ def test_dataset_selector_grades_one_trusted_record() -> None:
     }
 
 
-def test_pinned_manifest() -> None:
+def pinned_manifest_test() -> None:
     info = benchmark_info()
     assert info.count == 164
     assert info.revision == "v0.1.10"
@@ -145,13 +145,13 @@ def synthetic_dataset(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         catalog._catalog.cache_clear()
 
 
-def test_dataset_index_keeps_all_cases(synthetic_dataset: None) -> None:
+def dataset_index_keeps_all_cases_test(synthetic_dataset: None) -> None:
     cases = load_cases(selection="humanevalplus")
     assert (len(cases), len({case.id for case in cases})) == (164, 164)
     assert all(tuple(case.files) == ("solution.py",) for case in cases)
 
 
-def test_import_cache_tracks_verifier_source(
+def import_cache_tracks_verifier_source_test(
     *, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     load_cases(selection="humanevalplus")
@@ -172,7 +172,7 @@ def test_import_cache_tracks_verifier_source(
     assert checks.files["verifier.py"] == (dict(resources)["evalplus_verifier.py"] + "\n")
 
 
-def test_dataset_count_mismatch(
+def dataset_count_mismatch_test(
     *, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("evals.python.catalog.download", lambda request: record().encode())
@@ -180,20 +180,20 @@ def test_dataset_count_mismatch(
         load_cases(selection="humanevalplus")
 
 
-def test_duplicate_ids_across_import_batches() -> None:
+def duplicate_ids_across_import_batches_test() -> None:
     records = (*(record(task_id=f"HumanEval/{i}") for i in range(16)), record())
     with pytest.raises(ValueError, match="unique"):
         import_records(records)
 
 
-def test_custom_smoke_suite_still_supported(tmp_path: Path) -> None:
+def custom_smoke_suite_still_supported_test(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
     suite.write_text("let cases = []")
     assert load_cases(selection=suite) == ()
 
 
 @pytest.mark.parametrize("driver", ["verifier.py", "evalplus_verifier.py"])
-def test_case_hash_tracks_private_verifier_code(
+def case_hash_tracks_private_verifier_code_test(
     *, driver: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     before = cases_hash("smoke")
@@ -212,7 +212,7 @@ def test_case_hash_tracks_private_verifier_code(
     assert query.Provenance(selection="smoke").source_hash != source_before
 
 
-def test_case_hash_tracks_private_records_without_changing_public_cases() -> None:
+def case_hash_tracks_private_records_without_changing_public_cases_test() -> None:
     original = catalog.compile_records(
         sources=catalog.sources("humanevalplus"), records=(record(),)
     )
@@ -227,7 +227,7 @@ def test_case_hash_tracks_private_records_without_changing_public_cases() -> Non
         assert query.Provenance(selection="humanevalplus").cases_hash != before
 
 
-def test_imported_dataset_grade_uses_cached_record(synthetic_dataset: None) -> None:
+def imported_dataset_grade_uses_cached_record_test(synthetic_dataset: None) -> None:
     task = baseline(dataset="humanevalplus")
     assert task.metadata is not None
     assert task.metadata["benchmark"]["count"] == len(task.dataset) == 164
