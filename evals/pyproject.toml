@@ -50,7 +50,7 @@ mypy_path = ".."
 [tool.pytest.ini_options]
 testpaths = ["python/tests"]
 python_files = ["*.py"]
-python_functions = ["[!_]*"]
+python_functions = ["[a-z]*"]
 addopts = "-q"
 pythonpath = [".."]
 
