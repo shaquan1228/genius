@@ -91,7 +91,7 @@ def test_integration_entry_points_use_explicit_catalog_selection() -> None:
     expected = {"case": (1, 1), "reference": (1, 1), "verifier": (1, 1), "grade": (0, 2)}
     signatures = {
         node.name: (len(node.args.args), len(node.args.kwonlyargs))
-        for node in nodes(PYTHON_ROOT / "integrations/datasets/catalog.py", kind=ast.FunctionDef)
+        for node in nodes(PYTHON_ROOT / "catalog.py", kind=ast.FunctionDef)
         if node.name in expected
     }
     assert signatures == expected

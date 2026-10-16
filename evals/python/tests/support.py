@@ -8,9 +8,8 @@ from inspect_ai import Task, eval
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import get_model
 
-from evals.python import transport
+from evals.python import catalog, transport
 from evals.python.contracts import Case, ExecutableChecks, Reference
-from evals.python.integrations.datasets import catalog
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.scenarios import Mode, echo_model, scripted
 

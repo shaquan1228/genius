@@ -8,16 +8,16 @@ from unittest.mock import patch
 
 import pytest
 
-from evals.python.contracts import ExecutableChecks, GradeRequest, Sources, Verification
-from evals.python.integrations.datasets import catalog
-from evals.python.integrations.datasets.catalog import (
+from evals.python import catalog, commands
+from evals.python.catalog import (
     case as catalog_case,
 )
-from evals.python.integrations.datasets.catalog import (
+from evals.python.catalog import (
     cases_hash,
     grade,
     load_cases,
 )
+from evals.python.contracts import ExecutableChecks, GradeRequest, Sources, Verification
 from evals.python.integrations.evalplus.benchmarks import (
     benchmark_info,
 )
@@ -89,7 +89,7 @@ def test_dataset_selector_grades_one_trusted_record() -> None:
     raw = record()
     case = import_records((raw,))[0]
     compiled = catalog.compile_records(sources=catalog.sources("humanevalplus"), records=(raw,))
-    with patch("evals.python.integrations.datasets.catalog._selected", return_value=compiled):
+    with patch("evals.python.catalog._selected", return_value=compiled):
         assert catalog_case(case.id, selection="humanevalplus") == case
         assert load_cases(selection="humanevalplus") == (case,)
         assert grade(
@@ -121,7 +121,7 @@ def test_pinned_manifest() -> None:
 def synthetic_dataset(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     data = "\n".join(record(task_id=f"HumanEval/{i}") for i in range(164)).encode()
     catalog._catalog.cache_clear()
-    monkeypatch.setattr("evals.python.integrations.datasets.catalog.download", lambda request: data)
+    monkeypatch.setattr("evals.python.catalog.download", lambda request: data)
     try:
         yield
     finally:
@@ -158,9 +158,7 @@ def test_import_cache_tracks_verifier_source(
 def test_dataset_count_mismatch(
     *, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        "evals.python.integrations.datasets.catalog.download", lambda request: record().encode()
-    )
+    monkeypatch.setattr("evals.python.catalog.download", lambda request: record().encode())
     with pytest.raises(ValueError, match="count"):
         load_cases(selection="humanevalplus")
 
@@ -182,6 +180,7 @@ def test_case_hash_tracks_private_verifier_code(
     *, driver: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     before = cases_hash("smoke")
+    source_before = commands.source_hash("smoke")
     resources = catalog.sources().resources
     updated = tuple(
         (name, source + "\n" if name == driver else source) for name, source in resources
@@ -193,6 +192,22 @@ def test_case_hash_tracks_private_verifier_code(
         lambda selection="smoke": Sources(modules=original(selection).modules, resources=updated),
     )
     assert cases_hash("smoke") != before
+    assert commands.source_hash("smoke") != source_before
+
+
+def test_case_hash_tracks_private_records_without_changing_public_cases() -> None:
+    original = catalog.compile_records(
+        sources=catalog.sources("humanevalplus"), records=(record(),)
+    )
+    changed = catalog.compile_records(
+        sources=original.sources, records=(record(plus_input=[[123]]),)
+    )
+    with patch.object(catalog, "_selected", return_value=original):
+        before = commands.cases_hash("humanevalplus")
+        public = commands.load_cases(selection="humanevalplus")
+    with patch.object(catalog, "_selected", return_value=changed):
+        assert commands.load_cases(selection="humanevalplus") == public
+        assert commands.cases_hash("humanevalplus") != before
 
 
 def test_imported_dataset_grade_uses_cached_record(synthetic_dataset: None) -> None:

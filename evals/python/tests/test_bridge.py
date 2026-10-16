@@ -8,14 +8,14 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python.contracts import GradeRequest, Verification
-from evals.python.integrations.datasets.catalog import (
+from evals.python.catalog import (
     RUNNER,
     grade,
     load_cases,
     reference,
     verifier,
 )
+from evals.python.contracts import GradeRequest, Verification
 from evals.python.transport import LIBRARY, SUITE
 
 
@@ -127,7 +127,7 @@ def test_kernel_cache_tracks_every_trusted_source(*, source: Path, tmp_path: Pat
     runner = {source: copied}.get(RUNNER, RUNNER)
     with (
         patch("evals.python.transport.LIBRARY", library),
-        patch("evals.python.integrations.datasets.catalog.RUNNER", runner),
+        patch("evals.python.catalog.RUNNER", runner),
         patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as process,
     ):
         assert judgment(response='{"choice":"B","reason":"Cheap"}')
@@ -220,7 +220,7 @@ def test_kernel_cache_tracks_trusted_python_runtime(tmp_path: Path) -> None:
     runtime.write_text(driver.read_text() + "\n")
     with (
         patch(
-            "evals.python.integrations.datasets.catalog.DRIVERS",
+            "evals.python.catalog.DRIVERS",
             (runtime, RUNNER.parent.parent / "python/integrations/evalplus/evalplus_verifier.py"),
         ),
         patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as process,

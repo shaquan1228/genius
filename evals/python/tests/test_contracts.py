@@ -8,9 +8,8 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import transport
+from evals.python import catalog, commands, transport
 from evals.python.contracts import GradeRequest, RunOverrides, Verification
-from evals.python.integrations.datasets import catalog
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.integrations.inspect.tasks import TaskRequest, build_task
 from evals.python.tests.support import ocaml_choice_case
@@ -127,14 +126,16 @@ def test_public_projection_requires_exact_protocol_version(version: object) -> N
 
 def test_unknown_or_unsafe_dataset_is_rejected() -> None:
     with pytest.raises(FileNotFoundError):
-        catalog.load_cases(selection="does-not-exist")
+        commands.load_cases(selection="does-not-exist")
     with pytest.raises(ValidationError):
-        catalog.load_cases(selection="../outside")
+        commands.load_cases(selection="../outside")
 
 
 def test_benchmark_adapter_requires_provenance() -> None:
     with (
-        patch.object(catalog, "dataset_info", return_value=None),
+        patch(
+            "evals.python.integrations.datasets.commands.catalog.dataset_info", return_value=None
+        ),
         pytest.raises(ValueError, match="provenance"),
     ):
         benchmarks.benchmark_info()

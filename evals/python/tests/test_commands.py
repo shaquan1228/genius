@@ -7,12 +7,53 @@ from unittest.mock import patch
 
 import pytest
 
+from evals.python import catalog, commands
 from evals.python.command import command
-from evals.python.contracts import GradeRequest, Verification
-from evals.python.integrations.datasets import catalog
+from evals.python.contracts import DatasetInfo, Experiment, GradeRequest, RunOverrides, Verification
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.integrations.inspect import datasets
 from evals.python.paths import EVALS_ROOT
+
+
+def test_public_commands_preserve_canonical_objects() -> None:
+    case = commands.load_cases()[0]
+    assert case is catalog.load_cases()[0]
+    assert commands.verifier(case.id) is catalog.verifier(case.id)
+    expected = catalog.reference(case.id)
+    with patch("evals.python.transport.reference", return_value=expected):
+        assert commands.reference(case.id) is expected
+
+
+def test_public_commands_select_canonical_projections() -> None:
+    assert commands.verifier("small-decision") is None
+    assert commands.load_cases(selection=EVALS_ROOT / "ocaml/suite.ml") == catalog.load_cases()
+    assert commands.dataset_info("smoke") is None
+    assert isinstance(commands.dataset_info("humanevalplus"), DatasetInfo)
+
+
+def test_public_experiment_resolves_canonical_overrides() -> None:
+    overrides = RunOverrides(epochs=2)
+    spec = commands.experiment(overrides)
+    assert isinstance(spec, Experiment)
+    assert spec.epochs == overrides.epochs
+
+
+def test_public_hashes_match_existing_provenance() -> None:
+    assert commands.source_hash("smoke") == datasets.source_hash("smoke")
+    assert commands.cases_hash("smoke") == catalog.cases_hash("smoke")
+
+
+def test_public_grade_preserves_request_and_result() -> None:
+    request = GradeRequest(
+        case_id="clear-task",
+        response="",
+        changed_files=(),
+        verification=Verification(status="passed"),
+    )
+    with patch("evals.python.transport.grade", return_value={"correctness": True}) as grade:
+        result = commands.grade(request=request)
+    assert grade.call_args.kwargs["request"] is request
+    assert result is grade.return_value
 
 
 @pytest.mark.parametrize(
@@ -56,7 +97,9 @@ def test_local_suite_selection_survives_json_roundtrip() -> None:
 def test_missing_dataset_metadata_is_explicit() -> None:
     assert json.loads(command("dataset.metadata")) is None
     assert datasets.benchmark_metadata("smoke") == {}
-    with patch.object(catalog, "dataset_info", return_value=None):
+    with patch(
+        "evals.python.integrations.datasets.commands.catalog.dataset_info", return_value=None
+    ):
         assert (
             json.loads(command("dataset.metadata", payload='{"selection":"humanevalplus"}')) is None
         )
