@@ -4,17 +4,17 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
-from kernel import Code, Criterion, Inline, Verifier
+from kernel import Content, Criterion, Verifier
 
 
-def checks(*, record: str, manifest: Mapping[str, object]) -> Criterion:
-    return Code(
+def checks(*, record: str, manifest: Mapping[str, object]) -> Criterion.Value:
+    return Criterion.Code(
         Verifier(
             inputs=("solution.py",),
             files=(
                 (
                     "verifier.py",
-                    Inline(Path(__file__).with_name("evalplus_verifier.py").read_text()),
+                    Content.Inline(Path(__file__).with_name("evalplus_verifier.py").read_text()),
                 ),
             ),
             tools=(),

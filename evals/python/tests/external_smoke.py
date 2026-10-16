@@ -12,7 +12,7 @@ from evals.python import commands, queries
 from evals.python.datasets import smoke as declarations
 from evals.python.integrations.smoke import __main__ as cli
 from evals.python.tests.declarations import _files, _reference_files
-from kernel import Case, Code, Failed, HarnessError, Passed, Unchecked
+from kernel import Case, Criterion, Verification
 
 
 def python_smoke_compiles_to_public_cases() -> None:
@@ -47,7 +47,7 @@ def python_smoke_keeps_checks_and_references_private() -> None:
     dataset = queries.compile_dataset(cases=definitions)
     cases = queries.list_cases(selection=dataset)
     code = definitions[0]
-    assert isinstance(code.criterion, Code)
+    assert isinstance(code.criterion, Criterion.Code)
     assert code.criterion[0].stdin not in json.dumps(_files(cases[0].files))
     assert _reference_files(code.reference)["receipt.py"] not in _files(cases[0].files).values()
     assert "verifier.py" not in dict(cases[0].files)
@@ -93,8 +93,8 @@ def external_seed_fails_reference_passes_and_scope_is_enforced() -> None:
             await runtime.cleanup(agent, interrupted=False)
 
     results = asyncio.run(execute())
-    assert isinstance(results[0].verification, Failed)
-    assert all(isinstance(result.verification, Passed) for result in results[1:])
+    assert isinstance(results[0].verification, Verification.Failed)
+    assert all(isinstance(result.verification, Verification.Passed) for result in results[1:])
     assert tuple(result.scores for result in results) == (
         {"correctness": False, "scope": True},
         {"correctness": True, "scope": True},
@@ -123,7 +123,7 @@ def external_answer_uses_kernel_rules_without_allocating() -> None:
         '{"decision_was_supported":true,"change_rule":false,"reason":"Check existing behavior"}'
     )
     result = asyncio.run(assess(response))
-    assert isinstance(result.verification, Unchecked)
+    assert isinstance(result.verification, Verification.Unchecked)
     assert result.scores == {"correctness": True, "scope": True}
     wrong_type = asyncio.run(assess(response.replace("true", '"true"')))
     assert wrong_type.scores == {"correctness": False, "scope": True}
@@ -167,7 +167,9 @@ def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixtur
 def offline_cli_reports_harness_failure_without_success(
     *, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    result = commands.VerificationResult(verification=HarnessError("private diagnostic"))
+    result = commands.VerificationResult(
+        verification=Verification.HarnessError("private diagnostic")
+    )
     with patch.object(commands, "validate_reference", new=AsyncMock(return_value=result)):
         assert _run_cli() == 1
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines()]

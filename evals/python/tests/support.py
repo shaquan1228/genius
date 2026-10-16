@@ -17,13 +17,13 @@ from evals.python.tests.scenarios import Mode
 from evals.python.tests.scenarios import echo_model as _echo_model
 from evals.python.tests.scenarios import scripted as _scripted
 from kernel import (
-    Answer,
     Case,
+    Completion,
+    Criterion,
     Instruction,
     Reference,
+    ResponseValue,
     Rubric,
-    String,
-    Structured,
     Task,
     TextRule,
     Verifier,
@@ -90,19 +90,19 @@ def choice_case(*, case_id: str, a: int, b: int) -> Task:
         id=case_id,
         fixture=fixture_ops.empty,
         instruction=Instruction(skill="reasoning", prompt="Choose A or B with a reason"),
-        criterion=Answer(
+        criterion=Criterion.Answer(
             Rubric(
-                expected=[("choice", String(choice))],
+                expected=[("choice", ResponseValue.String(choice))],
                 text_rule=TextRule(field="reason", min_words=1, max_words=40),
             )
         ),
         allowed_files=(),
         reference=Reference(
             edits=fixture_ops.empty,
-            completion=Structured(
+            completion=Completion.Structured(
                 [
-                    ("choice", String(choice)),
-                    ("reason", String("The cost is lower.")),
+                    ("choice", ResponseValue.String(choice)),
+                    ("reason", ResponseValue.String("The cost is lower.")),
                 ]
             ),
         ),

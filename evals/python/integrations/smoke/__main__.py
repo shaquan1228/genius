@@ -4,15 +4,15 @@ import sys
 from typing import assert_never
 
 from evals.python import commands, queries
-from kernel import Case, Completion, HarnessError, Passed, Plain, Structured, Unchecked
+from kernel import Case, Completion, Verification
 from kernel._operations import fixture as fixture_ops
 
 
-def response(completion: Completion) -> str:
+def response(completion: Completion.Value) -> str:
     match completion:
-        case Plain():
+        case Completion.Plain():
             return completion[0]
-        case Structured():
+        case Completion.Structured():
             return json.dumps({name: value[0] for name, value in completion[0]})
         case _ as unreachable:
             assert_never(unreachable)
@@ -22,7 +22,7 @@ async def validate(case: Case, *, dataset: queries.Dataset) -> bool:
     reference = queries.get_reference(case_id=case.id, selection=dataset)
     result = await commands.validate_reference(case_id=case.id, selection=dataset)
     scores: queries.Scores = {}
-    if not isinstance(result.verification, HarnessError):
+    if not isinstance(result.verification, Verification.HarnessError):
         scores = queries.score_case(
             case_id=case.id,
             response=response(reference.completion),
@@ -41,7 +41,9 @@ async def validate(case: Case, *, dataset: queries.Dataset) -> bool:
             }
         )
     )
-    return isinstance(result.verification, (Passed, Unchecked)) and all(scores.values())
+    return isinstance(result.verification, (Verification.Passed, Verification.Unchecked)) and all(
+        scores.values()
+    )
 
 
 async def main() -> int:

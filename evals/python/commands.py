@@ -19,7 +19,7 @@ from evals.python.verification import (
     Runtime,
     VerificationResult,
 )
-from kernel import HarnessError, Unchecked
+from kernel import Verification
 from kernel._operations import fixture as fixture_ops
 from kernel._operations import projection as projection_ops
 
@@ -112,7 +112,7 @@ async def verify(
 ) -> VerificationResult:
     checks = projection_ops.verifier(datasets.record(case_id, selection=selection))
     if checks is None:
-        return VerificationResult(verification=Unchecked())
+        return VerificationResult(verification=Verification.Unchecked())
     return await _verification.verify(checks, agent=agent, runtime=runtime)
 
 
@@ -127,7 +127,7 @@ async def assess(
     runtime: InstanceOf[Runtime],
 ) -> Assessment:
     result = await verify(case_id=case_id, selection=selection, agent=agent, runtime=runtime)
-    if isinstance(result.verification, HarnessError):
+    if isinstance(result.verification, Verification.HarnessError):
         raise RuntimeError(f"Verification harness error: {result.verification[0]}")
     return Assessment(
         verification=result.verification,
@@ -151,7 +151,7 @@ async def validate_reference(
     runtime: InstanceOf[Runtime] | None = None,
 ) -> VerificationResult:
     if projection_ops.verifier(datasets.record(case_id, selection=selection)) is None:
-        return VerificationResult(verification=Unchecked())
+        return VerificationResult(verification=Verification.Unchecked())
     runtime = runtime or create_runtime()
     try:
         async with _verification.allocated(runtime) as agent:
@@ -167,7 +167,7 @@ async def validate_reference(
             )
             return await verify(case_id=case_id, selection=selection, agent=agent, runtime=runtime)
     except Exception as error:
-        return VerificationResult(verification=HarnessError(str(error)))
+        return VerificationResult(verification=Verification.HarnessError(str(error)))
 
 
 async def evaluate(

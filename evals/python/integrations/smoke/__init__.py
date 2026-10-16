@@ -2,17 +2,17 @@
 
 from pathlib import Path
 
-from kernel import Code, Criterion, Inline, Verifier
+from kernel import Content, Criterion, Verifier
 
 
-def checks(*, inputs: tuple[str, ...], program: str) -> Criterion:
-    return Code(
+def checks(*, inputs: tuple[str, ...], program: str) -> Criterion.Value:
+    return Criterion.Code(
         Verifier(
             inputs=inputs,
             files=(
                 (
                     "verifier.py",
-                    Inline(Path(__file__).with_name("verifier.py").read_text()),
+                    Content.Inline(Path(__file__).with_name("verifier.py").read_text()),
                 ),
             ),
             tools=(),

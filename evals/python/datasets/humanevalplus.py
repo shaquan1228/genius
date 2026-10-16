@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from evals.python import queries
 from evals.python.integrations.datasets.download import Download, cache_path, download
 from evals.python.integrations.evalplus import checks
-from kernel import Instruction, Plain, Reference, Task
+from kernel import Completion, Instruction, Reference, Task
 from kernel._operations import fixture as fixture_ops
 
 info = queries.DatasetInfo(
@@ -55,7 +55,7 @@ def declaration(raw: str) -> Task:
             edits=fixture_ops.of_files(
                 [("solution.py", problem.prompt + problem.canonical_solution)]
             ),
-            completion=Plain(""),
+            completion=Completion.Plain(""),
         ),
     )
 

@@ -38,16 +38,19 @@ def compiled_includes_and_inference_drive_bindings(tmp_path: Path) -> None:
     items = generate.schema((path,), reader=READER)[0]["items"]
     stub = generate.ast_bindings(items[:-1])
     assert (
-        "class A:" in stub,
-        "class B:" in stub,
+        "class A(_types.Token):" in stub,
+        "class B(_types.Token):" in stub,
         "Sequence[tuple[str, int | None]]" in stub,
         "@property\n    def flag(self) -> bool:" in stub,
     ) == (True, True, True, True)
-    assert generate.operation(items[-1]) == (
-        "def choose(*, fallback: str | None = ..., expected: _types.Token) -> _types.Token: ...\n"
+    assert generate.operation(items[-1], variants=frozenset({"token"})) == (
+        "def choose(*, fallback: str | None = ..., expected: _types.Token.Value)"
+        " -> _types.Token.Value: ...\n"
     )
     assert "fallback: str | None" in generate.options(items[-1])
-    assert "expected: Required[_types.Token]" in generate.options(items[-1])
+    assert "expected: Required[_types.Token.Value]" in generate.options(
+        items[-1], variants=frozenset({"token"})
+    )
 
 
 def inferred_compiled_values_drive_bindings(tmp_path: Path) -> None:
@@ -152,9 +155,26 @@ def incompatible_python_identifiers_fail_loudly(tmp_path: Path) -> None:
         generate.ast_bindings(generate.schema((path,), reader=READER)[0]["items"])
 
 
-@pytest.mark.parametrize("text", ["type entry = Entry", "type invalid_argument = { code : int }"])
+@pytest.mark.parametrize(
+    "text", ["type foo_bar = string\ntype fooBar = bool", "type invalid_argument = { code : int }"]
+)
 def capitalized_binding_names_cannot_silently_collide(tmp_path: Path, *, text: str) -> None:
     path = _compile(tmp_path / "collision", text=text)
     items = generate.schema((path,), reader=READER)[0]["items"]
     with pytest.raises(ValueError, match="names collide"):
+        generate.runtime_types(items)
+
+
+def constructor_names_can_match_their_owner(tmp_path: Path) -> None:
+    path = _compile(tmp_path / "owned", text="type entry = Entry")
+    items = generate.schema((path,), reader=READER)[0]["items"]
+    assert "Entry.Entry = _native.Entry" in generate.runtime_types(items)
+    assert "class Entry(_types.Entry):" in generate.ast_bindings(items)
+
+
+@pytest.mark.parametrize("text", ["type state = Value", "type state = Foo_bar | FooBar"])
+def alternative_names_cannot_silently_collide(tmp_path: Path, *, text: str) -> None:
+    path = _compile(tmp_path / "collision", text=text)
+    items = generate.schema((path,), reader=READER)[0]["items"]
+    with pytest.raises(ValueError, match="alternative names collide"):
         generate.runtime_types(items)

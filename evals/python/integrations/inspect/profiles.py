@@ -12,7 +12,7 @@ from inspect_ai.dataset import Sample
 
 from evals.python import commands
 from evals.python.paths import REPO_ROOT
-from kernel import Case, Experiment, Inline, Profile
+from kernel import Case, Content, Experiment, Profile
 
 # A diagnostic treatment of reasoning's four required reads, without rewriting them.
 REASONING_DOCUMENTS = (
@@ -99,7 +99,7 @@ def files(
 ) -> dict[str, str]:
     workspace = {}
     for name, content in case.files:
-        if not isinstance(content, Inline):
+        if not isinstance(content, Content.Inline):
             raise ValueError(f"Unresolved resource in public case {case.id}: {name}")
         workspace[f"workspace/{name}"] = inline_file(contents=content[0].encode())
     return {

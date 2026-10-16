@@ -11,7 +11,7 @@ from typing import Protocol, cast
 from pydantic import TypeAdapter
 
 from evals.python.schema import FROZEN, DatasetInfo, FileName
-from kernel import Answer, Case, Code, Content, Fixture, Inline, Resource, Task, Verifier
+from kernel import Case, Content, Criterion, Fixture, Task, Verifier
 from kernel._operations import case as case_ops
 from kernel._operations import fixture as fixture_ops
 from kernel._operations import projection as projection_ops
@@ -78,10 +78,15 @@ class _CaseKey:
 
 
 def _artifacts(
-    values: Sequence[tuple[str, Content]], *, resources: Mapping[str, str]
-) -> tuple[tuple[str, Content], ...]:
+    values: Sequence[tuple[str, Content.Value]], *, resources: Mapping[str, str]
+) -> tuple[tuple[str, Content.Value], ...]:
     return tuple(
-        (name, Inline(resources[content[0]]) if isinstance(content, Resource) else content)
+        (
+            name,
+            Content.Inline(resources[content[0]])
+            if isinstance(content, Content.Resource)
+            else content,
+        )
         for name, content in values
     )
 
@@ -90,7 +95,7 @@ def _resolve(case: Task, *, sources: Sources) -> Task:
     case_ops.validate(case)
     if sources.modules != _MODULES:
         raise ValueError("Kernel sources differ from the loaded native types; restart the process")
-    if isinstance(case.criterion, Answer):
+    if isinstance(case.criterion, Criterion.Answer):
         return case
     checks = case.criterion[0]
     resources = dict(sources.resources)
@@ -106,7 +111,7 @@ def _resolve(case: Task, *, sources: Sources) -> Task:
         id=case.id,
         fixture=case.fixture,
         instruction=case.instruction,
-        criterion=Code(verifier),
+        criterion=Criterion.Code(verifier),
         allowed_files=case.allowed_files,
         reference=case.reference,
     )

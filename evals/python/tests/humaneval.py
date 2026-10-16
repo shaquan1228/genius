@@ -30,7 +30,7 @@ from evals.python.tests.support import (
 from evals.python.tests.support import (
     imported_verifier as _imported_verifier,
 )
-from kernel import Passed, Verifier
+from kernel import Verification, Verifier
 
 
 def _record(**updates: object) -> str:
@@ -117,7 +117,7 @@ def dataset_selector_grades_one_trusted_record() -> None:
             case_id=case.id,
             response="",
             changed_files=("workspace/solution.py",),
-            verification=Passed(),
+            verification=Verification.Passed(),
             selection="humanevalplus",
         ) == {"correctness": True, "scope": True}
         samples = profiles.samples(
@@ -219,6 +219,6 @@ def imported_dataset_grade_uses_cached_record(synthetic_dataset: None) -> None:
         case_id="humaneval-0",
         response="",
         changed_files=(),
-        verification=Passed(),
+        verification=Verification.Passed(),
         selection="humanevalplus",
     ) == {"correctness": True, "scope": True}

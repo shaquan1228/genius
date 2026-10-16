@@ -11,25 +11,19 @@ from evals.python import queries
 from evals.python.tests.projections import reference as private_reference
 from evals.python.tests.projections import verifier
 from kernel import (
-    Answer,
-    Bool,
     Case,
-    Code,
+    Completion,
     Content,
     Criterion,
     Fixture,
-    Inline,
     Instruction,
     InvalidArgument,
-    Passed,
-    Plain,
     Reference,
-    Resource,
+    ResponseValue,
     Rubric,
-    String,
-    Structured,
     Task,
     TextRule,
+    Verification,
     Verifier,
 )
 from kernel._operations import fixture as fixture_ops
@@ -45,7 +39,7 @@ def _copy_case(  # noqa: PLR0913 - Reconstruct the actual native record fields.
     id: str | None = None,
     fixture: Fixture | None = None,
     instruction: Instruction | None = None,
-    criterion: Criterion | None = None,
+    criterion: Criterion.Value | None = None,
     allowed_files: Sequence[str] | None = None,
     reference: Reference | None = None,
 ) -> Task:
@@ -63,8 +57,8 @@ def _copy_verifier(  # noqa: PLR0913 - Reconstruct the actual native record fiel
     value: Verifier,
     *,
     inputs: Sequence[str] | None = None,
-    files: Sequence[tuple[str, Content]] | None = None,
-    tools: Sequence[tuple[str, Content]] | None = None,
+    files: Sequence[tuple[str, Content.Value]] | None = None,
+    tools: Sequence[tuple[str, Content.Value]] | None = None,
     command: Sequence[str] | None = None,
     stdin: str | None = None,
     timeout_seconds: int | None = None,
@@ -79,31 +73,34 @@ def _copy_verifier(  # noqa: PLR0913 - Reconstruct the actual native record fiel
     )
 
 
-def _files(value: Sequence[tuple[str, Content]]) -> dict[str, str]:
+def _files(value: Sequence[tuple[str, Content.Value]]) -> dict[str, str]:
     result = {}
     for name, content in value:
-        assert isinstance(content, Inline)
+        assert isinstance(content, Content.Inline)
         result[name] = content[0]
     return result
 
 
 def _declaration(*, code: bool = True) -> Task:
-    criterion: Criterion
+    criterion: Criterion.Value
     if code:
-        criterion = Code(
+        criterion = Criterion.Code(
             Verifier(
                 inputs=("main.py",),
-                files=[("verify.py", Inline("private assertions"))],
-                tools=[("check.sh", Inline("visible helper"))],
+                files=[("verify.py", Content.Inline("private assertions"))],
+                tools=[("check.sh", Content.Inline("visible helper"))],
                 command=("python3", "verify.py"),
                 stdin="private stdin",
                 timeout_seconds=30,
             )
         )
     else:
-        criterion = Answer(
+        criterion = Criterion.Answer(
             Rubric(
-                expected=[("choice", String("B")), ("safe", Bool(True))],
+                expected=[
+                    ("choice", ResponseValue.String("B")),
+                    ("safe", ResponseValue.Bool(True)),
+                ],
                 text_rule=TextRule(field="reason", min_words=1, max_words=5),
             )
         )
@@ -115,9 +112,11 @@ def _declaration(*, code: bool = True) -> Task:
         allowed_files=("main.py",),
         reference=Reference(
             edits=fixture_ops.of_files([("main.py", "fixed")]),
-            completion=Plain("done")
+            completion=Completion.Plain("done")
             if code
-            else Structured([("choice", String("B")), ("safe", Bool(True))]),
+            else Completion.Structured(
+                [("choice", ResponseValue.String("B")), ("safe", ResponseValue.Bool(True))]
+            ),
         ),
     )
 
@@ -145,9 +144,11 @@ def code_declarations_preserve_private_checks_and_resolve_resources() -> None:
 
 def missing_private_resource_fails_at_resolution() -> None:
     definition = _declaration()
-    assert isinstance(definition.criterion, Code)
-    checks = _copy_verifier(definition.criterion[0], files=[("verify.py", Resource("missing.py"))])
-    definition = _copy_case(definition, criterion=Code(checks))
+    assert isinstance(definition.criterion, Criterion.Code)
+    checks = _copy_verifier(
+        definition.criterion[0], files=[("verify.py", Content.Resource("missing.py"))]
+    )
+    definition = _copy_case(definition, criterion=Criterion.Code(checks))
     with pytest.raises(KeyError, match=r"missing\.py"):
         queries.compile_dataset(cases=(definition,))
 
@@ -162,17 +163,17 @@ def declarations_preserve_private_reference_edits(*, code: bool) -> None:
 def code_declarations_preserve_plain_completion() -> None:
     dataset = queries.compile_dataset(cases=(_declaration(),))
     completion = private_reference("external", selection=dataset).completion
-    assert isinstance(completion, Plain)
+    assert isinstance(completion, Completion.Plain)
     assert completion[0] == "done"
 
 
 def answer_declarations_preserve_typed_completion_fields() -> None:
     dataset = queries.compile_dataset(cases=(_declaration(code=False),))
     completion = private_reference("external", selection=dataset).completion
-    assert isinstance(completion, Structured)
+    assert isinstance(completion, Completion.Structured)
     fields = dict(completion[0])
-    assert (isinstance(fields["choice"], String), fields["choice"][0]) == (True, "B")
-    assert (isinstance(fields["safe"], Bool), fields["safe"][0]) == (True, True)
+    assert (isinstance(fields["choice"], ResponseValue.String), fields["choice"][0]) == (True, "B")
+    assert (isinstance(fields["safe"], ResponseValue.Bool), fields["safe"][0]) == (True, True)
 
 
 def answer_declarations_do_not_supply_executable_checks() -> None:
@@ -188,7 +189,7 @@ def imported_declarations_use_existing_grading(*, code: bool) -> None:
         case_id="external",
         response='{"choice":"B","safe":true,"reason":"clear"}',
         changed_files=("workspace/main.py",),
-        verification=Passed(),
+        verification=Verification.Passed(),
     ) == {"correctness": True, "scope": True}
 
 
@@ -201,12 +202,12 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
     [
         lambda c: _copy_case(c, allowed_files=()),
         lambda c: _copy_case(c, fixture=fixture_ops.empty),
-        lambda c: _copy_case(c, criterion=Answer(Rubric(expected=[], text_rule=None))),
+        lambda c: _copy_case(c, criterion=Criterion.Answer(Rubric(expected=[], text_rule=None))),
         lambda c: _copy_case(
             c,
-            criterion=Answer(
+            criterion=Criterion.Answer(
                 Rubric(
-                    expected=[("choice", String("B"))],
+                    expected=[("choice", ResponseValue.String("B"))],
                     text_rule=TextRule(field="choice", min_words=0, max_words=2),
                 )
             ),
@@ -215,7 +216,7 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
             c,
             reference=Reference(
                 edits=fixture_ops.of_files([("outside.py", "unauthorized")]),
-                completion=Plain(""),
+                completion=Completion.Plain(""),
             ),
         ),
     ],
@@ -234,13 +235,13 @@ def kernel_constructors_validate_raw_declarations(
         ("inputs", ("missing.py",)),
         ("command", ()),
         ("timeout_seconds", 0),
-        ("files", [("main.py", Inline("overlap"))]),
-        ("tools", [("../secret", Inline("bad"))]),
+        ("files", [("main.py", Content.Inline("overlap"))]),
+        ("tools", [("../secret", Content.Inline("bad"))]),
     ],
 )
 def nested_constructor_rules_fail_closed(field: str, *, value: object) -> None:
     definition = _declaration()
-    assert isinstance(definition.criterion, Code)
+    assert isinstance(definition.criterion, Criterion.Code)
     old = definition.criterion[0]
     fields = {
         name: getattr(old, name)
@@ -249,12 +250,12 @@ def nested_constructor_rules_fail_closed(field: str, *, value: object) -> None:
     fields[field] = value
     checks = Verifier(**fields)
     with pytest.raises(InvalidArgument):
-        queries.compile_dataset(cases=(_copy_case(definition, criterion=Code(checks)),))
+        queries.compile_dataset(cases=(_copy_case(definition, criterion=Criterion.Code(checks)),))
 
 
 @pytest.mark.parametrize(("minimum", "maximum"), [(-1, 2), (3, 2)])
 def answer_constructor_rules_fail_closed(minimum: int, *, maximum: int) -> None:
-    criterion = Answer(
+    criterion = Criterion.Answer(
         Rubric(
             expected=[],
             text_rule=TextRule(field="reason", min_words=minimum, max_words=maximum),
@@ -265,7 +266,7 @@ def answer_constructor_rules_fail_closed(minimum: int, *, maximum: int) -> None:
 
 
 def native_fields_retain_immutable_snapshots() -> None:
-    fields = [("choice", String("B"))]
+    fields = [("choice", ResponseValue.String("B"))]
     answer = Rubric(expected=fields, text_rule=None)
     fields.clear()
     assert len(answer.expected) == 1
@@ -275,9 +276,9 @@ def native_fields_retain_immutable_snapshots() -> None:
     fixture = fixture_ops.of_files(initial)
     initial[0] = ("main.py", "changed")
     assert dict(fixture_ops.files(fixture)) == {"main.py": "broken"}
-    artifacts = [("verify.py", Inline("private assertions"))]
+    artifacts = [("verify.py", Content.Inline("private assertions"))]
     definition = _declaration()
-    assert isinstance(definition.criterion, Code)
+    assert isinstance(definition.criterion, Criterion.Code)
     checks = _copy_verifier(definition.criterion[0], files=artifacts)
     artifacts.clear()
     assert _files(checks.files) == {"verify.py": "private assertions"}
@@ -286,11 +287,13 @@ def native_fields_retain_immutable_snapshots() -> None:
 @pytest.mark.parametrize(
     "criterion",
     [
-        Answer(Rubric(expected=[("choice", String("B"))], text_rule=None)),
-        Answer(Rubric(expected=[], text_rule=TextRule(field="reason", min_words=1, max_words=5))),
+        Criterion.Answer(Rubric(expected=[("choice", ResponseValue.String("B"))], text_rule=None)),
+        Criterion.Answer(
+            Rubric(expected=[], text_rule=TextRule(field="reason", min_words=1, max_words=5))
+        ),
     ],
 )
-def answer_construction_supports_each_optional_rule_shape(criterion: Criterion) -> None:
+def answer_construction_supports_each_optional_rule_shape(criterion: Criterion.Value) -> None:
     dataset = queries.compile_dataset(
         cases=(_copy_case(_declaration(code=False), criterion=criterion),)
     )
@@ -303,9 +306,9 @@ def _reference_files(value: Reference) -> dict[str, str]:
 
 def _reference_text(value: Reference) -> str:
     completion = value.completion
-    if isinstance(completion, Plain):
+    if isinstance(completion, Completion.Plain):
         return completion[0]
-    assert isinstance(completion, Structured)
+    assert isinstance(completion, Completion.Structured)
     return json.dumps({name: scalar[0] for name, scalar in completion[0]})
 
 

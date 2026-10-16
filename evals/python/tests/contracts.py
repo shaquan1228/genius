@@ -17,7 +17,7 @@ from evals.python.queries import resolve_settings, score_case
 from evals.python.tests.declarations import _reference_text
 from evals.python.tests.projections import reference, verifier
 from evals.python.tests.support import choice_case as _choice_case
-from kernel import Case, Experiment, InvalidArgument, Passed, Unchecked
+from kernel import Case, Experiment, InvalidArgument, Verification
 from kernel._operations import fixture as fixture_ops
 from kernel._operations import grader as grader_ops
 from kernel._operations import projection as projection_ops
@@ -39,7 +39,7 @@ def _third_grade(*, case_id: str = "third-case", selection: queries.Dataset) -> 
         selection=selection,
         response='{"choice":"A","reason":"Less"}',
         changed_files=(),
-        verification=Unchecked(),
+        verification=Verification.Unchecked(),
     )
 
 
@@ -176,7 +176,7 @@ def verifier_projection_and_grading_use_native_values() -> None:
         case_id=case_id,
         response="",
         changed_files=(),
-        verification=Passed(),
+        verification=Verification.Passed(),
     )
     with (
         patch.object(projection_ops, "verifier", wraps=projection_ops.verifier) as projection,

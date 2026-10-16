@@ -1,74 +1,66 @@
 # Generated from compiled OCaml interfaces; do not edit.
-"""Native domain types and constructors, imported directly from kernel."""
+"""Native domain types, with alternatives attached to their owners."""
 
 from ._bridge import InvalidArgument as InvalidArgument
 from ._bridge import native as _native
 
-Answer = _native.Answer
-Bool = _native.Bool
 Case = _native.case
-Code = _native.Code
 Completion = _native.completion
 Content = _native.content
 Criterion = _native.criterion
 Experiment = _native.experiment
-Failed = _native.Failed
 Fixture = _native.fixture
-HarnessError = _native.Harness_error
-Inline = _native.Inline
 Instruction = _native.instruction
-InvalidSubmission = _native.Invalid_submission
 Outcome = _native.outcome
-Passed = _native.Passed
-Plain = _native.Plain
 Profile = _native.profile
 Reference = _native.reference
-Resource = _native.Resource
 Response = _native.response
 ResponseValue = _native.response_value
 Rubric = _native.answer
 Score = _native.score
-String = _native.String
-Structured = _native.Structured
 Task = _native.task
 TextRule = _native.text_rule
-TimedOut = _native.Timed_out
-Unchecked = _native.Unchecked
 Verification = _native.verification
 Verifier = _native.verifier
 
+ResponseValue.Value = ResponseValue
+Content.Value = Content
+Criterion.Value = Criterion
+Completion.Value = Completion
+Verification.Value = Verification
+ResponseValue.String = _native.String
+ResponseValue.Bool = _native.Bool
+Content.Inline = _native.Inline
+Content.Resource = _native.Resource
+Criterion.Code = _native.Code
+Criterion.Answer = _native.Answer
+Completion.Plain = _native.Plain
+Completion.Structured = _native.Structured
+Verification.Unchecked = _native.Unchecked
+Verification.Passed = _native.Passed
+Verification.Failed = _native.Failed
+Verification.InvalidSubmission = _native.Invalid_submission
+Verification.TimedOut = _native.Timed_out
+Verification.HarnessError = _native.Harness_error
+
 __all__ = [
-    "Answer",
-    "Bool",
     "Case",
-    "Code",
     "Completion",
     "Content",
     "Criterion",
     "Experiment",
-    "Failed",
     "Fixture",
-    "HarnessError",
-    "Inline",
     "Instruction",
     "InvalidArgument",
-    "InvalidSubmission",
     "Outcome",
-    "Passed",
-    "Plain",
     "Profile",
     "Reference",
-    "Resource",
     "Response",
     "ResponseValue",
     "Rubric",
     "Score",
-    "String",
-    "Structured",
     "Task",
     "TextRule",
-    "TimedOut",
-    "Unchecked",
     "Verification",
     "Verifier",
 ]

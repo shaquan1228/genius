@@ -23,15 +23,14 @@ from evals.python.tests.declarations import _copy_case, _declaration
 from evals.python.tests.support import offline_run as _offline_run
 from evals.python.tests.support import results as _results
 from kernel import (
-    Answer,
-    Bool,
     Case,
+    Completion,
+    Content,
+    Criterion,
     Instruction,
-    Plain,
     Reference,
-    Resource,
+    ResponseValue,
     Rubric,
-    String,
     TextRule,
 )
 from kernel._operations import fixture as fixture_ops
@@ -112,7 +111,7 @@ def private_tasks() -> list[Task]:
         ),
         reference=Reference(
             edits=fixture_ops.of_files([("main.py", PRIVATE_SENTINEL)]),
-            completion=Plain(PRIVATE_SENTINEL),
+            completion=Completion.Plain(PRIVATE_SENTINEL),
         ),
     )
     datasets = [
@@ -120,11 +119,11 @@ def private_tasks() -> list[Task]:
             cases=(
                 _copy_case(
                     definition,
-                    criterion=Answer(
+                    criterion=Criterion.Answer(
                         Rubric(
                             expected=[
-                                ("choice", String(choice)),
-                                ("safe", Bool(True)),
+                                ("choice", ResponseValue.String(choice)),
+                                ("safe", ResponseValue.Bool(True)),
                             ],
                             text_rule=TextRule(field="reason", min_words=1, max_words=5),
                         )
@@ -238,7 +237,7 @@ def unresolved_public_resource_cannot_reach_agent_files() -> None:
         id="unresolved",
         skill="reasoning",
         prompt="Use the supplied context",
-        files=[("context.txt", Resource("private-resource"))],
+        files=[("context.txt", Content.Resource("private-resource"))],
     )
     with pytest.raises(ValueError, match="Unresolved resource in public case unresolved"):
         profiles.files(profiles.load_profile("baseline", spec=spec), case=case, instructions={})

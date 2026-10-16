@@ -11,7 +11,16 @@ from evals.python.datasets import Selection
 from evals.python.queries import score_case
 from evals.python.tests.declarations import _declaration, _reference_files, _reference_text
 from evals.python.tests.projections import reference, verifier
-from kernel import Answer, Bool, Instruction, Reference, Rubric, String, Structured, Task, Unchecked
+from kernel import (
+    Completion,
+    Criterion,
+    Instruction,
+    Reference,
+    ResponseValue,
+    Rubric,
+    Task,
+    Verification,
+)
 from kernel._operations import fixture as fixture_ops
 from kernel._operations import grader as grader_ops
 from kernel._operations import response as response_ops
@@ -36,7 +45,7 @@ def _judgment(*, response: str, suite: Selection = "smoke") -> bool:
         case_id="small-decision",
         response=response,
         changed_files=(),
-        verification=Unchecked(),
+        verification=Verification.Unchecked(),
         selection=suite,
     )["correctness"]
 
@@ -46,7 +55,7 @@ def kernel_grades_response_and_scope() -> None:
         case_id="small-decision",
         response='{"choice":"B","reason":"Lower cost."}',
         changed_files=(),
-        verification=Unchecked(),
+        verification=Verification.Unchecked(),
     )
     assert dict(scores) == {"correctness": True, "scope": True}
     with pytest.raises(TypeError):
@@ -67,7 +76,7 @@ def unknown_case_is_a_harness_error() -> None:
             case_id="unknown",
             response="{}",
             changed_files=(),
-            verification=Unchecked(),
+            verification=Verification.Unchecked(),
         )
 
 
@@ -141,7 +150,7 @@ def additional_named_scores_cross_bridge_without_decoder_changes() -> None:
             case_id="small-decision",
             response="{}",
             changed_files=(),
-            verification=Unchecked(),
+            verification=Verification.Unchecked(),
         )
     assert dict(scores) == {"correctness": True, "scope": False, "new_metric": True}
 
@@ -150,18 +159,20 @@ def reference_channels_export_independently_and_escape() -> None:
     state = 'quote" \\ \n é'
     fields: dict[str, str | bool] = {"state": state, "safe": True}
     safe = True
-    expected_fields = response_ops.of_fields([("state", String(state)), ("safe", Bool(safe))])
+    expected_fields = response_ops.of_fields(
+        [("state", ResponseValue.String(state)), ("safe", ResponseValue.Bool(safe))]
+    )
     dataset = queries.compile_dataset(
         cases=(
             Task(
                 id="reference",
                 fixture=fixture_ops.empty,
                 instruction=Instruction(skill="reasoning", prompt="fields"),
-                criterion=Answer(Rubric(expected=expected_fields, text_rule=None)),
+                criterion=Criterion.Answer(Rubric(expected=expected_fields, text_rule=None)),
                 allowed_files=("result.txt",),
                 reference=Reference(
                     edits=fixture_ops.of_files([("result.txt", "result")]),
-                    completion=Structured(expected_fields),
+                    completion=Completion.Structured(expected_fields),
                 ),
             ),
         )
@@ -175,7 +186,7 @@ def reference_channels_export_independently_and_escape() -> None:
         case_id="reference",
         response=_reference_text(expected),
         changed_files=(),
-        verification=Unchecked(),
+        verification=Verification.Unchecked(),
         selection=dataset,
     )["correctness"]
 

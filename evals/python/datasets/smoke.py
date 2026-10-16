@@ -2,14 +2,12 @@
 
 from evals.python.integrations.smoke import checks
 from kernel import (
-    Answer,
-    Bool,
+    Completion,
+    Criterion,
     Instruction,
-    Plain,
     Reference,
+    ResponseValue,
     Rubric,
-    String,
-    Structured,
     Task,
     TextRule,
 )
@@ -69,7 +67,7 @@ assert total([(1.5, 2)]) == 3.0
                     )
                 ]
             ),
-            completion=Plain("Each quantity now contributes to the total."),
+            completion=Completion.Plain("Each quantity now contributes to the total."),
         ),
     )
 
@@ -151,7 +149,7 @@ for value in (0, -1):
                     ("client.py", client(requested)),
                 ]
             ),
-            completion=Plain("Updated both defaults and preserved overrides."),
+            completion=Completion.Plain("Updated both defaults and preserved overrides."),
         ),
     )
 
@@ -172,9 +170,9 @@ def cases() -> tuple[Task, ...]:
                     "Do not change files."
                 ),
             ),
-            criterion=Answer(
+            criterion=Criterion.Answer(
                 Rubric(
-                    expected=[("choice", String("B"))],
+                    expected=[("choice", ResponseValue.String("B"))],
                     text_rule=TextRule(
                         field="reason",
                         min_words=1,
@@ -185,10 +183,10 @@ def cases() -> tuple[Task, ...]:
             allowed_files=(),
             reference=Reference(
                 edits=fixture_ops.empty,
-                completion=Structured(
+                completion=Completion.Structured(
                     [
-                        ("choice", String("B")),
-                        ("reason", String("B costs less for identical service.")),
+                        ("choice", ResponseValue.String("B")),
+                        ("reason", ResponseValue.String("B costs less for identical service.")),
                     ]
                 ),
             ),
@@ -207,11 +205,11 @@ def cases() -> tuple[Task, ...]:
                     "change_rule (boolean), and reason (one sentence). Do not change files."
                 ),
             ),
-            criterion=Answer(
+            criterion=Criterion.Answer(
                 Rubric(
                     expected=[
-                        ("decision_was_supported", Bool(True)),  # noqa: FBT003
-                        ("change_rule", Bool(False)),  # noqa: FBT003
+                        ("decision_was_supported", ResponseValue.Bool(True)),  # noqa: FBT003
+                        ("change_rule", ResponseValue.Bool(False)),  # noqa: FBT003
                     ],
                     text_rule=TextRule(field="reason", min_words=1, max_words=40),
                 )
@@ -219,11 +217,11 @@ def cases() -> tuple[Task, ...]:
             allowed_files=(),
             reference=Reference(
                 edits=fixture_ops.empty,
-                completion=Structured(
+                completion=Completion.Structured(
                     [
-                        ("decision_was_supported", Bool(True)),  # noqa: FBT003
-                        ("change_rule", Bool(False)),  # noqa: FBT003
-                        ("reason", String("One loss did not change the known odds.")),
+                        ("decision_was_supported", ResponseValue.Bool(True)),  # noqa: FBT003
+                        ("change_rule", ResponseValue.Bool(False)),  # noqa: FBT003
+                        ("reason", ResponseValue.String("One loss did not change the known odds.")),
                     ]
                 ),
             ),

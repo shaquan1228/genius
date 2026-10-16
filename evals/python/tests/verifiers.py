@@ -15,7 +15,7 @@ from evals.python.datasets import smoke as declarations
 from evals.python.integrations.inspect.environments import environment, runtime
 from evals.python.tests.declarations import _files, _reference_files
 from evals.python.tests.projections import reference, verifier
-from kernel import Case, Passed, Task, Verifier
+from kernel import Case, Task, Verification, Verifier
 
 CASES = {case.id: case for case in queries.list_cases()}
 
@@ -40,7 +40,7 @@ def _verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> b
                 agent=environment(agent),
                 runtime=runtime(agent),
             )
-            return isinstance(result.verification, Passed)
+            return isinstance(result.verification, Verification.Passed)
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
                 "test", None, {"default": agent}, interrupted=False

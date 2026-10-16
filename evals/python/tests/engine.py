@@ -27,7 +27,7 @@ from evals.python.tests.support import (
     results as _results,
 )
 from evals.python.tests.verification import _agent_port, _grader_port, _runtime_port
-from kernel import HarnessError, Passed
+from kernel import Verification
 from kernel._operations import grader as grader_ops
 
 
@@ -127,7 +127,7 @@ def verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
     with patch(
         "evals.python.verification.verify",
         return_value=commands.VerificationResult(
-            verification=HarnessError("grader failed to import")
+            verification=Verification.HarnessError("grader failed to import")
         ),
     ):
         log = _offline_run([baseline()], mode="pass", directory=tmp_path)[0]
@@ -149,7 +149,7 @@ def scorer_maps_sdk_observation_to_public_assessment() -> None:
     state.output = ModelOutput.from_content("mockllm/model", "observed answer")
     agent, runtime = _agent_port(), _runtime_port(_grader_port())
     assessment = commands.Assessment(
-        verification=Passed(),
+        verification=Verification.Passed(),
         detail="canonical evidence",
         metadata={"nested": {"items": (True, None, 4.2)}},
         scores={"correctness": True, "scope": False},

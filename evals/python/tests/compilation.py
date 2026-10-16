@@ -21,15 +21,12 @@ from evals.python.tests.declarations import (
 from evals.python.tests.projections import reference, verifier
 from kernel import (
     Case,
-    Code,
-    Inline,
+    Completion,
+    Content,
+    Criterion,
     InvalidArgument,
-    Passed,
-    Plain,
     Reference,
-    Resource,
     Task,
-    Unchecked,
     Verification,
     Verifier,
 )
@@ -69,14 +66,14 @@ def compile_query_forwards_canonical_values_and_results() -> None:
 
 def _independent_datasets() -> tuple[queries.Dataset, queries.Dataset]:
     first = _declaration()
-    assert isinstance(first.criterion, Code)
+    assert isinstance(first.criterion, Criterion.Code)
     checks = _copy_verifier(first.criterion[0], stdin="different private stdin")
     second = _copy_case(
         first,
-        criterion=Code(checks),
+        criterion=Criterion.Code(checks),
         reference=Reference(
             edits=fixture_ops.of_files([("main.py", "another fixed solution")]),
-            completion=Plain("another answer"),
+            completion=Completion.Plain("another answer"),
         ),
     )
     return queries.compile_dataset(cases=(first,)), queries.compile_dataset(cases=(second,))
@@ -137,9 +134,11 @@ def compiled_provenance_retains_python_metadata() -> None:
 @pytest.mark.parametrize("resource_name", ["checker.py", "ast.ml", "ast.cmo", "case.cmi", "kernel"])
 def compiled_datasets_supply_independent_evaluator_resources(resource_name: str) -> None:
     definition = _declaration()
-    assert isinstance(definition.criterion, Code)
-    checks = _copy_verifier(definition.criterion[0], files=[("verify.py", Resource(resource_name))])
-    definition = _copy_case(definition, criterion=Code(checks))
+    assert isinstance(definition.criterion, Criterion.Code)
+    checks = _copy_verifier(
+        definition.criterion[0], files=[("verify.py", Content.Resource(resource_name))]
+    )
+    definition = _copy_case(definition, criterion=Criterion.Code(checks))
     first = queries.compile_dataset(cases=(definition,), resources={resource_name: "first checker"})
     second = queries.compile_dataset(
         cases=(definition,), resources={resource_name: "second checker"}
@@ -178,7 +177,7 @@ def compilation_hashes_include_trusted_source_changes() -> None:
     assert original.cases_hash != updated.cases_hash
 
 
-def _grade(*, dataset: queries.Dataset, verification: Verification) -> queries.Scores:
+def _grade(*, dataset: queries.Dataset, verification: Verification.Value) -> queries.Scores:
     return queries.score_case(
         case_id="external",
         response="done",
@@ -190,7 +189,7 @@ def _grade(*, dataset: queries.Dataset, verification: Verification) -> queries.S
 
 def compiled_cases_use_existing_grading_policy() -> None:
     dataset = queries.compile_dataset(cases=(_declaration(),))
-    assert _grade(dataset=dataset, verification=Passed()) == {
+    assert _grade(dataset=dataset, verification=Verification.Passed()) == {
         "correctness": True,
         "scope": True,
     }
@@ -198,13 +197,13 @@ def compiled_cases_use_existing_grading_policy() -> None:
 
 def compiled_grading_preserves_canonical_inputs_and_results() -> None:
     dataset = queries.compile_dataset(cases=(_declaration(),))
-    verification = Passed()
+    verification = Verification.Passed()
     with patch(
         "kernel._operations.grader.grade", return_value=[("correctness", True), ("scope", True)]
     ) as kernel_grade:
         assert _grade(dataset=dataset, verification=verification) == dict(kernel_grade.return_value)
     assert kernel_grade.call_args.args[0] is dataset.records["external"]
-    assert isinstance(kernel_grade.call_args.kwargs["outcome"].verification, Passed)
+    assert isinstance(kernel_grade.call_args.kwargs["outcome"].verification, Verification.Passed)
 
 
 def compiled_dataset_is_immutable() -> None:
@@ -216,7 +215,7 @@ def compiled_dataset_is_immutable() -> None:
     with pytest.raises(TypeError):
         cast(dict[str, Case], dataset.cases)["external"] = dataset.cases["external"]
     with pytest.raises(TypeError):
-        dataset.cases["external"].files[0] = ("main.py", Inline("changed"))  # type: ignore[index]
+        dataset.cases["external"].files[0] = ("main.py", Content.Inline("changed"))  # type: ignore[index]
     with pytest.raises(FrozenInstanceError):
         dataset.sources.modules = ()  # type: ignore[misc]
     with pytest.raises(TypeError):
@@ -265,7 +264,7 @@ def compiled_selection_flows_through_all_verification_commands() -> None:
             ),
             commands.VerificationResult,
         )
-        assert isinstance(verification.verification, Unchecked)
+        assert isinstance(verification.verification, Verification.Unchecked)
         assessment = assert_type(
             await commands.assess(
                 case_id="external",
@@ -284,7 +283,7 @@ def compiled_selection_flows_through_all_verification_commands() -> None:
             ),
             commands.VerificationResult,
         )
-        assert isinstance(reference.verification, Unchecked)
+        assert isinstance(reference.verification, Verification.Unchecked)
 
     asyncio.run(execute())
     cast(AsyncMock, runtime.create).assert_not_awaited()

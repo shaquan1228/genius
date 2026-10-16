@@ -7,24 +7,19 @@ import pytest
 
 import kernel as kernel_types
 from kernel import (
-    Answer,
     Case,
-    Code,
+    Completion,
+    Content,
+    Criterion,
     Experiment,
-    Failed,
-    Inline,
     Instruction,
     InvalidArgument,
     Outcome,
-    Passed,
-    Plain,
     Reference,
     Response,
+    ResponseValue,
     Rubric,
-    String,
-    Structured,
     Task,
-    Unchecked,
     Verification,
 )
 from kernel._bridge import native as native_kernel
@@ -38,10 +33,10 @@ from kernel._operations import verifier as verifier_ops
 
 
 def _answer() -> tuple[Task, Response]:
-    expected = response_ops.of_fields([("choice", String("B"))])
+    expected = response_ops.of_fields([("choice", ResponseValue.String("B"))])
     fixture = fixture_ops.of_files([("context.txt", "Public context")])
-    reference = Reference(edits=fixture_ops.empty, completion=Structured(expected))
-    criterion = Answer(Rubric(expected=expected, text_rule=None))
+    reference = Reference(edits=fixture_ops.empty, completion=Completion.Structured(expected))
+    criterion = Criterion.Answer(Rubric(expected=expected, text_rule=None))
     instruction = Instruction(skill="reasoning", prompt="Choose B")
     case = case_ops.make(
         id="native-answer",
@@ -73,17 +68,19 @@ def check_answer_projection() -> None:
 def check_answer_grading() -> None:
     assert experiment_ops.resolve(epochs=1).epochs == 1
     case, expected = _answer()
-    outcome = Outcome(changed_files=[], verification=Unchecked())
+    outcome = Outcome(changed_files=[], verification=Verification.Unchecked())
     scores = grader_ops.grade(case, response=expected, outcome=outcome)
     assert dict(scores) == {"correctness": True, "scope": True}
     assert not dict(grader_ops.grade(case, response=None, outcome=outcome))["correctness"]
 
 
-@pytest.mark.parametrize(("status", "correctness"), [(Passed(), True), (Failed(), False)])
-def check_code(status: Verification, *, correctness: bool) -> None:
+@pytest.mark.parametrize(
+    ("status", "correctness"), [(Verification.Passed(), True), (Verification.Failed(), False)]
+)
+def check_code(status: Verification.Value, *, correctness: bool) -> None:
     checks = verifier_ops.make(
         inputs=["solution.py"],
-        files=[("verify.py", Inline("private check"))],
+        files=[("verify.py", Content.Inline("private check"))],
         tools=[],
         command=["python3", "verify.py"],
         stdin="private input",
@@ -93,10 +90,10 @@ def check_code(status: Verification, *, correctness: bool) -> None:
         id="native-code",
         fixture=fixture_ops.of_files([("solution.py", "pass")]),
         instruction=Instruction(skill="reasoning", prompt="Fix solution.py"),
-        criterion=Code(checks),
+        criterion=Criterion.Code(checks),
         allowed_files=["solution.py"],
         reference=Reference(
-            edits=fixture_ops.of_files([("solution.py", "fixed")]), completion=Plain("")
+            edits=fixture_ops.of_files([("solution.py", "fixed")]), completion=Completion.Plain("")
         ),
     )
     projected = projection_ops.verifier(case)
@@ -107,7 +104,9 @@ def check_code(status: Verification, *, correctness: bool) -> None:
         "correctness": correctness,
         "scope": True,
     }
-    outside_scope = Outcome(changed_files=["workspace/other.py"], verification=Passed())
+    outside_scope = Outcome(
+        changed_files=["workspace/other.py"], verification=Verification.Passed()
+    )
     assert (
         projected.stdin,
         public_files,
@@ -124,15 +123,45 @@ def check_rejections() -> None:
 
 @pytest.mark.parametrize(
     ("public_name", "native_name"),
-    [("Case", "case"), ("Task", "task"), ("Rubric", "answer"), ("Answer", "Answer")],
+    [("Case", "case"), ("Task", "task"), ("Rubric", "answer")],
 )
 def explicit_types_preserve_native_identity(public_name: str, *, native_name: str) -> None:
     assert getattr(kernel_types, public_name) is getattr(native_kernel, native_name)
 
 
-def public_kernel_exports_only_capitalized_types_and_constructors() -> None:
+@pytest.mark.parametrize(
+    ("owner", "alternative", "native_name"),
+    [
+        ("Criterion", "Answer", "Answer"),
+        ("Content", "Inline", "Inline"),
+        ("Completion", "Plain", "Plain"),
+        ("ResponseValue", "String", "String"),
+        ("Verification", "HarnessError", "Harness_error"),
+    ],
+)
+def owned_alternatives_preserve_native_identity(
+    owner: str, *, alternative: str, native_name: str
+) -> None:
+    assert getattr(getattr(kernel_types, owner), alternative) is getattr(native_kernel, native_name)
+
+
+def public_kernel_exports_only_domain_types() -> None:
     assert all(
         name[0].isupper() and isinstance(getattr(kernel_types, name), type)
         for name in vars(kernel_types)["__all__"]
     )
-    assert not {"Ast", "Grader", "Projection", "sources"} & vars(kernel_types).keys()
+    assert (
+        not {
+            "Ast",
+            "Grader",
+            "Projection",
+            "sources",
+            "Answer",
+            "Code",
+            "Inline",
+            "Plain",
+            "String",
+            "HarnessError",
+        }
+        & vars(kernel_types).keys()
+    )

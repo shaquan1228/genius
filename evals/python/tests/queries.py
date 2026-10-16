@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import commands, datasets, queries
-from kernel import Case, Experiment, Passed
+from kernel import Case, Experiment, Verification
 from kernel._operations import projection as projection_ops
 
 
@@ -42,7 +42,7 @@ def public_hashes_match_existing_provenance() -> None:
 
 
 def public_grade_preserves_input_and_result() -> None:
-    verification = Passed()
+    verification = Verification.Passed()
     with patch(
         "kernel._operations.grader.grade", return_value=[("correctness", True), ("scope", True)]
     ) as grade:
@@ -56,7 +56,7 @@ def public_grade_preserves_input_and_result() -> None:
             queries.Scores,
         )
     assert grade.call_args.args[0] is queries.load_dataset().records["clear-task"]
-    assert isinstance(grade.call_args.kwargs["outcome"].verification, Passed)
+    assert isinstance(grade.call_args.kwargs["outcome"].verification, Verification.Passed)
     assert result == dict(grade.return_value)
 
 

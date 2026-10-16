@@ -255,9 +255,9 @@ Sandbox and verifier failures still stop the task.
 ## Author cases
 
 Python datasets construct native `Task` values. The example in
-`python/datasets/smoke.py` uses `Instruction`, `Code` or `Answer`, and
+`python/datasets/smoke.py` uses `Instruction`, `Criterion.Code` or `Criterion.Answer`, and
 `Reference`; `fixture_ops.of_files` constructs the opaque file map. Import native types and constructors directly from `kernel`, such as
-`Task`, `Instruction`, `Answer`, and `Rubric`. The implementation keeps fixture
+`Task`, `Instruction`, `Criterion`, and `Rubric`. The implementation keeps fixture
 operations in the private `kernel._operations` binding layer. Public queries return `Case`, which
 excludes private checks and reference solutions.
 Python-only metadata and SDK execution capabilities remain Python-owned.
@@ -313,7 +313,7 @@ rejects checks that read missing fixture files and reference edits outside the
 allowed scope. Add a genuinely new success condition to `ast.ml`, its validating
 constructor to `criterion.ml`, and its pure grading logic to `grader.ml`.
 
-Structured answers use `Answer(Rubric(...))` with named `String`/`Bool`
+Structured answers use `Criterion.Answer(Rubric(...))` with named `ResponseValue.String`/`ResponseValue.Bool`
 expected fields and an optional `TextRule`. A field named `reason` has no special meaning unless
 the criterion declares it. Adding answer fields does not require a new binding or API operation.
 
@@ -331,9 +331,12 @@ compiler-libs `Subst` and `Printtyp`. It exposes the fixture as abstract and pre
 the compiler's constructors and operation signatures. No domain declaration is copied
 into a handwritten binding interface. The Python binding generator consumes this final
 public `.cmi`, including its nested operation signatures. It emits capitalized
-native type and constructor imports at `kernel`; operation modules stay in the
+native type imports at `kernel`; alternatives live on their owning types, such
+as `Criterion.Answer`, `Content.Inline`, and `Verification.Passed`. Each union
+provides a `.Value` alias for closed-union type annotations and exhaustive
+matching. Operation modules stay in the
 private `kernel._operations` namespace. `Rubric` names the native `answer` record,
-while `Answer` selects the answer-grading criterion. The exported objects retain
+while `Criterion.Answer` selects the answer-grading criterion. The exported objects retain
 their original native identities.
 
 Python imports never build the kernel library. The bridge still compiles its own

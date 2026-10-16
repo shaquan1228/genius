@@ -30,17 +30,17 @@ from evals.python.tests.support import (
 )
 from kernel import (
     Case,
-    Code,
+    Completion,
+    Content,
+    Criterion,
     Experiment,
-    Inline,
     Instruction,
     InvalidArgument,
     Outcome,
-    Plain,
     Profile,
     Reference,
     Task,
-    Unchecked,
+    Verification,
     Verifier,
 )
 from kernel._operations import fixture as fixture_ops
@@ -72,7 +72,7 @@ def _grade(case_id: str, *, text: str) -> bool:
         case_id=case_id,
         response=text,
         changed_files=(),
-        verification=Unchecked(),
+        verification=Verification.Unchecked(),
         selection="smoke",
     )["correctness"]
 
@@ -208,7 +208,7 @@ def cases_are_immutable() -> None:
     with pytest.raises((AttributeError, TypeError)):
         case.id = "changed"  # type: ignore[misc]
     with pytest.raises(TypeError):
-        case.files[0] = ("receipt.py", Inline("changed"))  # type: ignore[index]
+        case.files[0] = ("receipt.py", Content.Inline("changed"))  # type: ignore[index]
     with pytest.raises(TypeError):
         fixture_ops.files(reference(case.id).edits)[0] = ("receipt.py", "changed")  # type: ignore[index]
     checks = verifier(case.id)
@@ -238,10 +238,10 @@ def generic_python_case_exports_without_language_restriction() -> None:
         id="python-case",
         fixture=fixture_ops.of_files([("solution.py", "print(42)")]),
         instruction=Instruction(skill="reasoning", prompt="Return 42"),
-        criterion=Code(
+        criterion=Criterion.Code(
             Verifier(
                 inputs=("solution.py",),
-                files=[("grader.py", Inline("trusted"))],
+                files=[("grader.py", Content.Inline("trusted"))],
                 tools=[],
                 command=("python3", "grader.py"),
                 stdin="private",
@@ -249,7 +249,7 @@ def generic_python_case_exports_without_language_restriction() -> None:
             )
         ),
         allowed_files=("solution.py",),
-        reference=Reference(edits=fixture_ops.empty, completion=Plain("done")),
+        reference=Reference(edits=fixture_ops.empty, completion=Completion.Plain("done")),
     )
     dataset = queries.compile_dataset(cases=(definition,))
     case = queries.list_cases(selection=dataset)[0]
@@ -309,7 +309,7 @@ def record_updates_cannot_bypass_kernel_validation(*, grade_only: bool) -> None:
             grader_ops.grade,
             records[0],
             response=None,
-            outcome=Outcome(changed_files=(), verification=Unchecked()),
+            outcome=Outcome(changed_files=(), verification=Verification.Unchecked()),
         )
     else:
         operation = partial(queries.compile_dataset, cases=records)

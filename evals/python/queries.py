@@ -12,7 +12,6 @@ from evals.python import datasets
 from evals.python.datasets import Dataset, Selection
 from evals.python.schema import FROZEN, DatasetInfo, Files
 from kernel import (
-    Bool,
     Case,
     Experiment,
     InvalidArgument,
@@ -20,9 +19,7 @@ from kernel import (
     Reference,
     Response,
     ResponseValue,
-    String,
     Task,
-    Unchecked,
     Verification,
 )
 from kernel._operations import experiment as experiment_ops
@@ -34,11 +31,11 @@ if TYPE_CHECKING:
     from kernel._experiment import ResolveArgs
 
 
-def _scalar(value: object) -> ResponseValue:
+def _scalar(value: object) -> ResponseValue.Value:
     if isinstance(value, bool):
-        return Bool(value)
+        return ResponseValue.Bool(value)
     if isinstance(value, str):
-        return String(value)
+        return ResponseValue.String(value)
     raise ValueError("Response fields must be strings or booleans")
 
 
@@ -75,7 +72,7 @@ __all__ = [
 ]
 
 type Scores = Mapping[str, bool]
-_UNCHECKED = Unchecked()
+_UNCHECKED = Verification.Unchecked()
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -154,7 +151,7 @@ def score_case(
     case_id: str,
     response: str,
     changed_files: tuple[str, ...],
-    verification: Verification = _UNCHECKED,
+    verification: Verification.Value = _UNCHECKED,
     selection: Selection = "smoke",
 ) -> Scores:
     scores = dict(
