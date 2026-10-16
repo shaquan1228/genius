@@ -7,13 +7,36 @@ from typing import Literal, assert_never
 from pydantic import validate_call
 
 from evals.python import catalog
-from evals.python._kernel import FROZEN, Case, DatasetInfo, Experiment, Verification
+from evals.python._kernel import (
+    FROZEN,
+    AnswerCriterion,
+    Case,
+    CaseDefinition,
+    CodeCriterion,
+    DatasetInfo,
+    Experiment,
+    Inline,
+    Instruction,
+    PlainCompletion,
+    ReferenceDefinition,
+    Resource,
+    StructuredCompletion,
+    TextRule,
+    Verification,
+    VerifierDefinition,
+)
+from evals.python.catalog import Catalog as Dataset
 from evals.python.catalog import Selection
 from evals.python.verification import Runtime
 
 __all__ = [
+    "AnswerCriterion",
     "Case",
+    "CaseDefinition",
     "Cases",
+    "CodeCriterion",
+    "CompileDataset",
+    "Dataset",
     "DatasetInfo",
     "DatasetProvenance",
     "DescribeDataset",
@@ -21,11 +44,19 @@ __all__ = [
     "Experiment",
     "ExperimentSettings",
     "GradeCase",
+    "Inline",
+    "Instruction",
+    "PlainCompletion",
     "Provenance",
+    "ReferenceDefinition",
+    "Resource",
     "Runtime",
     "Scores",
     "Selection",
+    "StructuredCompletion",
+    "TextRule",
     "Verification",
+    "VerifierDefinition",
 ]
 
 type Scores = Mapping[str, bool]
@@ -37,6 +68,11 @@ class DatasetProvenance:
     info: DatasetInfo | None
     source_hash: str
     cases_hash: str
+
+
+@validate_call(config=FROZEN)
+def CompileDataset(*, cases: tuple[CaseDefinition, ...]) -> Dataset:
+    return catalog.compile_declarations(cases)
 
 
 @validate_call(config=FROZEN)

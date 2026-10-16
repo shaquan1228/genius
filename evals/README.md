@@ -5,7 +5,7 @@
 Hugging Face provides hosted Jobs, model access, and per-sample sandboxes; CI can launch the hosted path on manual dispatch.
 Model calls and hosted compute can cost money. The test suite uses local sandboxes and mock models.
 
-OCaml defines and validates evaluations, resolves run settings, and grades observations.
+OCaml defines evaluation types, validates declarations, resolves run settings, and grades observations.
 Python integrations consume canonical projections through typed public queries and commands.
 The kernel is a compiler and pure grader. Public commands own verification and assessment;
 Inspect adapts observations, task execution, and reporting to its SDK.
@@ -30,10 +30,12 @@ flowchart LR
 | `ocaml/experiment.mli` | Immutable defaults and validated launch overrides |
 | `ocaml/dataset.mli`, `ocaml/datasets/` | Common adapter interface; dataset-specific records and provenance |
 | `ocaml/codec.ml`, `ocaml/transport.ml` | JSON syntax and generic protocol operations |
-| `python/_kernel.py` | Private immutable Python projections of the OCaml domain; no integration imports |
+| `ocaml/declaration.mli`, `ocaml/declaration.ml` | Narrow declaration decoder interface and private implementation, returning validated `Ast.case` values |
+| `python/_kernel.py` | Private immutable Python bindings for canonical declarations and projections; no integration imports |
 | `python/transport.py` | Trusted source compilation, content-keyed executable caches, protocol encoding/decoding |
 | `python/catalog.py` | Adapter composition, immutable catalogs, trusted record retention and content fingerprints |
 | `python/integrations/datasets/` | Pinned download effects |
+| `python/integrations/smoke/` | Python-owned example case declarations and offline reference-validation CLI |
 | `python/integrations/inspect/` | SDK task/sample/score adaptation, agents, and sandbox capability adaptation |
 | `python/query.py` | Typed public queries returning canonical values directly |
 | `python/commands.py` | Typed asynchronous commands, validated launch settings and composition |
@@ -46,17 +48,18 @@ flowchart LR
 Public `Case` values contain only ID, skill, prompt, and public files, including visible helper tools.
 Reference solutions, expected answers, private verifier programs and private inputs use separate projections.
 Only the trusted host or fresh grading sandbox receives those projections; agent samples and metadata receive public inputs and identifiers.
-Python does not mirror answer expectations, text rules, or criterion variants.
+Python construction bindings express the existing kernel declaration types; validation and grading policy remain in OCaml.
 
 Protocol version 3 exposes generic describe, cases, verifier, reference, experiment, and grade operations.
 Every response is versioned. A grading request carries the case ID, raw response text, changed paths, and trusted execution evidence.
 It returns named boolean scores. Dataset-specific CLI operations and branches are absent from both transports.
 The old combined case manifest is intentionally unsupported; native historical Inspect logs are unchanged.
 
-Dataset selection is an adapter name or, for local library use, a trusted suite path.
+Dataset selection is an adapter name, a trusted suite path, or an immutable `Dataset` returned by the public `CompileDataset` query.
 An adapter under `ocaml/datasets/<name>.ml` implements `dataset.mli`, compiles as `Dataset`, and constructs ordinary kernel values.
 Its `info` is absent for local declarations or contains a pinned gzip JSONL source plus flat provenance attributes.
 Its `import` function maps a raw record to a validated case; raw private benchmark JSON is retained byte-for-byte.
+Python integrations can instead supply canonical `CaseDefinition` values through `CompileDataset`. The generic `ocaml/datasets/declarations.ml` adapter delegates to `Declaration.decode : string -> Ast.case`; its implementation decodes through existing validating constructors. The compiled dataset retains trusted records and resources without registering a new selector.
 Adding a dataset using existing semantics requires only an adapter and declarations, without editing the kernel, transport, or a Python dataset enum.
 A genuinely new evaluation capability may require a new primitive.
 
@@ -230,7 +233,55 @@ Sandbox and verifier failures still stop the task.
 
 ## Author cases
 
-A suite declares the parts of a case explicitly:
+Python integrations can author cases using the existing kernel type bindings. The
+example in `python/integrations/smoke/declarations.py` returns immutable
+`query.CaseDefinition` values containing fixtures, instructions, code or answer
+criteria, allowed files, and reference solutions. `CaseDefinition` represents the
+full `Ast.case` construction contract; `Case` is its separate public read projection.
+
+```python
+from evals.python import commands
+from evals.python import query
+from evals.python.integrations.smoke import declarations
+
+definitions = declarations.cases()
+dataset = query.CompileDataset(cases=definitions)
+public_cases = query.Cases(selection=dataset)
+
+# In an async caller, validate the first case's known reference offline.
+verification = await commands.ValidateReference(
+    case_id=public_cases[0].id, selection=dataset
+)
+scores = query.GradeCase(
+    case_id=public_cases[0].id,
+    selection=dataset,
+    response="Increment now adds one.",
+    changed_files=("workspace/solution.ml",),
+    verification=verification.verification,
+)
+```
+
+Run both example references from the repository root, with the compiler environment
+configured as above:
+
+```sh
+uv run --project evals python -m evals.python.integrations.smoke
+```
+
+The CLI compiles the declarations, validates each reference, grades correctness and
+scope, prints only IDs, verification statuses and scores, and exits nonzero on an
+unsuccessful score or harness failure. It makes no model calls or hosted requests.
+One case fixes OCaml candidate code through the existing standalone OCaml driver;
+the other grades a structured answer without allocating a sandbox. Python owns
+these declarations, independently of the language being tested. Private assertions
+and reference solutions never enter `Cases` or the CLI output.
+
+Compiled datasets are public in-process selections for case, metadata, provenance,
+grading and verification operations. `Evaluate` and the Inspect/HF launch interfaces
+continue accepting their existing string selectors; this example does not replace
+the original `smoke` suite or add a launch registry entry.
+
+An OCaml suite can also declare the parts of a case explicitly:
 
 ```ocaml
 let cases =
@@ -275,8 +326,9 @@ let timeout_case i =
 let cases = List.init 200 timeout_case
 ```
 
-A new starting project belongs in `ocaml/fixtures.ml`. Scenario instructions, assertions,
-and reference outputs belong in `scenarios.ml`. Add a reusable success condition to
+For OCaml-authored suites, reusable starting projects belong in `ocaml/fixtures.ml`;
+scenario instructions, assertions and reference outputs belong in `scenarios.ml`.
+Python-authored integrations own those values in their declaration module. Add a reusable success condition to
 `ast.ml`, its validating constructor to `criterion.ml`, and its pure evaluation to
 `grader.ml`. Case IDs have no matching directory
 or Python registry entry.
@@ -432,8 +484,8 @@ exit_code = await commands.Evaluate(model="openai/your-model", dataset="humaneva
 ```
 
 Each callable validates its arguments and returns its declared result directly.
-`Cases`, `ExperimentSettings`,
-`DescribeDataset`, `Provenance`, `GradeCase`, and `ExecutionRuntime` are queries.
+`Cases`, `ExperimentSettings`, `CompileDataset`, `DescribeDataset`, `Provenance`,
+`GradeCase`, and `ExecutionRuntime` are queries.
 `VerifyCase`, `AssessCase`, `ValidateReference`, and `Evaluate` are asynchronous
 commands. `DescribeDataset` reads metadata without downloading/importing all cases;
 `Provenance` includes source and private-case fingerprints.

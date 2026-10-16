@@ -13,6 +13,7 @@ from evals.python._kernel import (
     FROZEN,
     Attributes,
     Case,
+    CaseDefinition,
     DatasetInfo,
     ExecutableChecks,
     Experiment,
@@ -23,8 +24,6 @@ from evals.python._kernel import (
 from evals.python.integrations.datasets.download import Download, cache_path, download
 from evals.python.paths import EVALS_ROOT
 from evals.python.transport import Program, Sources
-
-Selection = str | Path
 
 ADAPTER_ROOT = EVALS_ROOT / "ocaml/datasets"
 RUNNER = EVALS_ROOT / "ocaml/check.sh"
@@ -41,8 +40,13 @@ class Catalog(BaseModel):
     records: Attributes
 
 
+Selection = str | Path | Catalog
+
+
 def sources(selection: Selection = "smoke") -> Sources:
     selection = TypeAdapter(Selection).validate_python(selection, strict=True)
+    if isinstance(selection, Catalog):
+        return selection.sources
     if isinstance(selection, Path):
         suite, adapter = selection, ADAPTER_ROOT / "smoke.ml"
     else:
@@ -57,6 +61,12 @@ def compile_records(*, sources: Sources, records: tuple[str, ...]) -> Catalog:
         sources=sources,
         cases={case.id: case for case in cases},
         records=dict(zip((case.id for case in cases), records, strict=bool(records))),
+    )
+
+
+def compile_declarations(definitions: tuple[CaseDefinition, ...]) -> Catalog:
+    return compile_records(
+        sources=sources("declarations"), records=transport.encode_declarations(definitions)
     )
 
 
@@ -85,7 +95,7 @@ def _catalog(sources: Sources) -> Catalog:
 
 
 def _selected(selection: Selection) -> Catalog:
-    return _catalog(sources(selection))
+    return selection if isinstance(selection, Catalog) else _catalog(sources(selection))
 
 
 def load_cases(*, selection: Selection = "smoke") -> tuple[Case, ...]:

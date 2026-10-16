@@ -17,6 +17,7 @@ from pydantic import AfterValidator, BaseModel, Field
 from evals.python._kernel import (
     FROZEN,
     Case,
+    CaseDefinition,
     DatasetInfo,
     ExecutableChecks,
     Experiment,
@@ -67,6 +68,8 @@ LIBRARY: Final = tuple(
         "projection.mli",
         "projection.ml",
         "codec.ml",
+        "declaration.mli",
+        "declaration.ml",
     )
 )
 SUITE: Final = OCAML_ROOT / "suite.ml"
@@ -251,3 +254,7 @@ def grade(  # noqa: PLR0913 - kernel grading fields and trusted compiler context
     if not {"correctness", "scope"} <= result.scores.keys():
         raise ValueError("Kernel omitted required score names")
     return result.scores
+
+
+def encode_declarations(definitions: tuple[CaseDefinition, ...]) -> tuple[str, ...]:
+    return tuple(definition.model_dump_json() for definition in definitions)
