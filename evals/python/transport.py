@@ -14,20 +14,33 @@ from typing import Annotated, Final
 
 from pydantic import AfterValidator, BaseModel, Field
 
-from evals.python.contracts import (
+from evals.python._kernel import (
     FROZEN,
-    VERSION,
     Case,
+    CaseDefinition,
     DatasetInfo,
     ExecutableChecks,
     Experiment,
-    GradeRequest,
-    Program,
     Reference,
-    RunOverrides,
-    Sources,
+    Verification,
 )
 from evals.python.paths import EVALS_ROOT
+
+VERSION: Final = 3
+
+
+@dataclass(frozen=True, kw_only=True)
+class Program:
+    suite: Path
+    adapter: Path
+    resources: tuple[Path, ...]
+
+
+@dataclass(frozen=True, kw_only=True)
+class Sources:
+    modules: tuple[tuple[str, str], ...]
+    resources: tuple[tuple[str, str], ...]
+
 
 OCAML_ROOT: Final = EVALS_ROOT / "ocaml"
 LIBRARY: Final = tuple(
@@ -50,11 +63,11 @@ LIBRARY: Final = tuple(
         "reference.ml",
         "grader.mli",
         "grader.ml",
-        "fixtures.ml",
-        "scenarios.ml",
         "projection.mli",
         "projection.ml",
         "codec.ml",
+        "declaration.mli",
+        "declaration.ml",
     )
 )
 SUITE: Final = OCAML_ROOT / "suite.ml"
@@ -172,16 +185,10 @@ def describe(*, sources: Sources) -> DatasetInfo | None:
     )
 
 
-def experiment(*, sources: Sources, overrides: RunOverrides | None = None) -> Experiment:
+def experiment(*, sources: Sources, overrides: Mapping[str, int | bool | None]) -> Experiment:
     return (
         Envelope[Experiment]
-        .model_validate_json(
-            invoke(
-                sources=sources,
-                operation="--experiment",
-                payload=(overrides or RunOverrides()).model_dump(),
-            )
-        )
+        .model_validate_json(invoke(sources=sources, operation="--experiment", payload=overrides))
         .value
     )
 
@@ -217,17 +224,35 @@ def reference(*, sources: Sources, case_id: str, record: str | None = None) -> R
     )
 
 
-def grade(
-    *, sources: Sources, request: GradeRequest, record: str | None = None
+def grade(  # noqa: PLR0913 - kernel grading fields and trusted compiler context
+    *,
+    sources: Sources,
+    case_id: str,
+    response: str,
+    changed_files: tuple[str, ...],
+    verification: Verification,
+    record: str | None = None,
 ) -> Mapping[str, bool]:
-    payload = {"version": VERSION, **request.model_dump()}
     result = GradingResult.model_validate_json(
         invoke(
             sources=sources,
             operation="--grade",
-            payload={"record": record, "request": payload},
+            payload={
+                "record": record,
+                "request": {
+                    "version": VERSION,
+                    "case_id": case_id,
+                    "response": response,
+                    "changed_files": changed_files,
+                    "verification": verification.model_dump(),
+                },
+            },
         )
     )
     if not {"correctness", "scope"} <= result.scores.keys():
         raise ValueError("Kernel omitted required score names")
     return result.scores
+
+
+def encode_declarations(definitions: tuple[CaseDefinition, ...]) -> tuple[str, ...]:
+    return tuple(definition.model_dump_json() for definition in definitions)

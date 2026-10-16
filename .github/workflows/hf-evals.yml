@@ -70,4 +70,4 @@ jobs:
           EVAL_VERSION: ${{ inputs.version }}
         run: |
           test -n "$HF_TOKEN" || { echo "Add an HF_TOKEN repository secret with write access." >&2; exit 1; }
-          sh evals/hf_host.sh
+          sh evals/bin/hf_host.sh

@@ -8,13 +8,17 @@ let rejected construct =
 let rule ~field ~min_words ~max_words = { Ast.field; min_words; max_words }
 
 let () =
-  (match Criterion.ocaml ~sources:[ "receipt.ml" ] ~assertions:[ "Receipt.total [] = 0." ] with
-  | Ast.Code verifier ->
-      assert (verifier.inputs = [ "receipt.ml" ]);
-      assert (String.length verifier.stdin > 0)
-  | Ast.Answer _ -> assert false);
-  rejected (fun () -> Criterion.ocaml ~sources:[] ~assertions:[ "true" ]);
-  rejected (fun () -> Criterion.ocaml ~sources:[ "a.ml" ] ~assertions:[])
+  let checks =
+    Verifier.make
+      ~inputs:[ "source.txt" ]
+      ~files:[]
+      ~tools:[]
+      ~command:[ "checker" ]
+      ~stdin:"private input"
+      ~timeout_seconds:5
+  in
+  assert (Criterion.validate (Ast.Code checks) = Ast.Code checks);
+  rejected (fun () -> Criterion.validate (Ast.Code { checks with inputs = [] }))
 
 let () =
   let exact = Response.of_fields [ ("status", Ast.String "ready"); ("safe", Ast.Bool true) ] in

@@ -36,7 +36,6 @@ check-ocaml-format:
 # Compile temporary copies in dependency order so no build files enter the checkout.
 lint-ocaml:
 	@command -v ocamlfind >/dev/null || { echo "Install OCaml 4.13+, ocamlfind and Jsonm for kernel checks." >&2; exit 1; }
-	sh -n bin/enforce
 	@for adapter in ocaml/datasets/*.ml; do \
 	  build_dir=$$(mktemp -d) && \
 	  (trap 'rm -rf "$$build_dir"' EXIT; \
@@ -45,8 +44,8 @@ lint-ocaml:
 	    ocamlfind ocamlc -package jsonm $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml)) || exit 1; \
 	done
 
-# Every kernel module except the JSON entry point, in dependency order.
-KERNEL = $(shell cd ocaml && ocamldep -sort $(filter-out transport.ml codec.ml dataset.mli,$(notdir $(wildcard ocaml/*.mli ocaml/*.ml))))
+# Pure kernel modules, excluding the process boundary, in dependency order.
+KERNEL = $(shell cd ocaml && ocamldep -sort $(filter-out transport.ml codec.ml declaration.mli declaration.ml dataset.mli,$(notdir $(wildcard ocaml/*.mli ocaml/*.ml))))
 
 # Link a test with only the modules it may use, so a new dependency fails to compile.
 ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
@@ -56,11 +55,11 @@ ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
 test-ocaml:
 	$(call ocaml_test,ast.ml experiment.mli experiment.ml tests/test_experiment.ml)
 	$(call ocaml_test,ast.ml verifier.mli verifier.ml tests/test_verifier.ml)
-	$(call ocaml_test,ast.ml fixture.mli fixture.ml fixtures.ml tests/test_fixture.ml)
+	$(call ocaml_test,ast.ml fixture.mli fixture.ml tests/test_fixture.ml)
 	$(call ocaml_test,ast.ml response.mli response.ml fixture.mli fixture.ml verifier.mli verifier.ml criterion.mli criterion.ml tests/test_criterion.ml)
 	$(call ocaml_test,$(KERNEL) tests/test_kernel.ml)
 
 check-scaffolding:
-	sh -n hf_host.sh
-	sh -n hf_bootstrap.sh
+	sh -n bin/hf_host.sh
+	sh -n bin/hf_bootstrap.sh
 	uv lock --check

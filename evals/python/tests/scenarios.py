@@ -10,9 +10,11 @@ from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
 from inspect_ai.util import sandbox
 
-from evals.python.contracts import Reference
-from evals.python.integrations.datasets.catalog import reference
+from evals.python._kernel import Reference
+from evals.python.catalog import reference
 from evals.python.integrations.inspect.workspace import GIT_IDENTITY, execute
+
+__test__ = False
 
 Mode = Literal[
     "pass",
@@ -57,14 +59,14 @@ async def corrupt_instructions(case: Reference) -> None:
 
 
 async def tamper_runner(case: Reference) -> None:
-    await sandbox().write_file("workspace/check.sh", "#!/bin/sh\nexit 0\n")
+    await sandbox().write_file("workspace/test_receipt.py", "raise SystemExit(0)\n")
 
 
 async def exit_early(case: Reference) -> None:
     for name in case.solution:
         path = f"workspace/{name}"
         source = await sandbox().read_file(path)
-        await sandbox().write_file(path, "let () = exit 0\n" + source)
+        await sandbox().write_file(path, "import os\nos._exit(0)\n" + source)
 
 
 @dataclass(frozen=True)

@@ -1,91 +1,48 @@
-"""Run paired evaluations inside a Hugging Face Job."""
-
+import asyncio
+import json
 import os
-from typing import Any, override
+from collections.abc import Mapping
 
-from inspect_ai import eval
-from inspect_ai.log import EvalLog, EvalSample
-from inspect_ai.model import GenerateConfig, get_model, modelapi
-from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
-
-import evals.python.integrations.hugging_face.sandbox  # noqa: F401 - provider registration belongs to HF
-from evals.python.contracts import Experiment, RunOverrides
-from evals.python.integrations.datasets.catalog import experiment
-from evals.python.integrations.inspect.tasks import TaskRequest, build_task
+from evals.python import commands
 
 
-@modelapi(name="genius-hf")
-class HfChatAPI(HFInferenceProvidersAPI):
-    @override
-    def completion_params(self, config: GenerateConfig, tools: bool) -> dict[str, Any]:
-        params = super().completion_params(config, tools)
-        if body := params.get("extra_body"):
-            body.pop("prompt_cache_key", None)
-        return params
+def optional_int(value: str | None) -> int | None:
+    return int(value) if value else None
 
 
-def sample_limit() -> int | None:
-    value = os.environ.get("EVAL_LIMIT")
+def optional_json(value: str | None) -> tuple[object, ...] | None:
     if not value:
         return None
-    limit = int(value)
-    if limit < 1:
-        raise ValueError("EVAL_LIMIT must be positive")
-    return limit
+    parsed = json.loads(value)
+    if not isinstance(parsed, list):
+        raise ValueError("Selection must be a JSON list")
+    return tuple(parsed)
 
 
-def crashed(sample: EvalSample) -> bool:
-    scores = sample.scores or {}
-    return any((score.metadata or {}).get("agent_failure") for score in scores.values())
-
-
-# A scored crash still counts as success, so name crashes apart from clean zeros.
-def crash_summary(log: EvalLog) -> str:
-    samples = log.samples or []
-    crashes = sum(crashed(sample) for sample in samples)
-    return f"{log.eval.task}: {crashes} of {len(samples)} samples had an agent crash"
-
-
-def run_specification() -> Experiment:
-    value = os.environ.get("EVAL_EPOCHS")
-    return experiment(RunOverrides(epochs=int(value) if value else None))
+def configuration(environment: Mapping[str, str]) -> commands.EvaluationSettings:
+    return commands.EvaluationSettings.model_validate(
+        {
+            "model": environment["EVAL_MODEL"],
+            "agent": environment.get("EVAL_AGENT", "claude"),
+            "version": environment.get("EVAL_VERSION", ""),
+            "dataset": environment.get("EVAL_DATASET", "smoke"),
+            "sandbox": "hf",
+            "instruction_root": "/eval/instructions",
+            "epochs": optional_int(environment.get("EVAL_EPOCHS")),
+            "token_limit": optional_int(environment.get("EVAL_TOKEN_LIMIT")),
+            "limit": optional_int(environment.get("EVAL_LIMIT")),
+            "sample_ids": optional_json(environment.get("EVAL_SAMPLE_IDS")),
+            "instruction_delivery": environment.get("EVAL_INSTRUCTION_DELIVERY", "files"),
+            "deliveries": optional_json(environment.get("EVAL_DELIVERIES")),
+            "log_dir": environment.get("EVAL_LOG_DIR", "/results/live"),
+        }
+    )
 
 
 def run() -> int:
-    agent = os.environ.get("EVAL_AGENT", "claude")
-    version = os.environ.get("EVAL_VERSION", "")
-    dataset = os.environ.get("EVAL_DATASET", "smoke")
-    model_name = os.environ["EVAL_MODEL"]
-    if model_name.startswith("hf-inference-providers/"):
-        model = get_model(
-            model_name.replace("hf-inference-providers/", "genius-hf/", 1),
-            strict_tools=False,
-        )
-    else:
-        model = get_model(model_name)
-    spec = run_specification()
-    logs = eval(
-        [
-            build_task(
-                request=TaskRequest(
-                    profile=profile.name,
-                    agent=agent,
-                    version=version,
-                    dataset=dataset,
-                    sandbox="hf",
-                    experiment=spec,
-                )
-            )
-            for profile in spec.profiles
-        ],
-        model=model,
-        epochs=spec.epochs,
-        sandbox="hf",
-        max_samples=1,
-        limit=sample_limit(),
-        log_dir=os.environ.get("EVAL_LOG_DIR", "/results/live"),
-    )
-    for log in logs:
-        print(f"{log.eval.task}: {log.status} ({log.location})", flush=True)
-        print(crash_summary(log), flush=True)
-    return int(any(log.status != "success" for log in logs))
+    operation = configuration(dict(os.environ))
+    return asyncio.run(commands.Evaluate(**operation.model_dump()))
+
+
+if __name__ == "__main__":
+    raise SystemExit(run())

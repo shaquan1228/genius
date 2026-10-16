@@ -5,15 +5,12 @@ import asyncio
 import json
 import os
 import platform
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Literal, assert_never
 
-from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 from pydantic import BaseModel, ConfigDict
 
-from evals.python.contracts import Case, ExecutableChecks
-from evals.python.integrations.datasets.catalog import dataset_info, load_cases, reference, verifier
-from evals.python.integrations.inspect.verification import Verifier
+from evals.python import commands, query
 
 
 class BenchmarkInfo(BaseModel):
@@ -28,7 +25,7 @@ class BenchmarkInfo(BaseModel):
 
 
 def benchmark_info() -> BenchmarkInfo:
-    info = dataset_info("humanevalplus")
+    info = query.DescribeDataset(selection="humanevalplus")
     if info is None:
         raise ValueError("Benchmark adapter must declare provenance")
     return BenchmarkInfo.model_validate(
@@ -36,25 +33,21 @@ def benchmark_info() -> BenchmarkInfo:
     )
 
 
-async def validate_case(case: Case) -> dict[str, object]:
-    match verifier(case.id, selection="humanevalplus"):
-        case ExecutableChecks() as checks:
-            pass
-        case None:
-            raise ValueError("Reference validation requires executable checks")
-        case _ as unreachable:
-            assert_never(unreachable)
-    agent = LocalSandboxEnvironment()
-    try:
-        await agent.exec(["mkdir", "workspace"])
-        for name, contents in reference(case.id, selection="humanevalplus").solution.items():
-            await agent.write_file(f"workspace/{name}", contents)
-        evidence, metadata = await Verifier(checks=checks, agent=agent).verify()
-        return {"case_id": case.id, **evidence.model_dump(), "metadata": metadata}
-    finally:
-        await LocalSandboxEnvironment.sample_cleanup(
-            "reference-validation", None, {"default": agent}, interrupted=False
-        )
+async def validate_case(case: commands.Case) -> dict[str, object]:
+    result = await commands.ValidateReference(case_id=case.id, selection="humanevalplus")
+    return {
+        "case_id": case.id,
+        **result.verification.model_dump(),
+        "metadata": diagnostic(result.metadata),
+    }
+
+
+def diagnostic(value: commands.Diagnostic) -> object:
+    if isinstance(value, Mapping):
+        return {key: diagnostic(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [diagnostic(item) for item in value]
+    return value
 
 
 def parser() -> argparse.ArgumentParser:
@@ -91,7 +84,7 @@ def validate(arguments: Options) -> int:
     configure_memory(arguments=arguments)
     results = [
         asyncio.run(validate_case(case=case))
-        for case in load_cases(selection="humanevalplus")[: arguments.limit]
+        for case in query.Cases(selection="humanevalplus")[: arguments.limit]
     ]
     print(json.dumps({"provenance": benchmark_info().model_dump(), "results": results}, indent=2))
     return int(any(result["status"] != "passed" for result in results))

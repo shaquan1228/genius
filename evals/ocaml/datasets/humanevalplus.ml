@@ -40,7 +40,7 @@ let make problem ~stdin =
       (Ast.Code
          (Verifier.make
             ~inputs:[ "solution.py" ]
-            ~files:[ ("verifier.py", Ast.Resource "verifier.py") ]
+            ~files:[ ("verifier.py", Ast.Resource "evalplus_verifier.py") ]
             ~tools:[]
             ~command:[ "python3"; "-I"; "verifier.py"; "evalplus" ]
             ~stdin
