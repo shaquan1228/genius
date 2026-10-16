@@ -77,7 +77,7 @@ def instruction_files(
 def prompt(
     profile: Ast.profile,
     *,
-    case: Ast.public_case,
+    case: Ast.case,
     instructions: Mapping[str, bytes],
     delivery: commands.InstructionDelivery = "files",
     instruction_root: str = "../instructions",
@@ -96,7 +96,7 @@ def prompt(
 def files(
     profile: Ast.profile,
     *,
-    case: Ast.public_case,
+    case: Ast.case,
     instructions: Mapping[str, bytes],
 ) -> dict[str, str]:
     workspace = {}
@@ -117,7 +117,7 @@ def files(
 def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery options
     profile: Ast.profile,
     *,
-    cases: tuple[Ast.public_case, ...],
+    cases: tuple[Ast.case, ...],
     instructions: Mapping[str, bytes],
     dataset: str = "smoke",
     delivery: commands.InstructionDelivery = "files",

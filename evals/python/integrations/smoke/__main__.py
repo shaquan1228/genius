@@ -6,20 +6,21 @@ from typing import assert_never
 import evals.python.query as queries
 from evals.python import commands
 from evals.python.datasets import smoke as declarations
+from kernel import Ast
 
 
-def response(completion: queries.Ast.completion) -> str:
-    if isinstance(completion, queries.Ast.Plain):
+def response(completion: Ast.completion) -> str:
+    if isinstance(completion, Ast.Plain):
         return completion[0]
-    if isinstance(completion, queries.Ast.Structured):
+    if isinstance(completion, Ast.Structured):
         return json.dumps({name: value[0] for name, value in completion[0]})
     assert_never(completion)
 
 
-async def validate(definition: queries.Ast.case, *, dataset: queries.Dataset) -> bool:
+async def validate(definition: Ast.task, *, dataset: queries.Dataset) -> bool:
     result = await commands.ValidateReference(case_id=definition.id, selection=dataset)
     scores: queries.Scores = {}
-    if not isinstance(result.verification, queries.Ast.Harness_error):
+    if not isinstance(result.verification, Ast.Harness_error):
         scores = queries.GradeCase(
             case_id=definition.id,
             response=response(definition.reference.completion),
@@ -38,7 +39,7 @@ async def validate(definition: queries.Ast.case, *, dataset: queries.Dataset) ->
             }
         )
     )
-    return isinstance(result.verification, (queries.Ast.Passed, queries.Ast.Unchecked)) and all(
+    return isinstance(result.verification, (Ast.Passed, Ast.Unchecked)) and all(
         scores.values()
     )
 

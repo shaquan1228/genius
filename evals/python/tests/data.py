@@ -26,13 +26,13 @@ from evals.python.tests.support import (
     choice_case as _choice_case,
 )
 from evals.python.tests.support import (
+from kernel import Ast, Grader, InvalidArgument, load
     timeout_case as _timeout_case,
 )
-from kernel import Grader, InvalidArgument, load
 
 
 def public_projection_uses_native_types() -> None:
-    assert all(isinstance(case, query.Ast.public_case) for case in query.Cases())
+    assert all(isinstance(case, Ast.case) for case in query.Cases())
 
 
 def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
@@ -56,7 +56,7 @@ def _grade(case_id: str, *, text: str) -> bool:
         case_id=case_id,
         response=text,
         changed_files=(),
-        verification=query.Ast.Unchecked(),
+        verification=Ast.Unchecked(),
         selection="smoke",
     )["correctness"]
 
@@ -181,7 +181,7 @@ def native_projection_preserves_strings() -> None:
     text = 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
     definition = _copy_case(
         _choice_case(case_id="escaped", a=10, b=8),
-        instruction=query.Ast.instruction(skill="reasoning", prompt=text),
+        instruction=Ast.instruction(skill="reasoning", prompt=text),
     )
     dataset = query.CompileDataset(cases=(definition,))
     assert query.Cases(selection=dataset)[0].prompt == text
@@ -192,7 +192,7 @@ def cases_are_immutable() -> None:
     with pytest.raises((AttributeError, TypeError)):
         case.id = "changed"  # type: ignore[misc]
     with pytest.raises(TypeError):
-        case.files[0] = ("receipt.py", query.Ast.Inline("changed"))  # type: ignore[index]
+        case.files[0] = ("receipt.py", Ast.Inline("changed"))  # type: ignore[index]
     with pytest.raises(TypeError):
         query.Fixture.files(reference(case.id).edits)[0] = ("receipt.py", "changed")  # type: ignore[index]
     checks = verifier(case.id)
@@ -218,14 +218,14 @@ def compilation_cache_invalidates_when_declarations_change() -> None:
 
 
 def generic_python_case_exports_without_language_restriction() -> None:
-    definition = query.Ast.case(
+    definition = Ast.task(
         id="python-case",
         fixture=query.Fixture.of_files([("solution.py", "print(42)")]),
-        instruction=query.Ast.instruction(skill="reasoning", prompt="Return 42"),
-        criterion=query.Ast.Code(
-            query.Ast.verifier(
+        instruction=Ast.instruction(skill="reasoning", prompt="Return 42"),
+        criterion=Ast.Code(
+            Ast.verifier(
                 inputs=("solution.py",),
-                files=[("grader.py", query.Ast.Inline("trusted"))],
+                files=[("grader.py", Ast.Inline("trusted"))],
                 tools=[],
                 command=("python3", "grader.py"),
                 stdin="private",
@@ -233,8 +233,8 @@ def generic_python_case_exports_without_language_restriction() -> None:
             )
         ),
         allowed_files=("solution.py",),
-        reference=query.Ast.reference(
-            edits=query.Fixture.empty, completion=query.Ast.Plain("done")
+        reference=Ast.reference(
+            edits=query.Fixture.empty, completion=Ast.Plain("done")
         ),
     )
     dataset = query.CompileDataset(cases=(definition,))
@@ -292,7 +292,7 @@ def record_updates_cannot_bypass_kernel_validation(*, grade_only: bool) -> None:
             Grader.grade,
             records[0],
             response=None,
-            outcome=query.Ast.outcome(changed_files=(), verification=query.Ast.Unchecked()),
+            outcome=Ast.outcome(changed_files=(), verification=Ast.Unchecked()),
         )
     else:
         operation = partial(query.CompileDataset, cases=records)

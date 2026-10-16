@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from evals.python import query
 from evals.python.integrations.datasets.download import Download, cache_path, download
 from evals.python.integrations.evalplus import checks
+from kernel import Ast
 
 info = query.DatasetInfo(
     source="https://github.com/evalplus/humanevalplus_release/releases/download/v0.1.10/HumanEvalPlus.jsonl.gz",
@@ -29,16 +30,16 @@ class Problem(BaseModel):
     canonical_solution: str
 
 
-def declarations(records: Iterable[str]) -> tuple[query.Ast.case, ...]:
+def declarations(records: Iterable[str]) -> tuple[Ast.task, ...]:
     return tuple(declaration(raw) for raw in records)
 
 
-def declaration(raw: str) -> query.Ast.case:
+def declaration(raw: str) -> Ast.task:
     problem = Problem.model_validate_json(raw)
-    return query.Ast.case(
+    return Ast.task(
         id="humaneval-" + problem.task_id.split("/")[1],
         fixture=query.Fixture.of_files([("solution.py", problem.prompt)]),
-        instruction=query.Ast.instruction(
+        instruction=Ast.instruction(
             skill="reasoning",
             prompt=(
                 "Implement the specified function in solution.py. Preserve its signature and edit "
@@ -49,16 +50,16 @@ def declaration(raw: str) -> query.Ast.case:
             record=raw, manifest={**info.model_dump(exclude={"attributes"}), **info.attributes}
         ),
         allowed_files=("solution.py",),
-        reference=query.Ast.reference(
+        reference=Ast.reference(
             edits=query.Fixture.of_files(
                 [("solution.py", problem.prompt + problem.canonical_solution)]
             ),
-            completion=query.Ast.Plain(""),
+            completion=Ast.Plain(""),
         ),
     )
 
 
-def cases() -> tuple[query.Ast.case, ...]:
+def cases() -> tuple[Ast.task, ...]:
     data = download(
         request=Download(
             source=info.source, sha256=info.sha256, destination=cache_path(info.sha256)

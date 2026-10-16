@@ -28,6 +28,7 @@ from evals.python.tests.support import (
     imported_reference as _imported_reference,
 )
 from evals.python.tests.support import (
+from kernel import Ast
     imported_verifier as _imported_verifier,
 )
 
@@ -50,7 +51,7 @@ def _record(**updates: object) -> str:
 def import_preserves_original_private_json() -> None:
     raw = _record()
     checks = _imported_verifier(raw)
-    assert isinstance(checks, query.Ast.verifier)
+    assert isinstance(checks, Ast.verifier)
     assert json.loads(checks.stdin)["record"] == raw
     assert str(2**326 + 17) in checks.stdin
 
@@ -116,7 +117,7 @@ def dataset_selector_grades_one_trusted_record() -> None:
             case_id=case.id,
             response="",
             changed_files=("workspace/solution.py",),
-            verification=query.Ast.Passed(),
+            verification=Ast.Passed(),
             selection="humanevalplus",
         ) == {"correctness": True, "scope": True}
         samples = profiles.samples(
@@ -156,12 +157,12 @@ def import_cache_tracks_verifier_source(
     *, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     first = query.LoadDataset(selection="humanevalplus")
-    before = cast(query.Ast.verifier, verifier("humaneval-0", selection=first))
+    before = cast(Ast.verifier, verifier("humaneval-0", selection=first))
     script = tmp_path / "evalplus_verifier.py"
     script.write_text(_files(before.files)["verifier.py"] + "\n")
     monkeypatch.setattr(evalplus, "__file__", str(tmp_path / "__init__.py"))
     second = query.LoadDataset(selection="humanevalplus")
-    checks = cast(query.Ast.verifier, verifier("humaneval-0", selection=second))
+    checks = cast(Ast.verifier, verifier("humaneval-0", selection=second))
     assert _files(checks.files)["verifier.py"] == _files(before.files)["verifier.py"] + "\n"
     assert _public_snapshot(query.Cases(selection=first)) == _public_snapshot(
         query.Cases(selection=second)
@@ -212,6 +213,6 @@ def imported_dataset_grade_uses_cached_record(synthetic_dataset: None) -> None:
         case_id="humaneval-0",
         response="",
         changed_files=(),
-        verification=query.Ast.Passed(),
+        verification=Ast.Passed(),
         selection="humanevalplus",
     ) == {"correctness": True, "scope": True}

@@ -40,15 +40,15 @@ def _canonical(value: object) -> object:
     return (type(value).__name__, tuple(_canonical(item) for item in cast(Sequence[object], value)))
 
 
-def value_fingerprint(value: Ast.case) -> str:
+def value_fingerprint(value: Ast.task) -> str:
     return hashlib.sha256(repr(_canonical(value)).encode()).hexdigest()
 
 
 @dataclass(frozen=True, kw_only=True)
 class Dataset:
     sources: Sources
-    cases: Mapping[str, Ast.public_case]
-    records: Mapping[str, Ast.case]
+    cases: Mapping[str, Ast.case]
+    records: Mapping[str, Ast.task]
     info: DatasetInfo | None = None
 
     def __post_init__(self) -> None:
@@ -59,7 +59,7 @@ class Dataset:
 class DatasetModule(Protocol):
     info: DatasetInfo | None
 
-    def cases(self) -> tuple[Ast.case, ...]: ...
+    def cases(self) -> tuple[Ast.task, ...]: ...
 
 
 Selection = str | Dataset
@@ -67,7 +67,7 @@ Selection = str | Dataset
 
 @dataclass(frozen=True)
 class _CaseKey:
-    value: Ast.case = field(compare=False, hash=False)
+    value: Ast.task = field(compare=False, hash=False)
     digest: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -83,7 +83,7 @@ def _artifacts(
     )
 
 
-def _resolve(case: Ast.case, *, sources: Sources) -> Ast.case:
+def _resolve(case: Ast.task, *, sources: Sources) -> Ast.task:
     Case.validate(case)
     if sources.modules != _MODULES:
         raise ValueError("Kernel sources differ from the loaded native types; restart the process")
@@ -130,14 +130,14 @@ def _compile(
 
 
 def compile_records(
-    *, sources: Sources, records: tuple[Ast.case, ...], info: DatasetInfo | None = None
+    *, sources: Sources, records: tuple[Ast.task, ...], info: DatasetInfo | None = None
 ) -> Dataset:
     normalized = tuple(_CaseKey(_resolve(record, sources=sources)) for record in records)
     return _compile(sources=sources, records=normalized, info=info)
 
 
 def compile_declarations(
-    definitions: tuple[Ast.case, ...],
+    definitions: tuple[Ast.task, ...],
     *,
     info: DatasetInfo | None = None,
     resources: Mapping[str, str] = MappingProxyType({}),
@@ -162,7 +162,7 @@ def load_dataset(selection: Selection) -> Dataset:
     return compile_declarations(module.cases(), info=module.info)
 
 
-def record(case_id: str, *, selection: Selection) -> Ast.case:
+def record(case_id: str, *, selection: Selection) -> Ast.task:
     value = load_dataset(selection).records[case_id]
     if value.id != case_id:
         raise ValueError(f"Unknown case: {case_id}")

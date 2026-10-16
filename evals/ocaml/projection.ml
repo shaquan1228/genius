@@ -1,10 +1,10 @@
 (* Validated, immutable projections for each consumer. *)
-let verifier (case : Ast.case) =
+let verifier (case : Ast.task) =
   match (Case.validate case).criterion with
   | Ast.Code verifier -> Some verifier
   | Ast.Answer _ -> None
 
-let case (case : Ast.case) : Ast.public_case =
+let case (case : Ast.task) : Ast.case =
   let case = Case.validate case in
   let tools =
     match case.criterion with Ast.Code verifier -> verifier.tools | Ast.Answer _ -> []
@@ -17,4 +17,4 @@ let case (case : Ast.case) : Ast.public_case =
       List.map (fun (path, text) -> (path, Ast.Inline text)) (Fixture.files case.fixture) @ tools;
   }
 
-let reference (case : Ast.case) = (Case.validate case).reference
+let reference (case : Ast.task) = (Case.validate case).reference

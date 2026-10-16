@@ -19,22 +19,22 @@ from evals.python.tests.declarations import (
     _reference_files,
 )
 from evals.python.tests.projections import reference, verifier
-from kernel import InvalidArgument
+from kernel import Ast, InvalidArgument
 
 
 def compile_dataset_exposes_canonical_public_cases() -> None:
     definition = _declaration()
     dataset = assert_type(query.CompileDataset(cases=(definition,)), query.Dataset)
     assert isinstance(dataset, datasets.Dataset)
-    cases = assert_type(query.Cases(selection=dataset), tuple[query.Ast.public_case, ...])
+    cases = assert_type(query.Cases(selection=dataset), tuple[Ast.case, ...])
     assert cases[0] is dataset.cases[definition.id]
 
 
 def compiled_cases_separate_construction_from_public_projection() -> None:
     dataset = query.CompileDataset(cases=(_declaration(),))
     (case,) = query.Cases(selection=dataset)
-    assert not isinstance(case, query.Ast.case)
-    assert isinstance(case, query.Ast.public_case)
+    assert not isinstance(case, Ast.task)
+    assert isinstance(case, Ast.case)
     assert not hasattr(case, "reference")
     assert "verify.py" not in dict(case.files)
 
@@ -55,14 +55,14 @@ def compile_query_forwards_canonical_values_and_results() -> None:
 
 def _independent_datasets() -> tuple[query.Dataset, query.Dataset]:
     first = _declaration()
-    assert isinstance(first.criterion, query.Ast.Code)
+    assert isinstance(first.criterion, Ast.Code)
     checks = _copy_verifier(first.criterion[0], stdin="different private stdin")
     second = _copy_case(
         first,
-        criterion=query.Ast.Code(checks),
-        reference=query.Ast.reference(
+        criterion=Ast.Code(checks),
+        reference=Ast.reference(
             edits=query.Fixture.of_files([("main.py", "another fixed solution")]),
-            completion=query.Ast.Plain("another answer"),
+            completion=Ast.Plain("another answer"),
         ),
     )
     return query.CompileDataset(cases=(first,)), query.CompileDataset(cases=(second,))
@@ -118,15 +118,15 @@ def compiled_provenance_retains_python_metadata() -> None:
 @pytest.mark.parametrize("resource_name", ["checker.py", "ast.ml", "ast.cmo", "case.cmi", "kernel"])
 def compiled_datasets_supply_independent_evaluator_resources(resource_name: str) -> None:
     definition = _declaration()
-    assert isinstance(definition.criterion, query.Ast.Code)
+    assert isinstance(definition.criterion, Ast.Code)
     checks = _copy_verifier(
-        definition.criterion[0], files=[("verify.py", query.Ast.Resource(resource_name))]
+        definition.criterion[0], files=[("verify.py", Ast.Resource(resource_name))]
     )
-    definition = _copy_case(definition, criterion=query.Ast.Code(checks))
+    definition = _copy_case(definition, criterion=Ast.Code(checks))
     first = query.CompileDataset(cases=(definition,), resources={resource_name: "first checker"})
     second = query.CompileDataset(cases=(definition,), resources={resource_name: "second checker"})
-    a = cast(query.Ast.verifier, verifier("external", selection=first))
-    b = cast(query.Ast.verifier, verifier("external", selection=second))
+    a = cast(Ast.verifier, verifier("external", selection=first))
+    b = cast(Ast.verifier, verifier("external", selection=second))
     assert _files(a.files)["verify.py"] == "first checker"
     assert _files(b.files)["verify.py"] == "second checker"
     assert (
@@ -159,7 +159,7 @@ def compilation_hashes_include_trusted_source_changes() -> None:
     assert original.cases_hash != updated.cases_hash
 
 
-def _grade(*, dataset: query.Dataset, verification: query.Ast.verification) -> query.Scores:
+def _grade(*, dataset: query.Dataset, verification: Ast.verification) -> query.Scores:
     return query.GradeCase(
         case_id="external",
         response="done",
@@ -171,7 +171,7 @@ def _grade(*, dataset: query.Dataset, verification: query.Ast.verification) -> q
 
 def compiled_cases_use_existing_grading_policy() -> None:
     dataset = query.CompileDataset(cases=(_declaration(),))
-    assert _grade(dataset=dataset, verification=query.Ast.Passed()) == {
+    assert _grade(dataset=dataset, verification=Ast.Passed()) == {
         "correctness": True,
         "scope": True,
     }
@@ -179,13 +179,13 @@ def compiled_cases_use_existing_grading_policy() -> None:
 
 def compiled_grading_preserves_canonical_inputs_and_results() -> None:
     dataset = query.CompileDataset(cases=(_declaration(),))
-    verification = query.Ast.Passed()
+    verification = Ast.Passed()
     with patch(
         "kernel.Grader.grade", return_value=[("correctness", True), ("scope", True)]
     ) as kernel_grade:
         assert _grade(dataset=dataset, verification=verification) == dict(kernel_grade.return_value)
     assert kernel_grade.call_args.args[0] is dataset.records["external"]
-    assert isinstance(kernel_grade.call_args.kwargs["outcome"].verification, query.Ast.Passed)
+    assert isinstance(kernel_grade.call_args.kwargs["outcome"].verification, Ast.Passed)
 
 
 def compiled_dataset_is_immutable() -> None:
@@ -195,11 +195,11 @@ def compiled_dataset_is_immutable() -> None:
     with pytest.raises(TypeError):
         cast(dict[str, object], dataset.records)["external"] = "changed"
     with pytest.raises(TypeError):
-        cast(dict[str, query.Ast.public_case], dataset.cases)["external"] = dataset.cases[
+        cast(dict[str, Ast.case], dataset.cases)["external"] = dataset.cases[
             "external"
         ]
     with pytest.raises(TypeError):
-        dataset.cases["external"].files[0] = ("main.py", query.Ast.Inline("changed"))  # type: ignore[index]
+        dataset.cases["external"].files[0] = ("main.py", Ast.Inline("changed"))  # type: ignore[index]
     with pytest.raises(FrozenInstanceError):
         dataset.sources.modules = ()  # type: ignore[misc]
     with pytest.raises(TypeError):
@@ -218,7 +218,7 @@ def compile_query_validates_its_boundary_without_bypassing_kernel() -> None:
     compile_dataset: Callable[..., query.Dataset] = query.CompileDataset
     with pytest.raises(ValidationError):
         compile_dataset(cases=[_declaration()])
-    public_case = query.Ast.public_case(id="public", skill="reasoning", prompt="", files=[])
+    public_case = Ast.case(id="public", skill="reasoning", prompt="", files=[])
     with pytest.raises(ValidationError):
         compile_dataset(cases=(public_case,))
     invalid = _copy_case(_declaration(), allowed_files=())
@@ -248,7 +248,7 @@ def compiled_selection_flows_through_all_verification_commands() -> None:
             ),
             commands.VerificationResult,
         )
-        assert isinstance(verification.verification, query.Ast.Unchecked)
+        assert isinstance(verification.verification, Ast.Unchecked)
         assessment = assert_type(
             await commands.AssessCase(
                 case_id="external",
@@ -267,7 +267,7 @@ def compiled_selection_flows_through_all_verification_commands() -> None:
             ),
             commands.VerificationResult,
         )
-        assert isinstance(reference.verification, query.Ast.Unchecked)
+        assert isinstance(reference.verification, Ast.Unchecked)
 
     asyncio.run(execute())
     cast(AsyncMock, runtime.create).assert_not_awaited()

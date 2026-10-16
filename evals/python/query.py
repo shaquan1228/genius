@@ -75,7 +75,7 @@ class DatasetProvenance:
 @validate_call(config=FROZEN)
 def CompileDataset(
     *,
-    cases: tuple[Ast.case, ...],
+    cases: tuple[Ast.task, ...],
     info: DatasetInfo | None = None,
     resources: Files | None = None,
 ) -> Dataset:
@@ -90,7 +90,7 @@ def LoadDataset(*, selection: Selection = "smoke") -> Dataset:
 
 
 @validate_call(config=FROZEN)
-def Cases(*, selection: Selection = "smoke") -> tuple[Ast.public_case, ...]:
+def Cases(*, selection: Selection = "smoke") -> tuple[Ast.case, ...]:
     return tuple(datasets.load_dataset(selection).cases.values())
 
 

@@ -276,5 +276,5 @@ subprocess.run([sys.executable, "-c", "import re, pathlib"], check=True)
 
 def public_domain_values_are_native_types() -> None:
     assert not (PYTHON_ROOT / "_kernel.py").exists()
-    assert isinstance(query.Cases()[0], Ast.public_case)
+    assert isinstance(query.Cases()[0], Ast.case)
     assert isinstance(query.ExperimentSettings(), Ast.experiment)

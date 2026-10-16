@@ -17,7 +17,7 @@ from evals.python.query import ExperimentSettings, GradeCase
 from evals.python.tests.declarations import _reference_text
 from evals.python.tests.projections import reference, verifier
 from evals.python.tests.support import choice_case as _choice_case
-from kernel import InvalidArgument, load
+from kernel import Ast, InvalidArgument, load
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def _third_grade(*, case_id: str = "third-case", selection: query.Dataset) -> qu
         selection=selection,
         response='{"choice":"A","reason":"Less"}',
         changed_files=(),
-        verification=query.Ast.Unchecked(),
+        verification=Ast.Unchecked(),
     )
 
 
@@ -82,7 +82,7 @@ def third_dataset_imports_and_grades_records(third_dataset: query.Dataset) -> No
 
 def public_projection_contains_no_private_material() -> None:
     for case in query.Cases():
-        assert isinstance(case, query.Ast.public_case)
+        assert isinstance(case, Ast.case)
         assert not hasattr(case, "reference")
         assert not hasattr(case, "criterion")
         assert "verifier.py" not in dict(case.files)
@@ -133,14 +133,14 @@ def run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
 @pytest.mark.parametrize("field", ["epochs", "message_limit", "cost_limit", "time_limit"])
 @pytest.mark.parametrize("value", [0, -1])
 def kernel_rejects_invalid_run_overrides(field: str, *, value: int) -> None:
-    operation = cast(Callable[..., query.Ast.experiment], ExperimentSettings)
+    operation = cast(Callable[..., Ast.experiment], ExperimentSettings)
     with pytest.raises(InvalidArgument):
         operation(**{field: value})
 
 
 @pytest.mark.parametrize("payload", [{"epochs": 1.5}, {"cache": 1}, {"unknown": 1}])
 def public_query_rejects_malformed_run_overrides(payload: dict[str, object]) -> None:
-    operation = cast(Callable[..., query.Ast.experiment], ExperimentSettings)
+    operation = cast(Callable[..., Ast.experiment], ExperimentSettings)
     with pytest.raises(ValidationError):
         operation(**payload)
 
@@ -174,7 +174,7 @@ def verifier_projection_and_grading_use_native_values() -> None:
         case_id=case_id,
         response="",
         changed_files=(),
-        verification=query.Ast.Passed(),
+        verification=Ast.Passed(),
     )
     native = load(datasets.kernel_sources().modules)
     with (

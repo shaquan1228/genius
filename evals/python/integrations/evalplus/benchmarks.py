@@ -35,7 +35,7 @@ def benchmark_info() -> BenchmarkInfo:
 
 
 async def validate_case(
-    case: Ast.public_case, *, dataset: query.Dataset
+    case: Ast.case, *, dataset: query.Dataset
 ) -> dict[str, object]:
     result = await commands.ValidateReference(case_id=case.id, selection=dataset)
     return {

@@ -15,6 +15,7 @@ from evals.python.tests.projections import reference, verifier
 from evals.python.tests.scenarios import Mode
 from evals.python.tests.scenarios import echo_model as _echo_model
 from evals.python.tests.scenarios import scripted as _scripted
+from kernel import Ast
 
 __test__ = False
 
@@ -66,29 +67,29 @@ def results(log: EvalLog) -> list[tuple[str, object, object]]:
     return sorted(sample_result(sample) for sample in log.samples or [])
 
 
-def timeout_case(*, case_id: str, initial: int, requested: int) -> query.Ast.case:
+def timeout_case(*, case_id: str, initial: int, requested: int) -> Ast.task:
     return _copy_case(smoke.timeout(initial=initial, requested=requested), id=case_id)
 
 
-def choice_case(*, case_id: str, a: int, b: int) -> query.Ast.case:
+def choice_case(*, case_id: str, a: int, b: int) -> Ast.task:
     choice = "A" if a < b else "B"
-    return query.Ast.case(
+    return Ast.task(
         id=case_id,
         fixture=query.Fixture.empty,
-        instruction=query.Ast.instruction(skill="reasoning", prompt="Choose A or B with a reason"),
-        criterion=query.Ast.Answer(
-            query.Ast.answer(
-                expected=[("choice", query.Ast.String(choice))],
-                text_rule=query.Ast.text_rule(field="reason", min_words=1, max_words=40),
+        instruction=Ast.instruction(skill="reasoning", prompt="Choose A or B with a reason"),
+        criterion=Ast.Answer(
+            Ast.answer(
+                expected=[("choice", Ast.String(choice))],
+                text_rule=Ast.text_rule(field="reason", min_words=1, max_words=40),
             )
         ),
         allowed_files=(),
-        reference=query.Ast.reference(
+        reference=Ast.reference(
             edits=query.Fixture.empty,
-            completion=query.Ast.Structured(
+            completion=Ast.Structured(
                 [
-                    ("choice", query.Ast.String(choice)),
-                    ("reason", query.Ast.String("The cost is lower.")),
+                    ("choice", Ast.String(choice)),
+                    ("reason", Ast.String("The cost is lower.")),
                 ]
             ),
         ),
@@ -99,15 +100,15 @@ def import_dataset(records: tuple[str, ...]) -> query.Dataset:
     return query.CompileDataset(cases=humanevalplus.declarations(records))
 
 
-def import_records(records: tuple[str, ...]) -> tuple[query.Ast.public_case, ...]:
+def import_records(records: tuple[str, ...]) -> tuple[Ast.case, ...]:
     return query.Cases(selection=import_dataset(records))
 
 
-def imported_verifier(raw: str) -> query.Ast.verifier | None:
+def imported_verifier(raw: str) -> Ast.verifier | None:
     dataset = import_dataset((raw,))
     return verifier(next(iter(dataset.cases)), selection=dataset)
 
 
-def imported_reference(raw: str) -> query.Ast.reference:
+def imported_reference(raw: str) -> Ast.reference:
     dataset = import_dataset((raw,))
     return reference(next(iter(dataset.cases)), selection=dataset)

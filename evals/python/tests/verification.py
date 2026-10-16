@@ -24,7 +24,7 @@ from evals.python.integrations.inspect.environments import environment, runtime
 from evals.python.query import GradeCase
 from evals.python.tests.declarations import _copy_case, _declaration, _reference_files
 from evals.python.tests.projections import reference, verifier
-from kernel import InvalidArgument
+from kernel import Ast, InvalidArgument
 
 DRIVER = """import json, os, subprocess, sys
 result = subprocess.run([sys.executable, 'solution.py'], capture_output=True, text=True)
@@ -34,17 +34,17 @@ print(json.dumps({'marker': os.environ['GENIUS_VERIFIER_MARKER'],
 """
 
 
-def _checks(**updates: object) -> query.Ast.verifier:
+def _checks(**updates: object) -> Ast.verifier:
     values = {
         "inputs": ("solution.py",),
-        "files": [("grader.py", query.Ast.Inline(DRIVER))],
-        "tools": [("visible.py", query.Ast.Inline("raise Exception()"))],
+        "files": [("grader.py", Ast.Inline(DRIVER))],
+        "tools": [("visible.py", Ast.Inline("raise Exception()"))],
         "command": ("python3", "grader.py"),
         "stdin": "42",
         "timeout_seconds": 30,
         **updates,
     }
-    constructor = cast(Callable[..., query.Ast.verifier], query.Ast.verifier)
+    constructor = cast(Callable[..., Ast.verifier], Ast.verifier)
     return constructor(**values)
 
 
@@ -102,7 +102,7 @@ def python_inputs_execute_in_fresh_workspace(source: str) -> None:
                     case_id="clear-task", agent=environment(agent), runtime=runtime(agent)
                 )
             assert isinstance(
-                result.verification, query.Ast.Passed if source == "print(42)" else query.Ast.Failed
+                result.verification, Ast.Passed if source == "print(42)" else Ast.Failed
             )
             assert result.metadata == {"raw": "42\n" if source == "print(42)" else "0\n"}
             assert (directory / "workspace/grader.py").read_text().endswith("tampered')")
@@ -134,7 +134,7 @@ def invalid_completion_discards_metadata(*, stdout: str, code: int) -> None:
         result = await _run(
             _agent_port(), runtime=_runtime_port(_grader_port(stdout=stdout, code=code))
         )
-        assert isinstance(result.verification, query.Ast.Harness_error)
+        assert isinstance(result.verification, Ast.Harness_error)
         assert result.metadata == {}
 
     asyncio.run(execute())
@@ -151,12 +151,12 @@ def valid_completion_allows_prior_stdout_and_freezes_nested_metadata() -> None:
                 )
             ),
         )
-        assert isinstance(result.verification, query.Ast.Passed)
+        assert isinstance(result.verification, Ast.Passed)
         assert result.metadata == {"nested": {"items": (True, None, 4.2)}}
         with pytest.raises(TypeError):
             result.metadata["nested"]["items"] = ()  # type: ignore[index]
         with pytest.raises(FrozenInstanceError):
-            result.verification = query.Ast.Failed()  # type: ignore[misc]
+            result.verification = Ast.Failed()  # type: ignore[misc]
 
     asyncio.run(execute())
 
@@ -171,7 +171,7 @@ def missing_candidate_is_invalid_before_allocation(missing: str) -> None:
             cast(AsyncMock, agent.read_bytes).side_effect = FileNotFoundError("solution.py")
         ports = _runtime_port(_grader_port())
         result = await _run(agent, runtime=ports)
-        assert isinstance(result.verification, query.Ast.Invalid_submission)
+        assert isinstance(result.verification, Ast.Invalid_submission)
         cast(AsyncMock, ports.create).assert_not_awaited()
         cast(AsyncMock, ports.cleanup).assert_not_awaited()
         if missing == "inspection":
@@ -195,7 +195,7 @@ def infrastructure_failures_are_harness_errors(*, stage: str, error: Exception) 
         }
         cast(AsyncMock, effects[stage]).side_effect = error
         result = await _run(agent, runtime=ports)
-        assert isinstance(result.verification, query.Ast.Harness_error)
+        assert isinstance(result.verification, Ast.Harness_error)
         assert result.metadata == {}
         assert cast(AsyncMock, ports.cleanup).await_count == (stage in {"mkdir", "transfer"})
 
@@ -208,7 +208,7 @@ def workspace_creation_failure_is_reported_and_cleaned() -> None:
         cast(AsyncMock, grader.execute).side_effect = [_output(code=1)]
         ports = _runtime_port(grader)
         result = await _run(_agent_port(), runtime=ports)
-        assert isinstance(result.verification, query.Ast.Harness_error)
+        assert isinstance(result.verification, Ast.Harness_error)
         assert "create verifier workspace" in result.detail
         cast(AsyncMock, ports.cleanup).assert_awaited_once_with(grader, interrupted=False)
 
@@ -221,7 +221,7 @@ def only_verifier_execution_deadline_is_timed_out() -> None:
         cast(AsyncMock, grader.execute).side_effect = [_output(), TimeoutError("command deadline")]
         ports = _runtime_port(grader)
         result = await _run(_agent_port(), runtime=ports)
-        assert isinstance(result.verification, query.Ast.Timed_out)
+        assert isinstance(result.verification, Ast.Timed_out)
         assert result.detail == "command deadline"
         cast(AsyncMock, ports.cleanup).assert_awaited_once_with(grader, interrupted=False)
 
@@ -233,7 +233,7 @@ def same_environment_is_rejected_without_destroying_candidate() -> None:
         agent = _agent_port()
         ports = _runtime_port(agent)
         result = await _run(agent, runtime=ports)
-        assert isinstance(result.verification, query.Ast.Harness_error)
+        assert isinstance(result.verification, Ast.Harness_error)
         cast(AsyncMock, ports.cleanup).assert_not_awaited()
 
     asyncio.run(execute())
@@ -320,10 +320,10 @@ def invalid_executable_contract_is_rejected(updates: dict[str, object]) -> None:
                 _copy_case(
                     case,
                     fixture=query.Fixture.of_files([("solution.py", "print(42)")]),
-                    criterion=query.Ast.Code(_checks(**updates)),
+                    criterion=Ast.Code(_checks(**updates)),
                     allowed_files=("solution.py",),
-                    reference=query.Ast.reference(
-                        edits=query.Fixture.empty, completion=query.Ast.Plain("")
+                    reference=Ast.reference(
+                        edits=query.Fixture.empty, completion=Ast.Plain("")
                     ),
                 ),
             )
@@ -333,21 +333,21 @@ def invalid_executable_contract_is_rejected(updates: dict[str, object]) -> None:
 @pytest.mark.parametrize(
     "status",
     [
-        query.Ast.Unchecked(),
-        query.Ast.Passed(),
-        query.Ast.Failed(),
-        query.Ast.Invalid_submission(),
-        query.Ast.Timed_out(),
+        Ast.Unchecked(),
+        Ast.Passed(),
+        Ast.Failed(),
+        Ast.Invalid_submission(),
+        Ast.Timed_out(),
     ],
 )
-def typed_status_reaches_kernel(status: query.Ast.verification) -> None:
+def typed_status_reaches_kernel(status: Ast.verification) -> None:
     scores = GradeCase(
         case_id="clear-task",
         response="",
         changed_files=(),
         verification=status,
     )
-    assert scores["correctness"] == isinstance(status, query.Ast.Passed)
+    assert scores["correctness"] == isinstance(status, Ast.Passed)
 
 
 def kernel_refuses_harness_error() -> None:
@@ -356,14 +356,14 @@ def kernel_refuses_harness_error() -> None:
             case_id="clear-task",
             response="",
             changed_files=(),
-            verification=query.Ast.Harness_error("server failed"),
+            verification=Ast.Harness_error("server failed"),
         )
 
 
 def private_artifacts_are_excluded_from_public_files() -> None:
     for case in query.Cases():
         executable = verifier(case.id)
-        if isinstance(executable, query.Ast.verifier):
+        if isinstance(executable, Ast.verifier):
             assert not dict(executable.files).keys() & dict(case.files).keys()
 
 
@@ -374,7 +374,7 @@ def public_answer_only_verification_never_allocates() -> None:
             result = await commands.VerifyCase(
                 case_id="small-decision", agent=_agent_port(), runtime=ports
             )
-        assert isinstance(result.verification, query.Ast.Unchecked)
+        assert isinstance(result.verification, Ast.Unchecked)
         assert result.metadata == {}
         cast(AsyncMock, ports.create).assert_not_awaited()
 
@@ -395,7 +395,7 @@ def assessment_grades_canonical_observation_and_freezes_scores() -> None:
                 ),
                 commands.Assessment,
             )
-        assert isinstance(result.verification, query.Ast.Unchecked)
+        assert isinstance(result.verification, Ast.Unchecked)
         assert result.scores == expected
         with pytest.raises(TypeError):
             result.scores["correctness"] = True  # type: ignore[index]
@@ -433,7 +433,7 @@ def candidate_inspection_classifies_missing_and_infrastructure(code: int) -> Non
         result = await _run(environment(sandbox), runtime=_runtime_port(_grader_port()))
         assert isinstance(
             result.verification,
-            {0: query.Ast.Passed, 1: query.Ast.Invalid_submission, 2: query.Ast.Harness_error}[
+            {0: Ast.Passed, 1: Ast.Invalid_submission, 2: Ast.Harness_error}[
                 code
             ],
         )
@@ -458,14 +458,14 @@ def reference_uses_default_local_adapter_and_real_ocaml() -> None:
         )
 
     result = asyncio.run(execute())
-    assert isinstance(result.verification, query.Ast.Passed), result.detail
+    assert isinstance(result.verification, Ast.Passed), result.detail
 
 
 def answer_only_reference_never_allocates() -> None:
     ports = _runtime_port(_grader_port())
     with patch("kernel.Projection.verifier", return_value=None):
         result = asyncio.run(commands.ValidateReference(case_id="small-decision", runtime=ports))
-    assert isinstance(result.verification, query.Ast.Unchecked)
+    assert isinstance(result.verification, Ast.Unchecked)
     cast(AsyncMock, ports.create).assert_not_awaited()
 
 
@@ -478,15 +478,15 @@ def reference_candidate_and_grader_are_both_cleaned() -> None:
             patch("kernel.Projection.verifier", return_value=_checks()),
             patch(
                 "kernel.Projection.reference",
-                return_value=query.Ast.reference(
+                return_value=Ast.reference(
                     edits=query.Fixture.of_files([("solution.py", "print(42)")]),
-                    completion=query.Ast.Plain(""),
+                    completion=Ast.Plain(""),
                 ),
             ),
             patch("evals.python.verification.token_hex", return_value="secret"),
         ):
             result = await commands.ValidateReference(case_id="clear-task", runtime=ports)
-        assert isinstance(result.verification, query.Ast.Passed)
+        assert isinstance(result.verification, Ast.Passed)
         assert cast(AsyncMock, ports.cleanup).await_count == 2
         cast(AsyncMock, agent.write_bytes).assert_awaited_once_with(
             "workspace/solution.py", b"print(42)"
@@ -513,9 +513,9 @@ def reference_setup_failures_preserve_lifecycle(stage: str) -> None:
             patch("kernel.Projection.verifier", return_value=_checks()),
             patch(
                 "kernel.Projection.reference",
-                return_value=query.Ast.reference(
+                return_value=Ast.reference(
                     edits=query.Fixture.of_files([("solution.py", "")]),
-                    completion=query.Ast.Plain(""),
+                    completion=Ast.Plain(""),
                 ),
             ),
         ):
@@ -524,7 +524,7 @@ def reference_setup_failures_preserve_lifecycle(stage: str) -> None:
                     await commands.ValidateReference(case_id="clear-task", runtime=ports)
             else:
                 result = await commands.ValidateReference(case_id="clear-task", runtime=ports)
-                assert isinstance(result.verification, query.Ast.Harness_error)
+                assert isinstance(result.verification, Ast.Harness_error)
         assert cast(AsyncMock, ports.cleanup).await_count == (stage != "allocation")
         if stage != "allocation":
             cast(AsyncMock, ports.cleanup).assert_awaited_once_with(
@@ -542,15 +542,15 @@ def reference_nonzero_mkdir_is_harness_error() -> None:
             patch("kernel.Projection.verifier", return_value=_checks()),
             patch(
                 "kernel.Projection.reference",
-                return_value=query.Ast.reference(
-                    edits=query.Fixture.empty, completion=query.Ast.Plain("")
+                return_value=Ast.reference(
+                    edits=query.Fixture.empty, completion=Ast.Plain("")
                 ),
             ),
         ):
             result = await commands.ValidateReference(
                 case_id="clear-task", runtime=_runtime_port(agent)
             )
-        assert isinstance(result.verification, query.Ast.Harness_error)
+        assert isinstance(result.verification, Ast.Harness_error)
         assert "create reference workspace" in result.detail
 
     asyncio.run(execute())
@@ -558,7 +558,7 @@ def reference_nonzero_mkdir_is_harness_error() -> None:
 
 def assessment_replaces_untrusted_verification_with_execution() -> None:
     async def execute() -> None:
-        untrusted = query.Ast.Failed()
+        untrusted = Ast.Failed()
         prior_scores = GradeCase(
             case_id="clear-task",
             response="",
@@ -576,10 +576,10 @@ def assessment_replaces_untrusted_verification_with_execution() -> None:
                 agent=_agent_port(),
                 runtime=_runtime_port(_grader_port()),
             )
-        assert isinstance(result.verification, query.Ast.Passed)
+        assert isinstance(result.verification, Ast.Passed)
         assert result.scores["correctness"]
         assert not prior_scores["correctness"]
-        assert isinstance(untrusted, query.Ast.Failed)
+        assert isinstance(untrusted, Ast.Failed)
 
     asyncio.run(execute())
 
@@ -598,7 +598,7 @@ def assessment_runs_actual_private_checks_before_grading() -> None:
                 agent=environment(agent),
                 runtime=runtime(agent),
             )
-            assert isinstance(result.verification, query.Ast.Passed)
+            assert isinstance(result.verification, Ast.Passed)
             assert result.scores["correctness"]
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
@@ -621,7 +621,7 @@ def cleanup_failure_preserves_cancellation(*, cancelled: bool) -> None:
                 await _run(_agent_port(), runtime=ports)
         else:
             result = await _run(_agent_port(), runtime=ports)
-            assert isinstance(result.verification, query.Ast.Harness_error)
+            assert isinstance(result.verification, Ast.Harness_error)
             assert result.detail == "cleanup failed"
 
     asyncio.run(execute())

@@ -34,9 +34,9 @@ def check_answer() -> None:
         allowed_files=[],
         reference=reference,
     )
-    assert isinstance(case, Ast.case)
+    assert isinstance(case, Ast.task)
     public = Projection.case(case)
-    assert isinstance(public, Ast.public_case)
+    assert isinstance(public, Ast.case)
     assert public.id == case.id
     assert [(name, text[0]) for name, text in public.files] == [("context.txt", "Public context")]
     assert not hasattr(public, "reference")

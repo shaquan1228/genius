@@ -48,12 +48,12 @@ type criterion = Code of verifier | Answer of answer
 type completion = Plain of string | Structured of response
 type reference = { edits : fixture; completion : completion }
 
-(* Case: one test specification combining instruction, initial state, criteria, and reference.
-   Mapping follows Anthropic's task/test case and Hugging Face's sample, rather than an
-   execution-level task configuration.
+(* Task: one test specification combining instruction, initial state, criteria, and reference.
+   Anthropic defines a task as a single test with inputs and success criteria; Hugging Face
+   represents a benchmark sample with its query, expected outputs, and task metadata.
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
-   https://huggingface.co/docs/lighteval/main/en/package_reference/doc *)
-type case = {
+   https://huggingface.co/docs/lighteval/v0.13.0/package_reference/doc *)
+type task = {
   id : string;
   fixture : fixture;
   instruction : instruction;
@@ -83,7 +83,7 @@ type outcome = { changed_files : string list; verification : verification }
 type score = (string * bool) list
 
 (* Public case inputs exclude private verifier and reference material. *)
-type public_case = { id : string; skill : string; prompt : string; files : (string * content) list }
+type case = { id : string; skill : string; prompt : string; files : (string * content) list }
 type profile = { name : string; preamble : string; instructions : string list }
 
 type experiment = {

@@ -1,5 +1,5 @@
-(* Validating constructors for Ast.case. *)
-let validate (case : Ast.case) =
+(* Validating constructors for Ast.task. *)
+let validate (case : Ast.task) =
   let { Ast.id; fixture; instruction; criterion; allowed_files; reference } = case in
   let valid_name name =
     name <> ""

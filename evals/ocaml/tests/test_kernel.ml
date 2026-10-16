@@ -62,7 +62,7 @@ let review =
       }
 
 let cases = [ code_case; decision ~id:"small-decision" ~choice:"B"; review ]
-let find id = List.find (fun (case : Ast.case) -> case.id = id) cases
+let find id = List.find (fun (case : Ast.task) -> case.id = id) cases
 let no_changes = { Ast.changed_files = []; verification = Unchecked }
 let scores ?(outcome = no_changes) ~response case = Grader.grade case ~response ~outcome
 
@@ -136,7 +136,7 @@ let () =
 
 let () =
   List.iter
-    (fun (case : Ast.case) ->
+    (fun (case : Ast.task) ->
       let fields =
         match case.criterion with
         | Ast.Answer { expected; text_rule } -> (
@@ -151,7 +151,7 @@ let () =
 
 let () =
   List.iter
-    (fun (case : Ast.case) ->
+    (fun (case : Ast.task) ->
       match (case.criterion, case.reference.completion) with
       | Ast.Answer _, Ast.Structured reply -> assert (correct ~fields:(Response.fields reply) case)
       | _ -> ())

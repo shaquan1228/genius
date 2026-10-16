@@ -3,16 +3,17 @@
 from pathlib import Path
 
 from evals.python import query
+from kernel import Ast
 
 
-def checks(*, inputs: tuple[str, ...], program: str) -> query.Ast.criterion:
-    return query.Ast.Code(
-        query.Ast.verifier(
+def checks(*, inputs: tuple[str, ...], program: str) -> Ast.criterion:
+    return Ast.Code(
+        Ast.verifier(
             inputs=inputs,
             files=(
                 (
                     "verifier.py",
-                    query.Ast.Inline(Path(__file__).with_name("verifier.py").read_text()),
+                    Ast.Inline(Path(__file__).with_name("verifier.py").read_text()),
                 ),
             ),
             tools=(),

@@ -8,14 +8,15 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import commands, datasets, query
+from kernel import Ast
 
 
 def public_queries_preserve_canonical_objects() -> None:
     dataset = assert_type(query.LoadDataset(), query.Dataset)
     assert query.LoadDataset(selection=dataset) is dataset
-    cases = assert_type(query.Cases(), tuple[query.Ast.public_case, ...])
+    cases = assert_type(query.Cases(), tuple[Ast.case, ...])
     assert cases[0] is dataset.cases[cases[0].id]
-    assert all(isinstance(case, query.Ast.public_case) for case in cases)
+    assert all(isinstance(case, Ast.case) for case in cases)
 
 
 def public_queries_select_canonical_projections() -> None:
@@ -28,7 +29,7 @@ def public_queries_select_canonical_projections() -> None:
 
 
 def public_experiment_resolves_canonical_overrides() -> None:
-    spec = assert_type(query.ExperimentSettings(epochs=2), query.Ast.experiment)
+    spec = assert_type(query.ExperimentSettings(epochs=2), Ast.experiment)
     assert spec.epochs == 2
 
 
@@ -40,7 +41,7 @@ def public_hashes_match_existing_provenance() -> None:
 
 
 def public_grade_preserves_input_and_result() -> None:
-    verification = query.Ast.Passed()
+    verification = Ast.Passed()
     with patch(
         "kernel.Grader.grade", return_value=[("correctness", True), ("scope", True)]
     ) as grade:
@@ -54,7 +55,7 @@ def public_grade_preserves_input_and_result() -> None:
             query.Scores,
         )
     assert grade.call_args.args[0] is query.LoadDataset().records["clear-task"]
-    assert isinstance(grade.call_args.kwargs["outcome"].verification, query.Ast.Passed)
+    assert isinstance(grade.call_args.kwargs["outcome"].verification, Ast.Passed)
     assert result == dict(grade.return_value)
 
 

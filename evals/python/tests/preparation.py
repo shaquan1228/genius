@@ -22,6 +22,7 @@ from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.declarations import _copy_case, _declaration
 from evals.python.tests.support import offline_run as _offline_run
 from evals.python.tests.support import results as _results
+from kernel import Ast
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
@@ -94,12 +95,12 @@ def evaluation_prepares_once_for_all_tasks(
 def private_tasks() -> list[Task]:
     definition = _copy_case(
         _declaration(code=False),
-        instruction=query.Ast.instruction(
+        instruction=Ast.instruction(
             skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
         ),
-        reference=query.Ast.reference(
+        reference=Ast.reference(
             edits=query.Fixture.of_files([("main.py", PRIVATE_SENTINEL)]),
-            completion=query.Ast.Plain(PRIVATE_SENTINEL),
+            completion=Ast.Plain(PRIVATE_SENTINEL),
         ),
     )
     datasets = [
@@ -107,13 +108,13 @@ def private_tasks() -> list[Task]:
             cases=(
                 _copy_case(
                     definition,
-                    criterion=query.Ast.Answer(
-                        query.Ast.answer(
+                    criterion=Ast.Answer(
+                        Ast.answer(
                             expected=[
-                                ("choice", query.Ast.String(choice)),
-                                ("safe", query.Ast.Bool(True)),
+                                ("choice", Ast.String(choice)),
+                                ("safe", Ast.Bool(True)),
                             ],
-                            text_rule=query.Ast.text_rule(field="reason", min_words=1, max_words=5),
+                            text_rule=Ast.text_rule(field="reason", min_words=1, max_words=5),
                         )
                     ),
                 ),

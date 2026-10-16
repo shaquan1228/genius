@@ -16,6 +16,7 @@ from evals.python.paths import EVALS_ROOT
 from evals.python.tests.humaneval import _record
 from evals.python.tests.support import import_dataset as _import_dataset
 from evals.python.tests.support import import_records as _import_records
+from kernel import Ast
 
 
 def info(capsys: pytest.CaptureFixture[str]) -> None:
@@ -63,7 +64,7 @@ def reference_validation_uses_public_operation_and_thaws_only_cli_output() -> No
     case = _import_records((_record(),))[0]
     dataset = _import_dataset((_record(),))
     canonical = commands.VerificationResult(
-        verification=query.Ast.Passed(), metadata={"test": {"items": (True,)}}
+        verification=Ast.Passed(), metadata={"test": {"items": (True,)}}
     )
     with patch.object(
         commands, "ValidateReference", new_callable=AsyncMock, return_value=canonical

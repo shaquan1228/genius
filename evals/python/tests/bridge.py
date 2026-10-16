@@ -13,7 +13,7 @@ from evals.python.datasets import Selection
 from evals.python.query import GradeCase
 from evals.python.tests.declarations import _declaration, _reference_files, _reference_text
 from evals.python.tests.projections import reference, verifier
-from kernel import load
+from kernel import Ast, load
 from kernel.build import LIBRARY, build
 
 
@@ -35,7 +35,7 @@ def _judgment(*, response: str, suite: Selection = "smoke") -> bool:
         case_id="small-decision",
         response=response,
         changed_files=(),
-        verification=query.Ast.Unchecked(),
+        verification=Ast.Unchecked(),
         selection=suite,
     )["correctness"]
 
@@ -45,7 +45,7 @@ def kernel_grades_response_and_scope() -> None:
         case_id="small-decision",
         response='{"choice":"B","reason":"Lower cost."}',
         changed_files=(),
-        verification=query.Ast.Unchecked(),
+        verification=Ast.Unchecked(),
     )
     assert dict(scores) == {"correctness": True, "scope": True}
     with pytest.raises(TypeError):
@@ -67,7 +67,7 @@ def unknown_case_is_a_harness_error() -> None:
             case_id="unknown",
             response="{}",
             changed_files=(),
-            verification=query.Ast.Unchecked(),
+            verification=Ast.Unchecked(),
         )
 
 
@@ -158,7 +158,7 @@ def additional_named_scores_cross_bridge_without_decoder_changes() -> None:
             case_id="small-decision",
             response="{}",
             changed_files=(),
-            verification=query.Ast.Unchecked(),
+            verification=Ast.Unchecked(),
         )
     assert dict(scores) == {"correctness": True, "scope": False, "new_metric": True}
 
@@ -167,18 +167,18 @@ def reference_channels_export_independently_and_escape() -> None:
     fields: dict[str, str | bool] = {"state": 'quote" \\ \n é', "safe": True}
     dataset = query.CompileDataset(
         cases=(
-            query.Ast.case(
+            Ast.task(
                 id="reference",
                 fixture=query.Fixture.empty,
-                instruction=query.Ast.instruction(skill="reasoning", prompt="fields"),
-                criterion=query.Ast.Answer(
-                    query.Ast.answer(
+                instruction=Ast.instruction(skill="reasoning", prompt="fields"),
+                criterion=Ast.Answer(
+                    Ast.answer(
                         expected=[
                             (
                                 name,
-                                query.Ast.Bool(value)
+                                Ast.Bool(value)
                                 if isinstance(value, bool)
-                                else query.Ast.String(value),
+                                else Ast.String(value),
                             )
                             for name, value in fields.items()
                         ],
@@ -186,15 +186,15 @@ def reference_channels_export_independently_and_escape() -> None:
                     )
                 ),
                 allowed_files=("result.txt",),
-                reference=query.Ast.reference(
+                reference=Ast.reference(
                     edits=query.Fixture.of_files([("result.txt", "result")]),
-                    completion=query.Ast.Structured(
+                    completion=Ast.Structured(
                         [
                             (
                                 name,
-                                query.Ast.Bool(value)
+                                Ast.Bool(value)
                                 if isinstance(value, bool)
-                                else query.Ast.String(value),
+                                else Ast.String(value),
                             )
                             for name, value in fields.items()
                         ]
@@ -212,7 +212,7 @@ def reference_channels_export_independently_and_escape() -> None:
         case_id="reference",
         response=_reference_text(expected),
         changed_files=(),
-        verification=query.Ast.Unchecked(),
+        verification=Ast.Unchecked(),
         selection=dataset,
     )["correctness"]
 
