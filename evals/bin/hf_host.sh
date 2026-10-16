@@ -12,7 +12,9 @@ case "$EVAL_MAX_SAMPLES" in
 esac
 
 case "$EVAL_MODEL" in
-  hf-inference-providers/*) provider_key=; default_agent=codex ;;
+  hf-inference-providers/*)
+    : "${EVAL_MODEL_COST:?Set EVAL_MODEL_COST to the exact routed provider token prices}"
+    provider_key=; default_agent=codex ;;
   openai/*) provider_key=OPENAI_API_KEY; default_agent=codex ;;
   anthropic/*) provider_key=ANTHROPIC_API_KEY; default_agent=claude ;;
   *) echo "Use an hf-inference-providers/, openai/, or anthropic/ model" >&2; exit 2 ;;
@@ -55,7 +57,8 @@ hf jobs run --name genius-evals --namespace "$HF_NAMESPACE" --timeout "${EVAL_JO
   --env "EVAL_MAX_SAMPLES=$EVAL_MAX_SAMPLES" \
   --env "EVAL_EPOCHS=$EVAL_EPOCHS" \
   --env "EVAL_DATASET=${EVAL_DATASET:-smoke}" --env "EVAL_LIMIT=${EVAL_LIMIT:-}" \
-  --env "EVAL_SAMPLE_IDS=${EVAL_SAMPLE_IDS:-}" --env "EVAL_TOKEN_LIMIT=${EVAL_TOKEN_LIMIT:-}" \
+  --env "EVAL_SAMPLE_IDS=${EVAL_SAMPLE_IDS:-}" --env "EVAL_COST_LIMIT=${EVAL_COST_LIMIT:-0.25}" \
+  --env "EVAL_MODEL_COST=${EVAL_MODEL_COST:-}" \
   --env "EVAL_INSTRUCTION_DELIVERY=${EVAL_INSTRUCTION_DELIVERY:-files}" \
   --env "EVAL_DELIVERIES=${EVAL_DELIVERIES:-}" \
   ghcr.io/astral-sh/uv:python3.12-bookworm sh /source/evals/bin/hf_bootstrap.sh

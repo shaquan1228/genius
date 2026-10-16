@@ -13,6 +13,7 @@ from inspect_ai.model import GenerateConfig, get_model, modelapi
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 
 import evals.python.integrations.inspect.completeness as completeness_adapter
+import evals.python.integrations.inspect.pricing as pricing_adapter
 import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.progress as progress_adapter
 import evals.python.integrations.inspect.remote  # noqa: F401 - register the HF sandbox
@@ -95,7 +96,7 @@ def diagnostic_tasks(
 
 
 async def evaluate_async(request: commands.EvaluationSettings) -> int:
-    spec = query.ExperimentSettings(epochs=request.epochs, token_limit=request.token_limit)
+    spec = query.ExperimentSettings(epochs=request.epochs, cost_limit=request.cost_limit)
     tasks = evaluation_tasks(spec, request=request)
     selected_samples(tasks[0], request=request)
     if request.model.startswith("hf-inference-providers/"):
@@ -106,11 +107,17 @@ async def evaluate_async(request: commands.EvaluationSettings) -> int:
         )
     else:
         model = get_model(request.model)
+    pricing = pricing_adapter.configure(model, request=request)
     state = progress_adapter.Progress(run=request.run_id or uuid4().hex)
     token = progress_adapter.current.set(state)
     heartbeat = asyncio.create_task(state.heartbeat())
     try:
-        state.emit("run_start", settings=request.model_dump(mode="json"))
+        state.emit(
+            "run_start",
+            settings=request.model_dump(mode="json"),
+            model_cost=pricing,
+            cost_limit=spec.cost_limit,
+        )
         return await execute(tasks, request=request, spec=spec, model=model, state=state)
     finally:
         try:

@@ -59,7 +59,7 @@ class Experiment(BaseModel):
     profiles: tuple[ProfileSpec, ...]
     epochs: int = Field(gt=0)
     message_limit: int = Field(gt=0)
-    token_limit: int = Field(gt=0)
+    cost_limit: float = Field(gt=0, allow_inf_nan=False)
     time_limit: int = Field(gt=0)
     cache: bool
 

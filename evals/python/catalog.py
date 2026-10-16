@@ -156,7 +156,7 @@ def experiment(
     *,
     epochs: int | None = None,
     message_limit: int | None = None,
-    token_limit: int | None = None,
+    cost_limit: float | None = None,
     time_limit: int | None = None,
     cache: bool | None = None,
 ) -> Experiment:
@@ -165,7 +165,7 @@ def experiment(
         overrides={
             "epochs": epochs,
             "message_limit": message_limit,
-            "token_limit": token_limit,
+            "cost_limit": cost_limit,
             "time_limit": time_limit,
             "cache": cache,
         },

@@ -90,7 +90,7 @@ type experiment = {
   profiles : profile list;
   epochs : int;
   message_limit : int;
-  token_limit : int;
+  cost_limit : float;
   time_limit : int;
   cache : bool;
 }

@@ -13,21 +13,18 @@ let default : Ast.experiment =
       ];
     epochs = 5;
     message_limit = 40;
-    token_limit = 50_000;
+    cost_limit = 0.25;
     time_limit = 300;
     cache = false;
   }
 
 let resolve ?(epochs = default.epochs) ?(message_limit = default.message_limit)
-    ?(token_limit = default.token_limit) ?(time_limit = default.time_limit) ?(cache = default.cache)
+    ?(cost_limit = default.cost_limit) ?(time_limit = default.time_limit) ?(cache = default.cache)
     () =
   List.iter
     (fun (name, value) ->
       if value <= 0 then invalid_arg ("Experiment " ^ name ^ " must be positive"))
-    [
-      ("epochs", epochs);
-      ("message_limit", message_limit);
-      ("token_limit", token_limit);
-      ("time_limit", time_limit);
-    ];
-  { Ast.profiles = default.profiles; epochs; message_limit; token_limit; time_limit; cache }
+    [ ("epochs", epochs); ("message_limit", message_limit); ("time_limit", time_limit) ];
+  if (not (Float.is_finite cost_limit)) || cost_limit <= 0. then
+    invalid_arg "Experiment cost_limit must be finite and positive";
+  { Ast.profiles = default.profiles; epochs; message_limit; cost_limit; time_limit; cache }

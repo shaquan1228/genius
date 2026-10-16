@@ -483,7 +483,7 @@ from evals.python import query
 
 dataset = query.LoadDataset(selection="humanevalplus")
 cases = query.Cases(selection=dataset)
-settings = query.ExperimentSettings(epochs=2, token_limit=50_000)
+settings = query.ExperimentSettings(epochs=2, cost_limit=0.25)
 
 # At the Inspect scoring interface, after capturing public observations:
 assessment = await commands.AssessCase(
@@ -550,10 +550,26 @@ checks outside the agent VM. Explicit delivery modes currently support only
 reasoning cases; they reject other skills rather than silently replacing them.
 For a normal baseline/Genius run with a chosen delivery mode, leave
 `EVAL_DELIVERIES` unset and set `EVAL_INSTRUCTION_DELIVERY` instead.
-`EVAL_TOKEN_LIMIT` applies the same validated cumulative token cap to every arm.
-Cached history still counts toward that cap; a billed model response can cross
-it before the proxy dispatches its requested tools. Generated patches are not
-proof of executed edits. Report cutoffs separately from agent crashes and errors.
+`EVAL_COST_LIMIT` sets the same model dollar limit per sample and epoch in every arm
+(default `$0.25`). There is no cumulative token cutoff. Time and message limits
+remain active. For example, `EVAL_COST_LIMIT=0.10` allows ten cents per attempt.
+This covers model usage, not HF parent/child VM charges. A 20-problem, two-arm,
+one-epoch run has 40 independently capped attempts.
+
+HF routes require `EVAL_MODEL_COST` with the exact selected provider's USD prices
+per million tokens: `input`, `output`, `input_cache_write`, and `input_cache_read`.
+All four fields are required, finite and nonnegative. Use current billed cache
+rates; a zero cache rate is valid only if that usage is actually free. No model
+vendor price is inferred for an HF provider route. Other providers may use Inspect's
+built-in prices, or the same explicit override. Missing pricing fails before
+sample VMs are allocated. The public command accepts `cost_limit=0.25` and a
+`commands.ModelPricing(...)` value as `model_cost`.
+
+The parent logs the resolved cap and prices; native Inspect logs retain usage,
+costs and cost-limit cutoffs. Cost is checked after each model response, so the
+last response can exceed the limit and its requested tools may not run. Generated
+patches are not proof of executed edits. Report cutoffs separately from crashes
+and errors.
 
 Keep optimization receipts and native run logs local and uncommitted.
 
@@ -561,7 +577,7 @@ Keep optimization receipts and native run logs local and uncommitted.
 
 Set `EVAL_MAX_SAMPLES=2` to run two samples concurrently within a profile (default `1`, maximum `16`). Profiles remain serial; instruction delivery diagnostics always use one sample at a time. The public `Evaluate(max_samples=2, ...)` entry point uses the same validation.
 
-The parent prints flushed JSON events for run settings, exact expected task/case/epoch tuples, sample initialization/start/end, a heartbeat every 30 seconds, and a final completeness report. Heartbeats include active sample identities, completed count and elapsed time, including sandbox provisioning. An interrupted sample gets an `aborted` terminal event. Native Inspect logs retain scoring evidence; telemetry contains identifiers and counts, without prompts, answers or private grading material. Missing or duplicate records, sample errors, failed tasks, or incomplete lifecycle telemetry fail the run even if its process otherwise exits cleanly. Crashes and token/time cutoffs are counted separately in the final report.
+The parent prints flushed JSON events for run settings, exact expected task/case/epoch tuples, sample initialization/start/end, a heartbeat every 30 seconds, and a final completeness report. Heartbeats include active sample identities, completed count and elapsed time, including sandbox provisioning. An interrupted sample gets an `aborted` terminal event. Native Inspect logs retain scoring evidence; telemetry contains identifiers and counts, without prompts, answers or private grading material. Missing or duplicate records, sample errors, failed tasks, or incomplete lifecycle telemetry fail the run even if its process otherwise exits cleanly. Crashes and cost/time/message cutoffs are counted separately in the final report.
 
 Set `EVAL_SANDBOX_IMAGE` to a prepared image to skip repeated system package installation. See [sandbox/README.md](sandbox/README.md) for the image definition, exact verifier-runtime qualification, and image revision limitations. Runtime-owned environments keep one connected HF client through command execution and file transfers, then settle pending operations before cleanup. Child Jobs carry the parent `EVAL_RUN_ID` in their `genius-run` label; VM lifecycle events identify each allocated and cleaned VM.
 

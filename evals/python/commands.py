@@ -42,6 +42,7 @@ __all__ = [
     "Execution",
     "Experiment",
     "InstructionDelivery",
+    "ModelPricing",
     "ProfileSpec",
     "Runtime",
     "ValidateReference",
@@ -59,6 +60,16 @@ def _unique[T](values: tuple[T, ...]) -> tuple[T, ...]:
     return values
 
 
+class ModelPricing(BaseModel):
+    """Exact provider prices in USD per million tokens, including cache usage."""
+
+    model_config = FROZEN
+    input: float = Field(ge=0, allow_inf_nan=False)
+    output: float = Field(ge=0, allow_inf_nan=False)
+    input_cache_write: float = Field(ge=0, allow_inf_nan=False)
+    input_cache_read: float = Field(ge=0, allow_inf_nan=False)
+
+
 class EvaluationSettings(BaseModel):
     model_config = FROZEN
     model: str
@@ -69,7 +80,8 @@ class EvaluationSettings(BaseModel):
     sandbox: str = "local"
     instruction_root: str = "../instructions"
     epochs: int | None = None
-    token_limit: int | None = None
+    cost_limit: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    model_cost: ModelPricing | None = None
     max_samples: int = Field(default=1, gt=0, le=16)
     limit: int | None = Field(default=None, gt=0)
     sample_ids: Annotated[tuple[str, ...], Field(min_length=1), AfterValidator(_unique)] | None = (
@@ -162,7 +174,8 @@ async def Evaluate(
     sandbox: str = "local",
     instruction_root: str = "../instructions",
     epochs: int | None = None,
-    token_limit: int | None = None,
+    cost_limit: float | None = None,
+    model_cost: ModelPricing | None = None,
     max_samples: int = 1,
     limit: int | None = None,
     sample_ids: tuple[str, ...] | None = None,
@@ -179,7 +192,8 @@ async def Evaluate(
         sandbox=sandbox,
         instruction_root=instruction_root,
         epochs=epochs,
-        token_limit=token_limit,
+        cost_limit=cost_limit,
+        model_cost=model_cost,
         max_samples=max_samples,
         limit=limit,
         sample_ids=sample_ids,

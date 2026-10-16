@@ -75,7 +75,7 @@ let describe = function
 
 let experiment value =
   let fields = json_fields value in
-  let allowed = [ "epochs"; "message_limit"; "token_limit"; "time_limit"; "cache" ] in
+  let allowed = [ "epochs"; "message_limit"; "cost_limit"; "time_limit"; "cache" ] in
   let names = List.map fst fields in
   if
     List.exists (fun name -> not (List.mem name allowed)) names
@@ -89,6 +89,12 @@ let experiment value =
         Some (int_of_float value)
     | _ -> invalid_arg ("Invalid experiment override: " ^ name)
   in
+  let cost_limit =
+    match get "cost_limit" with
+    | `Null -> None
+    | `Float value when Float.is_finite value && value > 0. -> Some value
+    | _ -> invalid_arg "Invalid experiment override: cost_limit"
+  in
   let cache =
     match get "cache" with
     | `Null -> None
@@ -99,7 +105,7 @@ let experiment value =
     Experiment.resolve
       ?epochs:(integer "epochs")
       ?message_limit:(integer "message_limit")
-      ?token_limit:(integer "token_limit")
+      ?cost_limit
       ?time_limit:(integer "time_limit")
       ?cache
       ()
@@ -117,7 +123,7 @@ let experiment value =
       ("profiles", `List (List.map profile spec.profiles));
       ("epochs", number spec.epochs);
       ("message_limit", number spec.message_limit);
-      ("token_limit", number spec.token_limit);
+      ("cost_limit", `Float spec.cost_limit);
       ("time_limit", number spec.time_limit);
       ("cache", `Bool spec.cache);
     ]

@@ -185,7 +185,9 @@ def describe(*, sources: Sources) -> DatasetInfo | None:
     )
 
 
-def experiment(*, sources: Sources, overrides: Mapping[str, int | bool | None]) -> Experiment:
+def experiment(
+    *, sources: Sources, overrides: Mapping[str, int | float | bool | None]
+) -> Experiment:
     return (
         Envelope[Experiment]
         .model_validate_json(invoke(sources=sources, operation="--experiment", payload=overrides))

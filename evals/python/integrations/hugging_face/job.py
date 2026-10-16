@@ -10,6 +10,14 @@ def optional_int(value: str | None) -> int | None:
     return int(value) if value else None
 
 
+def optional_float(value: str | None) -> float | None:
+    return float(value) if value else None
+
+
+def optional_cost(value: str | None) -> object:
+    return json.loads(value) if value else None
+
+
 def optional_json(value: str | None) -> tuple[object, ...] | None:
     if not value:
         return None
@@ -30,7 +38,8 @@ def configuration(environment: Mapping[str, str]) -> commands.EvaluationSettings
             "sandbox": "hf",
             "instruction_root": "/eval/instructions",
             "epochs": optional_int(environment.get("EVAL_EPOCHS")),
-            "token_limit": optional_int(environment.get("EVAL_TOKEN_LIMIT")),
+            "cost_limit": optional_float(environment.get("EVAL_COST_LIMIT")),
+            "model_cost": optional_cost(environment.get("EVAL_MODEL_COST")),
             "max_samples": int(environment.get("EVAL_MAX_SAMPLES") or "1"),
             "limit": optional_int(environment.get("EVAL_LIMIT")),
             "sample_ids": optional_json(environment.get("EVAL_SAMPLE_IDS")),

@@ -45,7 +45,7 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
         config=GenerateConfig(cache=spec.cache),
         epochs=spec.epochs,
         message_limit=spec.message_limit,
-        token_limit=spec.token_limit,
+        cost_limit=spec.cost_limit,
         time_limit=spec.time_limit,
         metadata={
             **({"diagnostic_epoch": diagnostic_epoch} if diagnostic_epoch else {}),

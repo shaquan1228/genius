@@ -1,6 +1,7 @@
 """Check the hosted runner without creating paid Hugging Face Jobs."""
 
 import asyncio
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -19,6 +20,16 @@ from evals.python.integrations.inspect.evaluation import HfChatAPI
 from evals.python.paths import REPO_ROOT
 
 
+@pytest.fixture(autouse=True)
+def explicit_test_prices(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "EVAL_MODEL_COST",
+        json.dumps(
+            {"input": 1.0, "output": 2.0, "input_cache_write": 1.0, "input_cache_read": 0.1}
+        ),
+    )
+
+
 def _configured_request() -> commands.EvaluationSettings:
     environment = {"EVAL_MODEL": "openai/test-model", **os.environ}
     return configuration(environment)
@@ -29,17 +40,17 @@ def hf_job_calls_evaluation_with_validated_settings(monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("EVAL_SAMPLE_IDS", '["clear-task"]')
     monkeypatch.setenv("EVAL_DELIVERIES", '["files", "manifest"]')
     monkeypatch.setenv("EVAL_EPOCHS", "2")
-    monkeypatch.setenv("EVAL_TOKEN_LIMIT", "50000")
+    monkeypatch.setenv("EVAL_COST_LIMIT", "0.25")
     before = dict(os.environ)
     with patch.object(commands, "Evaluate", new_callable=AsyncMock, return_value=7) as execute:
         assert run() == 7
     request = commands.EvaluationSettings.model_validate(execute.call_args.kwargs)
     assert isinstance(request, commands.EvaluationSettings)
-    assert (request.sample_ids, request.deliveries, request.epochs, request.token_limit) == (
+    assert (request.sample_ids, request.deliveries, request.epochs, request.cost_limit) == (
         ("clear-task",),
         ("files", "manifest"),
         2,
-        50000,
+        0.25,
     )
     assert (request.sandbox, request.instruction_root, dict(os.environ)) == (
         "hf",
@@ -51,13 +62,19 @@ def hf_job_calls_evaluation_with_validated_settings(monkeypatch: pytest.MonkeyPa
 def inspect_evaluation_uses_request_without_reading_job_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    request = commands.EvaluationSettings(model="openai/explicit")
+    request = commands.EvaluationSettings(
+        model="openai/explicit",
+        model_cost=commands.ModelPricing.model_validate_json(os.environ["EVAL_MODEL_COST"]),
+    )
     monkeypatch.setenv("EVAL_MODEL", "invalid-environment-model")
     monkeypatch.setenv("EVAL_AGENT", "invalid-environment-agent")
     monkeypatch.setenv("EVAL_SAMPLE_IDS", "invalid")
     monkeypatch.setenv("EVAL_DELIVERIES", "invalid")
     with (
-        patch("evals.python.integrations.inspect.evaluation.get_model") as model,
+        patch(
+            "evals.python.integrations.inspect.evaluation.get_model",
+            return_value=get_model("mockllm/model"),
+        ) as model,
         patch(
             "evals.python.integrations.inspect.evaluation.eval_async", return_value=[]
         ) as evaluate,
@@ -303,7 +320,10 @@ def hf_epoch_override_is_shared_with_tasks(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     monkeypatch.setenv("EVAL_EPOCHS", "3")
     with (
-        patch("evals.python.integrations.inspect.evaluation.get_model"),
+        patch(
+            "evals.python.integrations.inspect.evaluation.get_model",
+            return_value=get_model("mockllm/model"),
+        ),
         patch(
             "evals.python.integrations.inspect.evaluation.eval_async", return_value=[]
         ) as inspect_eval,
@@ -345,7 +365,10 @@ def explicit_non_list_selection_never_reaches_evaluation(
     monkeypatch.setenv(setting, value)
     with (
         patch("evals.python.integrations.hugging_face.job.commands.Evaluate") as dispatch,
-        patch("evals.python.integrations.inspect.evaluation.get_model") as model,
+        patch(
+            "evals.python.integrations.inspect.evaluation.get_model",
+            return_value=get_model("mockllm/model"),
+        ) as model,
         patch("evals.python.integrations.inspect.evaluation.eval_async") as evaluate,
         pytest.raises(ValueError, match="JSON list"),
     ):
@@ -364,7 +387,10 @@ def explicit_cohort_validation_precedes_sandbox_allocation(
     monkeypatch.setenv("EVAL_LIMIT", limit)
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     with (
-        patch("evals.python.integrations.inspect.evaluation.get_model"),
+        patch(
+            "evals.python.integrations.inspect.evaluation.get_model",
+            return_value=get_model("mockllm/model"),
+        ),
         patch("evals.python.integrations.inspect.evaluation.eval_async") as evaluate,
         pytest.raises(ValueError, match=r"Unknown sample|Choose EVAL_SAMPLE_IDS"),
     ):
@@ -379,12 +405,15 @@ def counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort(
     monkeypatch.setenv("EVAL_SAMPLE_IDS", '["clear-task"]')
     monkeypatch.setenv("EVAL_DELIVERIES", '["files", "manifest"]')
     monkeypatch.setenv("EVAL_EPOCHS", "2")
-    monkeypatch.setenv("EVAL_TOKEN_LIMIT", "50000")
+    monkeypatch.setenv("EVAL_COST_LIMIT", "0.25")
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     catalog = query.LoadDataset()
     cohort = catalog.model_copy(update={"cases": {"clear-task": catalog.cases["clear-task"]}})
     with (
-        patch("evals.python.integrations.inspect.evaluation.get_model"),
+        patch(
+            "evals.python.integrations.inspect.evaluation.get_model",
+            return_value=get_model("mockllm/model"),
+        ),
         patch("evals.python.query.LoadDataset", return_value=cohort),
         patch(
             "evals.python.integrations.inspect.evaluation.eval_async", return_value=[]
@@ -393,13 +422,13 @@ def counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort(
         assert run() == 1
     tasks = evaluate.call_args.args[0]
     assert [
-        (t.name, t.epochs, t.token_limit, t.time_limit, t.metadata["diagnostic_epoch"])
+        (t.name, t.epochs, t.cost_limit, t.time_limit, t.metadata["diagnostic_epoch"])
         for t in tasks
     ] == [
-        ("genius-files-r1", 1, 50000, 300, 1),
-        ("genius-manifest-r1", 1, 50000, 300, 1),
-        ("genius-manifest-r2", 1, 50000, 300, 2),
-        ("genius-files-r2", 1, 50000, 300, 2),
+        ("genius-files-r1", 1, 0.25, 300, 1),
+        ("genius-manifest-r1", 1, 0.25, 300, 1),
+        ("genius-manifest-r2", 1, 0.25, 300, 2),
+        ("genius-files-r2", 1, 0.25, 300, 2),
     ]
     options = evaluate.call_args.kwargs
     assert {k: options[k] for k in ["sample_id", "epochs", "max_tasks", "max_samples"]} == {
@@ -423,3 +452,33 @@ def host_rejects_invalid_concurrency(value: str, *, monkeypatch: pytest.MonkeyPa
     )
     assert result.returncode == 2
     assert b"EVAL_MAX_SAMPLES must be an integer from 1 to 16" in result.stderr
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "invalid"])
+def job_rejects_invalid_dollar_limit(value: str) -> None:
+    with pytest.raises(ValueError, match=r"validation error|could not convert"):
+        configuration({"EVAL_MODEL": "mockllm/model", "EVAL_COST_LIMIT": value})
+
+
+def job_parses_explicit_cache_prices() -> None:
+    prices = {"input": 0.26, "output": 0.38, "input_cache_write": 0.26, "input_cache_read": 0.026}
+    request = configuration({"EVAL_MODEL": "mockllm/model", "EVAL_MODEL_COST": json.dumps(prices)})
+    assert request.model_cost is not None
+    assert request.model_cost.model_dump() == prices
+
+
+@pytest.mark.parametrize("prices", ["{}", '{"input": -1}', '{"input": "0.26"}', "[]"])
+def job_rejects_incomplete_or_invalid_prices(prices: str) -> None:
+    with pytest.raises(ValueError, match="validation error"):
+        configuration({"EVAL_MODEL": "mockllm/model", "EVAL_MODEL_COST": prices})
+
+
+def host_requires_routed_prices_before_launch(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HF_NAMESPACE", "example")
+    monkeypatch.setenv("EVAL_MODEL", "hf-inference-providers/vendor/model:provider")
+    monkeypatch.delenv("EVAL_MODEL_COST")
+    result = subprocess.run(
+        ["sh", "evals/bin/hf_host.sh"], cwd=REPO_ROOT, capture_output=True, check=False
+    )
+    assert result.returncode != 0
+    assert b"Set EVAL_MODEL_COST" in result.stderr

@@ -157,10 +157,10 @@ def explicit_agent_version_is_logged() -> None:
         provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
     )
     spec = experiment()
-    assert (task.epochs, task.message_limit, task.token_limit, task.time_limit) == (
+    assert (task.epochs, task.message_limit, task.cost_limit, task.time_limit) == (
         spec.epochs,
         spec.message_limit,
-        spec.token_limit,
+        spec.cost_limit,
         spec.time_limit,
     )
     metadata = task.metadata

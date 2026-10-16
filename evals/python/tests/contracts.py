@@ -12,7 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import catalog, query, transport
-from evals.python._kernel import Verification
+from evals.python._kernel import Experiment, Verification
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.tasks import build_task
@@ -115,7 +115,7 @@ def all_contract_collections_are_immutable() -> None:
 
 def run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
     original = catalog.experiment()
-    spec = ExperimentSettings(epochs=2, token_limit=1234, cache=True)
+    spec = ExperimentSettings(epochs=2, cost_limit=0.1, cache=True)
     task = build_task(
         profile=profiles.load_profile("genius", spec=spec),
         spec=spec,
@@ -124,16 +124,17 @@ def run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
         instructions=profiles.load_instructions(spec),
         provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
     )
-    assert (task.epochs, task.token_limit, task.time_limit, task.config.cache) == (
+    assert task.token_limit is None
+    assert (task.epochs, task.cost_limit, task.time_limit, task.config.cache) == (
         2,
-        1234,
+        0.1,
         original.time_limit,
         True,
     )
     assert catalog.experiment() == original
 
 
-@pytest.mark.parametrize("field", ["epochs", "message_limit", "token_limit", "time_limit"])
+@pytest.mark.parametrize("field", ["epochs", "message_limit", "cost_limit", "time_limit"])
 @pytest.mark.parametrize("value", [0, -1])
 def kernel_rejects_invalid_run_overrides(field: str, *, value: int) -> None:
     operation = cast(Callable[..., query.Experiment], ExperimentSettings)
@@ -141,7 +142,10 @@ def kernel_rejects_invalid_run_overrides(field: str, *, value: int) -> None:
         operation(**{field: value})
 
 
-@pytest.mark.parametrize("payload", [{"epochs": 1.5}, {"cache": 1}, {"unknown": 1}])
+@pytest.mark.parametrize(
+    "payload",
+    [{"epochs": 1.5}, {"cache": 1}, {"unknown": 1}, {"cost_limit": True}, {"token_limit": 1}],
+)
 def protocol_rejects_malformed_run_overrides(payload: dict[str, object]) -> None:
     with pytest.raises(subprocess.CalledProcessError):
         transport.invoke(sources=catalog.sources(), operation="--experiment", payload=payload)
@@ -199,3 +203,11 @@ def verifier_projection_is_cached_but_grading_is_not() -> None:
             grade()["correctness"],
         ) == (True, True)
         assert [call.args[0][1:] for call in process.call_args_list] == [["--grade"], ["--grade"]]
+
+
+@pytest.mark.parametrize("value", [0.0, -0.1, float("inf"), float("-inf"), float("nan")])
+def experiment_cost_limit_requires_finite_positive_dollars(value: float) -> None:
+    payload = catalog.experiment().model_dump()
+    payload["cost_limit"] = value
+    with pytest.raises(ValidationError):
+        Experiment.model_validate(payload)

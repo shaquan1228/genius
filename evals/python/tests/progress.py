@@ -116,7 +116,14 @@ def evaluation_stops_heartbeat(outcome: str, *, capsys: pytest.CaptureFixture[st
             patch.object(evaluation, "eval_async", side_effect=fail),
             pytest.raises(RuntimeError if outcome == "error" else asyncio.CancelledError),
         ):
-            await evaluation.evaluate_async(commands.EvaluationSettings(model="mockllm/model"))
+            await evaluation.evaluate_async(
+                commands.EvaluationSettings(
+                    model="mockllm/model",
+                    model_cost=commands.ModelPricing(
+                        input=0.0, output=0.0, input_cache_write=0.0, input_cache_read=0.0
+                    ),
+                )
+            )
         assert progress.current.get() is None
         assert len(asyncio.all_tasks()) == 1
 
@@ -140,6 +147,9 @@ def native_evaluation_success(*, tmp_path: Path, capsys: pytest.CaptureFixture[s
             evaluation.evaluate_async(
                 commands.EvaluationSettings(
                     model="mockllm/model",
+                    model_cost=commands.ModelPricing(
+                        input=0.0, output=0.0, input_cache_write=0.0, input_cache_read=0.0
+                    ),
                     epochs=1,
                     max_samples=2,
                     log_dir=str(tmp_path),
