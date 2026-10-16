@@ -1,4 +1,3 @@
-(* Decode the canonical Ast construction types; validating constructors own policy. *)
 let info = None
 let cases = []
 let string = function `String value -> value | _ -> invalid_arg "Expected string"

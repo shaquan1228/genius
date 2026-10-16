@@ -255,5 +255,4 @@ def grade(  # noqa: PLR0913 - kernel grading fields and trusted compiler context
 
 
 def encode_declarations(definitions: tuple[CaseDefinition, ...]) -> tuple[str, ...]:
-    """Encode full declarations only when crossing into the kernel process."""
     return tuple(definition.model_dump_json() for definition in definitions)
