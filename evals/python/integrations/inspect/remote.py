@@ -1,8 +1,5 @@
-"""Adapt remote JSON commands to Inspect's sandbox interface."""
+"""Adapt canonical HF execution capabilities to Inspect's sandbox SDK."""
 
-import asyncio
-import base64
-import json
 from typing import Literal, overload, override
 
 from inspect_ai.util import (
@@ -11,58 +8,26 @@ from inspect_ai.util import (
     SandboxUserUnsupportedError,
     sandboxenv,
 )
-from pydantic import BaseModel, ConfigDict
 
-from evals.python.command import command
-
-
-class Handle(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
-    id: str
-
-
-class Completion(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
-    exit_code: int | None
-    stdout: str
-    stderr: str
-    timed_out: bool
-
-
-class Contents(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
-    contents: str
-
-
-def completed(result: Completion, *, cmd: list[str]) -> ExecResult[str]:
-    if result.timed_out:
-        raise TimeoutError(f"Sandbox command timed out: {cmd[0]}")
-    code = result.exit_code if result.exit_code is not None else 1
-    return ExecResult(
-        success=code == 0, returncode=code, stdout=result.stdout, stderr=result.stderr
-    )
+from evals.python import commands
 
 
 @sandboxenv(name="hf")
 class HfSandboxEnvironment(SandboxEnvironment):
     @override
-    def __init__(self, handle: str) -> None:
+    def __init__(self, environment: commands.Environment, runtime: commands.Runtime) -> None:
         super().__init__()
-        self.handle = handle
+        self.environment = environment
+        self.runtime = runtime
 
     @override
     @classmethod
     async def sample_init(
         cls, task_name: str, config: object, metadata: dict[str, str]
     ) -> dict[str, SandboxEnvironment]:
-        creation = asyncio.create_task(asyncio.to_thread(command, "hf.create"))
-        try:
-            response = await asyncio.shield(creation)
-        except asyncio.CancelledError:
-            response = await creation
-            await asyncio.to_thread(command, "hf.kill", payload=response)
-            raise
-        return {"default": cls(Handle.model_validate_json(response).id)}
+        runtime = commands.query(commands.ExecutionRuntime(provider="hf"))
+        environment = await runtime.create()
+        return {"default": cls(environment, runtime)}
 
     @override
     @classmethod
@@ -73,13 +38,9 @@ class HfSandboxEnvironment(SandboxEnvironment):
         environments: dict[str, SandboxEnvironment],
         interrupted: bool,
     ) -> None:
-        for environment in environments.values():
-            await environment.as_type(cls).invoke("kill")
-
-    async def invoke(self, operation: str, **payload: object) -> str:
-        return await asyncio.to_thread(
-            command, f"hf.{operation}", payload=json.dumps({"id": self.handle, **payload})
-        )
+        for value in environments.values():
+            adapter = value.as_type(cls)
+            await adapter.runtime.cleanup(adapter.environment, interrupted=interrupted)
 
     @override
     async def exec(
@@ -95,25 +56,23 @@ class HfSandboxEnvironment(SandboxEnvironment):
     ) -> ExecResult[str]:
         if user not in (None, "root", "0"):
             raise SandboxUserUnsupportedError(f"Hugging Face Sandbox cannot execute as {user!r}")
-        binary = isinstance(input, bytes)
-        stdin = base64.b64encode(input).decode() if isinstance(input, bytes) else input
-        result = Completion.model_validate_json(
-            await self.invoke(
-                "exec",
-                cmd=cmd,
-                input=stdin,
-                binary=binary,
-                cwd=cwd or ".",
-                env=env,
-                timeout=timeout,
+        result = await self.environment.execute(
+            commands.Execution(
+                command=tuple(cmd), input=input, cwd=cwd, env=env or {}, timeout=timeout
             )
         )
-        return completed(result, cmd=cmd)
+        return ExecResult(
+            success=result.returncode == 0,
+            returncode=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+        )
 
     @override
     async def write_file(self, file: str, contents: str | bytes) -> None:
-        data = contents.encode() if isinstance(contents, str) else contents
-        await self.invoke("write", file=file, contents=base64.b64encode(data).decode())
+        await self.environment.write_bytes(
+            file, contents.encode() if isinstance(contents, str) else contents
+        )
 
     @overload
     async def read_file(self, file: str, text: Literal[True] = True) -> str: ...  # noqa: FBT002
@@ -123,6 +82,5 @@ class HfSandboxEnvironment(SandboxEnvironment):
 
     @override
     async def read_file(self, file: str, text: bool = True) -> str | bytes:
-        response = Contents.model_validate_json(await self.invoke("read", file=file))
-        contents = base64.b64decode(response.contents, validate=True)
+        contents = await self.environment.read_bytes(file)
         return contents.decode() if text else contents

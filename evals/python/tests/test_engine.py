@@ -1,23 +1,29 @@
 """Check Inspect scoring, repeated runs, and saved logs."""
 
+import asyncio
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
 from inspect_ai.log import read_eval_log
-from inspect_ai.scorer import CORRECT, INCORRECT
+from inspect_ai.model import ModelName, ModelOutput
+from inspect_ai.scorer import CORRECT, INCORRECT, Target
+from inspect_ai.solver import TaskState
 
-from evals.python.contracts import Verification
-from evals.python.integrations.datasets.catalog import grade
+from evals.python import commands
+from evals.python._kernel import Verification
+from evals.python.catalog import grade
+from evals.python.integrations.inspect import environments, scoring, workspace
 from evals.python.integrations.inspect.agents import AGENT_REGISTRY
 from evals.python.integrations.inspect.tasks import baseline, genius
 from evals.python.tests.scenarios import Mode, crashing
 from evals.python.tests.support import crash_evidence, offline_run, results
+from evals.python.tests.test_verification import agent_port, grader_port, runtime_port
 
 
 def test_complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
-    with patch("evals.python.integrations.inspect.scoring.grade", wraps=grade) as grading:
+    with patch("evals.python.catalog.grade", wraps=grade) as grading:
         logs = offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
     assert grading.call_count == 16
     expected = [
@@ -110,10 +116,61 @@ def test_crashed_agent_is_scored_on_its_workspace(
 
 def test_verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
     with patch(
-        "evals.python.integrations.inspect.scoring.Verifier.verify",
-        return_value=(Verification(status="harness_error", detail="grader failed to import"), {}),
+        "evals.python.verification.verify",
+        return_value=commands.VerificationResult(
+            verification=Verification(status="harness_error", detail="grader failed to import")
+        ),
     ):
         log = offline_run([baseline()], mode="pass", directory=tmp_path)[0]
     assert log.status == "error"
     assert log.error is not None
     assert "grader failed to import" in log.error.message
+
+
+def test_scorer_maps_sdk_observation_to_public_assessment() -> None:
+
+    state = TaskState(
+        model=ModelName("mockllm/model"),
+        sample_id="sdk-id",
+        epoch=1,
+        input="task",
+        messages=[],
+        metadata={"case_id": "clear-task", "dataset": "smoke"},
+    )
+    state.output = ModelOutput.from_content("mockllm/model", "observed answer")
+    agent, runtime = agent_port(), runtime_port(grader_port())
+    assessment = commands.Assessment(
+        verification=commands.Verification(status="passed", detail="canonical evidence"),
+        metadata={"nested": {"items": (True, None, 4.2)}},
+        scores={"correctness": True, "scope": False},
+    )
+    with (
+        patch.object(workspace, "changed_files", return_value={"b.ml", "a.ml"}),
+        patch.object(scoring, "sandbox"),
+        patch.object(environments, "environment", return_value=agent),
+        patch.object(environments, "runtime", return_value=runtime),
+        patch.object(commands, "execute", return_value=assessment) as execute,
+    ):
+        score = asyncio.run(scoring.score_sample(state, Target([""])))
+    assert score.metadata is not None
+    assert (
+        execute.call_args.args,
+        score.value,
+        score.explanation,
+        score.metadata["verifier_metadata"],
+        assessment.metadata,
+    ) == (
+        (
+            commands.AssessCase(
+                case_id="clear-task",
+                response="observed answer",
+                changed_files=("a.ml", "b.ml"),
+                agent=agent,
+                runtime=runtime,
+            ),
+        ),
+        {"correctness": CORRECT, "scope": INCORRECT},
+        "canonical evidence",
+        {"nested": {"items": [True, None, 4.2]}},
+        {"nested": {"items": (True, None, 4.2)}},
+    )

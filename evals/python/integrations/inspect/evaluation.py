@@ -1,6 +1,5 @@
 """Prepare explicit evaluation requests and execute them with Inspect."""
 
-import asyncio
 from typing import Any, override
 
 from inspect_ai import Task, eval_async
@@ -8,12 +7,10 @@ from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import GenerateConfig, get_model, modelapi
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 
-import evals.python.integrations.inspect.remote  # noqa: F401 - register the command-backed sandbox
+import evals.python.integrations.inspect.profiles as profile_adapter
+import evals.python.integrations.inspect.remote  # noqa: F401 - register the HF sandbox
+import evals.python.integrations.inspect.tasks as task_adapter
 from evals.python import commands
-from evals.python.integrations.inspect.profiles import InstructionDelivery
-from evals.python.integrations.inspect.tasks import TaskRequest, build_task
-
-EvaluationRequest = commands.Evaluate
 
 
 @modelapi(name="genius-hf")
@@ -38,7 +35,7 @@ def crash_summary(log: EvalLog) -> str:
     return f"{log.eval.task}: {crashes} of {len(samples)} samples had an agent crash"
 
 
-def selected_samples(task: Task, *, request: EvaluationRequest) -> list[str] | None:
+def selected_samples(task: Task, *, request: commands.Evaluate) -> list[str] | None:
     selected = request.sample_ids
     if selected is None:
         return None
@@ -50,7 +47,7 @@ def selected_samples(task: Task, *, request: EvaluationRequest) -> list[str] | N
     return list(selected)
 
 
-def evaluation_tasks(spec: commands.Experiment, *, request: EvaluationRequest) -> list[Task]:
+def evaluation_tasks(spec: commands.Experiment, *, request: commands.Evaluate) -> list[Task]:
     if request.deliveries:
         return diagnostic_tasks(spec, request=request)
     return [
@@ -64,28 +61,26 @@ def evaluation_tasks(spec: commands.Experiment, *, request: EvaluationRequest) -
 def make_task(
     spec: commands.Experiment,
     *,
-    request: EvaluationRequest,
+    request: commands.Evaluate,
     profile: str,
-    delivery: InstructionDelivery,
+    delivery: commands.InstructionDelivery,
     diagnostic_epoch: int | None = None,
 ) -> Task:
-    return build_task(
-        request=TaskRequest(
-            profile=profile,
-            agent=request.agent,
-            version=request.version,
-            dataset=request.dataset,
-            sandbox=request.sandbox,
-            experiment=spec,
-            instruction_delivery=delivery,
-            instruction_root=request.instruction_root,
-            task_name=f"{profile}-{delivery}-r{diagnostic_epoch}" if diagnostic_epoch else None,
-            diagnostic_epoch=diagnostic_epoch,
-        )
+    return task_adapter.build_task(
+        profile=profile_adapter.load_profile(profile, spec=spec),
+        spec=spec,
+        agent=request.agent,
+        version=request.version,
+        dataset=request.dataset,
+        sandbox=request.sandbox,
+        instruction_delivery=delivery,
+        instruction_root=request.instruction_root,
+        task_name=f"{profile}-{delivery}-r{diagnostic_epoch}" if diagnostic_epoch else None,
+        diagnostic_epoch=diagnostic_epoch,
     )
 
 
-def diagnostic_tasks(spec: commands.Experiment, *, request: EvaluationRequest) -> list[Task]:
+def diagnostic_tasks(spec: commands.Experiment, *, request: commands.Evaluate) -> list[Task]:
     modes = request.deliveries or ()
     single = spec.model_copy(update={"epochs": 1})
     return [
@@ -101,11 +96,7 @@ def diagnostic_tasks(spec: commands.Experiment, *, request: EvaluationRequest) -
     ]
 
 
-def evaluate(request: EvaluationRequest) -> int:
-    return asyncio.run(evaluate_async(request))
-
-
-async def evaluate_async(request: EvaluationRequest) -> int:
+async def evaluate_async(request: commands.Evaluate) -> int:
     spec = commands.query(
         commands.ExperimentSettings(epochs=request.epochs, token_limit=request.token_limit)
     )

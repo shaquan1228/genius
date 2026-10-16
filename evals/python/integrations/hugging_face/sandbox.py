@@ -1,12 +1,13 @@
-"""Hugging Face sandbox operations behind a JSON command boundary."""
+"""Adapt Hugging Face Sandbox effects to canonical execution capabilities."""
 
-import base64
-import json
+import asyncio
+from contextlib import suppress
 from pathlib import PurePosixPath
 from uuid import uuid4
 
-from huggingface_hub import Sandbox
-from pydantic import BaseModel, ConfigDict, Field
+from huggingface_hub import Sandbox, SandboxCommandResult
+
+from evals.python import commands
 
 IMAGE = "python:3.12-slim-bookworm"
 WORKDIR = PurePosixPath("/eval")
@@ -16,28 +17,14 @@ INSTALL_TOOLS = (
 )
 
 
-class Request(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
-
-    id: str = ""
-    cmd: list[str] = Field(default_factory=list)
-    input: str | None = None
-    binary: bool = False
-    cwd: str = "."
-    env: dict[str, str] | None = None
-    timeout: int | None = None
-    file: str = ""
-    contents: str = ""
-
-
-def create() -> dict[str, str]:
+def create() -> str:
     client = Sandbox.create(image=IMAGE, idle_timeout=900)
     try:
         result = client.run(["sh", "-c", INSTALL_TOOLS], timeout=240, check=False)
         if result.exit_code != 0:
             raise RuntimeError("Could not install eval tools in Hugging Face Sandbox")
         client.files.mkdir(str(WORKDIR))
-        return {"id": client.id}
+        return client.id
     except BaseException:
         client.kill()
         raise
@@ -45,63 +32,118 @@ def create() -> dict[str, str]:
         client.close()
 
 
-def run(client: Sandbox, *, request: Request) -> dict[str, object]:
-    cmd, stdin = request.cmd, request.input
+def run(client: Sandbox, *, request: commands.Execution) -> commands.Completion:
+    cmd, stdin = list(request.command), request.input
     stdin_path: str | None = None
     try:
-        if request.binary:
+        if isinstance(stdin, bytes):
             stdin_path = f"/tmp/genius-stdin-{uuid4().hex}"
-            client.files.write(
-                stdin_path, base64.b64decode(stdin or "", validate=True), mode="0600"
-            )
+            client.files.write(stdin_path, stdin, mode="0600")
             cmd = ["/bin/sh", "-c", 'stdin=$1; shift; exec "$@" < "$stdin"', "sh", stdin_path, *cmd]
             stdin = None
         result = client.run(
             cmd,
             shell=False,
             stdin=stdin,
-            cwd=str(WORKDIR / request.cwd),
-            env=request.env,
+            cwd=str(WORKDIR / (request.cwd or ".")),
+            env=dict(request.env),
             timeout=request.timeout,
             check=False,
         )
-        return {
-            "exit_code": result.exit_code,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "timed_out": result.timed_out,
-        }
+        return completion(result, command=request.command)
     finally:
         if stdin_path is not None:
             client.files.delete(stdin_path)
 
 
-def read(client: Sandbox, *, request: Request) -> dict[str, str]:
-    contents = client.files.read(str(WORKDIR / request.file))
-    return {"contents": base64.b64encode(contents).decode()}
-
-
-def write(client: Sandbox, *, request: Request) -> None:
-    client.files.write(
-        str(WORKDIR / request.file), base64.b64decode(request.contents, validate=True)
+def completion(result: SandboxCommandResult, *, command: tuple[str, ...]) -> commands.Completion:
+    if result.timed_out:
+        raise TimeoutError(f"Sandbox command timed out: {command[0]}")
+    return commands.Completion(
+        returncode=result.exit_code if result.exit_code is not None else 1,
+        stdout=result.stdout,
+        stderr=result.stderr,
     )
 
 
-def mkdir(client: Sandbox, *, request: Request) -> None:
-    client.files.mkdir(str(WORKDIR / request.file))
+def environment(handle: str) -> commands.Environment:
+    async def execute(request: commands.Execution) -> commands.Completion:
+        def invoke() -> commands.Completion:
+            client = Sandbox.connect(handle)
+            try:
+                return run(client, request=request)
+            finally:
+                client.close()
+
+        return await asyncio.to_thread(invoke)
+
+    async def read(file: str) -> bytes:
+        def invoke() -> bytes:
+            client = Sandbox.connect(handle)
+            try:
+                return client.files.read(str(WORKDIR / file))
+            finally:
+                client.close()
+
+        return await asyncio.to_thread(invoke)
+
+    async def write(file: str, contents: bytes) -> None:  # noqa: PLR0917 - capability write port
+        def invoke() -> None:
+            client = Sandbox.connect(handle)
+            try:
+                client.files.write(str(WORKDIR / file), contents)
+            finally:
+                client.close()
+
+        await asyncio.to_thread(invoke)
+
+    return commands.Environment(execute=execute, read_bytes=read, write_bytes=write)
 
 
-def kill(client: Sandbox, *, request: Request) -> None:
-    client.kill()
-
-
-def execute(operation: str, *, payload: str) -> str:
-    request = Request.model_validate_json(payload)
-    if operation == "create":
-        return json.dumps(create())
-    handler = {"kill": kill, "exec": run, "read": read, "write": write, "mkdir": mkdir}[operation]
-    client = Sandbox.connect(request.id)
+def kill(handle: str) -> None:
+    client = Sandbox.connect(handle)
     try:
-        return json.dumps(handler(client, request=request))
+        client.kill()
     finally:
         client.close()
+
+
+async def _settle[T](task: asyncio.Task[T]) -> T:
+    while not task.done():
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            continue
+    return task.result()
+
+
+async def _kill(handle: str) -> None:
+    pending = asyncio.create_task(asyncio.to_thread(kill, handle))
+    try:
+        await asyncio.shield(pending)
+    except asyncio.CancelledError:
+        with suppress(Exception):
+            await _settle(pending)
+        raise
+
+
+def runtime() -> commands.Runtime:
+    owned: dict[commands.Environment, str] = {}
+
+    async def allocate() -> commands.Environment:
+        pending = asyncio.create_task(asyncio.to_thread(create))
+        try:
+            handle = await asyncio.shield(pending)
+        except asyncio.CancelledError:
+            with suppress(Exception):
+                handle = await _settle(pending)
+                await _kill(handle)
+            raise
+        result = environment(handle)
+        owned[result] = handle
+        return result
+
+    async def cleanup(target: commands.Environment, *, interrupted: bool) -> None:
+        await _kill(owned.pop(target))
+
+    return commands.Runtime(create=allocate, cleanup=cleanup)

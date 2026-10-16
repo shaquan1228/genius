@@ -1,88 +1,86 @@
-"""Registered Inspect tasks: identical agents and limits, different instructions."""
+"""Registered Inspect tasks built directly from canonical experiment values."""
 
 from inspect_ai import Task, task
 from inspect_ai.model import GenerateConfig
-from pydantic import BaseModel, ConfigDict
 
-from evals.python.contracts import Experiment
-from evals.python.integrations.inspect.agents import DEFAULT_VERSIONS, AgentKind, contained_agent
-from evals.python.integrations.inspect.datasets import (
-    benchmark_metadata,
-    cases_hash,
-    experiment,
-    source_hash,
-)
-from evals.python.integrations.inspect.profiles import (
-    InstructionDelivery,
-    content_hash,
-    load_profile,
-)
-from evals.python.integrations.inspect.scoring import evaluation
-from evals.python.integrations.inspect.workspace import prepare
+import evals.python.integrations.inspect.agents as agent_adapter
+import evals.python.integrations.inspect.profiles as profile_adapter
+import evals.python.integrations.inspect.scoring as scoring_adapter
+import evals.python.integrations.inspect.workspace as workspace_adapter
+from evals.python import commands
 
 
-class TaskRequest(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
-
-    profile: str
-    agent: AgentKind
-    version: str = ""
-    dataset: str = "smoke"
-    sandbox: str = "local"
-    experiment: Experiment | None = None
-    instruction_delivery: InstructionDelivery = "files"
-    instruction_root: str = "../instructions"
-    task_name: str | None = None
-    diagnostic_epoch: int | None = None
-
-
-def build_task(*, request: TaskRequest) -> Task:
-    spec = request.experiment or experiment()
-    profile = load_profile(name=request.profile, spec=spec)
-    agent, version, dataset = request.agent, request.version, request.dataset
-    agent_version = version or DEFAULT_VERSIONS[agent]
+def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
+    *,
+    profile: commands.ProfileSpec,
+    spec: commands.Experiment,
+    agent: str,
+    version: str = "",
+    dataset: str = "smoke",
+    sandbox: str = "local",
+    instruction_delivery: commands.InstructionDelivery = "files",
+    instruction_root: str = "../instructions",
+    task_name: str | None = None,
+    diagnostic_epoch: int | None = None,
+) -> Task:
+    agent_version = version or agent_adapter.AGENT_REGISTRY[agent].default_version
+    provenance = commands.query(commands.Provenance(selection=dataset))
     return Task(
-        name=request.task_name or profile.name,
-        dataset=profile.samples(
+        name=task_name or profile.name,
+        dataset=profile_adapter.samples(
+            profile,
+            cases=commands.query(commands.Cases(selection=dataset)),
             dataset=dataset,
-            delivery=request.instruction_delivery,
-            instruction_root=request.instruction_root,
+            delivery=instruction_delivery,
+            instruction_root=instruction_root,
         ),
-        setup=prepare(),
-        solver=contained_agent(agent, version=agent_version),
-        scorer=evaluation(),
-        sandbox=request.sandbox,
+        setup=workspace_adapter.prepare(),
+        solver=agent_adapter.contained_agent(agent, version=agent_version),
+        scorer=scoring_adapter.evaluation(),
+        sandbox=sandbox,
         config=GenerateConfig(cache=spec.cache),
         epochs=spec.epochs,
         message_limit=spec.message_limit,
         token_limit=spec.token_limit,
         time_limit=spec.time_limit,
         metadata={
-            **({"diagnostic_epoch": request.diagnostic_epoch} if request.diagnostic_epoch else {}),
+            **({"diagnostic_epoch": diagnostic_epoch} if diagnostic_epoch else {}),
             "profile": profile.name,
-            "dataset": str(dataset),
-            "benchmark": benchmark_metadata(dataset=dataset),
+            "dataset": dataset,
+            "benchmark": provenance.info.model_dump() if provenance.info else {},
             "agent": agent,
             "agent_version": agent_version,
-            "instruction_delivery": request.instruction_delivery,
-            "instructions_sha256": content_hash(
-                files=load_profile(name="genius", spec=spec).instruction_files()
+            "instruction_delivery": instruction_delivery,
+            "instructions_sha256": profile_adapter.content_hash(
+                files=profile_adapter.instruction_files(
+                    profile_adapter.load_profile(name="genius", spec=spec)
+                )
             ),
-            "fixtures_sha256": source_hash(dataset),
-            "cases_sha256": cases_hash(dataset=dataset),
+            "fixtures_sha256": provenance.source_hash,
+            "cases_sha256": provenance.cases_hash,
         },
     )
 
 
 @task
-def baseline(*, agent: AgentKind = "claude", version: str = "", dataset: str = "smoke") -> Task:
+def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
+    spec = commands.query(commands.ExperimentSettings())
     return build_task(
-        request=TaskRequest(profile="baseline", agent=agent, version=version, dataset=dataset)
+        profile=profile_adapter.load_profile("baseline", spec=spec),
+        spec=spec,
+        agent=agent,
+        version=version,
+        dataset=dataset,
     )
 
 
 @task
-def genius(*, agent: AgentKind = "claude", version: str = "", dataset: str = "smoke") -> Task:
+def genius(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
+    spec = commands.query(commands.ExperimentSettings())
     return build_task(
-        request=TaskRequest(profile="genius", agent=agent, version=version, dataset=dataset)
+        profile=profile_adapter.load_profile("genius", spec=spec),
+        spec=spec,
+        agent=agent,
+        version=version,
+        dataset=dataset,
     )

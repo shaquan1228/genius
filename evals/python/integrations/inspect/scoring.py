@@ -1,16 +1,16 @@
-"""Grade correctness and file scope independently of the agent's self-report."""
+"""Translate Inspect observations and canonical assessments at the SDK edge."""
 
 from collections.abc import Mapping
-from typing import assert_never, cast
+from typing import cast
 
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer, stderr
 from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
+from pydantic import JsonValue
 
-from evals.python.contracts import ExecutableChecks, GradeRequest, Verification
-from evals.python.integrations.inspect.datasets import grade, verifier
-from evals.python.integrations.inspect.verification import Verifier
-from evals.python.integrations.inspect.workspace import changed_files
+import evals.python.integrations.inspect.environments as environments_adapter
+import evals.python.integrations.inspect.workspace as workspace_adapter
+from evals.python import commands
 
 
 def score_values(scores: Mapping[str, bool]) -> dict[str, str]:
@@ -23,36 +23,38 @@ def with_failure(explanation: str, *, failure: str | None) -> str:
     return f"Agent process crashed: {failure}\n\n{explanation}"
 
 
+def diagnostic(value: commands.Diagnostic) -> JsonValue:
+    if isinstance(value, Mapping):
+        return {key: diagnostic(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [diagnostic(item) for item in value]
+    return value
+
+
 async def score_sample(state: TaskState, target: Target) -> Score:  # noqa: PLR0917 - Inspect calls scorers positionally
-    # A crashed agent is graded on its workspace, like an agent that stopped early.
     failure = state.metadata.get("agent_failure")
-    dataset = cast(str, state.metadata.get("dataset", "smoke"))
-    case_id = str(state.metadata["case_id"])
     completion = state.output.completion
-    changed = tuple(sorted(await changed_files(state)))
-    match verifier(case_id, selection=dataset):
-        case ExecutableChecks() as checks:
-            evidence, metadata = await Verifier(checks=checks, agent=sandbox()).verify()
-            explanation = evidence.detail
-        case None:
-            evidence, metadata = Verification(status="unchecked"), {}
-            explanation = completion
-        case _ as unreachable:
-            assert_never(unreachable)
-    if evidence.status == "harness_error":
-        raise RuntimeError(f"Verification harness error: {evidence.detail}")
-    scores = grade(
-        request=GradeRequest(
-            case_id=case_id, response=completion, changed_files=changed, verification=evidence
-        ),
-        selection=dataset,
+    changed = tuple(sorted(await workspace_adapter.changed_files(state)))
+    current = sandbox()
+    result = await commands.execute(
+        commands.AssessCase(
+            case_id=str(state.metadata["case_id"]),
+            response=completion,
+            changed_files=changed,
+            selection=cast(str, state.metadata.get("dataset", "smoke")),
+            agent=environments_adapter.environment(current),
+            runtime=environments_adapter.runtime(current),
+        )
+    )
+    explanation = (
+        completion if result.verification.status == "unchecked" else result.verification.detail
     )
     return Score(
-        value=score_values(scores=scores),
+        value=score_values(result.scores),
         explanation=with_failure(explanation, failure=failure),
         metadata={
-            "verification": evidence.model_dump(),
-            "verifier_metadata": metadata,
+            "verification": result.verification.model_dump(),
+            "verifier_metadata": diagnostic(result.metadata),
             "changed_files": changed,
             "agent_failure": failure,
         },

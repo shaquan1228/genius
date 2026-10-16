@@ -10,13 +10,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from evals.python.contracts import Verification
-from evals.python.integrations.datasets.catalog import load_cases
+from evals.python import commands
 from evals.python.integrations.evalplus import benchmarks
-from evals.python.integrations.inspect import benchmarks as inspect_benchmarks
-from evals.python.integrations.inspect.verification import Verifier
 from evals.python.paths import EVALS_ROOT
-from evals.python.tests.support import import_records, imported_reference, imported_verifier
+from evals.python.tests.support import import_records
 from evals.python.tests.test_humaneval import record
 
 
@@ -29,7 +26,7 @@ def test_info(capsys: pytest.CaptureFixture[str]) -> None:
 def test_validate_reports_real_status(*, status: str, capsys: pytest.CaptureFixture[str]) -> None:
     case = import_records((record(),))[0]
     with (
-        patch.object(benchmarks, "load_cases", return_value=(case,)),
+        patch("evals.python.catalog.load_cases", return_value=(case,)),
         patch.object(benchmarks, "validate_case", new=AsyncMock(return_value={"status": status})),
     ):
         assert benchmarks.main(["validate", "--limit", "1"]) == int(status != "passed")
@@ -56,29 +53,25 @@ def test_memory_workaround_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
     assert os.environ["EVALPLUS_MAX_MEMORY_BYTES"] == "-1"
 
 
-def test_reference_workspace_cleanup() -> None:
+def test_reference_validation_uses_public_operation_and_thaws_only_cli_output() -> None:
     case = import_records((record(),))[0]
-    with (
-        patch.object(
-            Verifier,
-            "verify",
-            new=AsyncMock(return_value=(Verification(status="passed"), {"test": True})),
-        ),
-        patch.object(inspect_benchmarks, "verifier", return_value=imported_verifier(record())),
-        patch.object(inspect_benchmarks, "reference", return_value=imported_reference(record())),
-    ):
+    canonical = commands.VerificationResult(
+        verification=commands.Verification(status="passed"), metadata={"test": {"items": (True,)}}
+    )
+    with patch.object(
+        commands, "execute", new_callable=AsyncMock, return_value=canonical
+    ) as execute:
         result = asyncio.run(benchmarks.validate_case(case))
+    assert execute.call_args.args == (
+        commands.ValidateReference(case_id=case.id, selection="humanevalplus"),
+    )
     assert result == {
         "case_id": case.id,
         "status": "passed",
         "detail": "",
-        "metadata": {"test": True},
+        "metadata": {"test": {"items": [True]}},
     }
-    with (
-        patch.object(inspect_benchmarks, "verifier", return_value=None),
-        pytest.raises(ValueError, match="executable"),
-    ):
-        asyncio.run(benchmarks.validate_case(load_cases()[2]))
+    assert canonical.metadata == {"test": {"items": (True,)}}
 
 
 def test_benchmark_entrypoint(capsys: pytest.CaptureFixture[str]) -> None:

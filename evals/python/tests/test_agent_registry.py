@@ -11,7 +11,9 @@ from inspect_ai.model import ModelName
 from inspect_ai.solver import TaskState
 from inspect_swe import claude_code, codex_cli
 
-from evals.python.integrations.datasets.catalog import experiment
+from evals.python import commands
+from evals.python.catalog import experiment
+from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.agents import (
     AGENT_REGISTRY,
     AgentKind,
@@ -20,7 +22,7 @@ from evals.python.integrations.inspect.agents import (
     contained_agent,
     truncated,
 )
-from evals.python.integrations.inspect.tasks import TaskRequest, build_task
+from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.scenarios import crashing
 
 
@@ -144,7 +146,12 @@ def test_codex_options_disable_network() -> None:
 
 
 def test_explicit_agent_version_is_logged() -> None:
-    task = build_task(request=TaskRequest(profile="genius", agent="codex", version="0.137.0"))
+    task = build_task(
+        profile=profiles.load_profile("genius", spec=commands.query(commands.ExperimentSettings())),
+        spec=commands.query(commands.ExperimentSettings()),
+        agent="codex",
+        version="0.137.0",
+    )
     spec = experiment()
     assert (task.epochs, task.message_limit, task.token_limit, task.time_limit) == (
         spec.epochs,
@@ -155,3 +162,18 @@ def test_explicit_agent_version_is_logged() -> None:
     metadata = task.metadata
     assert metadata is not None
     assert (metadata["agent"], metadata["agent_version"]) == ("codex", "0.137.0")
+
+
+def test_custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(
+        AGENT_REGISTRY, "other", replace(AGENT_REGISTRY["codex"], default_version="custom-version")
+    )
+    request = commands.Evaluate(model="mockllm/model", agent="other")
+    spec = commands.query(commands.ExperimentSettings())
+    task = build_task(
+        profile=profiles.load_profile("baseline", spec=spec), spec=spec, agent=request.agent
+    )
+    assert task.metadata is not None
+    assert (task.metadata["agent"], task.metadata["agent_version"]) == ("other", "custom-version")

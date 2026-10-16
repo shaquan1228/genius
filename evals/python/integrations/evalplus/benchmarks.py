@@ -5,13 +5,12 @@ import asyncio
 import json
 import os
 import platform
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Literal, assert_never
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter
+from pydantic import BaseModel, ConfigDict
 
-from evals.python.command import command
-from evals.python.contracts import Case, DatasetInfo
+from evals.python import commands
 
 
 class BenchmarkInfo(BaseModel):
@@ -26,9 +25,7 @@ class BenchmarkInfo(BaseModel):
 
 
 def benchmark_info() -> BenchmarkInfo:
-    info = TypeAdapter(DatasetInfo | None).validate_json(
-        command("dataset.metadata", payload='{"selection":"humanevalplus"}')
-    )
+    info = commands.query(commands.DescribeDataset(selection="humanevalplus"))
     if info is None:
         raise ValueError("Benchmark adapter must declare provenance")
     return BenchmarkInfo.model_validate(
@@ -36,17 +33,23 @@ def benchmark_info() -> BenchmarkInfo:
     )
 
 
-def load_cases(*, selection: str) -> tuple[Case, ...]:
-    return TypeAdapter(tuple[Case, ...]).validate_json(
-        command("dataset.cases", payload=json.dumps({"selection": selection}))
+async def validate_case(case: commands.Case) -> dict[str, object]:
+    result = await commands.execute(
+        commands.ValidateReference(case_id=case.id, selection="humanevalplus")
     )
+    return {
+        "case_id": case.id,
+        **result.verification.model_dump(),
+        "metadata": diagnostic(result.metadata),
+    }
 
 
-async def validate_case(case: Case) -> dict[str, object]:
-    result = await asyncio.to_thread(
-        command, "inspect.validate_reference", payload=json.dumps({"case_id": case.id})
-    )
-    return TypeAdapter(dict[str, object]).validate_json(result)
+def diagnostic(value: commands.Diagnostic) -> object:
+    if isinstance(value, Mapping):
+        return {key: diagnostic(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [diagnostic(item) for item in value]
+    return value
 
 
 def parser() -> argparse.ArgumentParser:
@@ -83,7 +86,7 @@ def validate(arguments: Options) -> int:
     configure_memory(arguments=arguments)
     results = [
         asyncio.run(validate_case(case=case))
-        for case in load_cases(selection="humanevalplus")[: arguments.limit]
+        for case in commands.query(commands.Cases(selection="humanevalplus"))[: arguments.limit]
     ]
     print(json.dumps({"provenance": benchmark_info().model_dump(), "results": results}, indent=2))
     return int(any(result["status"] != "passed" for result in results))

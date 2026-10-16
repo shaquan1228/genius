@@ -1,7 +1,6 @@
-"""Commands exchange JSON projections; vendor SDKs and private inputs stay at their owners."""
+"""Typed public operations preserve canonical values and own adapter composition."""
 
 import asyncio
-import json
 import runpy
 import sys
 from typing import assert_type, cast
@@ -10,12 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import catalog, commands, contracts
-from evals.python.command import command
-from evals.python.contracts import GradeRequest, Verification
-from evals.python.integrations.evalplus import benchmarks
-from evals.python.integrations.inspect import datasets
-from evals.python.integrations.inspect.evaluation import EvaluationRequest
+from evals.python import catalog, commands
 from evals.python.paths import EVALS_ROOT
 
 
@@ -63,55 +57,6 @@ def test_public_grade_preserves_request_and_result() -> None:
     assert grade.call_args.kwargs["request"]["case_id"] == operation.case_id
     assert grade.call_args.kwargs["request"]["verification"] == {"status": "passed", "detail": ""}
     assert result is grade.return_value
-
-
-@pytest.mark.parametrize(
-    "name", ["missing.action", "dataset.missing", "inspect.missing", "missing"]
-)
-def test_unknown_commands_fail_closed(name: str) -> None:
-    with pytest.raises((KeyError, ValueError), match=r"missing|Unknown|unpack"):
-        command(name)
-
-
-def test_invalid_json_cannot_cross_the_boundary() -> None:
-    with pytest.raises(ValueError, match="Expecting"):
-        command("dataset.cases", payload="invalid")
-    with patch("evals.python.command.importlib.import_module") as module:
-        module.return_value.execute.return_value = "SDK object repr"
-        with pytest.raises(ValueError, match="Expecting"):
-            command("dataset.cases")
-
-
-def test_public_case_command_excludes_trusted_projections() -> None:
-    values = json.loads(command("dataset.cases"))
-    assert all(set(value) == {"id", "skill", "prompt", "files"} for value in values)
-    assert datasets.load_cases() == catalog.load_cases() == benchmarks.load_cases(selection="smoke")
-    assert "canonical_solution" not in json.dumps(values)
-
-
-def test_typed_client_keeps_private_channels_separate() -> None:
-    case = datasets.load_cases()[0]
-    assert datasets.reference(case.id) == catalog.reference(case.id)
-    assert datasets.verifier(case.id) == catalog.verifier(case.id)
-    request = GradeRequest(
-        case_id=case.id, response="", changed_files=(), verification=Verification(status="failed")
-    )
-    assert datasets.grade(request=request) == commands.grade(request=request)
-
-
-def test_local_suite_selection_survives_json_roundtrip() -> None:
-    assert datasets.load_cases(selection=EVALS_ROOT / "ocaml/suite.ml") == catalog.load_cases()
-
-
-def test_missing_dataset_metadata_is_explicit() -> None:
-    assert json.loads(command("dataset.metadata")) is None
-    assert datasets.benchmark_metadata("smoke") == {}
-    with patch(
-        "evals.python.integrations.datasets.commands.catalog.dataset_info", return_value=None
-    ):
-        assert (
-            json.loads(command("dataset.metadata", payload='{"selection":"humanevalplus"}')) is None
-        )
 
 
 def test_runner_entrypoint_validates_before_allocating_sandboxes(
@@ -190,17 +135,22 @@ def test_public_evaluation_preserves_the_command_at_the_sdk_edge() -> None:
         operation.model = "changed"
 
 
-def test_legacy_aliases_share_one_canonical_contract() -> None:
-    assert (
-        contracts.Case,
-        contracts.Verification,
-        contracts.RunOverrides,
-        contracts.GradeRequest,
-        EvaluationRequest,
-    ) == (
-        commands.Case,
-        commands.Verification,
-        commands.ExperimentSettings,
-        commands.GradeCase,
-        commands.Evaluate,
-    )
+@pytest.mark.parametrize("provider", ["hf", "local"])
+def test_runtime_query_returns_canonical_capability(provider: str) -> None:
+    operation = commands.ExecutionRuntime.model_validate({"provider": provider})
+    assert isinstance(assert_type(commands.query(operation), commands.Runtime), commands.Runtime)
+    with pytest.raises(ValidationError):
+        commands.ExecutionRuntime.model_validate({"provider": "unknown"})
+
+
+def test_public_surface_has_no_legacy_function_aliases() -> None:
+    for name in (
+        "GradeRequest",
+        "RunOverrides",
+        "load_cases",
+        "grade",
+        "verify_case",
+        "assess_case",
+        "validate_reference",
+    ):
+        assert not hasattr(commands, name)

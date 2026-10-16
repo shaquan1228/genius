@@ -10,8 +10,8 @@ from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
 from inspect_ai.util import sandbox
 
-from evals.python.contracts import Reference
-from evals.python.integrations.datasets.catalog import reference
+from evals.python._kernel import Reference
+from evals.python.catalog import reference
 from evals.python.integrations.inspect.workspace import GIT_IDENTITY, execute
 
 Mode = Literal[

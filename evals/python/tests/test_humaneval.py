@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from evals.python import catalog, commands
+from evals.python._kernel import ExecutableChecks, Verification
 from evals.python.catalog import (
     case as catalog_case,
 )
@@ -16,14 +17,15 @@ from evals.python.catalog import (
     cases_hash,
     load_cases,
 )
-from evals.python.commands import grade
-from evals.python.contracts import ExecutableChecks, GradeRequest, Sources, Verification
+from evals.python.commands import GradeCase
 from evals.python.integrations.evalplus.benchmarks import (
     benchmark_info,
 )
+from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import load_profile
 from evals.python.integrations.inspect.tasks import baseline
 from evals.python.tests.support import import_records, imported_reference, imported_verifier
+from evals.python.transport import Sources
 
 
 def record(**updates: object) -> str:
@@ -63,9 +65,9 @@ def test_imported_case_keeps_grader_private() -> None:
 def test_imported_profile_public_inputs_match() -> None:
     case = import_records((record(),))[0]
     assert {
-        name: load_profile(name="genius").files(case)[name]
-        for name in load_profile(name="baseline").files(case)
-    } == load_profile(name="baseline").files(case)
+        name: profiles.files(load_profile(name="genius"), case=case)[name]
+        for name in profiles.files(load_profile(name="baseline"), case=case)
+    } == profiles.files(load_profile(name="baseline"), case=case)
 
 
 @pytest.mark.parametrize(
@@ -92,16 +94,19 @@ def test_dataset_selector_grades_one_trusted_record() -> None:
     with patch("evals.python.catalog._selected", return_value=compiled):
         assert catalog_case(case.id, selection="humanevalplus") == case
         assert load_cases(selection="humanevalplus") == (case,)
-        assert grade(
-            request=GradeRequest(
+        assert commands.query(
+            GradeCase(
                 case_id=case.id,
                 response="",
                 changed_files=("workspace/solution.py",),
                 verification=Verification(status="passed"),
-            ),
-            selection="humanevalplus",
+            ).model_copy(update={"selection": "humanevalplus"})
         ) == {"correctness": True, "scope": True}
-        samples = load_profile(name="baseline").samples(dataset="humanevalplus")
+        samples = profiles.samples(
+            load_profile(name="baseline"),
+            cases=commands.query(commands.Cases()),
+            dataset="humanevalplus",
+        )
     assert samples[0].metadata == {
         "case_id": case.id,
         "profile": "baseline",
@@ -180,7 +185,7 @@ def test_case_hash_tracks_private_verifier_code(
     *, driver: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     before = cases_hash("smoke")
-    source_before = commands.source_hash("smoke")
+    source_before = commands.query(commands.Provenance(selection="smoke")).source_hash
     resources = catalog.sources().resources
     updated = tuple(
         (name, source + "\n" if name == driver else source) for name, source in resources
@@ -192,7 +197,7 @@ def test_case_hash_tracks_private_verifier_code(
         lambda selection="smoke": Sources(modules=original(selection).modules, resources=updated),
     )
     assert cases_hash("smoke") != before
-    assert commands.source_hash("smoke") != source_before
+    assert commands.query(commands.Provenance(selection="smoke")).source_hash != source_before
 
 
 def test_case_hash_tracks_private_records_without_changing_public_cases() -> None:
@@ -203,23 +208,22 @@ def test_case_hash_tracks_private_records_without_changing_public_cases() -> Non
         sources=original.sources, records=(record(plus_input=[[123]]),)
     )
     with patch.object(catalog, "_selected", return_value=original):
-        before = commands.cases_hash("humanevalplus")
-        public = commands.load_cases(selection="humanevalplus")
+        before = commands.query(commands.Provenance(selection="humanevalplus")).cases_hash
+        public = commands.query(commands.Cases(selection="humanevalplus"))
     with patch.object(catalog, "_selected", return_value=changed):
-        assert commands.load_cases(selection="humanevalplus") == public
-        assert commands.cases_hash("humanevalplus") != before
+        assert commands.query(commands.Cases(selection="humanevalplus")) == public
+        assert commands.query(commands.Provenance(selection="humanevalplus")).cases_hash != before
 
 
 def test_imported_dataset_grade_uses_cached_record(synthetic_dataset: None) -> None:
     task = baseline(dataset="humanevalplus")
     assert task.metadata is not None
     assert task.metadata["benchmark"]["count"] == len(task.dataset) == 164
-    assert grade(
-        request=GradeRequest(
+    assert commands.query(
+        GradeCase(
             case_id="humaneval-0",
             response="",
             changed_files=(),
             verification=Verification(status="passed"),
-        ),
-        selection="humanevalplus",
+        ).model_copy(update={"selection": "humanevalplus"})
     ) == {"correctness": True, "scope": True}

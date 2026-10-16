@@ -42,6 +42,7 @@ __all__ = [
     "Environment",
     "Evaluate",
     "Execution",
+    "ExecutionRuntime",
     "Experiment",
     "ExperimentSettings",
     "GradeCase",
@@ -67,6 +68,11 @@ def _unique[T](values: tuple[T, ...]) -> tuple[T, ...]:
     if len(set(values)) != len(values):
         raise ValueError("Selection must contain unique values")
     return values
+
+
+class ExecutionRuntime(BaseModel):
+    model_config = FROZEN
+    provider: Literal["local", "hf"] = "local"
 
 
 class Cases(BaseModel):
@@ -157,6 +163,10 @@ class Evaluate(BaseModel):
 
 
 @overload
+def query(operation: ExecutionRuntime) -> Runtime: ...
+
+
+@overload
 def query(operation: Cases) -> tuple[Case, ...]: ...
 
 
@@ -177,8 +187,27 @@ def query(operation: GradeCase) -> Scores: ...
 
 
 def query(
-    operation: Cases | ExperimentSettings | DescribeDataset | Provenance | GradeCase,
-) -> tuple[Case, ...] | Experiment | DatasetInfo | DatasetProvenance | Scores | None:
+    operation: Cases
+    | ExperimentSettings
+    | DescribeDataset
+    | Provenance
+    | GradeCase
+    | ExecutionRuntime,
+) -> tuple[Case, ...] | Experiment | DatasetInfo | DatasetProvenance | Scores | Runtime | None:
+    match operation:
+        case ExecutionRuntime():
+            return _runtime(operation)
+        case DescribeDataset() | Provenance():
+            return _describe(operation)
+        case Cases() | ExperimentSettings() | GradeCase():
+            return _query_catalog(operation)
+        case _:
+            assert_never(operation)
+
+
+def _query_catalog(
+    operation: Cases | ExperimentSettings | GradeCase,
+) -> tuple[Case, ...] | Experiment | Scores:
     match operation:
         case Cases():
             return catalog.load_cases(selection=operation.selection)
@@ -190,8 +219,6 @@ def query(
                 time_limit=operation.time_limit,
                 cache=operation.cache,
             )
-        case DescribeDataset() | Provenance():
-            return _describe(operation)
         case GradeCase():
             return catalog.grade(
                 case_id=operation.case_id,
@@ -203,8 +230,8 @@ def query(
                 },
                 selection=operation.selection,
             )
-        case _:
-            assert_never(operation)
+        case _ as unreachable:
+            assert_never(unreachable)
 
 
 def _describe(operation: DescribeDataset | Provenance) -> DatasetInfo | DatasetProvenance | None:
@@ -249,31 +276,11 @@ async def execute(
         case ValidateReference():
             return await _validate_reference(operation)
         case Evaluate():
-            from evals.python.integrations.inspect.evaluation import (  # noqa: PLC0415 - lazy SDK composition
-                evaluate_async,
-            )
+            from evals.python.integrations.inspect import evaluation  # noqa: PLC0415 - lazy SDK composition
 
-            return await evaluate_async(operation)
+            return await evaluation.evaluate_async(operation)
         case _:
             assert_never(operation)
-
-
-GradeRequest = GradeCase
-RunOverrides = ExperimentSettings
-load_cases = catalog.load_cases
-dataset_info = catalog.dataset_info
-source_hash = catalog.source_hash
-cases_hash = catalog.cases_hash
-verifier = catalog.verifier
-reference = catalog.reference
-
-
-def experiment(overrides: ExperimentSettings | None = None) -> Experiment:
-    return query(overrides or ExperimentSettings())
-
-
-def grade(*, request: GradeCase, selection: Selection = "smoke") -> Scores:
-    return query(request.model_copy(update={"selection": selection}))
 
 
 async def _verify(operation: VerifyCase) -> VerificationResult:
@@ -312,13 +319,7 @@ async def _assess(operation: AssessCase) -> Assessment:
 async def _validate_reference(operation: ValidateReference) -> VerificationResult:
     if catalog.verifier(operation.case_id, selection=operation.selection) is None:
         return VerificationResult(verification=Verification(status="unchecked"))
-    runtime = operation.runtime
-    if runtime is None:
-        from evals.python.integrations.inspect.environments import (  # noqa: PLC0415 - lazy local composition
-            runtime as local_runtime,
-        )
-
-        runtime = local_runtime()
+    runtime = operation.runtime or query(ExecutionRuntime())
     try:
         async with _verification.allocated(runtime) as agent:
             await _verification.stage_reference(
@@ -339,30 +340,15 @@ async def _validate_reference(operation: ValidateReference) -> VerificationResul
         )
 
 
-async def verify_case(
-    case_id: str, *, selection: Selection = "smoke", agent: Environment, runtime: Runtime
-) -> VerificationResult:
-    return await execute(
-        VerifyCase(case_id=case_id, selection=selection, agent=agent, runtime=runtime)
-    )
+def _runtime(operation: ExecutionRuntime) -> Runtime:
+    match operation.provider:
+        case "local":
+            from evals.python.integrations.inspect import environments  # noqa: PLC0415 - lazy local SDK composition
 
+            return environments.runtime()
+        case "hf":
+            from evals.python.integrations.hugging_face import sandbox  # noqa: PLC0415 - lazy HF SDK composition
 
-async def assess_case(
-    request: GradeCase, *, selection: Selection = "smoke", agent: Environment, runtime: Runtime
-) -> Assessment:
-    return await execute(
-        AssessCase(
-            case_id=request.case_id,
-            response=request.response,
-            changed_files=request.changed_files,
-            selection=selection,
-            agent=agent,
-            runtime=runtime,
-        )
-    )
-
-
-async def validate_reference(
-    case_id: str, *, selection: Selection = "smoke", runtime: Runtime | None = None
-) -> VerificationResult:
-    return await execute(ValidateReference(case_id=case_id, selection=selection, runtime=runtime))
+            return sandbox.runtime()
+        case _ as unreachable:
+            assert_never(unreachable)

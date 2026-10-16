@@ -9,9 +9,11 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import catalog, commands, transport
-from evals.python.contracts import GradeRequest, RunOverrides, Verification
+from evals.python._kernel import Verification
+from evals.python.commands import ExperimentSettings, GradeCase
 from evals.python.integrations.evalplus import benchmarks
-from evals.python.integrations.inspect.tasks import TaskRequest, build_task
+from evals.python.integrations.inspect import profiles
+from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.support import ocaml_choice_case
 
 
@@ -28,8 +30,8 @@ def third_dataset(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     return "third"
 
 
-def third_request(*, case_id: str = "third-case") -> GradeRequest:
-    return GradeRequest(
+def third_request(*, case_id: str = "third-case") -> GradeCase:
+    return GradeCase(
         case_id=case_id,
         response='{"choice":"A","reason":"Less"}',
         changed_files=(),
@@ -40,16 +42,29 @@ def third_request(*, case_id: str = "third-case") -> GradeRequest:
 def test_third_dataset_requires_only_adapter_and_declarations(third_dataset: str) -> None:
     cases = catalog.load_cases(selection=third_dataset)
     assert cases[0].id == "third-case"
-    task = build_task(request=TaskRequest(profile="baseline", agent="codex", dataset="third"))
+    task = build_task(
+        profile=profiles.load_profile(
+            "baseline", spec=commands.query(commands.ExperimentSettings())
+        ),
+        spec=commands.query(commands.ExperimentSettings()),
+        agent="codex",
+        dataset="third",
+    )
     assert task.dataset[0].id == "third-case"
-    assert commands.grade(request=third_request(), selection=third_dataset) == {
+    assert commands.query(third_request().model_copy(update={"selection": third_dataset})) == {
         "correctness": True,
         "scope": True,
     }
 
 
 def test_default_sandbox_is_local() -> None:
-    task = build_task(request=TaskRequest(profile="baseline", agent="codex"))
+    task = build_task(
+        profile=profiles.load_profile(
+            "baseline", spec=commands.query(commands.ExperimentSettings())
+        ),
+        spec=commands.query(commands.ExperimentSettings()),
+        agent="codex",
+    )
     assert task.sandbox is not None
     assert task.sandbox.type == "local"
 
@@ -57,9 +72,9 @@ def test_default_sandbox_is_local() -> None:
 def test_third_dataset_imports_and_grades_records(third_dataset: str) -> None:
     imported = catalog.compile_records(sources=catalog.sources("third"), records=("new-case",))
     with patch.object(catalog, "_selected", return_value=imported):
-        assert commands.grade(request=third_request(case_id="new-case"), selection=third_dataset)[
-            "correctness"
-        ]
+        assert commands.query(
+            third_request(case_id="new-case").model_copy(update={"selection": third_dataset})
+        )["correctness"]
         assert catalog.reference("new-case", selection="third").answer
         assert catalog.verifier("new-case", selection="third") is None
 
@@ -93,8 +108,8 @@ def test_all_contract_collections_are_immutable() -> None:
 
 def test_run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
     original = catalog.experiment()
-    spec = commands.experiment(RunOverrides(epochs=2, token_limit=1234, cache=True))
-    task = build_task(request=TaskRequest(profile="genius", agent="codex", experiment=spec))
+    spec = commands.query(ExperimentSettings(epochs=2, token_limit=1234, cache=True))
+    task = build_task(profile=profiles.load_profile("genius", spec=spec), spec=spec, agent="codex")
     assert (task.epochs, task.token_limit, task.time_limit, task.config.cache) == (
         2,
         1234,
@@ -107,9 +122,9 @@ def test_run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
 @pytest.mark.parametrize("field", ["epochs", "message_limit", "token_limit", "time_limit"])
 @pytest.mark.parametrize("value", [0, -1])
 def test_kernel_rejects_invalid_run_overrides(field: str, *, value: int) -> None:
-    overrides = RunOverrides.model_validate({field: value})
+    overrides = ExperimentSettings.model_validate({field: value})
     with pytest.raises(subprocess.CalledProcessError):
-        commands.experiment(overrides)
+        commands.query(overrides)
 
 
 @pytest.mark.parametrize("payload", [{"epochs": 1.5}, {"cache": 1}, {"unknown": 1}])
@@ -126,16 +141,14 @@ def test_public_projection_requires_exact_protocol_version(version: object) -> N
 
 def test_unknown_or_unsafe_dataset_is_rejected() -> None:
     with pytest.raises(FileNotFoundError):
-        commands.load_cases(selection="does-not-exist")
+        commands.query(commands.Cases(selection="does-not-exist"))
     with pytest.raises(ValidationError):
-        commands.load_cases(selection="../outside")
+        commands.query(commands.Cases(selection="../outside"))
 
 
 def test_benchmark_adapter_requires_provenance() -> None:
     with (
-        patch(
-            "evals.python.integrations.datasets.commands.catalog.dataset_info", return_value=None
-        ),
+        patch("evals.python.catalog.dataset_info", return_value=None),
         pytest.raises(ValueError, match="provenance"),
     ):
         benchmarks.benchmark_info()
@@ -150,7 +163,7 @@ def test_transport_rejects_duplicate_export_ids() -> None:
 def test_verifier_projection_is_cached_but_grading_is_not() -> None:
     case_id = "clear-task"
     checks = catalog.verifier(case_id)
-    request = GradeRequest(
+    request = GradeCase(
         case_id=case_id,
         response="",
         changed_files=(),
@@ -167,7 +180,7 @@ def test_verifier_projection_is_cached_but_grading_is_not() -> None:
             0,
         )
         assert (
-            commands.grade(request=request)["correctness"],
-            commands.grade(request=request)["correctness"],
+            commands.query(request)["correctness"],
+            commands.query(request)["correctness"],
         ) == (True, True)
         assert [call.args[0][1:] for call in process.call_args_list] == [["--grade"], ["--grade"]]

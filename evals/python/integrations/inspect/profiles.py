@@ -4,15 +4,12 @@ import base64
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
-from typing import Literal
 
 from inspect_ai.dataset import Sample
 
-from evals.python.contracts import Case, Experiment, ProfileSpec
-from evals.python.integrations.inspect.datasets import experiment, load_cases
+from evals.python import commands
 from evals.python.paths import REPO_ROOT
 
-InstructionDelivery = Literal["files", "manifest", "inline"]
 # A diagnostic treatment of reasoning's four required reads, without rewriting them.
 REASONING_DOCUMENTS = (
     "skills/reasoning/SKILL.md",
@@ -22,7 +19,7 @@ REASONING_DOCUMENTS = (
 )
 
 
-def instruction_envelope(*, delivery: InstructionDelivery, root: str) -> str:
+def instruction_envelope(*, delivery: commands.InstructionDelivery, root: str) -> str:
     paths = [str(PurePosixPath(root) / name) for name in REASONING_DOCUMENTS]
     if delivery == "manifest":
         return (
@@ -53,60 +50,63 @@ def content_hash(files: dict[str, str]) -> str:
     return hashlib.sha256(json.dumps(contents, sort_keys=True).encode()).hexdigest()
 
 
-class Profile(ProfileSpec):
-    """What a profile adds to every case: a prompt preamble and instruction folders."""
-
-    def instruction_files(self) -> dict[str, str]:
-        return {
-            f"instructions/{folder}/{path.relative_to(REPO_ROOT / folder).as_posix()}": str(path)
-            for folder in self.instructions
-            for path in sorted((REPO_ROOT / folder).rglob("*"))
-            if path.is_file()
-        }
-
-    def prompt(
-        self,
-        case: Case,
-        *,
-        delivery: InstructionDelivery = "files",
-        instruction_root: str = "../instructions",
-    ) -> str:
-        preamble = self.preamble.format(skill=case.skill)
-        if not self.instructions or delivery == "files":
-            return preamble + case.prompt
-        if case.skill != "reasoning":
-            raise ValueError("Instruction delivery diagnostics currently support reasoning only")
-        envelope = instruction_envelope(delivery=delivery, root=instruction_root)
-        return (preamble + envelope if delivery == "manifest" else envelope) + case.prompt
-
-    def files(self, case: Case) -> dict[str, str]:
-        workspace = {
-            f"workspace/{name}": inline_file(contents=text) for name, text in case.files.items()
-        }
-        return {
-            "workspace/.gitkeep": inline_file(contents=""),
-            **workspace,
-            **self.instruction_files(),
-        }
-
-    def samples(
-        self,
-        *,
-        dataset: str = "smoke",
-        delivery: InstructionDelivery = "files",
-        instruction_root: str = "../instructions",
-    ) -> list[Sample]:
-        return [
-            Sample(
-                id=case.id,
-                input=self.prompt(case, delivery=delivery, instruction_root=instruction_root),
-                files=self.files(case),
-                metadata={"case_id": case.id, "profile": self.name, "dataset": dataset},
-            )
-            for case in load_cases(selection=dataset)
-        ]
+def instruction_files(profile: commands.ProfileSpec) -> dict[str, str]:
+    return {
+        f"instructions/{folder}/{path.relative_to(REPO_ROOT / folder).as_posix()}": str(path)
+        for folder in profile.instructions
+        for path in sorted((REPO_ROOT / folder).rglob("*"))
+        if path.is_file()
+    }
 
 
-def load_profile(name: str, *, spec: Experiment | None = None) -> Profile:
-    profile = {value.name: value for value in (spec or experiment()).profiles}[name]
-    return Profile.model_validate(profile.model_dump())
+def prompt(
+    profile: commands.ProfileSpec,
+    *,
+    case: commands.Case,
+    delivery: commands.InstructionDelivery = "files",
+    instruction_root: str = "../instructions",
+) -> str:
+    preamble = profile.preamble.format(skill=case.skill)
+    if not profile.instructions or delivery == "files":
+        return preamble + case.prompt
+    if case.skill != "reasoning":
+        raise ValueError("Instruction delivery diagnostics currently support reasoning only")
+    envelope = instruction_envelope(delivery=delivery, root=instruction_root)
+    return (preamble + envelope if delivery == "manifest" else envelope) + case.prompt
+
+
+def files(profile: commands.ProfileSpec, *, case: commands.Case) -> dict[str, str]:
+    workspace = {
+        f"workspace/{name}": inline_file(contents=text) for name, text in case.files.items()
+    }
+    return {
+        "workspace/.gitkeep": inline_file(contents=""),
+        **workspace,
+        **instruction_files(profile),
+    }
+
+
+def samples(
+    profile: commands.ProfileSpec,
+    *,
+    cases: tuple[commands.Case, ...],
+    dataset: str = "smoke",
+    delivery: commands.InstructionDelivery = "files",
+    instruction_root: str = "../instructions",
+) -> list[Sample]:
+    return [
+        Sample(
+            id=case.id,
+            input=prompt(profile, case=case, delivery=delivery, instruction_root=instruction_root),
+            files=files(profile, case=case),
+            metadata={"case_id": case.id, "profile": profile.name, "dataset": dataset},
+        )
+        for case in cases
+    ]
+
+
+def load_profile(name: str, *, spec: commands.Experiment | None = None) -> commands.ProfileSpec:
+    return {
+        value.name: value
+        for value in (spec or commands.query(commands.ExperimentSettings())).profiles
+    }[name]

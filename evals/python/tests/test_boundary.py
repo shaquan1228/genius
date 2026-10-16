@@ -45,7 +45,7 @@ def test_only_transport_and_trusted_driver_invoke_compilers() -> None:
 
 def test_core_cannot_import_integrations_or_sdks() -> None:
     dependencies = {
-        name for file in ("contracts.py", "transport.py") for name in imported(PYTHON_ROOT / file)
+        name for file in ("_kernel.py", "transport.py") for name in imported(PYTHON_ROOT / file)
     }
     assert not any(
         name.startswith(("evals.python.integrations", "inspect_ai", "huggingface_hub"))
@@ -88,7 +88,7 @@ def test_only_codec_uses_json_library() -> None:
 
 
 def test_integration_entry_points_use_explicit_catalog_selection() -> None:
-    expected = {"case": (1, 1), "reference": (1, 1), "verifier": (1, 1), "grade": (0, 2)}
+    expected = {"case": (1, 1), "reference": (1, 1), "verifier": (1, 1), "grade": (0, 5)}
     signatures = {
         node.name: (len(node.args.args), len(node.args.kwonlyargs))
         for node in nodes(PYTHON_ROOT / "catalog.py", kind=ast.FunctionDef)
@@ -147,3 +147,21 @@ def test_hugging_face_owns_only_its_sdk() -> None:
 def test_framework_driver_is_standalone(framework: str) -> None:
     path = PYTHON_ROOT / f"integrations/{framework}/{framework}_verifier.py"
     assert {name.split(".")[0] for name in imported(path)} <= sys.stdlib_module_names
+
+
+def test_integrations_use_typed_public_operations_without_legacy_facades() -> None:
+    obsolete = (
+        "command.py",
+        "contracts.py",
+        "integrations/datasets/catalog.py",
+        "integrations/datasets/commands.py",
+        "integrations/inspect/commands.py",
+        "integrations/inspect/datasets.py",
+        "integrations/inspect/verification.py",
+        "integrations/inspect/benchmarks.py",
+    )
+    assert not [name for name in obsolete if (PYTHON_ROOT / name).exists()]
+    imports = {
+        name for path in (PYTHON_ROOT / "integrations").rglob("*.py") for name in imported(path)
+    }
+    assert not any(name.startswith("evals.python.verification") for name in imports)

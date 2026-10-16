@@ -14,23 +14,17 @@ from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 from pydantic import ValidationError
 
 from evals.python import commands
+from evals.python._kernel import ExecutableChecks, Reference
+from evals.python.catalog import load_cases, reference, verifier
 from evals.python.commands import (
     Completion,
     Environment,
     Execution,
-    GradeRequest,
+    GradeCase,
     Runtime,
     Verification,
     VerificationResult,
-    assess_case,
-    grade,
-    load_cases,
-    reference,
-    validate_reference,
-    verifier,
-    verify_case,
 )
-from evals.python.contracts import ExecutableChecks, Reference
 from evals.python.integrations.inspect.environments import environment, runtime
 
 DRIVER = """import json, os, subprocess, sys
@@ -66,7 +60,6 @@ def envelope(**updates: object) -> str:
 def agent_port() -> Environment:
     return Environment(
         execute=AsyncMock(return_value=output()),
-        exists=AsyncMock(return_value=True),
         read_bytes=AsyncMock(return_value=b"print(42)"),
         write_bytes=AsyncMock(),
     )
@@ -108,8 +101,10 @@ def test_python_inputs_execute_in_fresh_workspace(source: str) -> None:
             await agent.write_file("workspace/solution.py", source)
             await agent.write_file("workspace/grader.py", "raise Exception('tampered')")
             with patch("evals.python.catalog.verifier", return_value=checks()):
-                result = await verify_case(
-                    "python", agent=environment(agent), runtime=runtime(agent)
+                result = await commands.execute(
+                    commands.VerifyCase(
+                        case_id="python", agent=environment(agent), runtime=runtime(agent)
+                    )
                 )
             assert result.verification.status == ("passed" if source == "print(42)" else "failed")
             assert result.metadata == {"raw": "42\n" if source == "print(42)" else "0\n"}
@@ -174,7 +169,7 @@ def test_missing_candidate_is_invalid_before_allocation(missing: str) -> None:
     async def execute() -> None:
         agent = agent_port()
         if missing == "inspection":
-            cast(AsyncMock, agent.exists).return_value = False
+            cast(AsyncMock, agent.execute).return_value = output(code=1)
         else:
             cast(AsyncMock, agent.read_bytes).side_effect = FileNotFoundError("solution.py")
         ports = runtime_port(grader_port())
@@ -195,7 +190,7 @@ def test_infrastructure_failures_are_harness_errors(*, stage: str, error: Except
         agent, grader = agent_port(), grader_port()
         ports = runtime_port(grader)
         effects = {
-            "inspection": agent.exists,
+            "inspection": agent.execute,
             "read": agent.read_bytes,
             "provision": ports.create,
             "mkdir": grader.execute,
@@ -328,8 +323,8 @@ def test_invalid_executable_contract_is_rejected(updates: dict[str, object]) -> 
     "status", ["unchecked", "passed", "failed", "invalid_submission", "timed_out"]
 )
 def test_typed_status_reaches_kernel(status: str) -> None:
-    scores = grade(
-        request=GradeRequest(
+    scores = commands.query(
+        GradeCase(
             case_id="clear-task",
             response="",
             changed_files=(),
@@ -341,8 +336,8 @@ def test_typed_status_reaches_kernel(status: str) -> None:
 
 def test_kernel_refuses_harness_error() -> None:
     with pytest.raises(subprocess.CalledProcessError):
-        grade(
-            request=GradeRequest(
+        commands.query(
+            GradeCase(
                 case_id="clear-task",
                 response="",
                 changed_files=(),
@@ -374,9 +369,7 @@ def test_public_answer_only_verification_never_allocates() -> None:
 
 def test_assessment_grades_canonical_observation_and_freezes_scores() -> None:
     async def execute() -> None:
-        request = GradeRequest(
-            case_id="clear-task", response="answer", changed_files=("receipt.ml",)
-        )
+        request = GradeCase(case_id="clear-task", response="answer", changed_files=("receipt.ml",))
         with patch("evals.python.catalog.verifier", return_value=None):
             result = assert_type(
                 await commands.execute(
@@ -391,7 +384,7 @@ def test_assessment_grades_canonical_observation_and_freezes_scores() -> None:
                 commands.Assessment,
             )
         assert result.verification.status == "unchecked"
-        assert result.scores == grade(request=request)
+        assert result.scores == commands.query(request)
         with pytest.raises(TypeError):
             result.scores["correctness"] = True  # type: ignore[index]
         assert request.verification.status == "unchecked"
@@ -406,10 +399,14 @@ def test_assessment_refuses_harness_error_before_grading() -> None:
             patch("evals.python.catalog.grade") as grading,
             pytest.raises(RuntimeError, match="Verification harness error"),
         ):
-            await assess_case(
-                GradeRequest(case_id="clear-task", response="", changed_files=()),
-                agent=agent_port(),
-                runtime=runtime_port(grader_port(stdout="invalid")),
+            await commands.execute(
+                commands.AssessCase(
+                    case_id="clear-task",
+                    response="",
+                    changed_files=(),
+                    agent=agent_port(),
+                    runtime=runtime_port(grader_port(stdout="invalid")),
+                )
             )
         grading.assert_not_called()
 
@@ -417,18 +414,20 @@ def test_assessment_refuses_harness_error_before_grading() -> None:
 
 
 @pytest.mark.parametrize("code", [0, 1, 2])
-def test_inspect_adapter_checks_existence(code: int) -> None:
+def test_candidate_inspection_classifies_missing_and_infrastructure(code: int) -> None:
     async def execute() -> None:
         sandbox = AsyncMock(spec=LocalSandboxEnvironment)
         sandbox.exec.return_value = ExecResult(
             returncode=code, success=code == 0, stdout="", stderr="server"
         )
-        ports = environment(sandbox)
+        sandbox.read_file.return_value = b"print(42)"
+        result = await run(environment(sandbox), runtime=runtime_port(grader_port()))
+        assert (
+            result.verification.status
+            == {0: "passed", 1: "invalid_submission", 2: "harness_error"}[code]
+        )
         if code == 2:
-            with pytest.raises(RuntimeError, match="inspect candidate"):
-                await ports.exists("workspace/solution.py")
-        else:
-            assert await ports.exists("workspace/solution.py") == (code == 0)
+            assert "inspect candidate" in result.verification.detail
 
     asyncio.run(execute())
 
@@ -454,7 +453,9 @@ def test_reference_uses_default_local_adapter_and_real_ocaml() -> None:
 def test_answer_only_reference_never_allocates() -> None:
     ports = runtime_port(grader_port())
     with patch("evals.python.catalog.verifier", return_value=None):
-        result = asyncio.run(validate_reference("answer", runtime=ports))
+        result = asyncio.run(
+            commands.execute(commands.ValidateReference(case_id="answer", runtime=ports))
+        )
     assert result.verification.status == "unchecked"
     cast(AsyncMock, ports.create).assert_not_awaited()
 
@@ -472,7 +473,9 @@ def test_reference_candidate_and_grader_are_both_cleaned() -> None:
             ),
             patch("evals.python.verification.token_hex", return_value="secret"),
         ):
-            result = await validate_reference("python", runtime=ports)
+            result = await commands.execute(
+                commands.ValidateReference(case_id="python", runtime=ports)
+            )
         assert result.verification.status == "passed"
         assert cast(AsyncMock, ports.cleanup).await_count == 2
         cast(AsyncMock, agent.write_bytes).assert_awaited_once_with(
@@ -505,9 +508,13 @@ def test_reference_setup_failures_preserve_lifecycle(stage: str) -> None:
         ):
             if stage == "cancel":
                 with pytest.raises(asyncio.CancelledError):
-                    await validate_reference("python", runtime=ports)
+                    await commands.execute(
+                        commands.ValidateReference(case_id="python", runtime=ports)
+                    )
             else:
-                result = await validate_reference("python", runtime=ports)
+                result = await commands.execute(
+                    commands.ValidateReference(case_id="python", runtime=ports)
+                )
                 assert result.verification.status == "harness_error"
         assert cast(AsyncMock, ports.cleanup).await_count == (stage != "allocation")
         if stage != "allocation":
@@ -526,7 +533,9 @@ def test_reference_nonzero_mkdir_is_harness_error() -> None:
             patch("evals.python.catalog.verifier", return_value=checks()),
             patch("evals.python.catalog.reference", return_value=Reference(solution={}, answer="")),
         ):
-            result = await validate_reference("python", runtime=runtime_port(agent))
+            result = await commands.execute(
+                commands.ValidateReference(case_id="python", runtime=runtime_port(agent))
+            )
         assert result.verification.status == "harness_error"
         assert "create reference workspace" in result.verification.detail
 
@@ -535,7 +544,7 @@ def test_reference_nonzero_mkdir_is_harness_error() -> None:
 
 def test_assessment_replaces_untrusted_verification_with_execution() -> None:
     async def execute() -> None:
-        request = GradeRequest(
+        request = GradeCase(
             case_id="clear-task",
             response="",
             changed_files=(),
@@ -545,8 +554,14 @@ def test_assessment_replaces_untrusted_verification_with_execution() -> None:
             patch("evals.python.catalog.verifier", return_value=checks()),
             patch("evals.python.verification.token_hex", return_value="secret"),
         ):
-            result = await assess_case(
-                request, agent=agent_port(), runtime=runtime_port(grader_port())
+            result = await commands.execute(
+                commands.AssessCase(
+                    case_id=request.case_id,
+                    response=request.response,
+                    changed_files=request.changed_files,
+                    agent=agent_port(),
+                    runtime=runtime_port(grader_port()),
+                )
             )
         assert result.verification.status == "passed"
         assert result.scores["correctness"]
@@ -562,15 +577,14 @@ def test_assessment_runs_actual_private_checks_before_grading() -> None:
             await agent.exec(["mkdir", "workspace"])
             for name, contents in reference("clear-task").solution.items():
                 await agent.write_file(f"workspace/{name}", contents)
-            result = await assess_case(
-                GradeRequest(
+            result = await commands.execute(
+                commands.AssessCase(
                     case_id="clear-task",
                     response="",
                     changed_files=(),
-                    verification=Verification(status="failed"),
-                ),
-                agent=environment(agent),
-                runtime=runtime(agent),
+                    agent=environment(agent),
+                    runtime=runtime(agent),
+                )
             )
             assert result.verification.status == "passed"
             assert result.scores["correctness"]

@@ -47,7 +47,6 @@ class Completion:
 @dataclass(frozen=True, kw_only=True, eq=False)
 class Environment:
     execute: Callable[[Execution], Awaitable[Completion]]
-    exists: Callable[[str], Awaitable[bool]]
     read_bytes: Callable[[str], Awaitable[bytes]]
     write_bytes: Callable[[str, bytes], Awaitable[None]]
 
@@ -119,8 +118,11 @@ async def _inputs(checks: ExecutableChecks, *, agent: Environment) -> dict[str, 
     result = {}
     for name in checks.inputs:
         path = f"workspace/{name}"
-        if not await agent.exists(path):
+        inspection = await agent.execute(Execution(command=("test", "-f", path)))
+        if inspection.returncode == 1:
             raise FileNotFoundError(name)
+        if inspection.returncode != 0:
+            raise RuntimeError(f"Could not inspect candidate input: {inspection.stderr}")
         result[name] = await agent.read_bytes(path)
     return result
 
