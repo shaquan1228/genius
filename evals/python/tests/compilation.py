@@ -11,33 +11,33 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import catalog, commands, query
-from evals.python.tests.declarations import declaration
+from evals.python.tests.declarations import _declaration
 
 
-def compile_dataset_exposes_canonical_public_cases_test() -> None:
-    definition = declaration()
+def compile_dataset_exposes_canonical_public_cases() -> None:
+    definition = _declaration()
     dataset = assert_type(query.CompileDataset(cases=(definition,)), query.Dataset)
     assert isinstance(dataset, catalog.Catalog)
     cases = assert_type(query.Cases(selection=dataset), tuple[query.Case, ...])
     assert cases[0] is dataset.cases[definition.id]
 
 
-def compiled_cases_separate_construction_from_public_projection_test() -> None:
-    dataset = query.CompileDataset(cases=(declaration(),))
+def compiled_cases_separate_construction_from_public_projection() -> None:
+    dataset = query.CompileDataset(cases=(_declaration(),))
     (case,) = query.Cases(selection=dataset)
     assert not isinstance(case, query.CaseDefinition)
     assert set(case.model_dump()) == {"id", "skill", "prompt", "files"}
     assert "verify.py" not in case.files
 
 
-def compiled_selection_reuses_the_compilation_snapshot_test() -> None:
-    dataset = query.CompileDataset(cases=(declaration(),))
+def compiled_selection_reuses_the_compilation_snapshot() -> None:
+    dataset = query.CompileDataset(cases=(_declaration(),))
     assert catalog.sources(dataset) is dataset.sources
     assert catalog.load_dataset(dataset) is dataset
 
 
-def compile_query_forwards_canonical_values_and_results_test() -> None:
-    definition = declaration()
+def compile_query_forwards_canonical_values_and_results() -> None:
+    definition = _declaration()
     dataset = query.CompileDataset(cases=(definition,))
     with patch("evals.python.catalog.compile_declarations", return_value=dataset) as compile_cases:
         assert query.CompileDataset(cases=(definition,)) is dataset
@@ -47,8 +47,8 @@ def compile_query_forwards_canonical_values_and_results_test() -> None:
     assert load.call_args.kwargs["selection"] is dataset
 
 
-def independent_datasets() -> tuple[query.Dataset, query.Dataset]:
-    first = declaration()
+def _independent_datasets() -> tuple[query.Dataset, query.Dataset]:
+    first = _declaration()
     assert isinstance(first.criterion, query.CodeCriterion)
     verifier = first.criterion.verifier.model_copy(update={"stdin": "different private stdin"})
     second = first.model_copy(
@@ -65,8 +65,8 @@ def independent_datasets() -> tuple[query.Dataset, query.Dataset]:
     return (a, b)
 
 
-def compilation_preserves_independent_private_inputs_test() -> None:
-    a, b = independent_datasets()
+def compilation_preserves_independent_private_inputs() -> None:
+    a, b = _independent_datasets()
     assert query.Cases(selection=a) == query.Cases(selection=b)
     assert catalog.verifier("external", selection=a) != catalog.verifier("external", selection=b)
     assert catalog.reference("external", selection=a).solution == {"main.py": "fixed"}
@@ -75,8 +75,8 @@ def compilation_preserves_independent_private_inputs_test() -> None:
     }
 
 
-def compiled_metadata_queries_do_not_download_test() -> None:
-    a, b = independent_datasets()
+def compiled_metadata_queries_do_not_download() -> None:
+    a, b = _independent_datasets()
     with patch("evals.python.catalog.download") as download:
         assert query.DescribeDataset(selection=a) is None
         a_provenance = query.Provenance(selection=a)
@@ -86,8 +86,8 @@ def compiled_metadata_queries_do_not_download_test() -> None:
     assert b_provenance.info is None
 
 
-def compilation_provenance_retains_sources_and_private_records_test() -> None:
-    a, b = independent_datasets()
+def compilation_provenance_retains_sources_and_private_records() -> None:
+    a, b = _independent_datasets()
     a_provenance = query.Provenance(selection=a)
     b_provenance = query.Provenance(selection=b)
     assert a_provenance.source_hash == b_provenance.source_hash
@@ -96,8 +96,8 @@ def compilation_provenance_retains_sources_and_private_records_test() -> None:
     assert a_provenance.cases_hash == catalog.cases_hash(a)
 
 
-def compilation_hashes_include_trusted_source_changes_test() -> None:
-    dataset = query.CompileDataset(cases=(declaration(),))
+def compilation_hashes_include_trusted_source_changes() -> None:
+    dataset = query.CompileDataset(cases=(_declaration(),))
     changed = dataset.model_copy(
         update={
             "sources": replace(
@@ -111,7 +111,7 @@ def compilation_hashes_include_trusted_source_changes_test() -> None:
     assert original.cases_hash != updated.cases_hash
 
 
-def grade(*, dataset: query.Dataset, verification: query.Verification) -> query.Scores:
+def _grade(*, dataset: query.Dataset, verification: query.Verification) -> query.Scores:
     return query.GradeCase(
         case_id="external",
         response="done",
@@ -121,26 +121,26 @@ def grade(*, dataset: query.Dataset, verification: query.Verification) -> query.
     )
 
 
-def compiled_cases_use_existing_grading_policy_test() -> None:
-    dataset = query.CompileDataset(cases=(declaration(),))
-    assert grade(dataset=dataset, verification=query.Verification(status="passed")) == {
+def compiled_cases_use_existing_grading_policy() -> None:
+    dataset = query.CompileDataset(cases=(_declaration(),))
+    assert _grade(dataset=dataset, verification=query.Verification(status="passed")) == {
         "correctness": True,
         "scope": True,
     }
 
 
-def compiled_grading_preserves_canonical_inputs_and_results_test() -> None:
-    dataset = query.CompileDataset(cases=(declaration(),))
+def compiled_grading_preserves_canonical_inputs_and_results() -> None:
+    dataset = query.CompileDataset(cases=(_declaration(),))
     verification = query.Verification(status="passed")
     with patch("evals.python.transport.grade", return_value={"correctness": True}) as kernel_grade:
-        assert grade(dataset=dataset, verification=verification) is kernel_grade.return_value
+        assert _grade(dataset=dataset, verification=verification) is kernel_grade.return_value
     assert kernel_grade.call_args.kwargs["sources"] is dataset.sources
     assert kernel_grade.call_args.kwargs["record"] is dataset.records["external"]
     assert kernel_grade.call_args.kwargs["verification"] is verification
 
 
-def compiled_dataset_is_immutable_test() -> None:
-    dataset = query.CompileDataset(cases=(declaration(),))
+def compiled_dataset_is_immutable() -> None:
+    dataset = query.CompileDataset(cases=(_declaration(),))
     with pytest.raises(ValidationError):
         dataset.records = {}
     with pytest.raises(TypeError):
@@ -155,36 +155,36 @@ def compiled_dataset_is_immutable_test() -> None:
         dataset.sources.resources[0] = ("changed", "changed")  # type: ignore[index]
 
 
-def empty_and_duplicate_compilation_test() -> None:
+def empty_and_duplicate_compilation() -> None:
     dataset = query.CompileDataset(cases=())
     assert query.Cases(selection=dataset) == ()
     assert dataset.records == {}
     with pytest.raises(subprocess.CalledProcessError):
-        query.CompileDataset(cases=(declaration(), declaration()))
+        query.CompileDataset(cases=(_declaration(), _declaration()))
 
 
-def compile_query_validates_its_boundary_without_bypassing_kernel_test() -> None:
+def compile_query_validates_its_boundary_without_bypassing_kernel() -> None:
     compile_dataset: Callable[..., query.Dataset] = query.CompileDataset
     with pytest.raises(ValidationError):
-        compile_dataset(cases=[declaration()])
+        compile_dataset(cases=[_declaration()])
     public_case = query.Case(id="public", skill="reasoning", prompt="", files={})
     with pytest.raises(ValidationError):
         compile_dataset(cases=(public_case,))
-    invalid = declaration().model_copy(update={"allowed_files": ()})
+    invalid = _declaration().model_copy(update={"allowed_files": ()})
     with pytest.raises(subprocess.CalledProcessError):
         query.CompileDataset(cases=(invalid,))
 
 
-def unknown_case_in_compiled_dataset_fails_closed_test() -> None:
-    dataset = query.CompileDataset(cases=(declaration(),))
+def unknown_case_in_compiled_dataset_fails_closed() -> None:
+    dataset = query.CompileDataset(cases=(_declaration(),))
     with pytest.raises(KeyError):
         catalog.case("absent", selection=dataset)
     with pytest.raises(subprocess.CalledProcessError):
         query.GradeCase(case_id="absent", response="", changed_files=(), selection=dataset)
 
 
-def compiled_selection_flows_through_all_verification_commands_test() -> None:
-    dataset = query.CompileDataset(cases=(declaration(code=False),))
+def compiled_selection_flows_through_all_verification_commands() -> None:
+    dataset = query.CompileDataset(cases=(_declaration(code=False),))
     agent = commands.Environment(
         execute=AsyncMock(), read_bytes=AsyncMock(), write_bytes=AsyncMock()
     )

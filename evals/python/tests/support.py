@@ -1,3 +1,5 @@
+__test__ = False
+
 """Run scripted agents through Inspect for integration tests."""
 
 import json
@@ -11,18 +13,18 @@ from inspect_ai.model import get_model
 from evals.python import catalog, transport
 from evals.python._kernel import Case, ExecutableChecks, Reference
 from evals.python.paths import EVALS_ROOT
-from evals.python.tests.scenarios import Mode, echo_model, scripted
+from evals.python.tests.scenarios import Mode, echo_model as _echo_model, scripted as _scripted
 
 
 def offline_run(
     tasks: list[Task], *, mode: Mode | None, directory: Path, epochs: int = 1
 ) -> list[EvalLog]:
     """Mode None keeps each task's own agent solver."""
-    model = get_model("mockllm/model", custom_outputs=echo_model)
+    model = get_model("mockllm/model", custom_outputs=_echo_model)
     logs = eval(
         tasks,
         model=model,
-        solver=None if mode is None else scripted(mode),
+        solver=None if mode is None else _scripted(mode),
         sandbox="local",
         epochs=epochs,
         max_samples=1,

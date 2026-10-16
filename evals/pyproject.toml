@@ -34,6 +34,7 @@ ignore = ["PLR2004"]
 [tool.ruff.lint.per-file-ignores]
 "python/commands.py" = ["N802", "PLR0913"]
 "python/query.py" = ["N802"]
+"python/conftest.py" = ["PLR0913"]
 
 [tool.ruff.lint.pylint]
 # Only the first parameter may be positional, so callers name every other argument.
@@ -49,7 +50,7 @@ mypy_path = ".."
 [tool.pytest.ini_options]
 testpaths = ["python/tests"]
 python_files = ["*.py"]
-python_functions = ["*_test"]
+python_functions = ["[!_]*"]
 addopts = "-q"
 pythonpath = [".."]
 

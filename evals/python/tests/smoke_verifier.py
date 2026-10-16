@@ -33,7 +33,7 @@ SOLUTION = "def total(items): return sum(price * quantity for price, quantity in
         ("import sys\nsys.stdout.buffer.write(b'\\xff\\n')\n" + SOLUTION, "passed"),
     ],
 )
-def private_checker_classifies_candidate_behavior_test(
+def private_checker_classifies_candidate_behavior(
     source: str, *, status: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -41,14 +41,14 @@ def private_checker_classifies_candidate_behavior_test(
     assert verifier.verify(("receipt.py",), checks=CHECKS)["status"] == status
 
 
-def child_does_not_receive_outer_completion_marker_test(monkeypatch: pytest.MonkeyPatch) -> None:
+def child_does_not_receive_outer_completion_marker(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GENIUS_VERIFIER_MARKER", "outer-private-marker")
     result = verifier.run("import os\nprint('GENIUS_VERIFIER_MARKER' in os.environ)")
     assert (result.returncode, result.stdout) == (0, "False\n")
 
 
 @pytest.mark.parametrize("failure", [None, RuntimeError("checker failed")])
-def main_emits_process_evidence_test(
+def main_emits_process_evidence(
     failure: Exception | None,
     *,
     monkeypatch: pytest.MonkeyPatch,
@@ -68,7 +68,7 @@ def main_emits_process_evidence_test(
     }
 
 
-def entrypoint_rejects_missing_sources_test(
+def entrypoint_rejects_missing_sources(
     monkeypatch: pytest.MonkeyPatch, *, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("GENIUS_VERIFIER_MARKER", "outer")
@@ -81,7 +81,7 @@ def entrypoint_rejects_missing_sources_test(
     }
 
 
-def wait_for_pid(path: Path) -> int:
+def _wait_for_pid(path: Path) -> int:
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         if path.exists():
@@ -90,15 +90,15 @@ def wait_for_pid(path: Path) -> int:
     raise TimeoutError("candidate did not start")
 
 
-def candidate_startup_wait_is_bounded_test(tmp_path: Path) -> None:
+def candidate_startup_wait_is_bounded(tmp_path: Path) -> None:
     with (
         patch.object(time, "monotonic", side_effect=[0, 6]),
         pytest.raises(TimeoutError, match="candidate did not start"),
     ):
-        wait_for_pid(tmp_path / "missing.pid")
+        _wait_for_pid(tmp_path / "missing.pid")
 
 
-def terminating_checker_reaps_candidate_child_test(tmp_path: Path) -> None:
+def terminating_checker_reaps_candidate_child(tmp_path: Path) -> None:
     candidate = tmp_path / "receipt.py"
     candidate.write_text(SOLUTION)
     pidfile = tmp_path / "candidate.pid"
@@ -118,7 +118,7 @@ def terminating_checker_reaps_candidate_child_test(tmp_path: Path) -> None:
     ) as process:
         with pytest.raises(subprocess.TimeoutExpired):
             process.communicate(input=checks, timeout=0.1)
-        child_pid = wait_for_pid(pidfile)
+        child_pid = _wait_for_pid(pidfile)
         try:
             process.terminate()
             process.wait(timeout=5)

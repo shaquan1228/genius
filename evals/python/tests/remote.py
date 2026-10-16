@@ -18,7 +18,7 @@ from evals.python.integrations.inspect import environments
 from evals.python.integrations.inspect.remote import HfSandboxEnvironment
 
 
-def result(code: int | None = 0, *, timed_out: bool = False) -> SandboxCommandResult:
+def _result(code: int | None = 0, *, timed_out: bool = False) -> SandboxCommandResult:
     return SandboxCommandResult(exit_code=code, stdout="done", stderr="", timed_out=timed_out)
 
 
@@ -26,11 +26,11 @@ def result(code: int | None = 0, *, timed_out: bool = False) -> SandboxCommandRe
 def client() -> Mock:
     value = Mock()
     value.id = "sandbox-id"
-    value.run.return_value = result()
+    value.run.return_value = _result()
     return value
 
 
-def adapter() -> HfSandboxEnvironment:
+def _adapter() -> HfSandboxEnvironment:
     return HfSandboxEnvironment(backend.environment("sandbox-id"), backend.runtime())
 
 
@@ -43,7 +43,7 @@ def remote_commands(client: Mock) -> Iterator[None]:
         yield
 
 
-def lifecycle_test(client: Mock) -> None:
+def lifecycle(client: Mock) -> None:
     environment = asyncio.run(HfSandboxEnvironment.sample_init("eval", None, {}))["default"]
     assert isinstance(environment, HfSandboxEnvironment)
     assert environments.environment(environment) is environment.environment
@@ -60,9 +60,9 @@ def lifecycle_test(client: Mock) -> None:
 
 
 @pytest.mark.parametrize("failure", ["exit", "mkdir"])
-def setup_failure_kills_sandbox_test(failure: str, *, client: Mock) -> None:
+def setup_failure_kills_sandbox(failure: str, *, client: Mock) -> None:
     if failure == "exit":
-        client.run.return_value = result(1)
+        client.run.return_value = _result(1)
     else:
         client.files.mkdir.side_effect = RuntimeError("mkdir failed")
     with pytest.raises(RuntimeError):
@@ -72,10 +72,10 @@ def setup_failure_kills_sandbox_test(failure: str, *, client: Mock) -> None:
 
 
 @pytest.mark.parametrize(("code", "expected"), [(0, 0), (7, 7), (None, 1)])
-def exec_test(code: int | None, *, expected: int, client: Mock) -> None:
-    client.run.return_value = result(code)
+def exec(code: int | None, *, expected: int, client: Mock) -> None:
+    client.run.return_value = _result(code)
     completion = asyncio.run(
-        adapter().exec(
+        _adapter().exec(
             ["python", "-V"], input="hello", cwd="workspace", env={"KEY": "value"}, timeout=3
         )
     )
@@ -96,7 +96,7 @@ def exec_test(code: int | None, *, expected: int, client: Mock) -> None:
 
 
 @pytest.mark.parametrize("contents", [b"\x00\xff\r\n", b""])
-def binary_stdin_test(contents: bytes, *, client: Mock) -> None:
+def binary_stdin(contents: bytes, *, client: Mock) -> None:
     def invoke(cmd: list[str], **kwargs: object) -> SandboxCommandResult:
         assert kwargs["stdin"] is None
         done = subprocess.run(cmd, capture_output=True, text=True, check=False)
@@ -108,7 +108,7 @@ def binary_stdin_test(contents: bytes, *, client: Mock) -> None:
     client.files.write.side_effect = lambda file, data, **_options: Path(file).write_bytes(data)
     client.files.delete.side_effect = lambda file: Path(file).unlink()
     completion = asyncio.run(
-        adapter().exec(
+        _adapter().exec(
             [
                 "python3",
                 "-c",
@@ -128,26 +128,26 @@ def binary_stdin_test(contents: bytes, *, client: Mock) -> None:
 
 
 @pytest.mark.parametrize("failure", ["timeout", "exception"])
-def exec_failure_cleans_binary_input_test(failure: str, *, client: Mock) -> None:
+def exec_failure_cleans_binary_input(failure: str, *, client: Mock) -> None:
     if failure == "timeout":
-        client.run.return_value = result(timed_out=True)
+        client.run.return_value = _result(timed_out=True)
     else:
         client.run.side_effect = TimeoutError("SDK timeout")
     with pytest.raises(TimeoutError):
-        asyncio.run(adapter().exec(["sleep", "10"], input=b""))
+        asyncio.run(_adapter().exec(["sleep", "10"], input=b""))
     client.files.delete.assert_called_once_with(client.files.write.call_args.args[0])
     client.close.assert_called_once_with()
 
 
-def unsupported_user_precedes_command_test(client: Mock) -> None:
+def unsupported_user_precedes_command(client: Mock) -> None:
     with pytest.raises(SandboxUserUnsupportedError):
-        asyncio.run(adapter().exec(["id"], user="nobody"))
+        asyncio.run(_adapter().exec(["id"], user="nobody"))
     client.run.assert_not_called()
 
 
 @pytest.mark.parametrize("contents", ["line\r\n", b"\x00\xff"])
-def file_io_test(contents: str | bytes, *, client: Mock) -> None:
-    environment = adapter()
+def file_io(contents: str | bytes, *, client: Mock) -> None:
+    environment = _adapter()
     asyncio.run(environment.write_file("workspace/file", contents))
     data = contents.encode() if isinstance(contents, str) else contents
     client.files.write.assert_called_once_with("/eval/workspace/file", data)
@@ -156,7 +156,7 @@ def file_io_test(contents: str | bytes, *, client: Mock) -> None:
     assert asyncio.run(environment.read_file("workspace/file", text=False)) == b"line\r\n"
 
 
-def creation_cancellation_cleans_eventual_sandbox_test(client: Mock) -> None:
+def creation_cancellation_cleans_eventual_sandbox(client: Mock) -> None:
     started, release = Event(), Event()
 
     def create(**_options: object) -> Mock:
@@ -178,7 +178,7 @@ def creation_cancellation_cleans_eventual_sandbox_test(client: Mock) -> None:
 
 
 @pytest.mark.parametrize("stdin", [None, "", b""])
-def stdin_preserves_absent_text_and_binary_test(stdin: str | bytes | None, *, client: Mock) -> None:
+def stdin_preserves_absent_text_and_binary(stdin: str | bytes | None, *, client: Mock) -> None:
     async def execute() -> None:
         await backend.environment("sandbox-id").execute(
             commands.Execution(command=("cat",), input=stdin)
@@ -190,7 +190,7 @@ def stdin_preserves_absent_text_and_binary_test(stdin: str | bytes | None, *, cl
 
 
 @pytest.mark.parametrize("fails", [False, True])
-def backend_allocation_owns_eventual_handle_after_repeated_cancellation_test(
+def backend_allocation_owns_eventual_handle_after_repeated_cancellation(
     *, fails: bool, client: Mock
 ) -> None:
     started, release = Event(), Event()
@@ -218,7 +218,7 @@ def backend_allocation_owns_eventual_handle_after_repeated_cancellation_test(
     assert client.kill.call_count == (not fails)
 
 
-def cleanup_waits_for_eventual_kill_after_repeated_cancellation_test(client: Mock) -> None:
+def cleanup_waits_for_eventual_kill_after_repeated_cancellation(client: Mock) -> None:
     started, release = Event(), Event()
 
     def kill() -> None:
@@ -243,8 +243,8 @@ def cleanup_waits_for_eventual_kill_after_repeated_cancellation_test(client: Moc
     assert client.close.call_count == 2
 
 
-def inspect_event_wrapper_reuses_its_canonical_capabilities_test() -> None:
-    sandbox = adapter()
+def inspect_event_wrapper_reuses_its_canonical_capabilities() -> None:
+    sandbox = _adapter()
     wrapped = SandboxEnvironmentProxy(sandbox)
     assert environments.environment(wrapped) is sandbox.environment
     assert environments.runtime(wrapped) is sandbox.runtime

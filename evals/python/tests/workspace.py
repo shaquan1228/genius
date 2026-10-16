@@ -14,7 +14,7 @@ from evals.python.integrations.inspect.workspace import changed_files, execute, 
 
 
 @pytest.mark.parametrize("error", ["stderr", "stdout"])
-def failed_setup_commands_raise_test(error: str) -> None:
+def failed_setup_commands_raise(error: str) -> None:
     result = ExecResult(
         success=False, returncode=1, stdout="stdout", stderr="stderr" if error == "stderr" else ""
     )
@@ -24,14 +24,14 @@ def failed_setup_commands_raise_test(error: str) -> None:
             asyncio.run(execute(["git", "init"]))
 
 
-def command_timeouts_propagate_test() -> None:
+def command_timeouts_propagate() -> None:
     with patch("evals.python.integrations.inspect.workspace.sandbox") as environment:
         environment.return_value.exec = AsyncMock(side_effect=TimeoutError("Timed out"))
         with pytest.raises(TimeoutError):
             asyncio.run(execute(["git", "init"]))
 
 
-def write_files(root: Path, *, files: dict[str, str | None]) -> None:
+def _write_files(root: Path, *, files: dict[str, str | None]) -> None:
     for name, contents in files.items():
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -69,10 +69,10 @@ def write_files(root: Path, *, files: dict[str, str | None]) -> None:
         ),
     ],
 )
-def git_scope_preserves_tracked_changes_test(
+def git_scope_preserves_tracked_changes(
     *, tmp_path: Path, edits: dict[str, str | None], expected: set[str]
 ) -> None:
-    write_files(
+    _write_files(
         tmp_path,
         files=dict.fromkeys(
             [
@@ -95,7 +95,7 @@ def git_scope_preserves_tracked_changes_test(
 
     with patch("evals.python.integrations.inspect.workspace.execute", side_effect=run_git):
         asyncio.run(prepare_sample(state, Mock()))
-        write_files(
+        _write_files(
             tmp_path,
             files={
                 "workspace/solution.py": "changed",

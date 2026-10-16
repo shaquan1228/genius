@@ -17,26 +17,26 @@ from evals.python.catalog import grade
 from evals.python.integrations.inspect import environments, scoring, workspace
 from evals.python.integrations.inspect.agents import AGENT_REGISTRY
 from evals.python.integrations.inspect.tasks import baseline, genius
-from evals.python.tests.scenarios import Mode, crashing
-from evals.python.tests.support import crash_evidence, offline_run, results
-from evals.python.tests.verification import agent_port, grader_port, runtime_port
+from evals.python.tests.scenarios import Mode, crashing as _crashing
+from evals.python.tests.support import crash_evidence as _crash_evidence, offline_run as _offline_run, results as _results
+from evals.python.tests.verification import _agent_port, _grader_port, _runtime_port
 
 
-def complete_suite_repeats_and_saves_logs_test(tmp_path: Path) -> None:
+def complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
     with patch("evals.python.catalog.grade", wraps=grade) as grading:
-        logs = offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
+        logs = _offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
     assert grading.call_count == 16
     expected = [
         (case, CORRECT, CORRECT)
         for case in ["clear-task", "known-preflight", "small-decision", "decision-review"]
     ] * 2
-    assert [(log.status, sorted(results(log))) for log in logs] == [
+    assert [(log.status, sorted(_results(log))) for log in logs] == [
         ("success", sorted(expected))
     ] * 2
 
 
-def logs_reopen_with_scores_and_model_calls_test(tmp_path: Path) -> None:
-    log = offline_run([baseline()], mode="pass", directory=tmp_path)[0]
+def logs_reopen_with_scores_and_model_calls(tmp_path: Path) -> None:
+    log = _offline_run([baseline()], mode="pass", directory=tmp_path)[0]
     saved = read_eval_log(str(log.location))
     assert saved.results is not None
     assert {score.name for score in saved.results.scores} == {"correctness", "scope"}
@@ -48,14 +48,14 @@ def logs_reopen_with_scores_and_model_calls_test(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("mode", ["extra", "committed-extra", "instructions", "tampered-checks"])
-def scope_rejects_extra_committed_and_instruction_edits_test(*, mode: Mode, tmp_path: Path) -> None:
-    logs = offline_run([baseline(), genius()], mode=mode, directory=tmp_path)
-    assert [[scope for _, _, scope in results(log)] for log in logs] == [[INCORRECT] * 4] * 2
+def scope_rejects_extra_committed_and_instruction_edits(*, mode: Mode, tmp_path: Path) -> None:
+    logs = _offline_run([baseline(), genius()], mode=mode, directory=tmp_path)
+    assert [[scope for _, _, scope in _results(log)] for log in logs] == [[INCORRECT] * 4] * 2
 
 
-def untouched_seeded_bugs_fail_test(tmp_path: Path) -> None:
-    log = offline_run([baseline()], mode="untouched", directory=tmp_path)[0]
-    assert results(log) == sorted(
+def untouched_seeded_bugs_fail(tmp_path: Path) -> None:
+    log = _offline_run([baseline()], mode="untouched", directory=tmp_path)[0]
+    assert _results(log) == sorted(
         [
             ("clear-task", INCORRECT, CORRECT),
             ("known-preflight", INCORRECT, CORRECT),
@@ -65,9 +65,9 @@ def untouched_seeded_bugs_fail_test(tmp_path: Path) -> None:
     )
 
 
-def invalid_answers_fail_test(tmp_path: Path) -> None:
-    log = offline_run([baseline()], mode="bad-answer", directory=tmp_path)[0]
-    assert {case: correct for case, correct, _ in results(log)} == {
+def invalid_answers_fail(tmp_path: Path) -> None:
+    log = _offline_run([baseline()], mode="bad-answer", directory=tmp_path)[0]
+    assert {case: correct for case, correct, _ in _results(log)} == {
         "clear-task": CORRECT,
         "known-preflight": CORRECT,
         "small-decision": INCORRECT,
@@ -75,30 +75,30 @@ def invalid_answers_fail_test(tmp_path: Path) -> None:
     }
 
 
-def tampered_visible_checks_cannot_pass_seeded_bugs_test(tmp_path: Path) -> None:
-    log = offline_run([baseline()], mode="tampered-checks", directory=tmp_path)[0]
-    coding = {case: correct for case, correct, _ in results(log)}
+def tampered_visible_checks_cannot_pass_seeded_bugs(tmp_path: Path) -> None:
+    log = _offline_run([baseline()], mode="tampered-checks", directory=tmp_path)[0]
+    coding = {case: correct for case, correct, _ in _results(log)}
     assert coding["clear-task"] == INCORRECT
     assert coding["known-preflight"] == INCORRECT
 
 
-def early_exit_cannot_skip_heldout_assertions_test(tmp_path: Path) -> None:
-    log = offline_run([baseline()], mode="early-exit", directory=tmp_path)[0]
-    scores = {case: (correct, scope) for case, correct, scope in results(log)}
+def early_exit_cannot_skip_heldout_assertions(tmp_path: Path) -> None:
+    log = _offline_run([baseline()], mode="early-exit", directory=tmp_path)[0]
+    scores = {case: (correct, scope) for case, correct, scope in _results(log)}
     assert scores["clear-task"] == (INCORRECT, CORRECT)
     assert scores["known-preflight"] == (INCORRECT, CORRECT)
 
 
-def crashed_agent_is_scored_on_its_workspace_test(
+def crashed_agent_is_scored_on_its_workspace(
     *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     message = "Error executing codex cli agent 1: tool 'apply_patch' was not in request.tools"
-    factory = Mock(return_value=crashing(message=message))
+    factory = Mock(return_value=_crashing(message=message))
     monkeypatch.setitem(
         AGENT_REGISTRY, "codex", replace(AGENT_REGISTRY["codex"], factory=lambda: factory)
     )
-    log = offline_run([baseline(agent="codex")], mode=None, directory=tmp_path)[0]
-    assert (log.status, results(log)) == (
+    log = _offline_run([baseline(agent="codex")], mode=None, directory=tmp_path)[0]
+    assert (log.status, _results(log)) == (
         "success",
         sorted(
             (case, INCORRECT, CORRECT)
@@ -106,7 +106,7 @@ def crashed_agent_is_scored_on_its_workspace_test(
         ),
     )
     crash = f"Agent process crashed: {message}"
-    assert {str(sample.id): crash_evidence(sample) for sample in log.samples or []} == {
+    assert {str(sample.id): _crash_evidence(sample) for sample in log.samples or []} == {
         "clear-task": (crash, message, "failed"),
         "known-preflight": (crash, message, "failed"),
         "small-decision": (crash, message, "unchecked"),
@@ -114,20 +114,20 @@ def crashed_agent_is_scored_on_its_workspace_test(
     }
 
 
-def verifier_infrastructure_failure_is_sample_error_test(tmp_path: Path) -> None:
+def verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
     with patch(
         "evals.python.verification.verify",
         return_value=commands.VerificationResult(
             verification=Verification(status="harness_error", detail="grader failed to import")
         ),
     ):
-        log = offline_run([baseline()], mode="pass", directory=tmp_path)[0]
+        log = _offline_run([baseline()], mode="pass", directory=tmp_path)[0]
     assert log.status == "error"
     assert log.error is not None
     assert "grader failed to import" in log.error.message
 
 
-def scorer_maps_sdk_observation_to_public_assessment_test() -> None:
+def scorer_maps_sdk_observation_to_public_assessment() -> None:
 
     state = TaskState(
         model=ModelName("mockllm/model"),

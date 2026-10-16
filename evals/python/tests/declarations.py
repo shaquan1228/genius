@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from evals.python import catalog, query, transport
 
 
-def declaration(*, code: bool = True) -> query.CaseDefinition:
+def _declaration(*, code: bool = True) -> query.CaseDefinition:
     criterion: query.CodeCriterion | query.AnswerCriterion
     if code:
         criterion = query.CodeCriterion(
@@ -46,7 +46,7 @@ def declaration(*, code: bool = True) -> query.CaseDefinition:
     )
 
 
-def sources() -> transport.Sources:
+def _sources() -> transport.Sources:
     return transport.sources(
         transport.Program(
             suite=transport.SUITE,
@@ -57,9 +57,9 @@ def sources() -> transport.Sources:
 
 
 @pytest.mark.parametrize("code", [True, False])
-def external_declarations_preserve_public_projection_test(*, code: bool) -> None:
-    (record,) = transport.encode_declarations((declaration(code=code),))
-    (case,) = transport.cases(sources=sources(), records=(record,))
+def external_declarations_preserve_public_projection(*, code: bool) -> None:
+    (record,) = transport.encode_declarations((_declaration(code=code),))
+    (case,) = transport.cases(sources=_sources(), records=(record,))
     public_files = {"main.py": "broken"}
     if code:
         public_files["check.sh"] = dict(catalog.sources().resources)["verifier.py"]
@@ -69,9 +69,9 @@ def external_declarations_preserve_public_projection_test(*, code: bool) -> None
     assert set(case.model_dump()) == {"id", "skill", "prompt", "files"}
 
 
-def code_declarations_preserve_private_checks_and_resolve_resources_test() -> None:
-    (record,) = transport.encode_declarations((declaration(),))
-    checks = transport.verifier(sources=sources(), case_id="external", record=record)
+def code_declarations_preserve_private_checks_and_resolve_resources() -> None:
+    (record,) = transport.encode_declarations((_declaration(),))
+    checks = transport.verifier(sources=_sources(), case_id="external", record=record)
     assert checks is not None
     assert checks.files == {"verify.py": "private assertions"}
     assert checks.tools == {"check.sh": dict(catalog.sources().resources)["verifier.py"]}
@@ -79,9 +79,9 @@ def code_declarations_preserve_private_checks_and_resolve_resources_test() -> No
 
 
 @pytest.mark.parametrize("code", [True, False])
-def declarations_preserve_private_references_test(*, code: bool) -> None:
-    (record,) = transport.encode_declarations((declaration(code=code),))
-    reference = transport.reference(sources=sources(), case_id="external", record=record)
+def declarations_preserve_private_references(*, code: bool) -> None:
+    (record,) = transport.encode_declarations((_declaration(code=code),))
+    reference = transport.reference(sources=_sources(), case_id="external", record=record)
     assert reference.solution == {"main.py": "fixed"}
     if code:
         assert reference.answer == "done"
@@ -89,16 +89,16 @@ def declarations_preserve_private_references_test(*, code: bool) -> None:
         assert json.loads(reference.answer) == {"choice": "B", "safe": True}
 
 
-def answer_declarations_do_not_supply_executable_checks_test() -> None:
-    (record,) = transport.encode_declarations((declaration(code=False),))
-    assert transport.verifier(sources=sources(), case_id="external", record=record) is None
+def answer_declarations_do_not_supply_executable_checks() -> None:
+    (record,) = transport.encode_declarations((_declaration(code=False),))
+    assert transport.verifier(sources=_sources(), case_id="external", record=record) is None
 
 
 @pytest.mark.parametrize("code", [True, False])
-def imported_declarations_use_existing_grading_test(*, code: bool) -> None:
-    (record,) = transport.encode_declarations((declaration(code=code),))
+def imported_declarations_use_existing_grading(*, code: bool) -> None:
+    (record,) = transport.encode_declarations((_declaration(code=code),))
     scores = transport.grade(
-        sources=sources(),
+        sources=_sources(),
         case_id="external",
         record=record,
         response='{"choice":"B","safe":true,"reason":"clear"}',
@@ -108,12 +108,12 @@ def imported_declarations_use_existing_grading_test(*, code: bool) -> None:
     assert scores == {"correctness": True, "scope": True}
 
 
-def generic_declarations_do_not_supply_cases_or_download_metadata_test() -> None:
-    assert transport.describe(sources=sources()) is None
-    assert transport.cases(sources=sources()) == ()
+def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
+    assert transport.describe(sources=_sources()) is None
+    assert transport.cases(sources=_sources()) == ()
 
 
-def declaration_inputs_are_frozen_defensive_copies_test() -> None:
+def declaration_inputs_are_frozen_defensive_copies() -> None:
     fields = {"choice": "B"}
     criterion = query.AnswerCriterion(expected=fields)
     fields["choice"] = "A"
@@ -126,7 +126,7 @@ def declaration_inputs_are_frozen_defensive_copies_test() -> None:
         with pytest.raises(ValidationError):
             query.AnswerCriterion.model_validate({"expected": fields_value})
     with pytest.raises(ValidationError):
-        query.CaseDefinition.model_validate({**declaration().model_dump(), "allowed_files": []})
+        query.CaseDefinition.model_validate({**_declaration().model_dump(), "allowed_files": []})
     assert transport.encode_declarations(()) == ()
 
 
@@ -144,16 +144,16 @@ def declaration_inputs_are_frozen_defensive_copies_test() -> None:
         },
     ],
 )
-def kernel_constructors_validate_raw_declarations_test(change: Mapping[str, object]) -> None:
-    raw = {**declaration().model_dump(), **change}
+def kernel_constructors_validate_raw_declarations(change: Mapping[str, object]) -> None:
+    raw = {**_declaration().model_dump(), **change}
     with pytest.raises(subprocess.CalledProcessError):
-        transport.cases(sources=sources(), records=(json.dumps(raw),))
+        transport.cases(sources=_sources(), records=(json.dumps(raw),))
 
 
 @pytest.mark.parametrize("raw", ["null", "[]", "{}", '{"id":"a","id":"b"}', '{"unknown":true}'])
-def malformed_declarations_fail_closed_test(raw: str) -> None:
+def malformed_declarations_fail_closed(raw: str) -> None:
     with pytest.raises(subprocess.CalledProcessError):
-        transport.cases(sources=sources(), records=(raw,))
+        transport.cases(sources=_sources(), records=(raw,))
 
 
 @pytest.mark.parametrize(
@@ -182,16 +182,16 @@ def malformed_declarations_fail_closed_test(raw: str) -> None:
         (("reference", "edits", "outside.py"), "unauthorized"),
     ],
 )
-def nested_wire_shapes_and_constructor_rules_fail_closed_test(
+def nested_wire_shapes_and_constructor_rules_fail_closed(
     *, path: tuple[str, ...], invalid: object
 ) -> None:
-    raw = declaration().model_dump()
+    raw = _declaration().model_dump()
     parent = raw
     for key in path[:-1]:
         parent = parent[key]
     parent[path[-1]] = invalid
     with pytest.raises(subprocess.CalledProcessError):
-        transport.cases(sources=sources(), records=(json.dumps(raw),))
+        transport.cases(sources=_sources(), records=(json.dumps(raw),))
 
 
 @pytest.mark.parametrize(
@@ -212,23 +212,23 @@ def nested_wire_shapes_and_constructor_rules_fail_closed_test(
         },
     ],
 )
-def answer_wire_validation_is_owned_by_kernel_test(criterion: Mapping[str, object]) -> None:
-    raw = {**declaration(code=False).model_dump(), "criterion": criterion}
+def answer_wire_validation_is_owned_by_kernel(criterion: Mapping[str, object]) -> None:
+    raw = {**_declaration(code=False).model_dump(), "criterion": criterion}
     with pytest.raises(subprocess.CalledProcessError):
-        transport.cases(sources=sources(), records=(json.dumps(raw),))
+        transport.cases(sources=_sources(), records=(json.dumps(raw),))
 
 
 @pytest.mark.parametrize("field", ["id", "main.py", "kind", "choice"])
-def nested_duplicate_wire_fields_are_rejected_test(field: str) -> None:
-    record = declaration(code=False).model_dump_json()
+def nested_duplicate_wire_fields_are_rejected(field: str) -> None:
+    record = _declaration(code=False).model_dump_json()
     marker = json.dumps(field) + ":"
     raw = record.replace(marker, marker + "null," + marker, 1)
     with pytest.raises(subprocess.CalledProcessError):
-        transport.cases(sources=sources(), records=(raw,))
+        transport.cases(sources=_sources(), records=(raw,))
 
 
-def fixture_and_artifact_mappings_retain_immutable_snapshots_test() -> None:
-    definition = declaration()
+def fixture_and_artifact_mappings_retain_immutable_snapshots() -> None:
+    definition = _declaration()
     with pytest.raises(TypeError):
         cast(dict[str, str], definition.fixture)["main.py"] = "changed"
     assert isinstance(definition.criterion, query.CodeCriterion)
@@ -249,10 +249,10 @@ def fixture_and_artifact_mappings_retain_immutable_snapshots_test() -> None:
         ),
     ],
 )
-def answer_construction_supports_each_optional_rule_shape_test(
+def answer_construction_supports_each_optional_rule_shape(
     criterion: query.AnswerCriterion,
 ) -> None:
-    definition = declaration(code=False).model_copy(update={"criterion": criterion})
+    definition = _declaration(code=False).model_copy(update={"criterion": criterion})
     (record,) = transport.encode_declarations((definition,))
-    (case,) = transport.cases(sources=sources(), records=(record,))
+    (case,) = transport.cases(sources=_sources(), records=(record,))
     assert case.id == "external"

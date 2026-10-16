@@ -13,18 +13,18 @@ import pytest
 from evals.python import commands
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.paths import EVALS_ROOT
-from evals.python.tests.support import import_records
-from evals.python.tests.humaneval import record
+from evals.python.tests.support import import_records as _import_records
+from evals.python.tests.humaneval import _record
 
 
-def info_test(capsys: pytest.CaptureFixture[str]) -> None:
+def info(capsys: pytest.CaptureFixture[str]) -> None:
     assert benchmarks.main(["info"]) == 0
     assert json.loads(capsys.readouterr().out)["count"] == 164
 
 
 @pytest.mark.parametrize("status", ["passed", "failed", "harness_error"])
-def validate_reports_real_status_test(*, status: str, capsys: pytest.CaptureFixture[str]) -> None:
-    case = import_records((record(),))[0]
+def validate_reports_real_status(*, status: str, capsys: pytest.CaptureFixture[str]) -> None:
+    case = _import_records((record(),))[0]
     with (
         patch("evals.python.catalog.load_cases", return_value=(case,)),
         patch.object(benchmarks, "validate_case", new=AsyncMock(return_value={"status": status})),
@@ -33,12 +33,12 @@ def validate_reports_real_status_test(*, status: str, capsys: pytest.CaptureFixt
     assert json.loads(capsys.readouterr().out)["results"] == [{"status": status}]
 
 
-def invalid_limit_test() -> None:
+def invalid_limit() -> None:
     with pytest.raises(ValueError, match="positive"):
         benchmarks.main(["validate", "--limit", "0"])
 
 
-def memory_workaround_is_explicit_test(monkeypatch: pytest.MonkeyPatch) -> None:
+def memory_workaround_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("EVALPLUS_MAX_MEMORY_BYTES", raising=False)
     benchmarks.configure_memory(benchmarks.Options())
     assert "EVALPLUS_MAX_MEMORY_BYTES" not in os.environ
@@ -53,8 +53,8 @@ def memory_workaround_is_explicit_test(monkeypatch: pytest.MonkeyPatch) -> None:
     assert os.environ["EVALPLUS_MAX_MEMORY_BYTES"] == "-1"
 
 
-def reference_validation_uses_public_operation_and_thaws_only_cli_output_test() -> None:
-    case = import_records((record(),))[0]
+def reference_validation_uses_public_operation_and_thaws_only_cli_output() -> None:
+    case = _import_records((record(),))[0]
     canonical = commands.VerificationResult(
         verification=commands.Verification(status="passed"), metadata={"test": {"items": (True,)}}
     )
@@ -72,7 +72,7 @@ def reference_validation_uses_public_operation_and_thaws_only_cli_output_test() 
     assert canonical.metadata == {"test": {"items": (True,)}}
 
 
-def benchmark_entrypoint_test(capsys: pytest.CaptureFixture[str]) -> None:
+def benchmark_entrypoint(capsys: pytest.CaptureFixture[str]) -> None:
     with (
         patch.object(sys, "argv", ["benchmarks", "info"]),
         pytest.raises(SystemExit) as exited,

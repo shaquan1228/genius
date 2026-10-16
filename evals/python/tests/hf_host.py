@@ -19,12 +19,12 @@ from evals.python.integrations.inspect.evaluation import HfChatAPI
 from evals.python.paths import REPO_ROOT
 
 
-def configured_request() -> commands.EvaluationSettings:
+def _configured_request() -> commands.EvaluationSettings:
     environment = {"EVAL_MODEL": "openai/test-model", **os.environ}
     return configuration(environment)
 
 
-def hf_job_calls_evaluation_with_validated_settings_test(monkeypatch: pytest.MonkeyPatch) -> None:
+def hf_job_calls_evaluation_with_validated_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     monkeypatch.setenv("EVAL_SAMPLE_IDS", '["clear-task"]')
     monkeypatch.setenv("EVAL_DELIVERIES", '["files", "manifest"]')
@@ -48,7 +48,7 @@ def hf_job_calls_evaluation_with_validated_settings_test(monkeypatch: pytest.Mon
     )
 
 
-def inspect_evaluation_uses_request_without_reading_job_environment_test(
+def inspect_evaluation_uses_request_without_reading_job_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = commands.EvaluationSettings(model="openai/explicit")
@@ -80,7 +80,7 @@ def inspect_evaluation_uses_request_without_reading_job_environment_test(
 
 
 @pytest.mark.parametrize("provider", ["openai", "hf-inference-providers"])
-def hf_job_runs_both_profiles_test(provider: str, *, monkeypatch: pytest.MonkeyPatch) -> None:
+def hf_job_runs_both_profiles(provider: str, *, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EVAL_MODEL", f"{provider}/test-model")
     monkeypatch.setenv("HF_TOKEN", "hf_test")
     monkeypatch.setenv("OPENAI_API_KEY", "test")
@@ -111,7 +111,7 @@ def hf_job_runs_both_profiles_test(provider: str, *, monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.parametrize("extra_body", [None, {"prompt_cache_key": "codex-session", "top_k": 5}])
-def hf_chat_omits_codex_cache_key_test(extra_body: dict[str, object] | None) -> None:
+def hf_chat_omits_codex_cache_key(extra_body: dict[str, object] | None) -> None:
     api = HfChatAPI(model_name="openai/gpt-oss-20b", api_key="hf_test")
     config = GenerateConfig(extra_body=extra_body)
     params = api.completion_params(config, tools=False)
@@ -119,7 +119,7 @@ def hf_chat_omits_codex_cache_key_test(extra_body: dict[str, object] | None) -> 
     assert config.extra_body == extra_body
 
 
-def hf_job_reports_failed_profile_test(monkeypatch: pytest.MonkeyPatch) -> None:
+def hf_job_reports_failed_profile(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     monkeypatch.setenv("OPENAI_API_KEY", "test")
     logs = [
@@ -141,7 +141,7 @@ def hf_job_reports_failed_profile_test(monkeypatch: pytest.MonkeyPatch) -> None:
         ),
     ],
 )
-def hf_job_counts_crashed_samples_test(
+def hf_job_counts_crashed_samples(
     failures: tuple[str | None, ...],
     *,
     summary: str,
@@ -164,7 +164,7 @@ def hf_job_counts_crashed_samples_test(
 
 
 @pytest.mark.parametrize("job_exit", [0, 7])
-def host_script_launches_job_without_exposing_key_test(
+def host_script_launches_job_without_exposing_key(
     job_exit: int, *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     launcher = tmp_path / "uvx"
@@ -203,7 +203,7 @@ def host_script_launches_job_without_exposing_key_test(
     ) == (False, True, False)
 
 
-def host_script_uses_hf_model_without_provider_key_test(
+def host_script_uses_hf_model_without_provider_key(
     *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     launcher = tmp_path / "uvx"
@@ -233,7 +233,7 @@ def host_script_uses_hf_model_without_provider_key_test(
     assert "OPENAI_API_KEY" not in commands
 
 
-def host_script_rejects_empty_provider_key_test(
+def host_script_rejects_empty_provider_key(
     *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     launcher = tmp_path / "uvx"
@@ -257,7 +257,7 @@ def host_script_rejects_empty_provider_key_test(
     assert b"Set OPENAI_API_KEY" in result.stderr
 
 
-def hf_inference_provider_initializes_test(monkeypatch: pytest.MonkeyPatch) -> None:
+def hf_inference_provider_initializes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HF_TOKEN", "hf_test")
     model = get_model("genius-hf/openai/gpt-oss-20b:nscale")
     assert (model.name, model.api.canonical_name()) == (
@@ -267,23 +267,23 @@ def hf_inference_provider_initializes_test(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.mark.parametrize(("value", "expected"), [("3", 3), ("", None), (None, None)])
-def hf_sample_limit_test(
+def hf_sample_limit(
     *, monkeypatch: pytest.MonkeyPatch, value: str | None, expected: int | None
 ) -> None:
     monkeypatch.delenv("EVAL_LIMIT", raising=False)
     if value is not None:
         monkeypatch.setenv("EVAL_LIMIT", value)
-    assert configured_request().limit == expected
+    assert _configured_request().limit == expected
 
 
 @pytest.mark.parametrize("value", ["0", "-1", "invalid"])
-def hf_sample_limit_rejects_invalid_test(*, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+def hf_sample_limit_rejects_invalid(*, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
     monkeypatch.setenv("EVAL_LIMIT", value)
     with pytest.raises(ValueError, match=r"greater than 0|invalid literal"):
-        configured_request()
+        _configured_request()
 
 
-def hf_epoch_override_is_shared_with_tasks_test(monkeypatch: pytest.MonkeyPatch) -> None:
+def hf_epoch_override_is_shared_with_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     monkeypatch.setenv("EVAL_EPOCHS", "3")
     with (
@@ -301,28 +301,28 @@ def hf_epoch_override_is_shared_with_tasks_test(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.parametrize("value", ["[]", '["x", "x"]', "[1]", '"x"', "invalid"])
-def explicit_cohort_rejects_invalid_json_or_duplicates_test(
+def explicit_cohort_rejects_invalid_json_or_duplicates(
     value: str, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
 
     monkeypatch.setenv("EVAL_SAMPLE_IDS", value)
     with pytest.raises(ValueError, match=r"unique|validation error|Expecting|JSON list"):
-        configured_request()
+        _configured_request()
 
 
 @pytest.mark.parametrize("deliveries", ["[]", '["files"]', '["files", "files"]', '["typo"]'])
-def delivery_comparison_rejects_invalid_modes_test(
+def delivery_comparison_rejects_invalid_modes(
     deliveries: str, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
 
     monkeypatch.setenv("EVAL_DELIVERIES", deliveries)
     with pytest.raises(ValueError, match=r"unique|validation error|Expecting"):
-        configured_request()
+        _configured_request()
 
 
 @pytest.mark.parametrize("setting", ["EVAL_SAMPLE_IDS", "EVAL_DELIVERIES"])
 @pytest.mark.parametrize("value", ["null", "{}", '"files"', "1", "true"])
-def explicit_non_list_selection_never_reaches_evaluation_test(
+def explicit_non_list_selection_never_reaches_evaluation(
     setting: str, *, value: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
@@ -340,7 +340,7 @@ def explicit_non_list_selection_never_reaches_evaluation_test(
 
 
 @pytest.mark.parametrize("limit", ["", "1"])
-def explicit_cohort_validation_precedes_sandbox_allocation_test(
+def explicit_cohort_validation_precedes_sandbox_allocation(
     limit: str, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
 
@@ -356,7 +356,7 @@ def explicit_cohort_validation_precedes_sandbox_allocation_test(
     evaluate.assert_not_called()
 
 
-def counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort_test(
+def counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 

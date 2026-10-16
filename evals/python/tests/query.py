@@ -11,7 +11,7 @@ from evals.python import catalog, commands, query
 from evals.python.paths import EVALS_ROOT
 
 
-def public_queries_preserve_canonical_objects_test() -> None:
+def public_queries_preserve_canonical_objects() -> None:
     dataset = assert_type(query.LoadDataset(), query.Dataset)
     assert query.LoadDataset(selection=dataset) is dataset
     cases = assert_type(query.Cases(), tuple[query.Case, ...])
@@ -19,7 +19,7 @@ def public_queries_preserve_canonical_objects_test() -> None:
     assert all(set(case.model_dump()) == {"id", "skill", "prompt", "files"} for case in cases)
 
 
-def public_queries_select_canonical_projections_test() -> None:
+def public_queries_select_canonical_projections() -> None:
     assert query.Cases(selection=EVALS_ROOT / "ocaml/suite.ml") == ()
     assert assert_type(query.DescribeDataset(), query.DatasetInfo | None) is None
     with patch("evals.python.catalog.download") as download:
@@ -28,19 +28,19 @@ def public_queries_select_canonical_projections_test() -> None:
     download.assert_not_called()
 
 
-def public_experiment_resolves_canonical_overrides_test() -> None:
+def public_experiment_resolves_canonical_overrides() -> None:
     spec = assert_type(query.ExperimentSettings(epochs=2), query.Experiment)
     assert spec.epochs == 2
 
 
-def public_hashes_match_existing_provenance_test() -> None:
+def public_hashes_match_existing_provenance() -> None:
     provenance = assert_type(query.Provenance(), query.DatasetProvenance)
     assert provenance.info is None
     assert provenance.source_hash == catalog.source_hash("smoke")
     assert provenance.cases_hash == catalog.cases_hash("smoke")
 
 
-def public_grade_preserves_input_and_result_test() -> None:
+def public_grade_preserves_input_and_result() -> None:
     verification = query.Verification(status="passed")
     with patch("evals.python.transport.grade", return_value={"correctness": True}) as grade:
         result = assert_type(
@@ -61,7 +61,7 @@ def public_grade_preserves_input_and_result_test() -> None:
     "operation", [query.LoadDataset, query.Cases, query.DescribeDataset, query.Provenance]
 )
 @pytest.mark.parametrize("arguments", [{"selection": None}, {"unknown": "smoke"}])
-def query_arguments_are_strict_test(
+def query_arguments_are_strict(
     operation: Callable[..., object], *, arguments: dict[str, object]
 ) -> None:
     with pytest.raises(ValidationError):
@@ -69,7 +69,7 @@ def query_arguments_are_strict_test(
 
 
 @pytest.mark.parametrize("provider", ["hf", "local"])
-def runtime_query_returns_canonical_capability_test(provider: str) -> None:
+def runtime_query_returns_canonical_capability(provider: str) -> None:
     runtime_query: Callable[..., query.Runtime] = query.ExecutionRuntime
     runtime = assert_type(runtime_query(provider=provider), query.Runtime)
     assert isinstance(runtime, commands.Runtime)
@@ -77,7 +77,7 @@ def runtime_query_returns_canonical_capability_test(provider: str) -> None:
         runtime_query(provider="unknown")
 
 
-def queries_are_separate_from_commands_test() -> None:
+def queries_are_separate_from_commands() -> None:
     assert not hasattr(commands, "query")
     assert not hasattr(commands, "execute")
     for name in (

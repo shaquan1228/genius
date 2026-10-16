@@ -16,13 +16,13 @@ from inspect_ai.solver import generate
 from evals.python import commands, query
 from evals.python.integrations.inspect import evaluation, profiles, scoring
 from evals.python.integrations.inspect.tasks import build_task
-from evals.python.tests.support import offline_run, results
-from evals.python.tests.declarations import declaration
+from evals.python.tests.support import offline_run as _offline_run, results as _results
+from evals.python.tests.declarations import _declaration
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
 
-def instruction_snapshot_survives_source_changes_test(
+def instruction_snapshot_survives_source_changes(
     tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     spec = query.ExperimentSettings()
@@ -39,7 +39,7 @@ def instruction_snapshot_survives_source_changes_test(
     assert dict(snapshot) == {f"instructions/{name}": data for name, data in material.items()}
 
 
-def composition_uses_supplied_bytes_without_filesystem_access_test() -> None:
+def composition_uses_supplied_bytes_without_filesystem_access() -> None:
     spec = query.ExperimentSettings()
     profile = profiles.load_profile("genius", spec=spec)
     snapshot = profiles.load_instructions(spec)
@@ -63,7 +63,7 @@ def composition_uses_supplied_bytes_without_filesystem_access_test() -> None:
 
 
 @pytest.mark.parametrize("deliveries", [None, ("files", "manifest")])
-def evaluation_prepares_once_for_all_tasks_test(
+def evaluation_prepares_once_for_all_tasks(
     deliveries: tuple[commands.InstructionDelivery, ...] | None,
 ) -> None:
     spec = query.ExperimentSettings(epochs=2)
@@ -88,7 +88,7 @@ def evaluation_prepares_once_for_all_tasks_test(
 
 @pytest.fixture
 def private_tasks() -> list[Task]:
-    definition = declaration(code=False).model_copy(
+    definition = _declaration(code=False).model_copy(
         update={
             "instruction": query.Instruction(
                 skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
@@ -133,13 +133,13 @@ def private_tasks() -> list[Task]:
     return tasks
 
 
-def native_logs_keep_private_snapshots_out_and_score_each_dataset_test(
+def native_logs_keep_private_snapshots_out_and_score_each_dataset(
     private_tasks: list[Task], *, tmp_path: Path
 ) -> None:
     with patch("evals.python.catalog.sources", side_effect=AssertionError("late source read")):
-        logs = offline_run(private_tasks, mode=None, directory=tmp_path)
+        logs = _offline_run(private_tasks, mode=None, directory=tmp_path)
     assert (
-        [results(read_eval_log(str(log.location))) for log in logs],
+        [_results(read_eval_log(str(log.location))) for log in logs],
         [PRIVATE_SENTINEL in Path(str(log.location)).read_text() for log in logs],
     ) == (
         [[("external", CORRECT, CORRECT)], [("external", INCORRECT, CORRECT)]],
@@ -147,5 +147,5 @@ def native_logs_keep_private_snapshots_out_and_score_each_dataset_test(
     )
 
 
-def registered_scorer_remains_reconstructible_after_binding_test(private_tasks: list[Task]) -> None:
+def registered_scorer_remains_reconstructible_after_binding(private_tasks: list[Task]) -> None:
     assert scorer_create("evaluation") is scoring.score_sample

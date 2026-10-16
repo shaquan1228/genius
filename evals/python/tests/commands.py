@@ -14,7 +14,7 @@ from evals.python import commands
 from evals.python.paths import EVALS_ROOT
 
 
-def runner_entrypoint_validates_before_allocating_sandboxes_test(
+def runner_entrypoint_validates_before_allocating_sandboxes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
@@ -46,7 +46,7 @@ def runner_entrypoint_validates_before_allocating_sandboxes_test(
         (commands.ValidateReference, {"case_id": "case", "runtime": object()}),
     ],
 )
-def capability_commands_reject_non_capabilities_test(
+def capability_commands_reject_non_capabilities(
     operation: Callable[..., Awaitable[object]], *, arguments: dict[str, object]
 ) -> None:
     async def execute() -> None:
@@ -56,7 +56,7 @@ def capability_commands_reject_non_capabilities_test(
     asyncio.run(execute())
 
 
-def public_evaluation_preserves_validated_settings_at_the_sdk_edge_test() -> None:
+def public_evaluation_preserves_validated_settings_at_the_sdk_edge() -> None:
     with patch(
         "evals.python.integrations.inspect.evaluation.evaluate_async",
         new_callable=AsyncMock,
@@ -80,7 +80,7 @@ def public_evaluation_preserves_validated_settings_at_the_sdk_edge_test() -> Non
 @pytest.mark.parametrize(
     "arguments", [{"limit": 0}, {"sample_ids": ()}, {"deliveries": ("files", "files")}]
 )
-def direct_evaluation_validates_before_sdk_execution_test(arguments: dict[str, object]) -> None:
+def direct_evaluation_validates_before_sdk_execution(arguments: dict[str, object]) -> None:
     operation: Callable[..., Awaitable[int]] = commands.Evaluate
 
     async def execute() -> None:
@@ -94,7 +94,7 @@ def direct_evaluation_validates_before_sdk_execution_test(arguments: dict[str, o
     evaluate.assert_not_called()
 
 
-def public_surface_has_no_legacy_function_aliases_test() -> None:
+def public_surface_has_no_legacy_function_aliases() -> None:
     for name in (
         "GradeRequest",
         "RunOverrides",

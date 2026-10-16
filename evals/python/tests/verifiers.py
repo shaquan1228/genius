@@ -19,16 +19,16 @@ from evals.python.catalog import (
 )
 from evals.python.integrations.inspect.environments import environment, runtime
 from evals.python.integrations.smoke import declarations
-from evals.python.tests.support import native_timeout_case
+from evals.python.tests.support import native_timeout_case as _native_timeout_case
 
 CASES = {case.id: case for case in load_cases()}
 
 
-def snapshot(directory: Path) -> dict[str, bytes]:
+def _snapshot(directory: Path) -> dict[str, bytes]:
     return {path.name: path.read_bytes() for path in directory.iterdir()}
 
 
-def verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> bool:
+def _verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> bool:
     checks = verifier(case.id, selection=selection)
     assert isinstance(checks, ExecutableChecks)
 
@@ -36,7 +36,7 @@ def verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> bo
         agent = LocalSandboxEnvironment()
         try:
             await agent.exec(["mkdir", "workspace"])
-            for name, data in snapshot(directory).items():
+            for name, data in _snapshot(directory).items():
                 await agent.write_file(f"workspace/{name}", data)
             result = await commands.VerifyCase(
                 case_id=case.id,
@@ -53,34 +53,34 @@ def verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> bo
     return asyncio.run(execute())
 
 
-def write_files(directory: Path, *, files: Mapping[str, str]) -> None:
+def _write_files(directory: Path, *, files: Mapping[str, str]) -> None:
     for name, text in files.items():
         (directory / name).write_text(text)
 
 
-def seed(case_id: str, *, directory: Path) -> Case:
+def _seed(case_id: str, *, directory: Path) -> Case:
     case = CASES[case_id]
-    write_files(directory, files=case.files)
+    _write_files(directory, files=case.files)
     return case
 
 
 @pytest.mark.parametrize("case_id", ["clear-task", "known-preflight"])
-def seeds_fail_and_solutions_pass_test(*, case_id: str, tmp_path: Path) -> None:
-    case = seed(case_id, directory=tmp_path)
-    assert not verify(case, directory=tmp_path)
-    write_files(tmp_path, files=reference(case.id).solution)
-    before = snapshot(tmp_path)
-    assert verify(case, directory=tmp_path)
-    assert snapshot(tmp_path) == before
+def seeds_fail_and_solutions_pass(*, case_id: str, tmp_path: Path) -> None:
+    case = _seed(case_id, directory=tmp_path)
+    assert not _verify(case, directory=tmp_path)
+    _write_files(tmp_path, files=reference(case.id).solution)
+    before = _snapshot(tmp_path)
+    assert _verify(case, directory=tmp_path)
+    assert _snapshot(tmp_path) == before
 
 
 @pytest.mark.parametrize("term", ["price", "price * max(quantity, 1)"])
-def receipt_partial_fixes_fail_test(*, term: str, tmp_path: Path) -> None:
-    case = seed("clear-task", directory=tmp_path)
+def receipt_partial_fixes_fail(*, term: str, tmp_path: Path) -> None:
+    case = _seed("clear-task", directory=tmp_path)
     (tmp_path / "receipt.py").write_text(
         f"def total(items):\n    return sum({term} for price, quantity in items)\n"
     )
-    assert not verify(case, directory=tmp_path)
+    assert not _verify(case, directory=tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -93,7 +93,7 @@ def receipt_partial_fixes_fail_test(*, term: str, tmp_path: Path) -> None:
         (30, 30, "value", False),
     ],
 )
-def preflight_defaults_overrides_and_validation_test(
+def preflight_defaults_overrides_and_validation(
     *,
     config: int,
     client: int,
@@ -101,7 +101,7 @@ def preflight_defaults_overrides_and_validation_test(
     rejection: bool,
     tmp_path: Path,
 ) -> None:
-    case = seed("known-preflight", directory=tmp_path)
+    case = _seed("known-preflight", directory=tmp_path)
     (tmp_path / "config.py").write_text(f"timeout_seconds = {config}\n")
     source = (
         reference(case.id)
@@ -114,7 +114,7 @@ def preflight_defaults_overrides_and_validation_test(
             '    if value <= 0:\n        raise ValueError("timeout must be positive")\n', ""
         )
     (tmp_path / "client.py").write_text(source)
-    assert (verify(case, directory=tmp_path)) == (
+    assert (_verify(case, directory=tmp_path)) == (
         config == 30 and client == 30 and override == "value" and rejection
     )
 
@@ -127,10 +127,10 @@ def preflight_defaults_overrides_and_validation_test(
         "import os\nos._exit(0)\ndef total(items): return 0\n",
     ],
 )
-def compile_and_runtime_errors_fail_test(*, source: str, tmp_path: Path) -> None:
-    case = seed("clear-task", directory=tmp_path)
+def compile_and_runtime_errors_fail(*, source: str, tmp_path: Path) -> None:
+    case = _seed("clear-task", directory=tmp_path)
     (tmp_path / "receipt.py").write_text(source)
-    assert not verify(case, directory=tmp_path)
+    assert not _verify(case, directory=tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -140,14 +140,14 @@ def compile_and_runtime_errors_fail_test(*, source: str, tmp_path: Path) -> None
         ("known-preflight", "test_client.py"),
     ],
 )
-def visible_check_command_leaves_no_build_files_test(
+def visible_check_command_leaves_no_build_files(
     *,
     case_id: str,
     script: str,
     tmp_path: Path,
 ) -> None:
-    seed(case_id, directory=tmp_path)
-    before = snapshot(tmp_path)
+    _seed(case_id, directory=tmp_path)
+    before = _snapshot(tmp_path)
     result = subprocess.run(
         [sys.executable, "-I", "-B", script],
         check=False,
@@ -156,7 +156,7 @@ def visible_check_command_leaves_no_build_files_test(
         timeout=30,
     )
     assert result.returncode == 0, result.stderr
-    assert snapshot(tmp_path) == before
+    assert _snapshot(tmp_path) == before
 
 
 @pytest.mark.parametrize(
@@ -167,7 +167,7 @@ def visible_check_command_leaves_no_build_files_test(
         (declarations.receipt(term="price * max(quantity, 1)"), "receipt.py", "max(quantity, 1)"),
     ],
 )
-def family_variants_generate_working_seeds_and_solutions_test(
+def family_variants_generate_working_seeds_and_solutions(
     *,
     definition: query.CaseDefinition,
     filename: str,
@@ -177,20 +177,20 @@ def family_variants_generate_working_seeds_and_solutions_test(
     dataset = query.CompileDataset(cases=(definition,))
     case = load_cases(selection=dataset)[0]
     assert fragment in case.files[filename]
-    write_files(tmp_path, files=case.files)
-    assert not verify(case, directory=tmp_path, selection=dataset)
-    write_files(tmp_path, files=reference(case.id, selection=dataset).solution)
-    assert verify(case, directory=tmp_path, selection=dataset)
+    _write_files(tmp_path, files=case.files)
+    assert not _verify(case, directory=tmp_path, selection=dataset)
+    _write_files(tmp_path, files=reference(case.id, selection=dataset).solution)
+    assert _verify(case, directory=tmp_path, selection=dataset)
 
 
-def native_suite_can_declare_python_candidate_checks_test(tmp_path: Path) -> None:
+def native_suite_can_declare_python_candidate_checks(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
-    expression = native_timeout_case(id_expression='"native"', initial="7", requested="17")
+    expression = _native_timeout_case(id_expression='"native"', initial="7", requested="17")
     suite.write_text(f"let cases = [{expression}]\n")
     case = load_cases(selection=suite)[0]
     work = tmp_path / "candidate"
     work.mkdir()
-    write_files(work, files=case.files)
-    assert not verify(case, directory=work, selection=suite)
-    write_files(work, files=reference(case.id, selection=suite).solution)
-    assert verify(case, directory=work, selection=suite)
+    _write_files(work, files=case.files)
+    assert not _verify(case, directory=work, selection=suite)
+    _write_files(work, files=reference(case.id, selection=suite).solution)
+    assert _verify(case, directory=work, selection=suite)

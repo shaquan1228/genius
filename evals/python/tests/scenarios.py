@@ -1,3 +1,5 @@
+__test__ = False
+
 """Scripted agents for offline framework tests, never for measuring Genius."""
 
 from collections.abc import Awaitable, Callable

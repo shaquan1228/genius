@@ -24,11 +24,11 @@ from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import load_profile
 from evals.python.integrations.inspect.tasks import baseline
 from evals.python.query import GradeCase
-from evals.python.tests.support import import_records, imported_reference, imported_verifier
+from evals.python.tests.support import import_records as _import_records, imported_reference as _imported_reference, imported_verifier as _imported_verifier
 from evals.python.transport import Sources
 
 
-def record(**updates: object) -> str:
+def _record(**updates: object) -> str:
     return json.dumps(
         {
             "task_id": "HumanEval/0",
@@ -43,18 +43,18 @@ def record(**updates: object) -> str:
     )
 
 
-def import_preserves_original_private_json_test() -> None:
-    raw = record()
-    checks = imported_verifier(raw)
+def import_preserves_original_private_json() -> None:
+    raw = _record()
+    checks = _imported_verifier(raw)
     assert isinstance(checks, ExecutableChecks)
     assert json.loads(checks.stdin)["record"] == raw
     assert str(2**326 + 17) in checks.stdin
 
 
-def imported_case_keeps_grader_private_test() -> None:
-    case = import_records((record(),))[0]
+def imported_case_keeps_grader_private() -> None:
+    case = _import_records((_record(),))[0]
     assert case.id == "humaneval-0"
-    assert imported_reference(record()).solution["solution.py"].endswith("    return x\n")
+    assert _imported_reference(_record()).solution["solution.py"].endswith("    return x\n")
     assert dict(case.files) == dict(case.files)
     assert (
         "canonical_solution" in case.prompt,
@@ -62,8 +62,8 @@ def imported_case_keeps_grader_private_test() -> None:
     ) == (False, False)
 
 
-def imported_profile_public_inputs_match_test() -> None:
-    case = import_records((record(),))[0]
+def imported_profile_public_inputs_match() -> None:
+    case = _import_records((_record(),))[0]
     assert {
         name: profiles.files(
             load_profile(name="genius", spec=query.ExperimentSettings()),
@@ -85,23 +85,23 @@ def imported_profile_public_inputs_match_test() -> None:
 @pytest.mark.parametrize(
     "records",
     [
-        (record(), record()),
-        (record(task_id="HumanEval/../outside"),),
-        (record(task_id="HumanEval/-1"),),
-        (record(task_id="HumanEval/00"),),
-        (record(entry_point=""),),
-        (record(prompt=1),),
+        (_record(), _record()),
+        (_record(task_id="HumanEval/../outside"),),
+        (_record(task_id="HumanEval/-1"),),
+        (_record(task_id="HumanEval/00"),),
+        (_record(entry_point=""),),
+        (_record(prompt=1),),
         ("[]",),
     ],
 )
-def malformed_import_rejected_test(records: tuple[str, ...]) -> None:
+def malformed_import_rejected(records: tuple[str, ...]) -> None:
     with pytest.raises(subprocess.CalledProcessError):
-        import_records(records)
+        _import_records(records)
 
 
-def dataset_selector_grades_one_trusted_record_test() -> None:
-    raw = record()
-    case = import_records((raw,))[0]
+def dataset_selector_grades_one_trusted_record() -> None:
+    raw = _record()
+    case = _import_records((raw,))[0]
     compiled = catalog.compile_records(sources=catalog.sources("humanevalplus"), records=(raw,))
     with patch("evals.python.catalog.load_dataset", return_value=compiled):
         assert catalog_case(case.id, selection="humanevalplus") == case
@@ -126,7 +126,7 @@ def dataset_selector_grades_one_trusted_record_test() -> None:
     }
 
 
-def pinned_manifest_test() -> None:
+def pinned_manifest() -> None:
     info = benchmark_info()
     assert info.count == 164
     assert info.revision == "v0.1.10"
@@ -136,7 +136,7 @@ def pinned_manifest_test() -> None:
 
 @pytest.fixture
 def synthetic_dataset(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    data = "\n".join(record(task_id=f"HumanEval/{i}") for i in range(164)).encode()
+    data = "\n".join(_record(task_id=f"HumanEval/{i}") for i in range(164)).encode()
     catalog._catalog.cache_clear()
     monkeypatch.setattr("evals.python.catalog.download", lambda request: data)
     try:
@@ -145,13 +145,13 @@ def synthetic_dataset(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         catalog._catalog.cache_clear()
 
 
-def dataset_index_keeps_all_cases_test(synthetic_dataset: None) -> None:
+def dataset_index_keeps_all_cases(synthetic_dataset: None) -> None:
     cases = load_cases(selection="humanevalplus")
     assert (len(cases), len({case.id for case in cases})) == (164, 164)
     assert all(tuple(case.files) == ("solution.py",) for case in cases)
 
 
-def import_cache_tracks_verifier_source_test(
+def import_cache_tracks_verifier_source(
     *, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     load_cases(selection="humanevalplus")
@@ -172,28 +172,28 @@ def import_cache_tracks_verifier_source_test(
     assert checks.files["verifier.py"] == (dict(resources)["evalplus_verifier.py"] + "\n")
 
 
-def dataset_count_mismatch_test(
+def dataset_count_mismatch(
     *, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("evals.python.catalog.download", lambda request: record().encode())
+    monkeypatch.setattr("evals.python.catalog.download", lambda request: _record().encode())
     with pytest.raises(ValueError, match="count"):
         load_cases(selection="humanevalplus")
 
 
-def duplicate_ids_across_import_batches_test() -> None:
-    records = (*(record(task_id=f"HumanEval/{i}") for i in range(16)), record())
+def duplicate_ids_across_import_batches() -> None:
+    records = (*(_record(task_id=f"HumanEval/{i}") for i in range(16)), _record())
     with pytest.raises(ValueError, match="unique"):
-        import_records(records)
+        _import_records(records)
 
 
-def custom_smoke_suite_still_supported_test(tmp_path: Path) -> None:
+def custom_smoke_suite_still_supported(tmp_path: Path) -> None:
     suite = tmp_path / "suite.ml"
     suite.write_text("let cases = []")
     assert load_cases(selection=suite) == ()
 
 
 @pytest.mark.parametrize("driver", ["verifier.py", "evalplus_verifier.py"])
-def case_hash_tracks_private_verifier_code_test(
+def case_hash_tracks_private_verifier_code(
     *, driver: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     before = cases_hash("smoke")
@@ -212,12 +212,12 @@ def case_hash_tracks_private_verifier_code_test(
     assert query.Provenance(selection="smoke").source_hash != source_before
 
 
-def case_hash_tracks_private_records_without_changing_public_cases_test() -> None:
+def case_hash_tracks_private_records_without_changing_public_cases() -> None:
     original = catalog.compile_records(
-        sources=catalog.sources("humanevalplus"), records=(record(),)
+        sources=catalog.sources("humanevalplus"), records=(_record(),)
     )
     changed = catalog.compile_records(
-        sources=original.sources, records=(record(plus_input=[[123]]),)
+        sources=original.sources, records=(_record(plus_input=[[123]]),)
     )
     with patch.object(catalog, "load_dataset", return_value=original):
         before = query.Provenance(selection="humanevalplus").cases_hash
@@ -227,7 +227,7 @@ def case_hash_tracks_private_records_without_changing_public_cases_test() -> Non
         assert query.Provenance(selection="humanevalplus").cases_hash != before
 
 
-def imported_dataset_grade_uses_cached_record_test(synthetic_dataset: None) -> None:
+def imported_dataset_grade_uses_cached_record(synthetic_dataset: None) -> None:
     task = baseline(dataset="humanevalplus")
     assert task.metadata is not None
     assert task.metadata["benchmark"]["count"] == len(task.dataset) == 164
