@@ -1,0 +1,476 @@
+{
+  "name": "hf-harness",
+  "status": "complete",
+  "stopping_reason": "target_reached",
+  "branch": "optimize/hf-harness",
+  "base": "fca100a",
+  "measured_commit": "cf976e663a862aa047989343164b88c31b78fe1c",
+  "experiment": "D1 explicit reference manifest",
+  "protocol": {
+    "model": "openai/gpt-5.6-luna",
+    "agent": "codex",
+    "agent_version": "0.137.0",
+    "effort": "medium",
+    "case_ids": [
+      "humaneval-20",
+      "humaneval-38"
+    ],
+    "selection": "Two previously implicated cases; selected diagnostic cohort, not population estimate.",
+    "repeats": 2,
+    "treatment_order": [
+      "files-r1",
+      "manifest-r1",
+      "manifest-r2",
+      "files-r2"
+    ],
+    "cumulative_token_limit": 50000,
+    "message_limit": 40,
+    "time_limit_seconds": 300,
+    "max_samples": 1,
+    "max_tasks": 1,
+    "skill_text_unchanged": true,
+    "same_mounted_instruction_files": true,
+    "grading_unchanged": true
+  },
+  "required_objectives": {
+    "pre_edit_counted_tokens": {
+      "direction": "minimize",
+      "target": 20000,
+      "definition": "Mean cumulative usage of model calls before the first response requesting a recognized patch; includes uncached input, cache read, cache write and output. Excludes usage of that patch-requesting response.",
+      "before": 27116,
+      "after": 7693,
+      "absolute_reduction": 19423,
+      "relative_reduction": 0.7162929635639474
+    },
+    "joint_pass_rate": {
+      "direction": "maximize",
+      "target": 1,
+      "before": 1,
+      "after": 1,
+      "counts": "4/4 in each arm"
+    }
+  },
+  "reference_metrics": {
+    "valid": 1,
+    "pre_edit_counted_tokens": 27116,
+    "joint_pass_rate": 1.0,
+    "token_stop_rate": 1.0,
+    "seconds_per_sample": 68.403,
+    "sample_count": 4,
+    "total_tokens": 240936
+  },
+  "candidate_metrics": {
+    "valid": 1,
+    "pre_edit_counted_tokens": 7693,
+    "joint_pass_rate": 1.0,
+    "token_stop_rate": 0.25,
+    "seconds_per_sample": 61.579,
+    "sample_count": 4,
+    "total_tokens": 179624
+  },
+  "decision": {
+    "decision": "keep",
+    "eligible": true,
+    "next_measurement": "none",
+    "target_reached": true,
+    "improved_objectives": [
+      "pre_edit_counted_tokens"
+    ],
+    "violated_objectives": [],
+    "comparisons": {
+      "pre_edit_counted_tokens": {
+        "verdict": "improved",
+        "delta": 19423,
+        "relative": 0.7162929635639474,
+        "violated": false
+      },
+      "joint_pass_rate": {
+        "verdict": "inconclusive",
+        "delta": 0,
+        "relative": 0,
+        "violated": false
+      }
+    },
+    "primary_delta": 19423,
+    "rank_score": 0.7162929635639474,
+    "reason": "improved pre_edit_counted_tokens without violating other required objectives"
+  },
+  "forecast_and_observation": {
+    "forecast": {
+      "workload": "HumanEval/20 and /38; two counterbalanced paired epochs",
+      "baseline": "Historical selected repeats and contemporaneous files control",
+      "evidence": "Two initial losses include failed relative reads before cutoff; repeated selected cases all pass but all hit token cap.",
+      "expected_benefit": "Unknown process gain; potentially save one pre-edit model call (roughly 8k-12k replayed tokens). Cheapest resolving measurement is the predeclared paired path treatment.",
+      "confidence": "Medium mechanism confidence, low replication confidence; controls may not repeat path errors.",
+      "cost_and_risk": "Eight sessions; reserve $0.16 API; same bytes and limits, zero added packages."
+    },
+    "observation": "Manifest trials load all four required documents in call1 and first request a patch in call2; controls first request patches in calls3-5. All four pairs save at least one call. Saving exceeds the rough single-call forecast. No failed instruction-path reads occurred in either arm; the specific lookup-error mechanism was not reproduced.",
+    "limits": "Efficiency improvement on two selected cases. Neither arm has an accuracy advantage here; original 16/20 versus 12/20 and 9/10 versus 5/10 scores remain unchanged."
+  },
+  "pair_proof": {
+    "pairs": 4,
+    "exact_tuples": 8,
+    "missing_or_duplicate_tuples": false,
+    "same_logged_models_limits_sandbox_and_generation_config": true,
+    "same_instruction_fixture_and_case_hashes": true,
+    "task_errors": 0,
+    "sample_errors": 0,
+    "agent_crashes": 0,
+    "sandbox_count": 16,
+    "all_sandboxes_canceled": true,
+    "metadata": {
+      "profile": "genius",
+      "dataset": "humanevalplus",
+      "benchmark": {
+        "source": "https://github.com/evalplus/humanevalplus_release/releases/download/v0.1.10/HumanEvalPlus.jsonl.gz",
+        "revision": "v0.1.10",
+        "sha256": "42526ec0e7d5f3ee0b06d6ced98f8c8bae3d76519151bfb3d36f79010645bd7f",
+        "count": 164,
+        "attributes": {
+          "evaluator_commit": "6eb1e199c2e370518e7bf3e8eee6322c2b23c89c",
+          "numpy_version": "2.5.4",
+          "psutil_version": "7.2.2"
+        }
+      },
+      "agent": "codex",
+      "agent_version": "0.137.0",
+      "instruction_delivery": "manifest",
+      "instructions_sha256": "697891384e8c147d3bb88cba19456874aa89c1d5c0b6bb8966b781f38b4d8df7",
+      "fixtures_sha256": "83a55534beef5fbe49acfb7bb34a52f4d1a0b48783062cacce0cdb581e705db8",
+      "cases_sha256": "476515bac5e7b1f027b9f12e11f346247ead11911deb9b6d6070ced7c4571a50",
+      "diagnostic_epoch": 2
+    }
+  },
+  "source_proof": {
+    "source_sha": "cf976e663a862aa047989343164b88c31b78fe1c",
+    "upload_sha": "59e5ec8c291ed603bc85ad64b7c10b905172f89f",
+    "private_source_repo": "shaquan1228/genius-evals-opt-harness",
+    "verified_source_files": 117,
+    "mismatched_paths": [],
+    "symlinks": [
+      {
+        "path": "evals/ocaml/check.sh",
+        "resolved_target": "evals/bin/enforce",
+        "upload_behavior": "HF upload dereferences symlinks; verified target bytes"
+      }
+    ],
+    "volume_revision": "59e5ec8c291ed603bc85ad64b7c10b905172f89f"
+  },
+  "samples": [
+    {
+      "mode": "files",
+      "repeat": 1,
+      "case_id": "humaneval-20",
+      "score": {
+        "correctness": "C",
+        "scope": "C"
+      },
+      "first_patch": {
+        "call": 4,
+        "tokens_before": 27856,
+        "blocked_by_token_cap": false
+      },
+      "failed_path_reads": 0,
+      "changed_files": [
+        "workspace/solution.py"
+      ],
+      "token_stop": true
+    },
+    {
+      "mode": "files",
+      "repeat": 1,
+      "case_id": "humaneval-38",
+      "score": {
+        "correctness": "C",
+        "scope": "C"
+      },
+      "first_patch": {
+        "call": 5,
+        "tokens_before": 37893,
+        "blocked_by_token_cap": false
+      },
+      "failed_path_reads": 0,
+      "changed_files": [
+        "workspace/solution.py"
+      ],
+      "token_stop": true
+    },
+    {
+      "mode": "files",
+      "repeat": 2,
+      "case_id": "humaneval-20",
+      "score": {
+        "correctness": "C",
+        "scope": "C"
+      },
+      "first_patch": {
+        "call": 4,
+        "tokens_before": 26600,
+        "blocked_by_token_cap": false
+      },
+      "failed_path_reads": 0,
+      "changed_files": [
+        "workspace/solution.py"
+      ],
+      "token_stop": true
+    },
+    {
+      "mode": "files",
+      "repeat": 2,
+      "case_id": "humaneval-38",
+      "score": {
+        "correctness": "C",
+        "scope": "C"
+      },
+      "first_patch": {
+        "call": 3,
+        "tokens_before": 16115,
+        "blocked_by_token_cap": false
+      },
+      "failed_path_reads": 0,
+      "changed_files": [
+        "workspace/solution.py"
+      ],
+      "token_stop": true
+    },
+    {
+      "mode": "manifest",
+      "repeat": 1,
+      "case_id": "humaneval-20",
+      "score": {
+        "correctness": "C",
+        "scope": "C"
+      },
+      "first_patch": {
+        "call": 2,
+        "tokens_before": 7719,
+        "blocked_by_token_cap": false
+      },
+      "failed_path_reads": 0,
+      "changed_files": [
+        "workspace/solution.py"
+      ],
+      "token_stop": false
+    },
+    {
+      "mode": "manifest",
+      "repeat": 1,
+      "case_id": "humaneval-38",
+      "score": {
+        "correctness": "C",
+        "scope": "C"
+      },
+      "first_patch": {
+        "call": 2,
+        "tokens_before": 7653,
+        "blocked_by_token_cap": false
+      },
+      "failed_path_reads": 0,
+      "changed_files": [
+        "workspace/solution.py"
+      ],
+      "token_stop": true
+    },
+    {
+      "mode": "manifest",
+      "repeat": 2,
+      "case_id": "humaneval-20",
+      "score": {
+        "correctness": "C",
+        "scope": "C"
+      },
+      "first_patch": {
+        "call": 2,
+        "tokens_before": 7736,
+        "blocked_by_token_cap": false
+      },
+      "failed_path_reads": 0,
+      "changed_files": [
+        "workspace/solution.py"
+      ],
+      "token_stop": false
+    },
+    {
+      "mode": "manifest",
+      "repeat": 2,
+      "case_id": "humaneval-38",
+      "score": {
+        "correctness": "C",
+        "scope": "C"
+      },
+      "first_patch": {
+        "call": 2,
+        "tokens_before": 7664,
+        "blocked_by_token_cap": false
+      },
+      "failed_path_reads": 0,
+      "changed_files": [
+        "workspace/solution.py"
+      ],
+      "token_stop": false
+    }
+  ],
+  "replayed_undispatched_patches": [
+    {
+      "case_id": "humaneval-20",
+      "fixture_sha256": "881d52f394307cce02e432bc6342c93bfe0f6652b203f0bf1a0fc365ed87c594",
+      "patch_sha256": "79ebdcf86a521a17633eeb0809db74da58203a7c578d2bb1dd6d3e7c2febe160",
+      "candidate_sha256": "6a94682dabf1d36c861f52314294bf1fb0bbb4f29dfbf8b34dbb4ba0a911d06c",
+      "verdict": "passed",
+      "phases": {
+        "base": "pass",
+        "plus": "pass"
+      },
+      "sandbox_id": "6ad192c95ccb47ba0f7ae853"
+    },
+    {
+      "case_id": "humaneval-38",
+      "fixture_sha256": "76b76b6f211ef2f4243678ddb1df6013ceac62da09fefe7bc38ba55e404a1ef8",
+      "patch_sha256": "34be28444580ae28d7dc01e3853f7a22b51a5ec2e0cd10f2e56662e9aaaff1a9",
+      "candidate_sha256": "61f99ac52002c3d4ba63d416540e7f14f14cef7ceb5f0d122871d8fe92743794",
+      "verdict": "passed",
+      "phases": {
+        "base": "pass",
+        "plus": "pass"
+      },
+      "sandbox_id": "6ad192f0c662881452257bed"
+    }
+  ],
+  "cleanup": {
+    "jobs": [
+      {
+        "id": "6ad1932bc662881452257bf4",
+        "stage": "COMPLETED"
+      },
+      {
+        "id": "6ad19350c662881452257c38",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad193975ccb47ba0f7ae862",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad193b55ccb47ba0f7ae869",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad193ef5ccb47ba0f7ae86b",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad1940ec662881452257c56",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad19445c662881452257c6b",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad19461c662881452257c80",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad19499c662881452257c82",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad194b7c662881452257c8c",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad194ef5ccb47ba0f7ae87c",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad1950d5ccb47ba0f7ae880",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad1953e5ccb47ba0f7ae884",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad1955dc662881452257c9f",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad195975ccb47ba0f7ae88d",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad195b5c662881452257cc0",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad195ee5ccb47ba0f7ae896",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad192c95ccb47ba0f7ae853",
+        "stage": "CANCELED"
+      },
+      {
+        "id": "6ad192f0c662881452257bed",
+        "stage": "CANCELED"
+      }
+    ],
+    "source_repo_private": true,
+    "sandboxes_canceled": 18,
+    "parent_completed": 1
+  },
+  "validation": {
+    "command": "opam exec --switch=evals-fmt -- make -C evals check",
+    "tests_passed": 334,
+    "statement_and_branch_coverage": 1,
+    "mypy": "strict pass",
+    "ruff": "pass",
+    "xenon": "A",
+    "ocaml": "format, warning-as-error compile, native tests pass"
+  },
+  "accounting": {
+    "outcomes": {
+      "kept": 1,
+      "not_selected": 2,
+      "reverted": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    "evaluation_sessions": 8,
+    "replay_verifier_vms": 2,
+    "judge_cost_usd": 0,
+    "estimated_eval_api_usd": 0.047218739999999995,
+    "estimated_hf_compute_usd": 0.005419896866125566,
+    "basis": "Recorded study rates: input .20/write .25/read .02/output 1.20 per 1M; cpu-basic .000167/min. Estimates, not a billing receipt. Excludes host agent usage.",
+    "host_agent_usage": "Unavailable; excluded from eval spend figures.",
+    "api_reserve_usd": 1,
+    "compute_reserve_usd": 0.5,
+    "started_at": "2026-10-16T02:44:45.032088+00:00",
+    "finished_at": "2026-10-16T03:16:21.777994+00:00"
+  },
+  "not_selected": [
+    {
+      "id": "D2",
+      "description": "Inline identical four required documents to remove loading interactions",
+      "reason": "Stopped at all required targets after first experiment; no further inference needed."
+    },
+    {
+      "id": "D3",
+      "description": "Test a matched 100k cumulative token limit only if cutoff still blocks recovery",
+      "reason": "Stopped at all required targets after first experiment; no further inference needed."
+    }
+  ],
+  "remaining_opportunity": [
+    "Broader unselected tasks and full baseline/Genius comparisons are unmeasured.",
+    "One manifest trial still hit the token cap after its correct patch; cap sensitivity remains a separate question.",
+    "HF reconnect overhead has not been separately attributed."
+  ],
+  "artifacts": {
+    "local_log": ".context/compound-engineering/ce-optimize/hf-harness/experiment-log.yaml",
+    "native_logs": ".context/compound-engineering/ce-optimize/hf-harness/D1/logs",
+    "call_audit": ".context/compound-engineering/ce-optimize/hf-harness/D1/audit.json",
+    "job_url": "https://huggingface.co/jobs/shaquan1228/6ad1932bc662881452257bf4",
+    "private_source_repo": "shaquan1228/genius-evals-opt-harness"
+  },
+  "post_completion": "Leave committed branch for manual review, as the autonomous single-branch task requests; no publication step taken."
+}

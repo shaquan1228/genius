@@ -433,3 +433,15 @@ For a normal baseline/Genius run with a chosen delivery mode, leave
 Cached history still counts toward that cap; a billed model response can cross
 it before the proxy dispatches its requested tools. Generated patches are not
 proof of executed edits. Report cutoffs separately from agent crashes and errors.
+
+The [2026-10-16 optimization receipt](optimization/hf-harness-2026-10-16.json)
+records a counterbalanced two-case, two-repeat HF comparison. Explicit paths
+reduced mean counted tokens before the first patch request from 27,116 to 7,693
+(71.6%). Both treatments passed all four sessions; token-limit stops fell from
+four to one. The skill files and 50k cumulative cap were identical. This confirms
+a loading improvement on those selected cases; it does not establish an
+accuracy advantage over an unmodified coding agent. Original benchmark results
+remain unchanged. Use `EVAL_INSTRUCTION_DELIVERY=manifest` for this measured
+reasoning treatment; `files` retains the historical default. Inline delivery and
+a larger token cap were not needed to reach this run's target and were not
+measured live.
