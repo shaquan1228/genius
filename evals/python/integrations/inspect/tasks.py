@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from inspect_ai import Task, task
 from inspect_ai.model import GenerateConfig
 
@@ -12,6 +14,9 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
     *,
     profile: commands.ProfileSpec,
     spec: commands.Experiment,
+    catalog: query.Dataset,
+    instructions: Mapping[str, bytes],
+    provenance: query.DatasetProvenance,
     agent: str,
     version: str = "",
     dataset: str = "smoke",
@@ -22,19 +27,19 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
     diagnostic_epoch: int | None = None,
 ) -> Task:
     agent_version = version or agent_adapter.AGENT_REGISTRY[agent].default_version
-    provenance = query.Provenance(selection=dataset)
     return Task(
         name=task_name or profile.name,
         dataset=profile_adapter.samples(
             profile,
-            cases=query.Cases(selection=dataset),
+            cases=tuple(catalog.cases.values()),
+            instructions=instructions,
             dataset=dataset,
             delivery=instruction_delivery,
             instruction_root=instruction_root,
         ),
         setup=workspace_adapter.prepare(),
         solver=agent_adapter.contained_agent(agent, version=agent_version),
-        scorer=scoring_adapter.evaluation(),
+        scorer=scoring_adapter.bound_evaluation(dataset=catalog),
         sandbox=sandbox,
         config=GenerateConfig(cache=spec.cache),
         epochs=spec.epochs,
@@ -51,7 +56,8 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
             "instruction_delivery": instruction_delivery,
             "instructions_sha256": profile_adapter.content_hash(
                 files=profile_adapter.instruction_files(
-                    profile_adapter.load_profile(name="genius", spec=spec)
+                    profile_adapter.load_profile(name="genius", spec=spec),
+                    instructions=instructions,
                 )
             ),
             "fixtures_sha256": provenance.source_hash,
@@ -63,9 +69,13 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
 @task
 def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
     spec = query.ExperimentSettings()
+    catalog = query.LoadDataset(selection=dataset)
     return build_task(
         profile=profile_adapter.load_profile("baseline", spec=spec),
         spec=spec,
+        catalog=catalog,
+        instructions=profile_adapter.load_instructions(spec),
+        provenance=query.Provenance(selection=catalog),
         agent=agent,
         version=version,
         dataset=dataset,
@@ -75,9 +85,13 @@ def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke"
 @task
 def genius(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
     spec = query.ExperimentSettings()
+    catalog = query.LoadDataset(selection=dataset)
     return build_task(
         profile=profile_adapter.load_profile("genius", spec=spec),
         spec=spec,
+        catalog=catalog,
+        instructions=profile_adapter.load_instructions(spec),
+        provenance=query.Provenance(selection=catalog),
         agent=agent,
         version=version,
         dataset=dataset,

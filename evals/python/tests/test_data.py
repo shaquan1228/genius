@@ -83,8 +83,16 @@ def test_profiles_share_fixture_files() -> None:
     spec = query.ExperimentSettings()
     assert load_profile("genius", spec=spec) is spec.profiles[1]
     case = load_cases()[0]
-    baseline = profiles.files(load_profile(name="baseline"), case=case)
-    genius = profiles.files(load_profile(name="genius"), case=case)
+    baseline = profiles.files(
+        load_profile(name="baseline", spec=query.ExperimentSettings()),
+        case=case,
+        instructions=profiles.load_instructions(query.ExperimentSettings()),
+    )
+    genius = profiles.files(
+        load_profile(name="genius", spec=query.ExperimentSettings()),
+        case=case,
+        instructions=profiles.load_instructions(query.ExperimentSettings()),
+    )
     assert {key: genius[key] for key in baseline} == baseline
 
 
@@ -93,11 +101,19 @@ def test_only_genius_receives_instructions() -> None:
     assert (
         any(
             key.startswith("instructions/")
-            for key in profiles.files(load_profile(name="baseline"), case=case)
+            for key in profiles.files(
+                load_profile(name="baseline", spec=query.ExperimentSettings()),
+                case=case,
+                instructions=profiles.load_instructions(query.ExperimentSettings()),
+            )
         ),
         any(
             key.startswith("instructions/")
-            for key in profiles.files(load_profile(name="genius"), case=case)
+            for key in profiles.files(
+                load_profile(name="genius", spec=query.ExperimentSettings()),
+                case=case,
+                instructions=profiles.load_instructions(query.ExperimentSettings()),
+            )
         ),
     ) == (False, True)
 
@@ -105,25 +121,36 @@ def test_only_genius_receives_instructions() -> None:
 def test_profile_prompts() -> None:
     case = load_cases()[0]
     assert (
-        profiles.prompt(load_profile(name="baseline"), case=case) == case.prompt,
+        profiles.prompt(
+            load_profile(name="baseline", spec=query.ExperimentSettings()),
+            case=case,
+            instructions=profiles.load_instructions(query.ExperimentSettings()),
+        )
+        == case.prompt,
         "../instructions/skills/reasoning/SKILL.md"
-        in profiles.prompt(load_profile(name="genius"), case=case),
+        in profiles.prompt(
+            load_profile(name="genius", spec=query.ExperimentSettings()),
+            case=case,
+            instructions=profiles.load_instructions(query.ExperimentSettings()),
+        ),
     ) == (True, True)
 
 
 def test_samples_keep_task_ids_and_metadata() -> None:
     assert [
-        sample.id for sample in profiles.samples(load_profile(name="genius"), cases=query.Cases())
+        sample.id
+        for sample in profiles.samples(
+            load_profile(name="genius", spec=query.ExperimentSettings()),
+            cases=query.Cases(),
+            instructions=profiles.load_instructions(query.ExperimentSettings()),
+        )
     ] == [case.id for case in load_cases()]
 
 
-def test_hash_tracks_contents_and_ignores_mapping_order(tmp_path: Path) -> None:
-    path = tmp_path / "source.txt"
-    path.write_text("before")
-    before = content_hash({"a": str(path), "b": str(path)})
-    assert content_hash({"b": str(path), "a": str(path)}) == before
-    path.write_text("after")
-    assert content_hash({"a": str(path), "b": str(path)}) != before
+def test_hash_tracks_contents_and_ignores_mapping_order() -> None:
+    before = content_hash({"a": b"before", "b": b"before"})
+    assert content_hash({"b": b"before", "a": b"before"}) == before
+    assert content_hash({"a": b"after", "b": b"before"}) != before
 
 
 @pytest.mark.parametrize(
@@ -152,7 +179,11 @@ def test_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
 
 
 def test_generated_artifacts_stay_out_of_sample_metadata() -> None:
-    for sample in profiles.samples(load_profile(name="baseline"), cases=query.Cases()):
+    for sample in profiles.samples(
+        load_profile(name="baseline", spec=query.ExperimentSettings()),
+        cases=query.Cases(),
+        instructions=profiles.load_instructions(query.ExperimentSettings()),
+    ):
         assert sample.metadata == {
             "case_id": sample.id,
             "profile": "baseline",
@@ -253,12 +284,15 @@ def test_experiment_cache_tracks_native_configuration(tmp_path: Path) -> None:
             profile=profiles.load_profile("genius", spec=query.ExperimentSettings()),
             spec=query.ExperimentSettings(),
             agent="codex",
+            catalog=query.LoadDataset(selection="smoke"),
+            instructions=profiles.load_instructions(query.ExperimentSettings()),
+            provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
         )
         assert (
             experiment().epochs,
             task.epochs,
             "Follow that" in str(task.dataset[0].input),
-            "Follow that" in load_profile(name="genius").preamble,
+            "Follow that" in load_profile(name="genius", spec=query.ExperimentSettings()).preamble,
         ) == (7, 7, True, True)
     assert experiment() == before
 
@@ -288,13 +322,28 @@ def test_delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, nam
     mode = cast(commands.InstructionDelivery, delivery)
     case = load_cases()[0]
     root = "/eval/instructions"
-    profile = load_profile(name="genius")
-    before = profiles.files(profile, case=case)
-    prompt = profiles.prompt(profile, case=case, delivery=mode, instruction_root=root)
+    profile = load_profile(name="genius", spec=query.ExperimentSettings())
+    before = profiles.files(
+        profile, case=case, instructions=profiles.load_instructions(query.ExperimentSettings())
+    )
+    prompt = profiles.prompt(
+        profile,
+        case=case,
+        delivery=mode,
+        instruction_root=root,
+        instructions=profiles.load_instructions(query.ExperimentSettings()),
+    )
     assert (
         prompt.endswith(case.prompt),
-        profiles.files(profile, case=case),
-        profiles.prompt(load_profile(name="baseline"), case=case, delivery=mode),
+        profiles.files(
+            profile, case=case, instructions=profiles.load_instructions(query.ExperimentSettings())
+        ),
+        profiles.prompt(
+            load_profile(name="baseline", spec=query.ExperimentSettings()),
+            case=case,
+            delivery=mode,
+            instructions=profiles.load_instructions(query.ExperimentSettings()),
+        ),
     ) == (True, before, case.prompt)
     assert f"{root}/{name}" in prompt
     assert ((REPO_ROOT / name).read_text() in prompt) == (delivery == "inline")
@@ -302,4 +351,9 @@ def test_delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, nam
 
 def test_delivery_rejects_unimplemented_skill_instead_of_silently_changing_it() -> None:
     with pytest.raises(ValueError, match="reasoning only"):
-        profiles.prompt(load_profile(name="genius"), case=load_cases()[1], delivery="inline")
+        profiles.prompt(
+            load_profile(name="genius", spec=query.ExperimentSettings()),
+            case=load_cases()[1],
+            delivery="inline",
+            instructions=profiles.load_instructions(query.ExperimentSettings()),
+        )

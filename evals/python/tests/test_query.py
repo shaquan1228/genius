@@ -12,8 +12,10 @@ from evals.python.paths import EVALS_ROOT
 
 
 def test_public_queries_preserve_canonical_objects() -> None:
+    dataset = assert_type(query.LoadDataset(), query.Dataset)
+    assert query.LoadDataset(selection=dataset) is dataset
     cases = assert_type(query.Cases(), tuple[query.Case, ...])
-    assert cases[0] is catalog.load_cases()[0]
+    assert cases[0] is dataset.cases[cases[0].id]
     assert all(set(case.model_dump()) == {"id", "skill", "prompt", "files"} for case in cases)
 
 
@@ -55,7 +57,9 @@ def test_public_grade_preserves_input_and_result() -> None:
     assert result is grade.return_value
 
 
-@pytest.mark.parametrize("operation", [query.Cases, query.DescribeDataset, query.Provenance])
+@pytest.mark.parametrize(
+    "operation", [query.LoadDataset, query.Cases, query.DescribeDataset, query.Provenance]
+)
 @pytest.mark.parametrize("arguments", [{"selection": None}, {"unknown": "smoke"}])
 def test_query_arguments_are_strict(
     operation: Callable[..., object], *, arguments: dict[str, object]
@@ -78,6 +82,7 @@ def test_queries_are_separate_from_commands() -> None:
     assert not hasattr(commands, "execute")
     for name in (
         "Cases",
+        "LoadDataset",
         "DescribeDataset",
         "Provenance",
         "GradeCase",

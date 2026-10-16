@@ -46,6 +46,7 @@ __all__ = [
     "GradeCase",
     "Inline",
     "Instruction",
+    "LoadDataset",
     "PlainCompletion",
     "Provenance",
     "ReferenceDefinition",
@@ -73,6 +74,11 @@ class DatasetProvenance:
 @validate_call(config=FROZEN)
 def CompileDataset(*, cases: tuple[CaseDefinition, ...]) -> Dataset:
     return catalog.compile_declarations(cases)
+
+
+@validate_call(config=FROZEN)
+def LoadDataset(*, selection: Selection = "smoke") -> Dataset:
+    return catalog.load_dataset(selection)
 
 
 @validate_call(config=FROZEN)

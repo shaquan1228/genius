@@ -33,7 +33,7 @@ def test_compiled_cases_separate_construction_from_public_projection() -> None:
 def test_compiled_selection_reuses_the_compilation_snapshot() -> None:
     dataset = query.CompileDataset(cases=(declaration(),))
     assert catalog.sources(dataset) is dataset.sources
-    assert catalog._selected(dataset) is dataset
+    assert catalog.load_dataset(dataset) is dataset
 
 
 def test_compile_query_forwards_canonical_values_and_results() -> None:

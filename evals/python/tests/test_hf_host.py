@@ -13,8 +13,7 @@ from inspect_ai.model import GenerateConfig, get_model
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 from inspect_ai.scorer import Score
 
-from evals.python import commands
-from evals.python.catalog import load_cases
+from evals.python import commands, query
 from evals.python.integrations.hugging_face.job import configuration, run
 from evals.python.integrations.inspect.evaluation import HfChatAPI
 from evals.python.paths import REPO_ROOT
@@ -366,9 +365,11 @@ def test_counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort(
     monkeypatch.setenv("EVAL_EPOCHS", "2")
     monkeypatch.setenv("EVAL_TOKEN_LIMIT", "50000")
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
+    catalog = query.LoadDataset()
+    cohort = catalog.model_copy(update={"cases": {"clear-task": catalog.cases["clear-task"]}})
     with (
         patch("evals.python.integrations.inspect.evaluation.get_model"),
-        patch("evals.python.catalog.load_cases", return_value=load_cases()[:1]),
+        patch("evals.python.query.LoadDataset", return_value=cohort),
         patch(
             "evals.python.integrations.inspect.evaluation.eval_async", return_value=[]
         ) as evaluate,

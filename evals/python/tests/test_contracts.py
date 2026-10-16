@@ -51,6 +51,9 @@ def test_third_dataset_requires_only_adapter_and_declarations(third_dataset: str
         spec=query.ExperimentSettings(),
         agent="codex",
         dataset="third",
+        catalog=query.LoadDataset(selection="third"),
+        instructions=profiles.load_instructions(query.ExperimentSettings()),
+        provenance=query.Provenance(selection=query.LoadDataset(selection="third")),
     )
     assert task.dataset[0].id == "third-case"
     assert third_grade(selection=third_dataset) == {
@@ -64,6 +67,9 @@ def test_default_sandbox_is_local() -> None:
         profile=profiles.load_profile("baseline", spec=query.ExperimentSettings()),
         spec=query.ExperimentSettings(),
         agent="codex",
+        catalog=query.LoadDataset(selection="smoke"),
+        instructions=profiles.load_instructions(query.ExperimentSettings()),
+        provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
     )
     assert task.sandbox is not None
     assert task.sandbox.type == "local"
@@ -71,7 +77,7 @@ def test_default_sandbox_is_local() -> None:
 
 def test_third_dataset_imports_and_grades_records(third_dataset: str) -> None:
     imported = catalog.compile_records(sources=catalog.sources("third"), records=("new-case",))
-    with patch.object(catalog, "_selected", return_value=imported):
+    with patch.object(catalog, "load_dataset", return_value=imported):
         assert third_grade(case_id="new-case", selection=third_dataset)["correctness"]
         assert catalog.reference("new-case", selection="third").answer
         assert catalog.verifier("new-case", selection="third") is None
@@ -107,7 +113,14 @@ def test_all_contract_collections_are_immutable() -> None:
 def test_run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
     original = catalog.experiment()
     spec = ExperimentSettings(epochs=2, token_limit=1234, cache=True)
-    task = build_task(profile=profiles.load_profile("genius", spec=spec), spec=spec, agent="codex")
+    task = build_task(
+        profile=profiles.load_profile("genius", spec=spec),
+        spec=spec,
+        agent="codex",
+        catalog=query.LoadDataset(selection="smoke"),
+        instructions=profiles.load_instructions(spec),
+        provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
+    )
     assert (task.epochs, task.token_limit, task.time_limit, task.config.cache) == (
         2,
         1234,

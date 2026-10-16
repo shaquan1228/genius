@@ -3,11 +3,14 @@
 import base64
 import hashlib
 import json
-from pathlib import Path, PurePosixPath
+from collections.abc import Mapping
+from itertools import chain
+from pathlib import PurePosixPath
+from types import MappingProxyType
 
 from inspect_ai.dataset import Sample
 
-from evals.python import commands, query
+from evals.python import commands
 from evals.python.paths import REPO_ROOT
 
 # A diagnostic treatment of reasoning's four required reads, without rewriting them.
@@ -19,7 +22,20 @@ REASONING_DOCUMENTS = (
 )
 
 
-def instruction_envelope(*, delivery: commands.InstructionDelivery, root: str) -> str:
+def load_instructions(spec: commands.Experiment) -> Mapping[str, bytes]:
+    return MappingProxyType(
+        {
+            f"instructions/{path.relative_to(REPO_ROOT).as_posix()}": path.read_bytes()
+            for folder in sorted(set(chain.from_iterable(p.instructions for p in spec.profiles)))
+            for path in sorted((REPO_ROOT / folder).rglob("*"))
+            if path.is_file()
+        }
+    )
+
+
+def instruction_envelope(
+    *, delivery: commands.InstructionDelivery, root: str, instructions: Mapping[str, bytes]
+) -> str:
     paths = [str(PurePosixPath(root) / name) for name in REASONING_DOCUMENTS]
     if delivery == "manifest":
         return (
@@ -31,38 +47,37 @@ def instruction_envelope(*, delivery: commands.InstructionDelivery, root: str) -
         "Apply the reasoning skill below. These are the complete, unchanged required documents; "
         "they are already loaded. Resolve other references from their containing file.\n\n"
         + "\n\n".join(
-            f"<document path={json.dumps(path)}>\n{(REPO_ROOT / name).read_text()}</document>"
+            f"<document path={json.dumps(path)}>\n"
+            f"{instructions[f'instructions/{name}'].decode()}</document>"
             for name, path in zip(REASONING_DOCUMENTS, paths, strict=True)
         )
         + "\n\n"
     )
 
 
-def inline_file(contents: str) -> str:
-    return "data:text/plain;base64," + base64.b64encode(contents.encode()).decode()
+def inline_file(contents: bytes) -> str:
+    return "data:text/plain;base64," + base64.b64encode(contents).decode()
 
 
-def content_hash(files: dict[str, str]) -> str:
+def content_hash(files: Mapping[str, bytes]) -> str:
     contents = {
-        name: hashlib.sha256(Path(path).read_bytes()).hexdigest()
-        for name, path in sorted(files.items())
+        name: hashlib.sha256(contents).hexdigest() for name, contents in sorted(files.items())
     }
     return hashlib.sha256(json.dumps(contents, sort_keys=True).encode()).hexdigest()
 
 
-def instruction_files(profile: commands.ProfileSpec) -> dict[str, str]:
-    return {
-        f"instructions/{folder}/{path.relative_to(REPO_ROOT / folder).as_posix()}": str(path)
-        for folder in profile.instructions
-        for path in sorted((REPO_ROOT / folder).rglob("*"))
-        if path.is_file()
-    }
+def instruction_files(
+    profile: commands.ProfileSpec, *, instructions: Mapping[str, bytes]
+) -> dict[str, bytes]:
+    prefixes = tuple(f"instructions/{folder}/" for folder in profile.instructions)
+    return {name: contents for name, contents in instructions.items() if name.startswith(prefixes)}
 
 
 def prompt(
     profile: commands.ProfileSpec,
     *,
     case: commands.Case,
+    instructions: Mapping[str, bytes],
     delivery: commands.InstructionDelivery = "files",
     instruction_root: str = "../instructions",
 ) -> str:
@@ -71,25 +86,34 @@ def prompt(
         return preamble + case.prompt
     if case.skill != "reasoning":
         raise ValueError("Instruction delivery diagnostics currently support reasoning only")
-    envelope = instruction_envelope(delivery=delivery, root=instruction_root)
+    envelope = instruction_envelope(
+        delivery=delivery, root=instruction_root, instructions=instructions
+    )
     return (preamble + envelope if delivery == "manifest" else envelope) + case.prompt
 
 
-def files(profile: commands.ProfileSpec, *, case: commands.Case) -> dict[str, str]:
+def files(
+    profile: commands.ProfileSpec, *, case: commands.Case, instructions: Mapping[str, bytes]
+) -> dict[str, str]:
     workspace = {
-        f"workspace/{name}": inline_file(contents=text) for name, text in case.files.items()
+        f"workspace/{name}": inline_file(contents=text.encode())
+        for name, text in case.files.items()
     }
     return {
-        "workspace/.gitkeep": inline_file(contents=""),
+        "workspace/.gitkeep": inline_file(contents=b""),
         **workspace,
-        **instruction_files(profile),
+        **{
+            name: inline_file(contents=contents)
+            for name, contents in instruction_files(profile, instructions=instructions).items()
+        },
     }
 
 
-def samples(
+def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery options
     profile: commands.ProfileSpec,
     *,
     cases: tuple[commands.Case, ...],
+    instructions: Mapping[str, bytes],
     dataset: str = "smoke",
     delivery: commands.InstructionDelivery = "files",
     instruction_root: str = "../instructions",
@@ -97,13 +121,19 @@ def samples(
     return [
         Sample(
             id=case.id,
-            input=prompt(profile, case=case, delivery=delivery, instruction_root=instruction_root),
-            files=files(profile, case=case),
+            input=prompt(
+                profile,
+                case=case,
+                instructions=instructions,
+                delivery=delivery,
+                instruction_root=instruction_root,
+            ),
+            files=files(profile, case=case, instructions=instructions),
             metadata={"case_id": case.id, "profile": profile.name, "dataset": dataset},
         )
         for case in cases
     ]
 
 
-def load_profile(name: str, *, spec: commands.Experiment | None = None) -> commands.ProfileSpec:
-    return {value.name: value for value in (spec or query.ExperimentSettings()).profiles}[name]
+def load_profile(name: str, *, spec: commands.Experiment) -> commands.ProfileSpec:
+    return {value.name: value for value in spec.profiles}[name]

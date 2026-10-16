@@ -65,9 +65,21 @@ def test_imported_case_keeps_grader_private() -> None:
 def test_imported_profile_public_inputs_match() -> None:
     case = import_records((record(),))[0]
     assert {
-        name: profiles.files(load_profile(name="genius"), case=case)[name]
-        for name in profiles.files(load_profile(name="baseline"), case=case)
-    } == profiles.files(load_profile(name="baseline"), case=case)
+        name: profiles.files(
+            load_profile(name="genius", spec=query.ExperimentSettings()),
+            case=case,
+            instructions=profiles.load_instructions(query.ExperimentSettings()),
+        )[name]
+        for name in profiles.files(
+            load_profile(name="baseline", spec=query.ExperimentSettings()),
+            case=case,
+            instructions=profiles.load_instructions(query.ExperimentSettings()),
+        )
+    } == profiles.files(
+        load_profile(name="baseline", spec=query.ExperimentSettings()),
+        case=case,
+        instructions=profiles.load_instructions(query.ExperimentSettings()),
+    )
 
 
 @pytest.mark.parametrize(
@@ -91,7 +103,7 @@ def test_dataset_selector_grades_one_trusted_record() -> None:
     raw = record()
     case = import_records((raw,))[0]
     compiled = catalog.compile_records(sources=catalog.sources("humanevalplus"), records=(raw,))
-    with patch("evals.python.catalog._selected", return_value=compiled):
+    with patch("evals.python.catalog.load_dataset", return_value=compiled):
         assert catalog_case(case.id, selection="humanevalplus") == case
         assert load_cases(selection="humanevalplus") == (case,)
         assert GradeCase(
@@ -102,9 +114,10 @@ def test_dataset_selector_grades_one_trusted_record() -> None:
             selection="humanevalplus",
         ) == {"correctness": True, "scope": True}
         samples = profiles.samples(
-            load_profile(name="baseline"),
+            load_profile(name="baseline", spec=query.ExperimentSettings()),
             cases=query.Cases(),
             dataset="humanevalplus",
+            instructions=profiles.load_instructions(query.ExperimentSettings()),
         )
     assert samples[0].metadata == {
         "case_id": case.id,
@@ -206,10 +219,10 @@ def test_case_hash_tracks_private_records_without_changing_public_cases() -> Non
     changed = catalog.compile_records(
         sources=original.sources, records=(record(plus_input=[[123]]),)
     )
-    with patch.object(catalog, "_selected", return_value=original):
+    with patch.object(catalog, "load_dataset", return_value=original):
         before = query.Provenance(selection="humanevalplus").cases_hash
         public = query.Cases(selection="humanevalplus")
-    with patch.object(catalog, "_selected", return_value=changed):
+    with patch.object(catalog, "load_dataset", return_value=changed):
         assert query.Cases(selection="humanevalplus") == public
         assert query.Provenance(selection="humanevalplus").cases_hash != before
 

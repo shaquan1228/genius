@@ -1,5 +1,6 @@
 """Prepare explicit evaluation requests and execute them with Inspect."""
 
+from functools import partial
 from typing import Any, override
 
 from inspect_ai import Task, eval_async
@@ -50,49 +51,41 @@ def selected_samples(task: Task, *, request: commands.EvaluationSettings) -> lis
 def evaluation_tasks(
     spec: commands.Experiment, *, request: commands.EvaluationSettings
 ) -> list[Task]:
-    if request.deliveries:
-        return diagnostic_tasks(spec, request=request)
-    return [
-        make_task(
-            spec, request=request, profile=profile.name, delivery=request.instruction_delivery
-        )
-        for profile in spec.profiles
-    ]
-
-
-def make_task(
-    spec: commands.Experiment,
-    *,
-    request: commands.EvaluationSettings,
-    profile: str,
-    delivery: commands.InstructionDelivery,
-    diagnostic_epoch: int | None = None,
-) -> Task:
-    return task_adapter.build_task(
-        profile=profile_adapter.load_profile(profile, spec=spec),
+    catalog = query.LoadDataset(selection=request.dataset)
+    instructions = profile_adapter.load_instructions(spec)
+    provenance = query.Provenance(selection=catalog)
+    build = partial(
+        task_adapter.build_task,
         spec=spec,
+        catalog=catalog,
+        instructions=instructions,
+        provenance=provenance,
         agent=request.agent,
         version=request.version,
         dataset=request.dataset,
         sandbox=request.sandbox,
-        instruction_delivery=delivery,
         instruction_root=request.instruction_root,
-        task_name=f"{profile}-{delivery}-r{diagnostic_epoch}" if diagnostic_epoch else None,
-        diagnostic_epoch=diagnostic_epoch,
     )
+    if request.deliveries:
+        return diagnostic_tasks(spec, request=request, build=build)
+    return [
+        build(profile=profile, instruction_delivery=request.instruction_delivery)
+        for profile in spec.profiles
+    ]
 
 
 def diagnostic_tasks(
-    spec: commands.Experiment, *, request: commands.EvaluationSettings
+    spec: commands.Experiment, *, request: commands.EvaluationSettings, build: partial[Task]
 ) -> list[Task]:
     modes = request.deliveries or ()
     single = spec.model_copy(update={"epochs": 1})
+    profile = profile_adapter.load_profile("genius", spec=spec)
     return [
-        make_task(
-            single,
-            request=request,
-            profile="genius",
-            delivery=mode,
+        build(
+            profile=profile,
+            spec=single,
+            instruction_delivery=mode,
+            task_name=f"genius-{mode}-r{epoch}",
             diagnostic_epoch=epoch,
         )
         for epoch in range(1, spec.epochs + 1)

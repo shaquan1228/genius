@@ -357,6 +357,21 @@ sample metadata or the agent workspace. Reference validation stages reference
 edits in a separate temporary candidate environment; scripted test agents also
 use them for offline checks.
 
+Inspect prepares one `query.LoadDataset` snapshot, provenance, and instruction byte
+snapshot before constructing an evaluation's tasks. Profile selection, prompts,
+sample files, and instruction hashes consume those supplied values. Instruction
+mounts use data URIs from the snapshot, so later source edits cannot change the
+mounted content. Baseline mounts no instructions and records the same Genius
+instruction hash as the comparison tasks. Standalone `baseline` and `genius`
+task entry points each prepare their own inputs.
+
+The scorer binds the prepared dataset on the host. Only its public Inspect
+registration is copied to the callback; private datasets never become decorated
+factory arguments, which Inspect serializes into native logs. The registered
+scorer remains available for named-dataset rescoring using the public dataset
+selection in sample metadata. Reconstructing an externally authored in-memory
+dataset requires supplying that dataset again.
+
 `bin/enforce` is the shared compiler runner. It compiles temporary copies and cleans
 up after success or failure, leaving no compiler artifacts in the measured
 worktree. Evaluation tasks receive it as `check.sh`, so a generated workspace can
@@ -409,6 +424,52 @@ Neither is included in Python coverage or the Python CRAP calculation.
 Strict mypy checks the Python modules without type-ignore exceptions; `ocamlc`
 type-checks fixture modules and assertions on every execution.
 
+
+## Effectful Complexity
+
+Effectful Complexity (EC) is a project heuristic used alongside CRAP:
+
+```text
+EC(scope) = sum(CC(function) * effectful(function))
+```
+
+`CC` is the pinned Radon cyclomatic complexity. `effectful` is one when a
+function directly or transitively executes I/O, reads ambient mutable state, or
+mutates externally visible state; otherwise it is zero. Review the executed
+call paths, including SDK registration hooks. Deferred callback bodies are
+classified separately from their factories. Unknown callees remain effectful
+until their behavior is checked.
+
+Measure the same responsibility scope before and after a change, including new
+or relocated helpers. Use the raw sum, not an average or a fraction that can be
+improved by adding pure wrappers. Moving a read into another function retains
+the caller's effect classification and adds the wrapper's complexity.
+
+Pure matching, comprehensions, local bindings, and deterministic validation do
+not count as effects. Comprehensions that read files still do. EC does not
+measure readability, local accumulation, or runtime effect frequency. Reject
+score-only extraction, introduce no mutable accumulators or recursion in
+composition, and verify that shared inputs are acquired once per evaluation.
+Explicit matching remains appropriate where alternatives select execution.
+The existing recursive diagnostic-value conversion is outside this refactor.
+
+The preparation refactor's audited slice compares against `bff5602`:
+
+| Responsibility | Before EC | After EC |
+| --- | ---: | ---: |
+| `inspect/profiles.py` composition and instruction acquisition | 22 | 5 |
+| `inspect/tasks.py` task construction and entry points | 7 | 7 |
+| `inspect/evaluation.py` task expansion and execution | 15 | 13 |
+| `inspect/scoring.py` runtime scoring and SDK registration | 3 | 5 |
+| `catalog.py` dataset resolution | 2 | 2 |
+| `query.py` public dataset loader | 0 | 1 |
+| `commands.py` optional-check verification dispatch | 2 | 4 |
+| Total | 51 | 37 |
+
+The verification dispatch retains exhaustive `match`, despite its higher raw
+complexity. Keep a reviewed function classification with local measurement
+receipts in `results/effectful-complexity.json`; this is a scoped comparison,
+not a whole-repository purity score or an automated purity proof.
 
 ## HumanEval+ coding benchmark
 
@@ -467,7 +528,8 @@ Integrations call typed public queries and commands directly:
 from evals.python import commands
 from evals.python import query
 
-cases = query.Cases(selection="humanevalplus")
+dataset = query.LoadDataset(selection="humanevalplus")
+cases = query.Cases(selection=dataset)
 settings = query.ExperimentSettings(epochs=2, token_limit=50_000)
 
 # At the Inspect scoring interface, after capturing public observations:
@@ -484,7 +546,7 @@ exit_code = await commands.Evaluate(model="openai/your-model", dataset="humaneva
 ```
 
 Each callable validates its arguments and returns its declared result directly.
-`Cases`, `ExperimentSettings`, `CompileDataset`, `DescribeDataset`, `Provenance`,
+`LoadDataset`, `Cases`, `ExperimentSettings`, `CompileDataset`, `DescribeDataset`, `Provenance`,
 `GradeCase`, and `ExecutionRuntime` are queries.
 `VerifyCase`, `AssessCase`, `ValidateReference`, and `Evaluate` are asynchronous
 commands. `DescribeDataset` reads metadata without downloading/importing all cases;

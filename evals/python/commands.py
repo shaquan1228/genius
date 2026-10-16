@@ -1,6 +1,6 @@
 """Typed public commands perform effects and return canonical results directly."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, assert_never
 
 from pydantic import AfterValidator, BaseModel, Field, InstanceOf, validate_call
 
@@ -11,6 +11,7 @@ from evals.python._kernel import (
     FROZEN,
     Case,
     DatasetInfo,
+    ExecutableChecks,
     Experiment,
     ProfileSpec,
     Verification,
@@ -89,9 +90,13 @@ async def VerifyCase(
     runtime: InstanceOf[Runtime],
 ) -> VerificationResult:
     checks = catalog.verifier(case_id, selection=selection)
-    if checks is None:
-        return VerificationResult(verification=Verification(status="unchecked"))
-    return await _verification.verify(checks, agent=agent, runtime=runtime)
+    match checks:
+        case None:
+            return VerificationResult(verification=Verification(status="unchecked"))
+        case ExecutableChecks():
+            return await _verification.verify(checks, agent=agent, runtime=runtime)
+        case _ as unreachable:
+            assert_never(unreachable)
 
 
 @validate_call(config=FROZEN)

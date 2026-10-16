@@ -151,6 +151,9 @@ def test_explicit_agent_version_is_logged() -> None:
         spec=query.ExperimentSettings(),
         agent="codex",
         version="0.137.0",
+        catalog=query.LoadDataset(selection="smoke"),
+        instructions=profiles.load_instructions(query.ExperimentSettings()),
+        provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
     )
     spec = experiment()
     assert (task.epochs, task.message_limit, task.token_limit, task.time_limit) == (
@@ -173,7 +176,12 @@ def test_custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
     request = commands.EvaluationSettings(model="mockllm/model", agent="other")
     spec = query.ExperimentSettings()
     task = build_task(
-        profile=profiles.load_profile("baseline", spec=spec), spec=spec, agent=request.agent
+        profile=profiles.load_profile("baseline", spec=spec),
+        spec=spec,
+        agent=request.agent,
+        catalog=query.LoadDataset(selection="smoke"),
+        instructions=profiles.load_instructions(spec),
+        provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
     )
     assert task.metadata is not None
     assert (task.metadata["agent"], task.metadata["agent_version"]) == ("other", "custom-version")

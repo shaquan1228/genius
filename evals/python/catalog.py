@@ -94,27 +94,27 @@ def _catalog(sources: Sources) -> Catalog:
     return catalog
 
 
-def _selected(selection: Selection) -> Catalog:
+def load_dataset(selection: Selection) -> Catalog:
     return selection if isinstance(selection, Catalog) else _catalog(sources(selection))
 
 
 def load_cases(*, selection: Selection = "smoke") -> tuple[Case, ...]:
-    return tuple(_selected(selection).cases.values())
+    return tuple(load_dataset(selection).cases.values())
 
 
 def case(case_id: str, *, selection: Selection = "smoke") -> Case:
-    return _selected(selection).cases[case_id]
+    return load_dataset(selection).cases[case_id]
 
 
 def verifier(case_id: str, *, selection: Selection = "smoke") -> ExecutableChecks | None:
-    catalog = _selected(selection)
+    catalog = load_dataset(selection)
     return transport.verifier(
         sources=catalog.sources, case_id=case_id, record=catalog.records.get(case_id)
     )
 
 
 def reference(case_id: str, *, selection: Selection = "smoke") -> Reference:
-    catalog = _selected(selection)
+    catalog = load_dataset(selection)
     return transport.reference(
         sources=catalog.sources, case_id=case_id, record=catalog.records.get(case_id)
     )
@@ -128,7 +128,7 @@ def grade(
     verification: Verification,
     selection: Selection = "smoke",
 ) -> Mapping[str, bool]:
-    catalog = _selected(selection)
+    catalog = load_dataset(selection)
     return transport.grade(
         sources=catalog.sources,
         case_id=case_id,
@@ -164,7 +164,7 @@ def experiment(
 
 
 def cases_hash(dataset: Selection) -> str:
-    catalog = _selected(dataset)
+    catalog = load_dataset(dataset)
     # Includes trusted adapter, verifier code, and private dataset records, not just public inputs.
     material = Sources(
         modules=catalog.sources.modules,

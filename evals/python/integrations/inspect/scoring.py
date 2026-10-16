@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from functools import partial, wraps
 from typing import cast
 
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer, stderr
@@ -8,7 +9,7 @@ from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import commands
+from evals.python import commands, query
 
 
 def score_values(scores: Mapping[str, bool]) -> dict[str, str]:
@@ -29,7 +30,9 @@ def diagnostic(value: commands.Diagnostic) -> JsonValue:
     return value
 
 
-async def score_sample(state: TaskState, target: Target) -> Score:  # noqa: PLR0917 - Inspect calls scorers positionally
+async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
+    state: TaskState, target: Target, *, dataset: query.Dataset | None = None
+) -> Score:
     failure = state.metadata.get("agent_failure")
     completion = state.output.completion
     changed = tuple(sorted(await workspace_adapter.changed_files(state)))
@@ -38,7 +41,9 @@ async def score_sample(state: TaskState, target: Target) -> Score:  # noqa: PLR0
         case_id=str(state.metadata["case_id"]),
         response=completion,
         changed_files=changed,
-        selection=cast(str, state.metadata.get("dataset", "smoke")),
+        selection=dataset
+        if dataset is not None
+        else cast(str, state.metadata.get("dataset", "smoke")),
         agent=environments_adapter.environment(current),
         runtime=environments_adapter.runtime(current),
     )
@@ -60,3 +65,8 @@ async def score_sample(state: TaskState, target: Target) -> Score:  # noqa: PLR0
 @scorer(metrics={name: [accuracy(), stderr()] for name in ("correctness", "scope")})
 def evaluation() -> Scorer:
     return score_sample
+
+
+def bound_evaluation(*, dataset: query.Dataset) -> Scorer:
+    # Copy only the public registration; private inputs stay in the bound callback.
+    return wraps(evaluation())(partial(score_sample, dataset=dataset))
