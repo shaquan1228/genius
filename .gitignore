@@ -20,3 +20,7 @@ dashboard/dashboard-go
 .env
 .env.*
 .claude/settings.local.json
+
+# Local workspaces and evaluation plans
+.worktrees/
+docs/plans/

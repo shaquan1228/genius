@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from hashlib import sha256
 
 from inspect_ai import Task, task
 from inspect_ai.model import GenerateConfig
@@ -53,6 +54,9 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
             "benchmark": provenance.info.model_dump() if provenance.info else {},
             "agent": agent,
             "agent_version": agent_version,
+            "agent_system_prompt_sha256": sha256(
+                agent_adapter.AGENT_REGISTRY[agent].system_prompt.encode()
+            ).hexdigest(),
             "instruction_delivery": instruction_delivery,
             "instructions_sha256": profile_adapter.content_hash(
                 files=profile_adapter.instruction_files(

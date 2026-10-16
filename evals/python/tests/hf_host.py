@@ -66,7 +66,7 @@ def inspect_evaluation_uses_request_without_reading_job_environment(
         async def execute() -> int:
             return assert_type(await commands.Evaluate(**request.model_dump()), int)
 
-        assert asyncio.run(execute()) == 0
+        assert asyncio.run(execute()) == 1
         assert evaluate.call_args.args[0] is not None
     model.assert_called_once_with("openai/explicit")
     tasks = evaluate.call_args.args[0]
@@ -97,7 +97,7 @@ def hf_job_runs_both_profiles(provider: str, *, monkeypatch: pytest.MonkeyPatch)
     with patch(
         "evals.python.integrations.inspect.evaluation.eval_async", return_value=logs
     ) as inspect_eval:
-        assert run() == 0
+        assert run() == 1
     assert (
         [task.name for task in inspect_eval.call_args.args[0]],
         inspect_eval.call_args.kwargs["sandbox"],
@@ -108,6 +108,12 @@ def hf_job_runs_both_profiles(provider: str, *, monkeypatch: pytest.MonkeyPatch)
         isinstance(model.api, HFInferenceProvidersAPI),
         getattr(model.api, "strict_tools", False),
     ) == (provider == "hf-inference-providers", False)
+    _hf_nonstreaming(model.api)
+
+
+def _hf_nonstreaming(api: object) -> None:
+    if isinstance(api, HFInferenceProvidersAPI):
+        assert api.stream is False
 
 
 @pytest.mark.parametrize("extra_body", [None, {"prompt_cache_key": "codex-session", "top_k": 5}])
@@ -151,16 +157,25 @@ def hf_job_counts_crashed_samples(
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     monkeypatch.setenv("OPENAI_API_KEY", "test")
     scored = [
-        SimpleNamespace(scores={"evaluation": Score(value={}, metadata={"agent_failure": failure})})
-        for failure in failures
+        SimpleNamespace(
+            id=str(index),
+            epoch=1,
+            error=None,
+            limit=None,
+            scores={"evaluation": Score(value={}, metadata={"agent_failure": failure})},
+        )
+        for index, failure in enumerate(failures)
     ]
-    samples = [*scored, SimpleNamespace(scores=None)]  # A sample error leaves no score.
+    samples = [
+        *scored,
+        SimpleNamespace(id="unscored", epoch=1, error=None, limit=None, scores=None),
+    ]  # A sample error leaves no score.
     log = SimpleNamespace(
         eval=SimpleNamespace(task="baseline"), status="success", location="log", samples=samples
     )
     with patch("evals.python.integrations.inspect.evaluation.eval_async", return_value=[log]):
-        assert run() == 0
-    assert capsys.readouterr().out.splitlines() == ["baseline: success (log)", summary]
+        assert run() == 1
+    assert summary in capsys.readouterr().out.splitlines()
 
 
 @pytest.mark.parametrize("job_exit", [0, 7])
@@ -195,7 +210,8 @@ def host_script_launches_job_without_exposing_key(
         "hf://datasets/example/genius-evals:/source:ro" in commands,
         "hf://buckets/example/genius-eval-results:/results:rw" in commands,
         "sh /source/evals/bin/hf_bootstrap.sh" in commands,
-    ) == (True, True, True)
+        "--repo-type dataset --delete * --commit-message" in commands,
+    ) == (True, True, True, True)
     assert (
         "private-test-key" in commands,
         "--env EVAL_VERSION=test-pinned-version" in commands,
@@ -292,7 +308,7 @@ def hf_epoch_override_is_shared_with_tasks(monkeypatch: pytest.MonkeyPatch) -> N
             "evals.python.integrations.inspect.evaluation.eval_async", return_value=[]
         ) as inspect_eval,
     ):
-        assert run() == 0
+        assert run() == 1
     tasks = inspect_eval.call_args.args[0]
     assert ([task.epochs for task in tasks], inspect_eval.call_args.kwargs["epochs"]) == (
         [3, 3],
@@ -374,7 +390,7 @@ def counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort(
             "evals.python.integrations.inspect.evaluation.eval_async", return_value=[]
         ) as evaluate,
     ):
-        assert run() == 0
+        assert run() == 1
     tasks = evaluate.call_args.args[0]
     assert [
         (t.name, t.epochs, t.token_limit, t.time_limit, t.metadata["diagnostic_epoch"])
@@ -392,3 +408,18 @@ def counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort(
         "max_tasks": 1,
         "max_samples": 1,
     }
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "17", "invalid", "999999999999999999999999999999"])
+def host_rejects_invalid_concurrency(value: str, *, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HF_NAMESPACE", "example")
+    monkeypatch.setenv("EVAL_MODEL", "mockllm/model")
+    monkeypatch.setenv("EVAL_MAX_SAMPLES", value)
+    result = subprocess.run(
+        ["sh", "evals/bin/hf_host.sh"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert b"EVAL_MAX_SAMPLES must be an integer from 1 to 16" in result.stderr

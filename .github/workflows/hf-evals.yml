@@ -21,6 +21,10 @@ on:
         description: Hugging Face Job timeout
         type: string
         default: 4h
+      max_samples:
+        description: Concurrent samples (1 to 16; profiles remain serial)
+        default: "1"
+        type: string
       epochs:
         description: Epochs per problem and profile (1 is one independent attempt)
         required: true
@@ -65,6 +69,7 @@ jobs:
           EVAL_DATASET: ${{ inputs.dataset }}
           EVAL_LIMIT: ${{ inputs.limit }}
           EVAL_JOB_TIMEOUT: ${{ inputs.job_timeout }}
+          EVAL_MAX_SAMPLES: ${{ inputs.max_samples }}
           EVAL_EPOCHS: ${{ inputs.epochs }}
           EVAL_AGENT: ${{ inputs.agent }}
           EVAL_VERSION: ${{ inputs.version }}

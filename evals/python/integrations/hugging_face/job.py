@@ -23,6 +23,7 @@ def configuration(environment: Mapping[str, str]) -> commands.EvaluationSettings
     return commands.EvaluationSettings.model_validate(
         {
             "model": environment["EVAL_MODEL"],
+            "run_id": environment.get("EVAL_RUN_ID") or None,
             "agent": environment.get("EVAL_AGENT", "claude"),
             "version": environment.get("EVAL_VERSION", ""),
             "dataset": environment.get("EVAL_DATASET", "smoke"),
@@ -30,6 +31,7 @@ def configuration(environment: Mapping[str, str]) -> commands.EvaluationSettings
             "instruction_root": "/eval/instructions",
             "epochs": optional_int(environment.get("EVAL_EPOCHS")),
             "token_limit": optional_int(environment.get("EVAL_TOKEN_LIMIT")),
+            "max_samples": int(environment.get("EVAL_MAX_SAMPLES") or "1"),
             "limit": optional_int(environment.get("EVAL_LIMIT")),
             "sample_ids": optional_json(environment.get("EVAL_SAMPLE_IDS")),
             "instruction_delivery": environment.get("EVAL_INSTRUCTION_DELIVERY", "files"),

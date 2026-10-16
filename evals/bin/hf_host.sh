@@ -4,6 +4,12 @@ set -eu
 : "${HF_NAMESPACE:?Set HF_NAMESPACE to your Hugging Face username or organization}"
 : "${EVAL_MODEL:?Set EVAL_MODEL to an exact Inspect provider/model ID}"
 EVAL_EPOCHS="${EVAL_EPOCHS:-1}"
+EVAL_MAX_SAMPLES="${EVAL_MAX_SAMPLES:-1}"
+EVAL_RUN_ID="${EVAL_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+case "$EVAL_MAX_SAMPLES" in
+  [1-9]|1[0-6]) ;;
+  *) echo "EVAL_MAX_SAMPLES must be an integer from 1 to 16" >&2; exit 2 ;;
+esac
 
 case "$EVAL_MODEL" in
   hf-inference-providers/*) provider_key=; default_agent=codex ;;
@@ -29,8 +35,7 @@ git -c safe.directory="$(pwd)" archive HEAD README.md docs skills evals | tar -x
 hf repos create "$source_repo" --repo-type dataset --private --exist-ok
 hf buckets create "$results_bucket" --private --exist-ok
 hf upload "$source_repo" "$snapshot_dir" . --repo-type dataset \
-  --delete 'evals/.coverage' --delete 'evals/.pytest_cache/**' \
-  --delete 'evals/.ruff_cache/**' --delete 'evals/genius_evals.egg-info/**' \
+  --delete '*' \
   --commit-message 'Update Genius evaluation source'
 
 set -- --secrets HF_TOKEN
@@ -44,6 +49,10 @@ hf jobs run --name genius-evals --namespace "$HF_NAMESPACE" --timeout "${EVAL_JO
   "$@" \
   --env "EVAL_AGENT=$EVAL_AGENT" --env "EVAL_MODEL=$EVAL_MODEL" \
   --env "EVAL_VERSION=${EVAL_VERSION:-}" \
+  --env "HF_NAMESPACE=$HF_NAMESPACE" \
+  --env "EVAL_SANDBOX_IMAGE=${EVAL_SANDBOX_IMAGE:-}" \
+  --env "EVAL_RUN_ID=${EVAL_RUN_ID:-}" \
+  --env "EVAL_MAX_SAMPLES=$EVAL_MAX_SAMPLES" \
   --env "EVAL_EPOCHS=$EVAL_EPOCHS" \
   --env "EVAL_DATASET=${EVAL_DATASET:-smoke}" --env "EVAL_LIMIT=${EVAL_LIMIT:-}" \
   --env "EVAL_SAMPLE_IDS=${EVAL_SAMPLE_IDS:-}" --env "EVAL_TOKEN_LIMIT=${EVAL_TOKEN_LIMIT:-}" \

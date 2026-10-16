@@ -556,3 +556,15 @@ it before the proxy dispatches its requested tools. Generated patches are not
 proof of executed edits. Report cutoffs separately from agent crashes and errors.
 
 Keep optimization receipts and native run logs local and uncommitted.
+
+### Observable parallel runs
+
+Set `EVAL_MAX_SAMPLES=2` to run two samples concurrently within a profile (default `1`, maximum `16`). Profiles remain serial; instruction delivery diagnostics always use one sample at a time. The public `Evaluate(max_samples=2, ...)` entry point uses the same validation.
+
+The parent prints flushed JSON events for run settings, exact expected task/case/epoch tuples, sample initialization/start/end, a heartbeat every 30 seconds, and a final completeness report. Heartbeats include active sample identities, completed count and elapsed time, including sandbox provisioning. An interrupted sample gets an `aborted` terminal event. Native Inspect logs retain scoring evidence; telemetry contains identifiers and counts, without prompts, answers or private grading material. Missing or duplicate records, sample errors, failed tasks, or incomplete lifecycle telemetry fail the run even if its process otherwise exits cleanly. Crashes and token/time cutoffs are counted separately in the final report.
+
+Set `EVAL_SANDBOX_IMAGE` to a prepared image to skip repeated system package installation. See [sandbox/README.md](sandbox/README.md) for the image definition, exact verifier-runtime qualification, and image revision limitations. Runtime-owned environments keep one connected HF client through command execution and file transfers, then settle pending operations before cleanup. Child Jobs carry the parent `EVAL_RUN_ID` in their `genius-run` label; VM lifecycle events identify each allocated and cleaned VM.
+
+HF model responses use non-streaming requests. A hosted canary observed empty streamed completions without a finish reason or usage; replaying an affected request without streaming returned a valid tool call and usage. Parent heartbeat and lifecycle events provide progress while a model request is pending.
+
+The Codex wrapper appends common tool compatibility guidance through Inspect SWE's supported `system_prompt` option (written to the agent's `AGENTS.md`). It tells the agent to use registered tools and shell command strings when `apply_patch` is unavailable. Both profiles receive identical guidance; native task metadata records its `agent_system_prompt_sha256`. This changes the wrapper configuration and should be treated as a distinct run configuration when comparing results.

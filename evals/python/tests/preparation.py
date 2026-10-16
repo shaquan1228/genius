@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 from inspect_ai import Task
-from inspect_ai.log import read_eval_log
+from inspect_ai.log import EvalLog, read_eval_log
 from inspect_ai.scorer import CORRECT, INCORRECT
 from inspect_ai.scorer._scorer import scorer_create
 from inspect_ai.solver import generate
@@ -150,3 +150,62 @@ def native_logs_keep_private_snapshots_out_and_score_each_dataset(
 
 def registered_scorer_remains_reconstructible_after_binding(private_tasks: list[Task]) -> None:
     assert scorer_create("evaluation") is scoring.score_sample
+
+
+def native_profiles_share_fingerprinted_codex_guidance(
+    *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dataclasses import replace  # noqa: PLC0415
+    from hashlib import sha256  # noqa: PLC0415
+    from unittest.mock import Mock  # noqa: PLC0415
+
+    from inspect_ai.agent import Agent, AgentState, agent  # noqa: PLC0415
+    from inspect_ai.model import ModelOutput  # noqa: PLC0415
+
+    from evals.python.integrations.inspect.agents import AGENT_REGISTRY  # noqa: PLC0415
+
+    seen: list[str] = []
+
+    @agent
+    def guided(*, system_prompt: str) -> Agent:
+        async def execute(state: AgentState) -> AgentState:
+            seen.append(system_prompt)
+            state.output = ModelOutput.from_content(
+                "mockllm/model", '{"choice":"B","safe":true,"reason":"clear"}'
+            )
+            return state
+
+        return execute
+
+    guidance = AGENT_REGISTRY["codex"].system_prompt
+    factory = Mock(side_effect=lambda **kwargs: guided(system_prompt=kwargs["system_prompt"]))
+    monkeypatch.setitem(
+        AGENT_REGISTRY, "codex", replace(AGENT_REGISTRY["codex"], factory=lambda: factory)
+    )
+    spec = query.ExperimentSettings(epochs=1)
+    dataset = query.CompileDataset(cases=(_declaration(code=False),))
+    instructions = profiles.load_instructions(spec)
+    tasks = [
+        build_task(
+            profile=profile,
+            spec=spec,
+            agent="codex",
+            catalog=dataset,
+            instructions=instructions,
+            provenance=query.Provenance(selection=dataset),
+        )
+        for profile in spec.profiles
+    ]
+    logs = _offline_run(tasks, mode=None, directory=tmp_path)
+    digest = sha256(guidance.encode()).hexdigest()
+    assert seen == [guidance, guidance]
+    assert [call.kwargs["system_prompt"] for call in factory.call_args_list] == seen
+    _assert_guidance_logs(logs, digest=digest)
+
+
+def _assert_guidance_logs(logs: list[EvalLog], *, digest: str) -> None:
+    for log in logs:
+        native = read_eval_log(str(log.location))
+        assert native.eval.metadata is not None
+        assert native.eval.metadata["agent_system_prompt_sha256"] == digest
+        assert native.status == "success"
