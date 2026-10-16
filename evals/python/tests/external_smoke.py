@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from evals.python import commands, query
+from evals.python.datasets import smoke as declarations
 from evals.python.integrations.smoke import __main__ as cli
-from evals.python.integrations.smoke import declarations
 
 
 def python_smoke_compiles_to_public_cases() -> None:

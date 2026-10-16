@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from evals.python.transport import DATASET_INTERFACE, EXPORTER, LIBRARY, OCAML_ROOT, SUITE
+from evals.python.transport import EXPORTER, LIBRARY, OCAML_ROOT
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
 
@@ -61,6 +61,13 @@ def transport_has_no_dataset_or_provider_dispatch() -> None:
     )
 
 
+def dataset_ingestion_has_no_ocaml_adapters_or_global_drivers() -> None:
+    assert not (OCAML_ROOT / "datasets").exists()
+    assert not (OCAML_ROOT / "dataset.mli").exists()
+    assert "Dataset." not in EXPORTER.read_text()
+    assert not re.search(r"humaneval|evalplus|DRIVERS", (PYTHON_ROOT / "catalog.py").read_text())
+
+
 def inspect_integration_does_not_select_hugging_face() -> None:
     imports = {
         name
@@ -77,11 +84,9 @@ def transport_internals_stay_private() -> None:
 
 
 def domain_modules_are_codec_free() -> None:
-    assert sorted(OCAML_ROOT.glob("*.ml*")) == sorted(
-        (*LIBRARY, SUITE, DATASET_INTERFACE, EXPORTER)
-    )
+    assert sorted(OCAML_ROOT.glob("*.ml*")) == sorted((*LIBRARY, EXPORTER))
     boundary = {"codec.ml", "declaration.ml", "declaration.mli"}
-    domain = (path for path in (*LIBRARY, SUITE) if path.name not in boundary)
+    domain = (path for path in LIBRARY if path.name not in boundary)
     assert not any(re.search(r"Jsonm|Codec|print_", path.read_text()) for path in domain)
 
 

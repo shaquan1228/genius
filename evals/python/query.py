@@ -15,6 +15,7 @@ from evals.python._kernel import (
     CodeCriterion,
     DatasetInfo,
     Experiment,
+    Files,
     Inline,
     Instruction,
     PlainCompletion,
@@ -72,8 +73,15 @@ class DatasetProvenance:
 
 
 @validate_call(config=FROZEN)
-def CompileDataset(*, cases: tuple[CaseDefinition, ...]) -> Dataset:
-    return catalog.compile_declarations(cases)
+def CompileDataset(
+    *,
+    cases: tuple[CaseDefinition, ...],
+    info: DatasetInfo | None = None,
+    resources: Files | None = None,
+) -> Dataset:
+    return catalog.compile_declarations(
+        cases, info=info, resources={} if resources is None else resources
+    )
 
 
 @validate_call(config=FROZEN)

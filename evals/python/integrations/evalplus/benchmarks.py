@@ -33,8 +33,8 @@ def benchmark_info() -> BenchmarkInfo:
     )
 
 
-async def validate_case(case: commands.Case) -> dict[str, object]:
-    result = await commands.ValidateReference(case_id=case.id, selection="humanevalplus")
+async def validate_case(case: commands.Case, *, dataset: query.Dataset) -> dict[str, object]:
+    result = await commands.ValidateReference(case_id=case.id, selection=dataset)
     return {
         "case_id": case.id,
         **result.verification.model_dump(),
@@ -82,9 +82,10 @@ def validate(arguments: Options) -> int:
     if arguments.limit is not None and arguments.limit < 1:
         raise ValueError("--limit must be positive")
     configure_memory(arguments=arguments)
+    dataset = query.LoadDataset(selection="humanevalplus")
     results = [
-        asyncio.run(validate_case(case=case))
-        for case in query.Cases(selection="humanevalplus")[: arguments.limit]
+        asyncio.run(validate_case(case=case, dataset=dataset))
+        for case in query.Cases(selection=dataset)[: arguments.limit]
     ]
     print(json.dumps({"provenance": benchmark_info().model_dump(), "results": results}, indent=2))
     return int(any(result["status"] != "passed" for result in results))

@@ -1,6 +1,5 @@
 """Run scripted agents through Inspect for integration tests."""
 
-import json
 import shutil
 from pathlib import Path
 
@@ -8,8 +7,9 @@ from inspect_ai import Task, eval
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import ModelCost, ModelInfo, get_model, set_model_info
 
-from evals.python import catalog, transport
+from evals.python import catalog, query
 from evals.python._kernel import Case, ExecutableChecks, Reference
+from evals.python.datasets import humanevalplus, smoke
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.scenarios import Mode
 from evals.python.tests.scenarios import echo_model as _echo_model
@@ -65,47 +65,43 @@ def results(log: EvalLog) -> list[tuple[str, object, object]]:
     return sorted(sample_result(sample) for sample in log.samples or [])
 
 
-def native_timeout_case(*, id_expression: str, initial: str, requested: str) -> str:
-    return f"""let initial = ({initial}) and requested = ({requested}) in
-  let config value = Printf.sprintf "timeout_seconds = %d\\n" value in
-  Case.make ~id:({id_expression})
-    ~fixture:(Fixture.of_files ["config.py", config initial])
-    ~instruction:{{ Ast.skill = "reasoning"; prompt = "Update config.py" }}
-    ~criterion:(Ast.Code (Verifier.make ~inputs:["config.py"]
-      ~files:["verifier.py", Ast.Resource "verifier.py"] ~tools:[]
-      ~command:["python3"; "-I"; "verifier.py"; "config.py"]
-      ~stdin:(Printf.sprintf
-        "import runpy\\nassert runpy.run_path('config.py')['timeout_seconds'] == %d\\n" requested)
-      ~timeout_seconds:5))
-    ~allowed_files:["config.py"]
-    ~reference:(Reference.edits (Fixture.of_files ["config.py", config requested]))"""
+def timeout_case(*, case_id: str, initial: int, requested: int) -> query.CaseDefinition:
+    return smoke.timeout(initial=initial, requested=requested).model_copy(update={"id": case_id})
 
 
-def native_choice_case(*, case_id: str, a: int, b: int) -> str:
+def choice_case(*, case_id: str, a: int, b: int) -> query.CaseDefinition:
     choice = "A" if a < b else "B"
-    return f'''Case.make ~id:{json.dumps(case_id)} ~fixture:Fixture.empty
-      ~instruction:{{ Ast.skill = "reasoning"; prompt = "Choose A or B with a reason" }}
-      ~criterion:(Criterion.answer
-        ~expected:(Response.of_fields ["choice", Ast.String "{choice}"])
-        ~text_rule:{{ Ast.field = "reason"; min_words = 1; max_words = 40 }} ())
-      ~allowed_files:[]
-      ~reference:{{ Ast.edits = Fixture.empty; completion = Ast.Structured
-        (Response.of_fields ["choice", Ast.String "{choice}";
-          "reason", Ast.String "The cost is lower."]) }}'''
+    return query.CaseDefinition(
+        id=case_id,
+        fixture={},
+        instruction=query.Instruction(skill="reasoning", prompt="Choose A or B with a reason"),
+        criterion=query.AnswerCriterion(
+            expected={"choice": choice},
+            text_rule=query.TextRule(field="reason", min_words=1, max_words=40),
+        ),
+        allowed_files=(),
+        reference=query.ReferenceDefinition(
+            edits={},
+            completion=query.StructuredCompletion(
+                fields={"choice": choice, "reason": "The cost is lower."}
+            ),
+        ),
+    )
 
 
-# Synthetic benchmark import never downloads datasets or calls a model.
+def import_dataset(records: tuple[str, ...]) -> query.Dataset:
+    return query.CompileDataset(cases=humanevalplus.declarations(records))
+
+
 def import_records(records: tuple[str, ...]) -> tuple[Case, ...]:
-    return transport.cases(sources=catalog.sources("humanevalplus"), records=records)
+    return query.Cases(selection=import_dataset(records))
 
 
 def imported_verifier(raw: str) -> ExecutableChecks | None:
-    case = import_records((raw,))[0]
-    return transport.verifier(sources=catalog.sources("humanevalplus"), case_id=case.id, record=raw)
+    dataset = import_dataset((raw,))
+    return catalog.verifier(next(iter(dataset.cases)), selection=dataset)
 
 
 def imported_reference(raw: str) -> Reference:
-    case = import_records((raw,))[0]
-    return transport.reference(
-        sources=catalog.sources("humanevalplus"), case_id=case.id, record=raw
-    )
+    dataset = import_dataset((raw,))
+    return catalog.reference(next(iter(dataset.cases)), selection=dataset)

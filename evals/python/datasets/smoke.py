@@ -1,19 +1,9 @@
 """Pure Python declarations for the default four-case smoke dataset."""
 
 from evals.python import query
+from evals.python.integrations.smoke import checks
 
-
-def checks(*, inputs: tuple[str, ...], program: str) -> query.CodeCriterion:
-    return query.CodeCriterion(
-        verifier=query.VerifierDefinition(
-            inputs=inputs,
-            files={"verifier.py": query.Resource(name="verifier.py")},
-            tools={},
-            command=("python3", "-I", "verifier.py", *inputs),
-            stdin=program,
-            timeout_seconds=30,
-        )
-    )
+info = None
 
 
 def receipt(*, term: str = "price") -> query.CaseDefinition:

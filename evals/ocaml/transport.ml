@@ -1,5 +1,3 @@
-(* Generic JSON process boundary. Dataset adapters own record interpretation;
-   the kernel owns validation, projections, defaults, and grading. *)
 let strings values = `List (List.map (fun value -> `String value) values)
 let files values = `Assoc (List.map (fun (path, text) -> (path, `String text)) values)
 let number value = `Float (float_of_int value)
@@ -17,7 +15,8 @@ let resource = function
   | Ast.Inline text -> text
   | Ast.Resource name ->
       if not (Verifier.valid_path name) then invalid_arg "Invalid verifier resource";
-      let channel = open_in_bin (Filename.concat (Filename.dirname Sys.executable_name) name) in
+      let root = Filename.concat (Filename.dirname Sys.executable_name) "resources" in
+      let channel = open_in_bin (Filename.concat root name) in
       Fun.protect
         ~finally:(fun () -> close_in channel)
         (fun () -> really_input_string channel (in_channel_length channel))
@@ -60,18 +59,6 @@ let reference case =
         Codec.encode (`Assoc (List.map field (Response.fields fields)))
   in
   `Assoc [ ("solution", files (Fixture.files reference.edits)); ("answer", `String answer) ]
-
-let describe = function
-  | None -> `Null
-  | Some (info : Ast.dataset_info) ->
-      `Assoc
-        [
-          ("source", `String info.source);
-          ("revision", `String info.revision);
-          ("sha256", `String info.sha256);
-          ("count", number info.count);
-          ("attributes", files info.attributes);
-        ]
 
 let experiment value =
   let fields = json_fields value in
@@ -128,8 +115,8 @@ let experiment value =
       ("cache", `Bool spec.cache);
     ]
 
-let imported raw = Case.validate (Dataset.import (json_string raw))
-let selected = function `Null -> Dataset.cases | raw -> [ imported raw ]
+let imported raw = Case.validate (Declaration.decode (json_string raw))
+let selected raw = [ imported raw ]
 
 let lookup value =
   let fields = exact_fields [ "case_id"; "record" ] value in
@@ -142,7 +129,7 @@ let lookup value =
 
 let cases = function
   | `List records ->
-      let cases = if records = [] then Dataset.cases else List.map imported records in
+      let cases = List.map imported records in
       let ids = List.map (fun (case : Ast.case) -> case.id) cases in
       if List.length ids <> List.length (List.sort_uniq compare ids) then
         invalid_arg "Duplicate case ID";
@@ -222,7 +209,6 @@ let () =
   let input () = Codec.decode (`Channel stdin) in
   let output =
     match Array.to_list Sys.argv with
-    | [ _; "--describe" ] -> envelope (describe Dataset.info)
     | [ _; "--cases" ] -> envelope (cases (input ()))
     | [ _; "--verifier" ] -> envelope (verifier (lookup (input ())))
     | [ _; "--reference" ] -> envelope (reference (lookup (input ())))

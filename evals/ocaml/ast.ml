@@ -94,12 +94,3 @@ type experiment = {
   time_limit : int;
   cache : bool;
 }
-
-(* Dataset provenance is independent of execution providers. *)
-type dataset_info = {
-  source : string;
-  revision : string;
-  sha256 : string;
-  count : int;
-  attributes : (string * string) list;
-}

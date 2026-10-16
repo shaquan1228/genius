@@ -2,11 +2,12 @@
 
 import json
 import subprocess
-from collections.abc import Iterator
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from evals.python import catalog, query
 from evals.python._kernel import ExecutableChecks, Verification
@@ -17,6 +18,8 @@ from evals.python.catalog import (
     cases_hash,
     load_cases,
 )
+from evals.python.datasets import humanevalplus
+from evals.python.integrations import evalplus
 from evals.python.integrations.evalplus.benchmarks import (
     benchmark_info,
 )
@@ -24,6 +27,7 @@ from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import load_profile
 from evals.python.integrations.inspect.tasks import baseline
 from evals.python.query import GradeCase
+from evals.python.tests.support import import_dataset as _import_dataset
 from evals.python.tests.support import (
     import_records as _import_records,
 )
@@ -33,7 +37,6 @@ from evals.python.tests.support import (
 from evals.python.tests.support import (
     imported_verifier as _imported_verifier,
 )
-from evals.python.transport import Sources
 
 
 def _record(**updates: object) -> str:
@@ -103,14 +106,14 @@ def imported_profile_public_inputs_match() -> None:
     ],
 )
 def malformed_import_rejected(records: tuple[str, ...]) -> None:
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises((subprocess.CalledProcessError, ValidationError)):
         _import_records(records)
 
 
 def dataset_selector_grades_one_trusted_record() -> None:
     raw = _record()
     case = _import_records((raw,))[0]
-    compiled = catalog.compile_records(sources=catalog.sources("humanevalplus"), records=(raw,))
+    compiled = _import_dataset((raw,))
     with patch("evals.python.catalog.load_dataset", return_value=compiled):
         assert catalog_case(case.id, selection="humanevalplus") == case
         assert load_cases(selection="humanevalplus") == (case,)
@@ -143,14 +146,9 @@ def pinned_manifest() -> None:
 
 
 @pytest.fixture
-def synthetic_dataset(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def synthetic_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
     data = "\n".join(_record(task_id=f"HumanEval/{i}") for i in range(164)).encode()
-    catalog._catalog.cache_clear()
-    monkeypatch.setattr("evals.python.catalog.download", lambda request: data)
-    try:
-        yield
-    finally:
-        catalog._catalog.cache_clear()
+    monkeypatch.setattr(humanevalplus, "download", lambda request: data)
 
 
 def dataset_index_keeps_all_cases(synthetic_dataset: None) -> None:
@@ -160,28 +158,23 @@ def dataset_index_keeps_all_cases(synthetic_dataset: None) -> None:
 
 
 def import_cache_tracks_verifier_source(
-    *, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch
+    *, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    load_cases(selection="humanevalplus")
-    resources = catalog.sources().resources
-    updated = tuple(
-        (name, source + "\n" if name == "evalplus_verifier.py" else source)
-        for name, source in resources
-    )
-    original = catalog.sources
-    monkeypatch.setattr(
-        catalog,
-        "sources",
-        lambda selection="smoke": Sources(modules=original(selection).modules, resources=updated),
-    )
-    second = load_cases(selection="humanevalplus")[0]
-    checks = catalog.verifier(second.id, selection="humanevalplus")
-    assert isinstance(checks, ExecutableChecks)
-    assert checks.files["verifier.py"] == (dict(resources)["evalplus_verifier.py"] + "\n")
+    first = query.LoadDataset(selection="humanevalplus")
+    before = cast(ExecutableChecks, catalog.verifier("humaneval-0", selection=first))
+    script = tmp_path / "evalplus_verifier.py"
+    script.write_text(before.files["verifier.py"] + "\n")
+    monkeypatch.setattr(evalplus, "__file__", str(tmp_path / "__init__.py"))
+    second = query.LoadDataset(selection="humanevalplus")
+    checks = cast(ExecutableChecks, catalog.verifier("humaneval-0", selection=second))
+    assert checks.files["verifier.py"] == before.files["verifier.py"] + "\n"
+    assert query.Cases(selection=first) == query.Cases(selection=second)
+    assert cases_hash(first) != cases_hash(second)
+    assert catalog.verifier("humaneval-0", selection=first) == before
 
 
 def dataset_count_mismatch(*, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("evals.python.catalog.download", lambda request: _record().encode())
+    monkeypatch.setattr(humanevalplus, "download", lambda request: _record().encode())
     with pytest.raises(ValueError, match="count"):
         load_cases(selection="humanevalplus")
 
@@ -192,37 +185,17 @@ def duplicate_ids_across_import_batches() -> None:
         _import_records(records)
 
 
-def custom_smoke_suite_still_supported(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    suite.write_text("let cases = []")
-    assert load_cases(selection=suite) == ()
-
-
-@pytest.mark.parametrize("driver", ["verifier.py", "evalplus_verifier.py"])
-def case_hash_tracks_private_verifier_code(*, driver: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    before = cases_hash("smoke")
-    source_before = query.Provenance(selection="smoke").source_hash
-    resources = catalog.sources().resources
-    updated = tuple(
-        (name, source + "\n" if name == driver else source) for name, source in resources
-    )
-    original = catalog.sources
-    monkeypatch.setattr(
-        catalog,
-        "sources",
-        lambda selection="smoke": Sources(modules=original(selection).modules, resources=updated),
-    )
-    assert cases_hash("smoke") != before
-    assert query.Provenance(selection="smoke").source_hash != source_before
+def unrelated_evaluator_does_not_change_smoke_provenance(
+    *, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    before = query.Provenance(selection="smoke")
+    monkeypatch.setattr(evalplus, "__file__", str(tmp_path / "missing.py"))
+    assert query.Provenance(selection="smoke") == before
 
 
 def case_hash_tracks_private_records_without_changing_public_cases() -> None:
-    original = catalog.compile_records(
-        sources=catalog.sources("humanevalplus"), records=(_record(),)
-    )
-    changed = catalog.compile_records(
-        sources=original.sources, records=(_record(plus_input=[[123]]),)
-    )
+    original = _import_dataset((_record(),))
+    changed = _import_dataset((_record(plus_input=[[123]]),))
     with patch.object(catalog, "load_dataset", return_value=original):
         before = query.Provenance(selection="humanevalplus").cases_hash
         public = query.Cases(selection="humanevalplus")

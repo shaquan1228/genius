@@ -5,7 +5,7 @@ from typing import assert_never
 
 import evals.python.query as queries
 from evals.python import commands
-from evals.python.integrations.smoke import declarations
+from evals.python.datasets import smoke as declarations
 
 
 def response(completion: queries.PlainCompletion | queries.StructuredCompletion) -> str:

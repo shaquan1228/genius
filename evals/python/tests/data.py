@@ -32,10 +32,10 @@ from evals.python.integrations.inspect.tasks import build_task
 from evals.python.paths import REPO_ROOT
 from evals.python.query import GradeCase
 from evals.python.tests.support import (
-    native_choice_case as _native_choice_case,
+    choice_case as _choice_case,
 )
 from evals.python.tests.support import (
-    native_timeout_case as _native_timeout_case,
+    timeout_case as _timeout_case,
 )
 from evals.python.transport import decode
 
@@ -49,12 +49,12 @@ def manifest_roundtrip() -> None:
     assert decode(_encode([case.model_dump() for case in cases])) == cases
 
 
-def invalid_ocaml_suite_is_rejected(*, tmp_path: Path, capfd: pytest.CaptureFixture[str]) -> None:
+def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
     path = tmp_path / "suite.ml"
-    path.write_text("this is not valid OCaml")
-    with pytest.raises(subprocess.CalledProcessError):
-        load_cases(selection=path)
-    assert 'File "suite.ml"' in capfd.readouterr().err
+    path.write_text("let cases = []")
+    operation = cast(Callable[..., query.Dataset], query.LoadDataset)
+    with pytest.raises(ValidationError):
+        operation(selection=path)
 
 
 @pytest.mark.parametrize(
@@ -72,13 +72,13 @@ def generated_paths_are_validated(*, field: str, value: object) -> None:
         decode(_encode([data]))
 
 
-def _grade(case_id: str, *, text: str, suite: Path | None = None) -> bool:
+def _grade(case_id: str, *, text: str) -> bool:
     return GradeCase(
         case_id=case_id,
         response=text,
         changed_files=(),
         verification=Verification(status="unchecked"),
-        selection="smoke" if suite is None else suite,
+        selection="smoke",
     )["correctness"]
 
 
@@ -164,20 +164,18 @@ def json_fences(text: str) -> None:
     assert _grade("small-decision", text=text)
 
 
-def cases_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    expression = _native_timeout_case(
-        id_expression='Printf.sprintf "timeout-%d" i',
-        initial="15",
-        requested="30 + i",
+def cases_200_cases_are_python_values() -> None:
+    dataset = query.CompileDataset(
+        cases=tuple(
+            _timeout_case(case_id=f"timeout-{i}", initial=15, requested=30 + i) for i in range(200)
+        )
     )
-    suite.write_text(f"let cases = List.init 200 (fun i -> {expression})\n")
-    cases = load_cases(selection=suite)
+    cases = load_cases(selection=dataset)
     assert len(cases) == 200
     assert (
-        reference(cases[199].id, selection=suite).solution["config.py"] == "timeout_seconds = 229\n"
+        reference(cases[199].id, selection=dataset).solution["config.py"]
+        == "timeout_seconds = 229\n"
     )
-    assert [path.name for path in tmp_path.iterdir()] == ["suite.ml"]
 
 
 def generated_artifacts_stay_out_of_sample_metadata() -> None:
@@ -194,28 +192,19 @@ def generated_artifacts_stay_out_of_sample_metadata() -> None:
         assert not any("heldout" in path for path in sample.files or {})
 
 
-def duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    expression = _native_choice_case(case_id="duplicate", a=10, b=8)
-    suite.write_text(f"let c = {expression}\nlet cases = [c; c]\n")
+def duplicate_case_ids_are_rejected() -> None:
+    definition = _choice_case(case_id="duplicate", a=10, b=8)
     with pytest.raises(subprocess.CalledProcessError):
-        load_cases(selection=suite)
+        query.CompileDataset(cases=(definition, definition))
 
 
-def exporter_escapes_strings(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    expression = _native_choice_case(case_id="escaped", a=10, b=8)
-    suite.write_text(
-        f"let c = {expression}\n"
-        + r"""
-let text = "quote\" slash\\ newline\n tab\t return\r zero\000 é"
-let cases = [{ c with instruction = { c.instruction with prompt = text } }]
-"""
+def exporter_escapes_strings() -> None:
+    text = 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
+    definition = _choice_case(case_id="escaped", a=10, b=8).model_copy(
+        update={"instruction": query.Instruction(skill="reasoning", prompt=text)}
     )
-    assert (
-        load_cases(selection=suite)[0].prompt
-        == 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
-    )
+    dataset = query.CompileDataset(cases=(definition,))
+    assert load_cases(selection=dataset)[0].prompt == text
 
 
 def cases_are_immutable() -> None:
@@ -234,34 +223,40 @@ def cases_are_immutable() -> None:
     assert catalog_case("clear-task") is case
 
 
-def compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    expression = _native_choice_case(case_id="cache", a=10, b=8)
-    source = f"let cases = [{expression}]\n"
-    suite.write_text(source)
+def compilation_cache_invalidates_when_declarations_change() -> None:
+    definition = _choice_case(case_id="cache", a=10, b=8)
+    first = query.CompileDataset(cases=(definition,))
     with patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as compiler:
-        first = load_cases(selection=suite)
-        assert load_cases(selection=suite) == first
-        assert compiler.call_count == 3
-        changed = _native_choice_case(case_id="cache", a=4, b=8)
-        suite.write_text(f"let cases = [{changed}]\n")
-        assert json.loads(reference("cache", selection=suite).answer)["choice"] == "A"
-        assert compiler.call_count == 7
+        assert query.CompileDataset(cases=(definition,)) is first
+        assert compiler.call_count == 0
+        changed = query.CompileDataset(cases=(_choice_case(case_id="cache", a=4, b=8),))
+        assert json.loads(reference("cache", selection=changed).answer)["choice"] == "A"
+        assert compiler.call_count == 2
 
 
-def generic_python_case_exports_without_language_restriction(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    suite.write_text("""let cases = [Case.make ~id:"python-case"
-      ~fixture:(Fixture.of_files ["solution.py", "print(42)"])
-      ~instruction:{ Ast.skill = "reasoning"; prompt = "Return 42" }
-      ~criterion:(Ast.Code (Verifier.make ~inputs:["solution.py"]
-        ~files:["grader.py", Inline "trusted"] ~tools:[]
-        ~command:["python3"; "grader.py"] ~stdin:"private" ~timeout_seconds:5))
-      ~allowed_files:["solution.py"]
-      ~reference:{ Ast.edits = Fixture.empty; completion = Plain "done" }]
-""")
-    case = load_cases(selection=suite)[0]
-    checks = verifier(case.id, selection=suite)
+def generic_python_case_exports_without_language_restriction() -> None:
+    definition = query.CaseDefinition(
+        id="python-case",
+        fixture={"solution.py": "print(42)"},
+        instruction=query.Instruction(skill="reasoning", prompt="Return 42"),
+        criterion=query.CodeCriterion(
+            verifier=query.VerifierDefinition(
+                inputs=("solution.py",),
+                files={"grader.py": query.Inline(text="trusted")},
+                tools={},
+                command=("python3", "grader.py"),
+                stdin="private",
+                timeout_seconds=5,
+            )
+        ),
+        allowed_files=("solution.py",),
+        reference=query.ReferenceDefinition(
+            edits={}, completion=query.PlainCompletion(text="done")
+        ),
+    )
+    dataset = query.CompileDataset(cases=(definition,))
+    case = load_cases(selection=dataset)[0]
+    checks = verifier(case.id, selection=dataset)
     assert checks is not None
     assert checks.model_dump() == {
         "inputs": ("solution.py",),
@@ -301,18 +296,24 @@ def experiment_cache_tracks_native_configuration(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("grade_only", [False, True])
 def record_updates_cannot_bypass_kernel_validation(
-    *, grade_only: bool, tmp_path: Path, capfd: pytest.CaptureFixture[str]
+    *, grade_only: bool, capfd: pytest.CaptureFixture[str]
 ) -> None:
-    suite = tmp_path / "suite.ml"
-    expression = _native_timeout_case(id_expression='"updated"', initial="15", requested="30")
-    suite.write_text(f"let c = {expression}\nlet cases = [{{c with fixture = Fixture.empty}}]\n")
+    definition = _timeout_case(case_id="updated", initial=15, requested=30)
+    invalid = definition.model_copy(update={"fixture": {}})
+    records = transport.encode_declarations((invalid,))
     operation: Callable[[], object]
     if grade_only:
         operation = partial(
-            GradeCase, case_id="updated", response="", changed_files=(), selection=suite
+            transport.grade,
+            sources=transport.sources(),
+            record=records[0],
+            case_id="updated",
+            response="",
+            changed_files=(),
+            verification=Verification(status="unchecked"),
         )
     else:
-        operation = partial(load_cases, selection=suite)
+        operation = partial(transport.cases, sources=transport.sources(), records=records)
     with pytest.raises(subprocess.CalledProcessError):
         operation()
     assert "criteria read files missing from the fixture" in capfd.readouterr().err

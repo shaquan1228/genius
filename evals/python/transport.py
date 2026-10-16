@@ -18,7 +18,6 @@ from evals.python._kernel import (
     FROZEN,
     Case,
     CaseDefinition,
-    DatasetInfo,
     ExecutableChecks,
     Experiment,
     Reference,
@@ -27,13 +26,6 @@ from evals.python._kernel import (
 from evals.python.paths import EVALS_ROOT
 
 VERSION: Final = 3
-
-
-@dataclass(frozen=True, kw_only=True)
-class Program:
-    suite: Path
-    adapter: Path
-    resources: tuple[Path, ...]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -70,9 +62,7 @@ LIBRARY: Final = tuple(
         "declaration.ml",
     )
 )
-SUITE: Final = OCAML_ROOT / "suite.ml"
 EXPORTER: Final = OCAML_ROOT / "transport.ml"
-DATASET_INTERFACE: Final = OCAML_ROOT / "dataset.mli"
 
 
 class Envelope[T](BaseModel):
@@ -112,8 +102,12 @@ class _Kernel:
 def _kernel(*, sources: Sources) -> _Kernel:
     directory = TemporaryDirectory(prefix="genius-kernel-")
     try:
-        for name, contents in (*sources.modules, *sources.resources):
+        for name, contents in sources.modules:
             (Path(directory.name) / name).write_text(contents)
+        resources = Path(directory.name) / "resources"
+        resources.mkdir()
+        for name, contents in sources.resources:
+            (resources / name).write_text(contents)
         subprocess.run(
             [
                 "ocamlfind",
@@ -135,16 +129,10 @@ def _kernel(*, sources: Sources) -> _Kernel:
     return _Kernel(directory)
 
 
-def sources(program: Program) -> Sources:
+def sources(*, resources: Mapping[str, str] = MappingProxyType({})) -> Sources:
     return Sources(
-        modules=(
-            *((path.name, path.read_text()) for path in LIBRARY),
-            ("suite.ml", program.suite.read_text()),
-            ("dataset.mli", DATASET_INTERFACE.read_text()),
-            ("dataset.ml", program.adapter.read_text()),
-            ("transport.ml", EXPORTER.read_text()),
-        ),
-        resources=tuple((path.name, path.read_text()) for path in program.resources),
+        modules=tuple((path.name, path.read_text()) for path in (*LIBRARY, EXPORTER)),
+        resources=tuple(sorted(resources.items())),
     )
 
 
@@ -196,9 +184,7 @@ def experiment(
 
 
 @lru_cache(maxsize=256)
-def verifier(
-    *, sources: Sources, case_id: str, record: str | None = None
-) -> ExecutableChecks | None:
+def verifier(*, sources: Sources, case_id: str, record: str) -> ExecutableChecks | None:
     return (
         Envelope[ExecutableChecks | None]
         .model_validate_json(
@@ -212,7 +198,7 @@ def verifier(
     )
 
 
-def reference(*, sources: Sources, case_id: str, record: str | None = None) -> Reference:
+def reference(*, sources: Sources, case_id: str, record: str) -> Reference:
     return (
         Envelope[Reference]
         .model_validate_json(
@@ -233,7 +219,7 @@ def grade(  # noqa: PLR0913 - kernel grading fields and trusted compiler context
     response: str,
     changed_files: tuple[str, ...],
     verification: Verification,
-    record: str | None = None,
+    record: str,
 ) -> Mapping[str, bool]:
     result = GradingResult.model_validate_json(
         invoke(

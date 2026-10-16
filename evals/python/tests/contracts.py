@@ -11,32 +11,28 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import catalog, query, transport
+from evals.python import catalog, datasets, query, transport
 from evals.python._kernel import Experiment, Verification
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.query import ExperimentSettings, GradeCase
-from evals.python.tests.support import native_choice_case as _native_choice_case
+from evals.python.tests.support import choice_case as _choice_case
 
 
 @pytest.fixture
-def third_dataset(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
-    adapter = tmp_path / "third.ml"
-    expression = _native_choice_case(case_id="third-case", a=1, b=2)
-    adapter.write_text(
-        f"let info = None\nlet cases = [{expression}]\n"
-        "let import raw = { (List.hd cases) with Ast.id = raw }\n"
+def third_dataset(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> query.Dataset:
+    definition = _choice_case(case_id="third-case", a=1, b=2)
+    (tmp_path / "third.py").write_text(
+        "from evals.python import query\ninfo = None\n"
+        "def cases():\n    return (query.CaseDefinition.model_validate_json(\n"
+        f"        {definition.model_dump_json()!r}),)\n"
     )
-    (tmp_path / "suite.ml").write_text((catalog.ADAPTER_ROOT / "suite.ml").read_text())
-    (tmp_path / "declarations.ml").write_text(
-        (catalog.ADAPTER_ROOT / "declarations.ml").read_text()
-    )
-    monkeypatch.setattr(catalog, "ADAPTER_ROOT", tmp_path)
-    return "third"
+    monkeypatch.setattr(datasets, "__path__", [str(tmp_path), *datasets.__path__])
+    return query.LoadDataset(selection="third")
 
 
-def _third_grade(*, case_id: str = "third-case", selection: str) -> query.Scores:
+def _third_grade(*, case_id: str = "third-case", selection: query.Dataset) -> query.Scores:
     return GradeCase(
         case_id=case_id,
         selection=selection,
@@ -46,7 +42,7 @@ def _third_grade(*, case_id: str = "third-case", selection: str) -> query.Scores
     )
 
 
-def third_dataset_requires_only_adapter_and_declarations(third_dataset: str) -> None:
+def third_dataset_requires_only_python_declarations(third_dataset: query.Dataset) -> None:
     cases = catalog.load_cases(selection=third_dataset)
     assert cases[0].id == "third-case"
     task = build_task(
@@ -54,9 +50,9 @@ def third_dataset_requires_only_adapter_and_declarations(third_dataset: str) -> 
         spec=query.ExperimentSettings(),
         agent="codex",
         dataset="third",
-        catalog=query.LoadDataset(selection="third"),
+        catalog=query.LoadDataset(selection=third_dataset),
         instructions=profiles.load_instructions(query.ExperimentSettings()),
-        provenance=query.Provenance(selection=query.LoadDataset(selection="third")),
+        provenance=query.Provenance(selection=third_dataset),
     )
     assert task.dataset[0].id == "third-case"
     assert _third_grade(selection=third_dataset) == {
@@ -78,12 +74,12 @@ def default_sandbox_is_local() -> None:
     assert task.sandbox.type == "local"
 
 
-def third_dataset_imports_and_grades_records(third_dataset: str) -> None:
-    imported = catalog.compile_records(sources=catalog.sources("third"), records=("new-case",))
+def third_dataset_imports_and_grades_records(third_dataset: query.Dataset) -> None:
+    imported = query.CompileDataset(cases=(_choice_case(case_id="new-case", a=1, b=2),))
     with patch.object(catalog, "load_dataset", return_value=imported):
         assert _third_grade(case_id="new-case", selection=third_dataset)["correctness"]
-        assert catalog.reference("new-case", selection="third").answer
-        assert catalog.verifier("new-case", selection="third") is None
+        assert catalog.reference("new-case", selection=imported).answer
+        assert catalog.verifier("new-case", selection=imported) is None
 
 
 def public_projection_contains_no_private_material() -> None:
@@ -159,7 +155,7 @@ def public_projection_requires_exact_protocol_version(version: object) -> None:
 
 
 def unknown_or_unsafe_dataset_is_rejected() -> None:
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(ModuleNotFoundError):
         query.Cases(selection="does-not-exist")
     with pytest.raises(ValidationError):
         query.Cases(selection="../outside")

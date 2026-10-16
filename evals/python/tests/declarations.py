@@ -8,7 +8,7 @@ from typing import cast
 import pytest
 from pydantic import ValidationError
 
-from evals.python import catalog, query, transport
+from evals.python import query, transport
 
 
 def _declaration(*, code: bool = True) -> query.CaseDefinition:
@@ -18,7 +18,7 @@ def _declaration(*, code: bool = True) -> query.CaseDefinition:
             verifier=query.VerifierDefinition(
                 inputs=("main.py",),
                 files={"verify.py": query.Inline(text="private assertions")},
-                tools={"check.sh": query.Resource(name="verifier.py")},
+                tools={"check.sh": query.Inline(text="visible helper")},
                 command=("python3", "verify.py"),
                 stdin="private stdin",
                 timeout_seconds=30,
@@ -47,13 +47,7 @@ def _declaration(*, code: bool = True) -> query.CaseDefinition:
 
 
 def _sources() -> transport.Sources:
-    return transport.sources(
-        transport.Program(
-            suite=transport.SUITE,
-            adapter=transport.OCAML_ROOT / "datasets/declarations.ml",
-            resources=catalog.DRIVERS,
-        )
-    )
+    return transport.sources(resources={"verifier.py": "visible helper"})
 
 
 @pytest.mark.parametrize("code", [True, False])
@@ -62,7 +56,7 @@ def external_declarations_preserve_public_projection(*, code: bool) -> None:
     (case,) = transport.cases(sources=_sources(), records=(record,))
     public_files = {"main.py": "broken"}
     if code:
-        public_files["check.sh"] = dict(catalog.sources().resources)["verifier.py"]
+        public_files["check.sh"] = "visible helper"
     assert case == query.Case(
         id="external", skill="reasoning", prompt="Fix it: é", files=public_files
     )
@@ -74,7 +68,7 @@ def code_declarations_preserve_private_checks_and_resolve_resources() -> None:
     checks = transport.verifier(sources=_sources(), case_id="external", record=record)
     assert checks is not None
     assert checks.files == {"verify.py": "private assertions"}
-    assert checks.tools == {"check.sh": dict(catalog.sources().resources)["verifier.py"]}
+    assert checks.tools == {"check.sh": "visible helper"}
     assert (checks.stdin, checks.inputs) == ("private stdin", ("main.py",))
 
 
@@ -109,7 +103,6 @@ def imported_declarations_use_existing_grading(*, code: bool) -> None:
 
 
 def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
-    assert transport.describe(sources=_sources()) is None
     assert transport.cases(sources=_sources()) == ()
 
 

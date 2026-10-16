@@ -16,7 +16,7 @@ flowchart LR
   I[Inspect observations] --> C
   E[EvalPlus CLI] --> C
   C --> T[OCaml process transport]
-  T --> K[Pure kernel and dataset adapters]
+  T --> K[Pure kernel and declaration validation]
   C --> V[Verification lifecycle]
   V --> P[Typed execution capabilities]
   P --> A[Local or HF SDK effects]
@@ -28,14 +28,14 @@ flowchart LR
 | Primitive `.mli` / `.ml` files | Public operation signatures / executable constructors, validation and pure grading |
 | `ocaml/projection.mli` | Separate public case, trusted verifier, and offline reference projections |
 | `ocaml/experiment.mli` | Immutable defaults and validated launch overrides |
-| `ocaml/dataset.mli`, `ocaml/datasets/` | Common adapter interface; dataset-specific records and provenance |
+| `python/datasets/` | Dataset records, provenance, and canonical case construction |
 | `ocaml/codec.ml`, `ocaml/transport.ml` | JSON syntax and generic protocol operations |
 | `ocaml/declaration.mli`, `ocaml/declaration.ml` | Narrow declaration decoder interface and private implementation, returning validated `Ast.case` values |
 | `python/_kernel.py` | Private immutable Python bindings for canonical declarations and projections; no integration imports |
 | `python/transport.py` | Trusted source compilation, content-keyed executable caches, protocol encoding/decoding |
-| `python/catalog.py` | Adapter composition, immutable catalogs, trusted record retention and content fingerprints |
+| `python/catalog.py` | Canonical compilation, immutable catalogs, trusted declaration retention and content fingerprints |
 | `python/integrations/datasets/` | Pinned download effects |
-| `python/integrations/smoke/` | Default Python smoke declarations, private execution driver and reference-validation CLI |
+| `python/integrations/smoke/` | Reusable private Python assertion driver and reference-validation CLI |
 | `python/integrations/inspect/` | SDK task/sample/score adaptation, agents, and sandbox capability adaptation |
 | `python/query.py` | Typed public queries returning canonical values directly |
 | `python/commands.py` | Typed asynchronous commands, validated launch settings and composition |
@@ -49,18 +49,30 @@ Reference solutions, expected answers, private verifier programs and private inp
 Only the trusted host or fresh grading sandbox receives those projections; agent samples and metadata receive public inputs and identifiers.
 Python construction bindings express the existing kernel declaration types; validation and grading policy remain in OCaml.
 
-Protocol version 3 exposes generic describe, cases, verifier, reference, experiment, and grade operations.
+Protocol version 3 exposes generic cases, verifier, reference, experiment, and grade operations.
+Dataset descriptions and provenance are Python-owned queries.
 Every response is versioned. A grading request carries the case ID, raw response text, changed paths, and trusted execution evidence.
 It returns named boolean scores. Dataset-specific CLI operations and branches are absent from both transports.
 The old combined case manifest is intentionally unsupported; native historical Inspect logs are unchanged.
 
-Dataset selection is the Python-owned `smoke` dataset, an adapter name, a trusted suite path, or an immutable `Dataset` returned by `LoadDataset` or `CompileDataset`.
-An adapter under `ocaml/datasets/<name>.ml` implements `dataset.mli`, compiles as `Dataset`, and constructs ordinary kernel values.
-Its `info` is absent for local declarations or contains a pinned gzip JSONL source plus flat provenance attributes.
-Its `import` function maps a raw record to a validated case; raw private benchmark JSON is retained byte-for-byte.
-Python integrations can instead supply canonical `CaseDefinition` values through `CompileDataset`. The generic `ocaml/datasets/declarations.ml` adapter delegates to `Declaration.decode : string -> Ast.case`; its implementation decodes through existing validating constructors. The compiled dataset retains trusted records and resources without registering a new selector.
-Adding a dataset using existing semantics requires only an adapter and declarations, without editing the kernel, transport, or a Python dataset enum.
-A genuinely new evaluation capability may require a new primitive.
+Dataset selection is a Python module name under `python/datasets/` or an immutable
+`Dataset` returned by `LoadDataset` or `CompileDataset`. Each bundled module supplies
+`info` (optional provenance) and `cases()` (canonical `CaseDefinition` values).
+Python owns downloading and parsing upstream records. OCaml accepts the same
+canonical declarations for every dataset, validates them through its constructors,
+and exposes separate public, verifier, and reference projections.
+
+To add a dataset, map its Python records into `CaseDefinition` values and call
+`CompileDataset(cases=..., info=...)`; no OCaml adapter or selector registration is
+needed. A module under `python/datasets/` makes a dataset available by name to the
+CLI. Evaluator integrations provide reusable executable checks, independently of
+which dataset supplies their inputs. Verifier programs can be inline contents or
+explicit `CompileDataset(resources=...)` resources. The catalog has no global
+verifier list. Named modules supply inline checker contents; callers using explicit
+resources compile a dataset with `CompileDataset(resources=...)`. Load a named
+dataset once and reuse the resulting immutable `Dataset` for repeated queries and
+verification, as the runners and reference-validation CLIs do. A genuinely new
+grading capability may require a kernel primitive.
 
 CI and local launchers supply overrides; OCaml resolves them into one immutable experiment specification before execution.
 The HF launcher deliberately requests one epoch by default for its smoke run; direct job invocation uses the kernel default when no override is supplied.
@@ -82,7 +94,7 @@ Primitive modules have no codec or SDK dependencies. Only transport compiles/inv
 Kernel domain projections are nonrecursive. Recursive diagnostics are frozen in public
 results and converted to JSON values only at process or SDK output interfaces.
 Boundary tests enforce these imports and the absence of dataset/provider knowledge in the transport.
-Source contents, adapter declarations, private records and verifier resources participate in provenance or cache keys.
+Kernel source contents, canonical declarations, private records, provenance and verifier resources participate in provenance or cache keys.
 Invalid candidate submissions produce unsuccessful outcomes; provisioning, transfer, driver and protocol failures remain harness errors.
 
 ## Check the harness offline
@@ -237,7 +249,7 @@ Sandbox and verifier failures still stop the task.
 ## Author cases
 
 Python integrations can author cases using the existing kernel type bindings. The
-example in `python/integrations/smoke/declarations.py` returns immutable
+example in `python/datasets/smoke.py` returns immutable
 `query.CaseDefinition` values containing fixtures, instructions, code or answer
 criteria, allowed files, and reference solutions. `CaseDefinition` represents the
 full `Ast.case` construction contract; `Case` is its separate public read projection.
@@ -245,7 +257,7 @@ full `Ast.case` construction contract; `Case` is its separate public read projec
 ```python
 from evals.python import commands
 from evals.python import query
-from evals.python.integrations.smoke import declarations
+from evals.python.datasets import smoke as declarations
 
 definitions = declarations.cases()
 dataset = query.CompileDataset(cases=definitions)
@@ -280,10 +292,10 @@ after one loss. Private assertions and reference solutions never enter `Cases` o
 the CLI output.
 
 `LoadDataset(selection="smoke")`, Inspect tasks, and the HF launcher's default
-selection all compile these same Python declarations through the existing generic
-OCaml declaration adapter. `ocaml/suite.ml` is an empty placeholder for adapters;
-a trusted native suite path uses `ocaml/datasets/suite.ml`. Kernel unit tests use
-inert local fixtures rather than the runnable smoke dataset.
+selection all compile these same Python declarations through the shared OCaml
+declaration decoder. Native OCaml dataset adapters and suite-path selection have
+been removed. Kernel unit tests use inert local fixtures rather than the runnable
+smoke dataset.
 
 The fixture, instruction, criterion, edit scope, and reference remain independent
 values. Use `declarations.receipt(term=...)` and
@@ -300,9 +312,9 @@ the criterion declares it. Adding answer fields does not require transport chang
 ## Execution boundary
 
 The host compiles the fixed OCaml module set in a temporary directory.
-`ocaml/transport.ml` consumes the selected `Dataset` adapter and emits versioned JSON projections; `python/transport.py`
-decodes those projections into frozen values. Importing `Suite` itself has no output or
-execution side effects. Compilation and validated case indexes are cached
+`ocaml/transport.ml` consumes canonical case declarations and emits versioned JSON
+projections; `python/transport.py` decodes those projections into frozen values.
+The same compiled kernel serves every dataset. Compilation and validated case indexes are cached
 by source contents and serialized declarations; changing a module, interface,
 trusted driver, or declaration invalidates the relevant cache.
 No generated files are written into this checkout. Both local checks and the
@@ -430,8 +442,9 @@ not a whole-repository purity score or an automated purity proof.
 
 ## HumanEval+ coding benchmark
 
-`humanevalplus` imports all 164 HumanEval+ v0.1.10 problems into typed OCaml
-`Case` values. The upstream release is public and requires no API key. The free commands below show the pinned provenance, then download and
+`humanevalplus` maps all 164 HumanEval+ v0.1.10 problems in Python into canonical
+case declarations, which OCaml validates and projects. The upstream release is
+public and requires no API key. The free commands below show the pinned provenance, then download and
 checksum-verify the dataset into the user cache and validate three references:
 
 ```sh
@@ -454,7 +467,8 @@ requires both groups to pass. Metadata records both upstream statuses, test
 counts, dataset digest, evaluator commit, and runtime versions. A timeout remains
 an upstream timeout result; infrastructure errors fail the sample.
 
-`evals/ocaml/datasets/humanevalplus.ml` owns dataset provenance and constructs the cases.
+`evals/python/datasets/humanevalplus.py` owns dataset provenance and constructs the cases.
+`python/integrations/evalplus/` supplies executable checks using the official evaluator.
 `ExecutableChecks` runs them through the same generic verifier as other coding
 cases. No dataset-specific scorer or Python-to-OCaml transpilation of benchmark
 programs is required. The evaluator is pinned to commit

@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import catalog, commands, query
+from evals.python._kernel import ExecutableChecks
 from evals.python.tests.declarations import _declaration
 
 
@@ -77,13 +78,52 @@ def compilation_preserves_independent_private_inputs() -> None:
 
 def compiled_metadata_queries_do_not_download() -> None:
     a, b = _independent_datasets()
-    with patch("evals.python.catalog.download") as download:
+    with patch("evals.python.datasets.humanevalplus.download") as download:
         assert query.DescribeDataset(selection=a) is None
         a_provenance = query.Provenance(selection=a)
         b_provenance = query.Provenance(selection=b)
     download.assert_not_called()
     assert a_provenance.info is None
     assert b_provenance.info is None
+
+
+def compiled_provenance_retains_python_metadata() -> None:
+    definition = _declaration()
+    info = query.DatasetInfo(
+        source="python://external", revision="one", sha256="digest", count=1, attributes={}
+    )
+    original = query.CompileDataset(cases=(definition,), info=info)
+    changed = query.CompileDataset(
+        cases=(definition,), info=info.model_copy(update={"revision": "two"})
+    )
+    assert query.DescribeDataset(selection=original) == info
+    assert query.Cases(selection=original) == query.Cases(selection=changed)
+    assert (
+        query.Provenance(selection=original).cases_hash
+        != query.Provenance(selection=changed).cases_hash
+    )
+    with pytest.raises(ValueError, match="count"):
+        query.CompileDataset(cases=(), info=info)
+
+
+@pytest.mark.parametrize("resource_name", ["checker.py", "ast.ml", "ast.cmo", "case.cmi", "kernel"])
+def compiled_datasets_supply_independent_evaluator_resources(resource_name: str) -> None:
+    definition = _declaration()
+    assert isinstance(definition.criterion, query.CodeCriterion)
+    checks = definition.criterion.verifier.model_copy(
+        update={"files": {"verify.py": query.Resource(name=resource_name)}}
+    )
+    definition = definition.model_copy(update={"criterion": query.CodeCriterion(verifier=checks)})
+    first = query.CompileDataset(cases=(definition,), resources={resource_name: "first checker"})
+    second = query.CompileDataset(cases=(definition,), resources={resource_name: "second checker"})
+    a = cast(ExecutableChecks, catalog.verifier("external", selection=first))
+    b = cast(ExecutableChecks, catalog.verifier("external", selection=second))
+    assert a.files["verify.py"] == "first checker"
+    assert b.files["verify.py"] == "second checker"
+    assert (
+        query.Provenance(selection=first).cases_hash
+        != query.Provenance(selection=second).cases_hash
+    )
 
 
 def compilation_provenance_retains_sources_and_private_records() -> None:
@@ -179,7 +219,7 @@ def unknown_case_in_compiled_dataset_fails_closed() -> None:
     dataset = query.CompileDataset(cases=(_declaration(),))
     with pytest.raises(KeyError):
         catalog.case("absent", selection=dataset)
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(KeyError):
         query.GradeCase(case_id="absent", response="", changed_files=(), selection=dataset)
 
 

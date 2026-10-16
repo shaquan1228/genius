@@ -8,7 +8,6 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import catalog, commands, query
-from evals.python.paths import EVALS_ROOT
 
 
 def public_queries_preserve_canonical_objects() -> None:
@@ -20,9 +19,9 @@ def public_queries_preserve_canonical_objects() -> None:
 
 
 def public_queries_select_canonical_projections() -> None:
-    assert query.Cases(selection=EVALS_ROOT / "ocaml/suite.ml") == ()
+    assert query.Cases(selection=query.CompileDataset(cases=())) == ()
     assert assert_type(query.DescribeDataset(), query.DatasetInfo | None) is None
-    with patch("evals.python.catalog.download") as download:
+    with patch("evals.python.datasets.humanevalplus.download") as download:
         info = query.DescribeDataset(selection="humanevalplus")
     assert isinstance(info, query.DatasetInfo)
     download.assert_not_called()

@@ -17,9 +17,8 @@ from evals.python.catalog import (
     reference,
     verifier,
 )
+from evals.python.datasets import smoke as declarations
 from evals.python.integrations.inspect.environments import environment, runtime
-from evals.python.integrations.smoke import declarations
-from evals.python.tests.support import native_timeout_case as _native_timeout_case
 
 CASES = {case.id: case for case in load_cases()}
 
@@ -181,16 +180,3 @@ def family_variants_generate_working_seeds_and_solutions(
     assert not _verify(case, directory=tmp_path, selection=dataset)
     _write_files(tmp_path, files=reference(case.id, selection=dataset).solution)
     assert _verify(case, directory=tmp_path, selection=dataset)
-
-
-def native_suite_can_declare_python_candidate_checks(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    expression = _native_timeout_case(id_expression='"native"', initial="7", requested="17")
-    suite.write_text(f"let cases = [{expression}]\n")
-    case = load_cases(selection=suite)[0]
-    work = tmp_path / "candidate"
-    work.mkdir()
-    _write_files(work, files=case.files)
-    assert not _verify(case, directory=work, selection=suite)
-    _write_files(work, files=reference(case.id, selection=suite).solution)
-    assert _verify(case, directory=work, selection=suite)

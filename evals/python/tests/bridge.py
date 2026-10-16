@@ -3,14 +3,15 @@
 import json
 import subprocess
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
 
+from evals.python import query, transport
 from evals.python._kernel import Verification
 from evals.python.catalog import (
-    DRIVERS,
     Selection,
     load_cases,
     reference,
@@ -78,7 +79,7 @@ def unknown_kernel_score_names_are_rejected() -> None:
 
 
 def unknown_case_is_a_harness_error() -> None:
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(KeyError):
         GradeCase(
             case_id="unknown",
             response="{}",
@@ -113,20 +114,29 @@ def grading_does_not_recompile_or_cache_results() -> None:
         assert [call.args[0][1:] for call in process.call_args_list] == [["--grade"]] * 3
 
 
-@pytest.mark.parametrize("source", [*LIBRARY, *DRIVERS])
+@pytest.mark.parametrize("source", LIBRARY)
 def kernel_cache_tracks_every_trusted_source(*, source: Path, tmp_path: Path) -> None:
     copied = tmp_path / source.name
     copied.write_text(source.read_text() + "\n")
     _judgment(response="{}")
     library = tuple({source: copied}.get(path, path) for path in LIBRARY)
-    drivers = tuple({source: copied}.get(path, path) for path in DRIVERS)
     with (
         patch("evals.python.transport.LIBRARY", library),
-        patch("evals.python.catalog.DRIVERS", drivers),
         patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as process,
     ):
         assert _judgment(response='{"choice":"B","reason":"Cheap"}')
         assert (process.call_count, process.call_args_list[0].args[0][0]) == (3, "ocamlfind")
+
+
+def kernel_compilation_failure_cleans_temporary_directory(tmp_path: Path) -> None:
+    directory = TemporaryDirectory(dir=tmp_path)
+    sources = transport.Sources(modules=(("broken.ml", "this is not OCaml"),), resources=())
+    with (
+        patch("evals.python.transport.TemporaryDirectory", return_value=directory),
+        pytest.raises(subprocess.CalledProcessError),
+    ):
+        transport.cases(sources=sources)
+    assert not Path(directory.name).exists()
 
 
 @pytest.mark.parametrize(
@@ -166,28 +176,34 @@ def additional_named_scores_cross_bridge_without_decoder_changes() -> None:
     assert dict(scores) == {"correctness": True, "scope": False, "new_metric": True}
 
 
-def reference_channels_export_independently_and_escape(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    suite.write_text(r"""let fields = Response.of_fields [
-      "state", Ast.String "quote\" \\ \n é";
-      "safe", Ast.Bool true]
-let cases = [Case.make ~id:"reference" ~fixture:Fixture.empty
-  ~instruction:{ Ast.skill = "reasoning"; prompt = "fields" }
-  ~criterion:(Criterion.answer ~expected:fields ()) ~allowed_files:["result.txt"]
-  ~reference:{ Ast.edits = Fixture.of_files ["result.txt", "result"];
-    completion = Structured fields }]
-""")
-    case = load_cases(selection=suite)[0]
-    expected = reference(case.id, selection=suite)
-    assert verifier(case.id, selection=suite) is None
+def reference_channels_export_independently_and_escape() -> None:
+    fields: dict[str, str | bool] = {"state": 'quote" \\ \n é', "safe": True}
+    dataset = query.CompileDataset(
+        cases=(
+            query.CaseDefinition(
+                id="reference",
+                fixture={},
+                instruction=query.Instruction(skill="reasoning", prompt="fields"),
+                criterion=query.AnswerCriterion(expected=fields),
+                allowed_files=("result.txt",),
+                reference=query.ReferenceDefinition(
+                    edits={"result.txt": "result"},
+                    completion=query.StructuredCompletion(fields=fields),
+                ),
+            ),
+        )
+    )
+    case = load_cases(selection=dataset)[0]
+    expected = reference(case.id, selection=dataset)
+    assert verifier(case.id, selection=dataset) is None
     assert dict(expected.solution) == {"result.txt": "result"}
-    assert json.loads(expected.answer) == {"state": 'quote" \\ \n é', "safe": True}
+    assert json.loads(expected.answer) == fields
     assert GradeCase(
         case_id="reference",
         response=expected.answer,
         changed_files=(),
         verification=Verification(status="unchecked"),
-        selection=suite,
+        selection=dataset,
     )["correctness"]
 
 

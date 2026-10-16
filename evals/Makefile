@@ -36,16 +36,13 @@ check-ocaml-format:
 # Compile temporary copies in dependency order so no build files enter the checkout.
 lint-ocaml:
 	@command -v ocamlfind >/dev/null || { echo "Install OCaml 4.13+, ocamlfind and Jsonm for kernel checks." >&2; exit 1; }
-	@for adapter in ocaml/datasets/*.ml; do \
-	  build_dir=$$(mktemp -d) && \
+	@build_dir=$$(mktemp -d) && \
 	  (trap 'rm -rf "$$build_dir"' EXIT; \
-	    cp ocaml/*.mli ocaml/*.ml "$$build_dir" && \
-	    cp "$$adapter" "$$build_dir/dataset.ml" && cd "$$build_dir" && \
-	    ocamlfind ocamlc -package jsonm $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml)) || exit 1; \
-	done
+	    cp ocaml/*.mli ocaml/*.ml "$$build_dir" && cd "$$build_dir" && \
+	    ocamlfind ocamlc -package jsonm $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml))
 
 # Pure kernel modules, excluding the process boundary, in dependency order.
-KERNEL = $(shell cd ocaml && ocamldep -sort $(filter-out transport.ml codec.ml declaration.mli declaration.ml dataset.mli,$(notdir $(wildcard ocaml/*.mli ocaml/*.ml))))
+KERNEL = $(shell cd ocaml && ocamldep -sort $(filter-out transport.ml codec.ml declaration.mli declaration.ml,$(notdir $(wildcard ocaml/*.mli ocaml/*.ml))))
 
 # Link a test with only the modules it may use, so a new dependency fails to compile.
 ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
