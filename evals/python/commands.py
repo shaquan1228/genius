@@ -27,6 +27,7 @@ from evals.python._kernel import (
     Verification,
     VerifierDefinition,
 )
+from evals.python.catalog import Catalog as Dataset
 from evals.python.catalog import Selection
 from evals.python.verification import (
     Assessment,
@@ -48,7 +49,9 @@ __all__ = [
     "Cases",
     "Cleanup",
     "CodeCriterion",
+    "CompileDataset",
     "Completion",
+    "Dataset",
     "DatasetInfo",
     "DatasetProvenance",
     "DescribeDataset",
@@ -95,6 +98,11 @@ def _unique[T](values: tuple[T, ...]) -> tuple[T, ...]:
 class ExecutionRuntime(BaseModel):
     model_config = FROZEN
     provider: Literal["local", "hf"] = "local"
+
+
+class CompileDataset(BaseModel):
+    model_config = FROZEN
+    cases: tuple[CaseDefinition, ...]
 
 
 class Cases(BaseModel):
@@ -189,6 +197,10 @@ def query(operation: ExecutionRuntime) -> Runtime: ...
 
 
 @overload
+def query(operation: CompileDataset) -> Dataset: ...
+
+
+@overload
 def query(operation: Cases) -> tuple[Case, ...]: ...
 
 
@@ -210,29 +222,39 @@ def query(operation: GradeCase) -> Scores: ...
 
 def query(
     operation: Cases
+    | CompileDataset
     | ExperimentSettings
     | DescribeDataset
     | Provenance
     | GradeCase
     | ExecutionRuntime,
-) -> tuple[Case, ...] | Experiment | DatasetInfo | DatasetProvenance | Scores | Runtime | None:
+) -> (
+    tuple[Case, ...]
+    | Dataset
+    | Experiment
+    | DatasetInfo
+    | DatasetProvenance
+    | Scores
+    | Runtime
+    | None
+):
     match operation:
         case ExecutionRuntime():
             return _runtime(operation)
         case DescribeDataset() | Provenance():
             return _describe(operation)
-        case Cases() | ExperimentSettings() | GradeCase():
+        case Cases() | CompileDataset() | ExperimentSettings() | GradeCase():
             return _query_catalog(operation)
         case _:
             assert_never(operation)
 
 
 def _query_catalog(
-    operation: Cases | ExperimentSettings | GradeCase,
-) -> tuple[Case, ...] | Experiment | Scores:
+    operation: Cases | CompileDataset | ExperimentSettings | GradeCase,
+) -> tuple[Case, ...] | Dataset | Experiment | Scores:
     match operation:
-        case Cases():
-            return catalog.load_cases(selection=operation.selection)
+        case Cases() | CompileDataset():
+            return _dataset(operation)
         case ExperimentSettings():
             return catalog.experiment(
                 epochs=operation.epochs,
@@ -249,6 +271,16 @@ def _query_catalog(
                 verification=operation.verification,
                 selection=operation.selection,
             )
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def _dataset(operation: Cases | CompileDataset) -> tuple[Case, ...] | Dataset:
+    match operation:
+        case Cases():
+            return catalog.load_cases(selection=operation.selection)
+        case CompileDataset():
+            return catalog.compile_declarations(operation.cases)
         case _ as unreachable:
             assert_never(unreachable)
 
