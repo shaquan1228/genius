@@ -68,6 +68,8 @@ LIBRARY: Final = tuple(
         "projection.mli",
         "projection.ml",
         "codec.ml",
+        "declaration.mli",
+        "declaration.ml",
     )
 )
 SUITE: Final = OCAML_ROOT / "suite.ml"

@@ -80,12 +80,14 @@ def test_domain_modules_are_codec_free() -> None:
     assert sorted(OCAML_ROOT.glob("*.ml*")) == sorted(
         (*LIBRARY, SUITE, DATASET_INTERFACE, EXPORTER)
     )
+    boundary = {"codec.ml", "declaration.ml", "declaration.mli"}
+    domain = (path for path in (*LIBRARY, SUITE) if path.name not in boundary)
+    assert not any(re.search(r"Jsonm|Codec|print_", path.read_text()) for path in domain)
 
 
 def test_only_codec_uses_json_library() -> None:
-    domain = {path.name: path.read_text() for path in (*LIBRARY, SUITE) if path.name != "codec.ml"}
-    assert not {name for name, text in domain.items() if re.search(r"Jsonm|Codec|print_", text)}
-    assert "Jsonm" in (OCAML_ROOT / "codec.ml").read_text()
+    users = {path.name for path in LIBRARY if re.search(r"\bJsonm\b", path.read_text())}
+    assert users == {"codec.ml"}
 
 
 def test_integration_entry_points_use_explicit_catalog_selection() -> None:

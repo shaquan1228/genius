@@ -45,8 +45,8 @@ lint-ocaml:
 	    ocamlfind ocamlc -package jsonm $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml)) || exit 1; \
 	done
 
-# Every kernel module except the JSON entry point, in dependency order.
-KERNEL = $(shell cd ocaml && ocamldep -sort $(filter-out transport.ml codec.ml dataset.mli,$(notdir $(wildcard ocaml/*.mli ocaml/*.ml))))
+# Pure kernel modules, excluding the process boundary, in dependency order.
+KERNEL = $(shell cd ocaml && ocamldep -sort $(filter-out transport.ml codec.ml declaration.mli declaration.ml dataset.mli,$(notdir $(wildcard ocaml/*.mli ocaml/*.ml))))
 
 # Link a test with only the modules it may use, so a new dependency fails to compile.
 ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \

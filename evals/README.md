@@ -30,6 +30,7 @@ flowchart LR
 | `ocaml/experiment.mli` | Immutable defaults and validated launch overrides |
 | `ocaml/dataset.mli`, `ocaml/datasets/` | Common adapter interface; dataset-specific records and provenance |
 | `ocaml/codec.ml`, `ocaml/transport.ml` | JSON syntax and generic protocol operations |
+| `ocaml/declaration.mli`, `ocaml/declaration.ml` | Narrow declaration decoder interface and private implementation, returning validated `Ast.case` values |
 | `python/_kernel.py` | Private immutable Python bindings for canonical declarations and projections; no integration imports |
 | `python/transport.py` | Trusted source compilation, content-keyed executable caches, protocol encoding/decoding |
 | `python/catalog.py` | Adapter composition, immutable catalogs, trusted record retention and content fingerprints |
@@ -58,7 +59,7 @@ Dataset selection is an adapter name, a trusted suite path, or an immutable `Dat
 An adapter under `ocaml/datasets/<name>.ml` implements `dataset.mli`, compiles as `Dataset`, and constructs ordinary kernel values.
 Its `info` is absent for local declarations or contains a pinned gzip JSONL source plus flat provenance attributes.
 Its `import` function maps a raw record to a validated case; raw private benchmark JSON is retained byte-for-byte.
-Python integrations can instead supply canonical `CaseDefinition` values through `CompileDataset`. The generic `ocaml/datasets/declarations.ml` adapter decodes those declarations through existing validating constructors. The compiled dataset retains trusted records and resources without registering a new selector.
+Python integrations can instead supply canonical `CaseDefinition` values through `CompileDataset`. The generic `ocaml/datasets/declarations.ml` adapter delegates to `Declaration.decode : string -> Ast.case`; its implementation decodes through existing validating constructors. The compiled dataset retains trusted records and resources without registering a new selector.
 Adding a dataset using existing semantics requires only an adapter and declarations, without editing the kernel, transport, or a Python dataset enum.
 A genuinely new evaluation capability may require a new primitive.
 
