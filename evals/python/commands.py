@@ -19,7 +19,9 @@ from evals.python.verification import (
     Runtime,
     VerificationResult,
 )
-from kernel import Ast, Fixture, Projection
+from kernel import HarnessError, Unchecked
+from kernel._operations import fixture as fixture_ops
+from kernel._operations import projection as projection_ops
 
 __all__ = [
     "Assessment",
@@ -108,9 +110,9 @@ async def verify(
     agent: InstanceOf[Environment],
     runtime: InstanceOf[Runtime],
 ) -> VerificationResult:
-    checks = Projection.verifier(datasets.record(case_id, selection=selection))
+    checks = projection_ops.verifier(datasets.record(case_id, selection=selection))
     if checks is None:
-        return VerificationResult(verification=Ast.Unchecked())
+        return VerificationResult(verification=Unchecked())
     return await _verification.verify(checks, agent=agent, runtime=runtime)
 
 
@@ -125,7 +127,7 @@ async def assess(
     runtime: InstanceOf[Runtime],
 ) -> Assessment:
     result = await verify(case_id=case_id, selection=selection, agent=agent, runtime=runtime)
-    if isinstance(result.verification, Ast.Harness_error):
+    if isinstance(result.verification, HarnessError):
         raise RuntimeError(f"Verification harness error: {result.verification[0]}")
     return Assessment(
         verification=result.verification,
@@ -148,22 +150,24 @@ async def validate_reference(
     selection: Selection = "smoke",
     runtime: InstanceOf[Runtime] | None = None,
 ) -> VerificationResult:
-    if Projection.verifier(datasets.record(case_id, selection=selection)) is None:
-        return VerificationResult(verification=Ast.Unchecked())
+    if projection_ops.verifier(datasets.record(case_id, selection=selection)) is None:
+        return VerificationResult(verification=Unchecked())
     runtime = runtime or create_runtime()
     try:
         async with _verification.allocated(runtime) as agent:
             await _verification.stage_reference(
                 dict(
-                    Fixture.files(
-                        Projection.reference(datasets.record(case_id, selection=selection)).edits
+                    fixture_ops.files(
+                        projection_ops.reference(
+                            datasets.record(case_id, selection=selection)
+                        ).edits
                     )
                 ),
                 agent=agent,
             )
             return await verify(case_id=case_id, selection=selection, agent=agent, runtime=runtime)
     except Exception as error:
-        return VerificationResult(verification=Ast.Harness_error(str(error)))
+        return VerificationResult(verification=HarnessError(str(error)))
 
 
 async def evaluate(

@@ -28,11 +28,27 @@ from evals.python.tests.support import (
 from evals.python.tests.support import (
     timeout_case as _timeout_case,
 )
-from kernel import Ast, Fixture, Grader, InvalidArgument
+from kernel import (
+    Case,
+    Code,
+    Experiment,
+    Inline,
+    Instruction,
+    InvalidArgument,
+    Outcome,
+    Plain,
+    Profile,
+    Reference,
+    Task,
+    Unchecked,
+    Verifier,
+)
+from kernel._operations import fixture as fixture_ops
+from kernel._operations import grader as grader_ops
 
 
 def public_projection_uses_native_types() -> None:
-    assert all(isinstance(case, Ast.case) for case in queries.list_cases())
+    assert all(isinstance(case, Case) for case in queries.list_cases())
 
 
 def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
@@ -46,7 +62,7 @@ def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
 @pytest.mark.parametrize("path", ["../outside.ml", "/outside.ml"])
 def generated_paths_are_validated(path: str) -> None:
     declaration = _choice_case(case_id="paths", a=1, b=2)
-    invalid = _copy_case(declaration, fixture=Fixture.of_files([(path, "bad")]))
+    invalid = _copy_case(declaration, fixture=fixture_ops.of_files([(path, "bad")]))
     with pytest.raises(InvalidArgument):
         queries.compile_dataset(cases=(invalid,))
 
@@ -56,7 +72,7 @@ def _grade(case_id: str, *, text: str) -> bool:
         case_id=case_id,
         response=text,
         changed_files=(),
-        verification=Ast.Unchecked(),
+        verification=Unchecked(),
         selection="smoke",
     )["correctness"]
 
@@ -181,7 +197,7 @@ def native_projection_preserves_strings() -> None:
     text = 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
     definition = _copy_case(
         _choice_case(case_id="escaped", a=10, b=8),
-        instruction=Ast.instruction(skill="reasoning", prompt=text),
+        instruction=Instruction(skill="reasoning", prompt=text),
     )
     dataset = queries.compile_dataset(cases=(definition,))
     assert queries.list_cases(selection=dataset)[0].prompt == text
@@ -192,9 +208,9 @@ def cases_are_immutable() -> None:
     with pytest.raises((AttributeError, TypeError)):
         case.id = "changed"  # type: ignore[misc]
     with pytest.raises(TypeError):
-        case.files[0] = ("receipt.py", Ast.Inline("changed"))  # type: ignore[index]
+        case.files[0] = ("receipt.py", Inline("changed"))  # type: ignore[index]
     with pytest.raises(TypeError):
-        Fixture.files(reference(case.id).edits)[0] = ("receipt.py", "changed")  # type: ignore[index]
+        fixture_ops.files(reference(case.id).edits)[0] = ("receipt.py", "changed")  # type: ignore[index]
     checks = verifier(case.id)
     assert checks is not None
     with pytest.raises((AttributeError, TypeError)):
@@ -218,14 +234,14 @@ def compilation_cache_invalidates_when_declarations_change() -> None:
 
 
 def generic_python_case_exports_without_language_restriction() -> None:
-    definition = Ast.task(
+    definition = Task(
         id="python-case",
-        fixture=Fixture.of_files([("solution.py", "print(42)")]),
-        instruction=Ast.instruction(skill="reasoning", prompt="Return 42"),
-        criterion=Ast.Code(
-            Ast.verifier(
+        fixture=fixture_ops.of_files([("solution.py", "print(42)")]),
+        instruction=Instruction(skill="reasoning", prompt="Return 42"),
+        criterion=Code(
+            Verifier(
                 inputs=("solution.py",),
-                files=[("grader.py", Ast.Inline("trusted"))],
+                files=[("grader.py", Inline("trusted"))],
                 tools=[],
                 command=("python3", "grader.py"),
                 stdin="private",
@@ -233,7 +249,7 @@ def generic_python_case_exports_without_language_restriction() -> None:
             )
         ),
         allowed_files=("solution.py",),
-        reference=Ast.reference(edits=Fixture.empty, completion=Ast.Plain("done")),
+        reference=Reference(edits=fixture_ops.empty, completion=Plain("done")),
     )
     dataset = queries.compile_dataset(cases=(definition,))
     case = queries.list_cases(selection=dataset)[0]
@@ -250,9 +266,9 @@ def generic_python_case_exports_without_language_restriction() -> None:
 
 def experiment_configuration_reaches_tasks_and_profiles() -> None:
     before = queries.resolve_settings()
-    spec = Ast.experiment(
+    spec = Experiment(
         profiles=[
-            Ast.profile(
+            Profile(
                 name=item.name,
                 preamble=item.preamble.replace("Apply that", "Follow that"),
                 instructions=item.instructions,
@@ -285,15 +301,15 @@ def experiment_configuration_reaches_tasks_and_profiles() -> None:
 @pytest.mark.parametrize("grade_only", [False, True])
 def record_updates_cannot_bypass_kernel_validation(*, grade_only: bool) -> None:
     definition = _timeout_case(case_id="updated", initial=15, requested=30)
-    invalid = _copy_case(definition, fixture=Fixture.empty)
+    invalid = _copy_case(definition, fixture=fixture_ops.empty)
     records = (invalid,)
     operation: Callable[[], object]
     if grade_only:
         operation = partial(
-            Grader.grade,
+            grader_ops.grade,
             records[0],
             response=None,
-            outcome=Ast.outcome(changed_files=(), verification=Ast.Unchecked()),
+            outcome=Outcome(changed_files=(), verification=Unchecked()),
         )
     else:
         operation = partial(queries.compile_dataset, cases=records)

@@ -40,24 +40,24 @@ flowchart LR
 | `python/integrations/evalplus/` | Benchmark reference-validation CLI, EvalPlus manifest adaptation and trusted EvalPlus driver |
 | `bin/` | Local launch and hosted bootstrap scripts |
 
-Public `Ast.case` values contain only ID, skill, prompt, and public files, including visible helper tools.
+Public `Case` values contain only ID, skill, prompt, and public files, including visible helper tools.
 Reference solutions, expected answers, private verifier programs and private inputs use separate projections.
 Only the trusted host or fresh grading sandbox receives those projections; agent samples and metadata receive public inputs and identifiers.
 Commands and queries accept and return the OCaml-backed types directly; validation and grading policy remain in OCaml.
 
 The public command and query operations remain. Their signatures use native
-`Ast.task`, `Ast.case`, `Ast.experiment` and `Ast.verification` values directly; projection, settings and grading calls stay in the same process. There is
+`Task`, `Case`, `Experiment` and `Verification` values directly; projection, settings and grading calls stay in the same process. There is
 no JSON envelope, kernel executable or per-call subprocess. Dataset descriptions
 and provenance remain Python-owned queries. Grading returns named boolean scores.
 
 Dataset selection is a Python module name under `python/datasets/` or an immutable
 `Dataset` returned by `load_dataset` or `compile_dataset`. Each bundled module supplies
-`info` (optional provenance) and `cases()` (native `Ast.task` values).
+`info` (optional provenance) and `cases()` (native `Task` values).
 Python owns downloading and parsing upstream records. OCaml accepts the same
 canonical declarations for every dataset, validates them through its constructors,
 and exposes separate public, verifier, and reference projections.
 
-To add a dataset, map its Python records into `Ast.task` values and call
+To add a dataset, map its Python records into `Task` values and call
 `compile_dataset(cases=..., info=...)`; no OCaml adapter or selector registration is
 needed. A module under `python/datasets/` makes a dataset available by name to the
 CLI. Evaluator integrations provide reusable executable checks, independently of
@@ -254,10 +254,11 @@ Sandbox and verifier failures still stop the task.
 
 ## Author cases
 
-Python datasets construct native `Ast.task` values. The example in
-`python/datasets/smoke.py` uses `Ast.instruction`, `Ast.Code` or `Ast.Answer`, and
-`Ast.reference`; `Fixture.of_files` constructs the opaque file map. Import `Ast`
-and `Fixture` directly from `kernel`. Public queries return `Ast.case`, which
+Python datasets construct native `Task` values. The example in
+`python/datasets/smoke.py` uses `Instruction`, `Code` or `Answer`, and
+`Reference`; `fixture_ops.of_files` constructs the opaque file map. Import native types and constructors directly from `kernel`, such as
+`Task`, `Instruction`, `Answer`, and `Rubric`. The implementation keeps fixture
+operations in the private `kernel._operations` binding layer. Public queries return `Case`, which
 excludes private checks and reference solutions.
 Python-only metadata and SDK execution capabilities remain Python-owned.
 
@@ -312,13 +313,13 @@ rejects checks that read missing fixture files and reference edits outside the
 allowed scope. Add a genuinely new success condition to `ast.ml`, its validating
 constructor to `criterion.ml`, and its pure grading logic to `grader.ml`.
 
-Structured answers use `Ast.Answer(Ast.answer(...))` with named `Ast.String`/`Ast.Bool`
-expected fields and an optional `Ast.text_rule`. A field named `reason` has no special meaning unless
+Structured answers use `Answer(Rubric(...))` with named `String`/`Bool`
+expected fields and an optional `TextRule`. A field named `reason` has no special meaning unless
 the criterion declares it. Adding answer fields does not require a new binding or API operation.
 
 ## Execution boundary
 
-`from kernel import Ast, Grader, Projection` loads the installed
+`from kernel import Case, Task, Rubric` loads the installed
 `genius_evals_kernel` findlib package with `ocaml.require`. Dune wraps the pure
 modules to avoid collisions with modules already loaded by the bridge. The fixture
 map lives behind `fixture_store.mli`'s abstract type.
@@ -328,8 +329,12 @@ records (it raises an unbound converter error). A Dune build rule therefore gene
 a flat public interface from the compiled domain and operation `.cmi` files using
 compiler-libs `Subst` and `Printtyp`. It exposes the fixture as abstract and preserves
 the compiler's constructors and operation signatures. No domain declaration is copied
-into a handwritten binding interface. The Python stub reader consumes this final
-public `.cmi`, including its nested operation signatures.
+into a handwritten binding interface. The Python binding generator consumes this final
+public `.cmi`, including its nested operation signatures. It emits capitalized
+native type and constructor imports at `kernel`; operation modules stay in the
+private `kernel._operations` namespace. `Rubric` names the native `answer` record,
+while `Answer` selects the answer-grading criterion. The exported objects retain
+their original native identities.
 
 Python imports never build the kernel library. The bridge still compiles its own
 conversion functions internally; `kernel/bridge.patch` addresses its independent

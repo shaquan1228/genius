@@ -38,4 +38,4 @@ bridge_library=$(opam var --switch="$kernel_switch" ocaml-in-python:lib)
 opam exec --switch="$kernel_switch" -- dune build @install tools/bindings.exe
 opam exec --switch="$kernel_switch" -- .venv/bin/python kernel/generate.py
 opam exec --switch="$kernel_switch" -- dune install
-opam exec --switch="$kernel_switch" -- .venv/bin/python -c 'from kernel import Ast, Grader, Projection'
+opam exec --switch="$kernel_switch" -- .venv/bin/python -c 'from kernel import Case, Task, Rubric'

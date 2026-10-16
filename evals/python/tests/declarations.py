@@ -1,7 +1,7 @@
 """Native declarations retain validation and separate public/private projections."""
+
 # Native boolean variants have a single positional payload.
 # ruff: noqa: FBT003
-
 import json
 from collections.abc import Callable, Sequence
 
@@ -10,7 +10,29 @@ import pytest
 from evals.python import queries
 from evals.python.tests.projections import reference as private_reference
 from evals.python.tests.projections import verifier
-from kernel import Ast, Fixture, InvalidArgument
+from kernel import (
+    Answer,
+    Bool,
+    Case,
+    Code,
+    Content,
+    Criterion,
+    Fixture,
+    Inline,
+    Instruction,
+    InvalidArgument,
+    Passed,
+    Plain,
+    Reference,
+    Resource,
+    Rubric,
+    String,
+    Structured,
+    Task,
+    TextRule,
+    Verifier,
+)
+from kernel._operations import fixture as fixture_ops
 
 
 def _override[T](value: T | None, *, original: T) -> T:
@@ -18,16 +40,16 @@ def _override[T](value: T | None, *, original: T) -> T:
 
 
 def _copy_case(  # noqa: PLR0913 - Reconstruct the actual native record fields.
-    value: Ast.task,
+    value: Task,
     *,
     id: str | None = None,
-    fixture: Ast.fixture | None = None,
-    instruction: Ast.instruction | None = None,
-    criterion: Ast.criterion | None = None,
+    fixture: Fixture | None = None,
+    instruction: Instruction | None = None,
+    criterion: Criterion | None = None,
     allowed_files: Sequence[str] | None = None,
-    reference: Ast.reference | None = None,
-) -> Ast.task:
-    return Ast.task(
+    reference: Reference | None = None,
+) -> Task:
+    return Task(
         id=_override(id, original=value.id),
         fixture=_override(fixture, original=value.fixture),
         instruction=_override(instruction, original=value.instruction),
@@ -38,16 +60,16 @@ def _copy_case(  # noqa: PLR0913 - Reconstruct the actual native record fields.
 
 
 def _copy_verifier(  # noqa: PLR0913 - Reconstruct the actual native record fields.
-    value: Ast.verifier,
+    value: Verifier,
     *,
     inputs: Sequence[str] | None = None,
-    files: Sequence[tuple[str, Ast.content]] | None = None,
-    tools: Sequence[tuple[str, Ast.content]] | None = None,
+    files: Sequence[tuple[str, Content]] | None = None,
+    tools: Sequence[tuple[str, Content]] | None = None,
     command: Sequence[str] | None = None,
     stdin: str | None = None,
     timeout_seconds: int | None = None,
-) -> Ast.verifier:
-    return Ast.verifier(
+) -> Verifier:
+    return Verifier(
         inputs=_override(inputs, original=value.inputs),
         files=_override(files, original=value.files),
         tools=_override(tools, original=value.tools),
@@ -57,45 +79,45 @@ def _copy_verifier(  # noqa: PLR0913 - Reconstruct the actual native record fiel
     )
 
 
-def _files(value: Sequence[tuple[str, Ast.content]]) -> dict[str, str]:
+def _files(value: Sequence[tuple[str, Content]]) -> dict[str, str]:
     result = {}
     for name, content in value:
-        assert isinstance(content, Ast.Inline)
+        assert isinstance(content, Inline)
         result[name] = content[0]
     return result
 
 
-def _declaration(*, code: bool = True) -> Ast.task:
-    criterion: Ast.criterion
+def _declaration(*, code: bool = True) -> Task:
+    criterion: Criterion
     if code:
-        criterion = Ast.Code(
-            Ast.verifier(
+        criterion = Code(
+            Verifier(
                 inputs=("main.py",),
-                files=[("verify.py", Ast.Inline("private assertions"))],
-                tools=[("check.sh", Ast.Inline("visible helper"))],
+                files=[("verify.py", Inline("private assertions"))],
+                tools=[("check.sh", Inline("visible helper"))],
                 command=("python3", "verify.py"),
                 stdin="private stdin",
                 timeout_seconds=30,
             )
         )
     else:
-        criterion = Ast.Answer(
-            Ast.answer(
-                expected=[("choice", Ast.String("B")), ("safe", Ast.Bool(True))],
-                text_rule=Ast.text_rule(field="reason", min_words=1, max_words=5),
+        criterion = Answer(
+            Rubric(
+                expected=[("choice", String("B")), ("safe", Bool(True))],
+                text_rule=TextRule(field="reason", min_words=1, max_words=5),
             )
         )
-    return Ast.task(
+    return Task(
         id="external",
-        fixture=Fixture.of_files([("main.py", "broken")]),
-        instruction=Ast.instruction(skill="reasoning", prompt="Fix it: é"),
+        fixture=fixture_ops.of_files([("main.py", "broken")]),
+        instruction=Instruction(skill="reasoning", prompt="Fix it: é"),
         criterion=criterion,
         allowed_files=("main.py",),
-        reference=Ast.reference(
-            edits=Fixture.of_files([("main.py", "fixed")]),
-            completion=Ast.Plain("done")
+        reference=Reference(
+            edits=fixture_ops.of_files([("main.py", "fixed")]),
+            completion=Plain("done")
             if code
-            else Ast.Structured([("choice", Ast.String("B")), ("safe", Ast.Bool(True))]),
+            else Structured([("choice", String("B")), ("safe", Bool(True))]),
         ),
     )
 
@@ -104,7 +126,7 @@ def _declaration(*, code: bool = True) -> Ast.task:
 def external_declarations_preserve_public_projection(*, code: bool) -> None:
     dataset = queries.compile_dataset(cases=(_declaration(code=code),))
     (case,) = queries.list_cases(selection=dataset)
-    assert isinstance(case, Ast.case)
+    assert isinstance(case, Case)
     assert (case.id, case.skill, case.prompt) == ("external", "reasoning", "Fix it: é")
     assert _files(case.files) == (
         {"main.py": "broken", "check.sh": "visible helper"} if code else {"main.py": "broken"}
@@ -123,11 +145,9 @@ def code_declarations_preserve_private_checks_and_resolve_resources() -> None:
 
 def missing_private_resource_fails_at_resolution() -> None:
     definition = _declaration()
-    assert isinstance(definition.criterion, Ast.Code)
-    checks = _copy_verifier(
-        definition.criterion[0], files=[("verify.py", Ast.Resource("missing.py"))]
-    )
-    definition = _copy_case(definition, criterion=Ast.Code(checks))
+    assert isinstance(definition.criterion, Code)
+    checks = _copy_verifier(definition.criterion[0], files=[("verify.py", Resource("missing.py"))])
+    definition = _copy_case(definition, criterion=Code(checks))
     with pytest.raises(KeyError, match=r"missing\.py"):
         queries.compile_dataset(cases=(definition,))
 
@@ -136,23 +156,23 @@ def missing_private_resource_fails_at_resolution() -> None:
 def declarations_preserve_private_reference_edits(*, code: bool) -> None:
     dataset = queries.compile_dataset(cases=(_declaration(code=code),))
     reference = private_reference("external", selection=dataset)
-    assert dict(Fixture.files(reference.edits)) == {"main.py": "fixed"}
+    assert dict(fixture_ops.files(reference.edits)) == {"main.py": "fixed"}
 
 
 def code_declarations_preserve_plain_completion() -> None:
     dataset = queries.compile_dataset(cases=(_declaration(),))
     completion = private_reference("external", selection=dataset).completion
-    assert isinstance(completion, Ast.Plain)
+    assert isinstance(completion, Plain)
     assert completion[0] == "done"
 
 
 def answer_declarations_preserve_typed_completion_fields() -> None:
     dataset = queries.compile_dataset(cases=(_declaration(code=False),))
     completion = private_reference("external", selection=dataset).completion
-    assert isinstance(completion, Ast.Structured)
+    assert isinstance(completion, Structured)
     fields = dict(completion[0])
-    assert (isinstance(fields["choice"], Ast.String), fields["choice"][0]) == (True, "B")
-    assert (isinstance(fields["safe"], Ast.Bool), fields["safe"][0]) == (True, True)
+    assert (isinstance(fields["choice"], String), fields["choice"][0]) == (True, "B")
+    assert (isinstance(fields["safe"], Bool), fields["safe"][0]) == (True, True)
 
 
 def answer_declarations_do_not_supply_executable_checks() -> None:
@@ -168,7 +188,7 @@ def imported_declarations_use_existing_grading(*, code: bool) -> None:
         case_id="external",
         response='{"choice":"B","safe":true,"reason":"clear"}',
         changed_files=("workspace/main.py",),
-        verification=Ast.Passed(),
+        verification=Passed(),
     ) == {"correctness": True, "scope": True}
 
 
@@ -180,28 +200,28 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
     "invalid",
     [
         lambda c: _copy_case(c, allowed_files=()),
-        lambda c: _copy_case(c, fixture=Fixture.empty),
-        lambda c: _copy_case(c, criterion=Ast.Answer(Ast.answer(expected=[], text_rule=None))),
+        lambda c: _copy_case(c, fixture=fixture_ops.empty),
+        lambda c: _copy_case(c, criterion=Answer(Rubric(expected=[], text_rule=None))),
         lambda c: _copy_case(
             c,
-            criterion=Ast.Answer(
-                Ast.answer(
-                    expected=[("choice", Ast.String("B"))],
-                    text_rule=Ast.text_rule(field="choice", min_words=0, max_words=2),
+            criterion=Answer(
+                Rubric(
+                    expected=[("choice", String("B"))],
+                    text_rule=TextRule(field="choice", min_words=0, max_words=2),
                 )
             ),
         ),
         lambda c: _copy_case(
             c,
-            reference=Ast.reference(
-                edits=Fixture.of_files([("outside.py", "unauthorized")]),
-                completion=Ast.Plain(""),
+            reference=Reference(
+                edits=fixture_ops.of_files([("outside.py", "unauthorized")]),
+                completion=Plain(""),
             ),
         ),
     ],
 )
 def kernel_constructors_validate_raw_declarations(
-    invalid: Callable[[Ast.task], Ast.task],
+    invalid: Callable[[Task], Task],
 ) -> None:
     with pytest.raises(InvalidArgument):
         queries.compile_dataset(cases=(invalid(_declaration()),))
@@ -214,30 +234,30 @@ def kernel_constructors_validate_raw_declarations(
         ("inputs", ("missing.py",)),
         ("command", ()),
         ("timeout_seconds", 0),
-        ("files", [("main.py", Ast.Inline("overlap"))]),
-        ("tools", [("../secret", Ast.Inline("bad"))]),
+        ("files", [("main.py", Inline("overlap"))]),
+        ("tools", [("../secret", Inline("bad"))]),
     ],
 )
 def nested_constructor_rules_fail_closed(field: str, *, value: object) -> None:
     definition = _declaration()
-    assert isinstance(definition.criterion, Ast.Code)
+    assert isinstance(definition.criterion, Code)
     old = definition.criterion[0]
     fields = {
         name: getattr(old, name)
         for name in ("inputs", "files", "tools", "command", "stdin", "timeout_seconds")
     }
     fields[field] = value
-    checks = Ast.verifier(**fields)
+    checks = Verifier(**fields)
     with pytest.raises(InvalidArgument):
-        queries.compile_dataset(cases=(_copy_case(definition, criterion=Ast.Code(checks)),))
+        queries.compile_dataset(cases=(_copy_case(definition, criterion=Code(checks)),))
 
 
 @pytest.mark.parametrize(("minimum", "maximum"), [(-1, 2), (3, 2)])
 def answer_constructor_rules_fail_closed(minimum: int, *, maximum: int) -> None:
-    criterion = Ast.Answer(
-        Ast.answer(
+    criterion = Answer(
+        Rubric(
             expected=[],
-            text_rule=Ast.text_rule(field="reason", min_words=minimum, max_words=maximum),
+            text_rule=TextRule(field="reason", min_words=minimum, max_words=maximum),
         )
     )
     with pytest.raises(InvalidArgument):
@@ -245,19 +265,19 @@ def answer_constructor_rules_fail_closed(minimum: int, *, maximum: int) -> None:
 
 
 def native_fields_retain_immutable_snapshots() -> None:
-    fields = [("choice", Ast.String("B"))]
-    answer = Ast.answer(expected=fields, text_rule=None)
+    fields = [("choice", String("B"))]
+    answer = Rubric(expected=fields, text_rule=None)
     fields.clear()
     assert len(answer.expected) == 1
     with pytest.raises((AttributeError, TypeError)):
         answer.expected = []  # type: ignore[misc]
     initial = [("main.py", "broken")]
-    fixture = Fixture.of_files(initial)
+    fixture = fixture_ops.of_files(initial)
     initial[0] = ("main.py", "changed")
-    assert dict(Fixture.files(fixture)) == {"main.py": "broken"}
-    artifacts = [("verify.py", Ast.Inline("private assertions"))]
+    assert dict(fixture_ops.files(fixture)) == {"main.py": "broken"}
+    artifacts = [("verify.py", Inline("private assertions"))]
     definition = _declaration()
-    assert isinstance(definition.criterion, Ast.Code)
+    assert isinstance(definition.criterion, Code)
     checks = _copy_verifier(definition.criterion[0], files=artifacts)
     artifacts.clear()
     assert _files(checks.files) == {"verify.py": "private assertions"}
@@ -266,34 +286,30 @@ def native_fields_retain_immutable_snapshots() -> None:
 @pytest.mark.parametrize(
     "criterion",
     [
-        Ast.Answer(Ast.answer(expected=[("choice", Ast.String("B"))], text_rule=None)),
-        Ast.Answer(
-            Ast.answer(
-                expected=[], text_rule=Ast.text_rule(field="reason", min_words=1, max_words=5)
-            )
-        ),
+        Answer(Rubric(expected=[("choice", String("B"))], text_rule=None)),
+        Answer(Rubric(expected=[], text_rule=TextRule(field="reason", min_words=1, max_words=5))),
     ],
 )
-def answer_construction_supports_each_optional_rule_shape(criterion: Ast.criterion) -> None:
+def answer_construction_supports_each_optional_rule_shape(criterion: Criterion) -> None:
     dataset = queries.compile_dataset(
         cases=(_copy_case(_declaration(code=False), criterion=criterion),)
     )
     assert queries.list_cases(selection=dataset)[0].id == "external"
 
 
-def _reference_files(value: Ast.reference) -> dict[str, str]:
-    return dict(Fixture.files(value.edits))
+def _reference_files(value: Reference) -> dict[str, str]:
+    return dict(fixture_ops.files(value.edits))
 
 
-def _reference_text(value: Ast.reference) -> str:
+def _reference_text(value: Reference) -> str:
     completion = value.completion
-    if isinstance(completion, Ast.Plain):
+    if isinstance(completion, Plain):
         return completion[0]
-    assert isinstance(completion, Ast.Structured)
+    assert isinstance(completion, Structured)
     return json.dumps({name: scalar[0] for name, scalar in completion[0]})
 
 
 def _public_snapshot(
-    cases: Sequence[Ast.case],
+    cases: Sequence[Case],
 ) -> tuple[tuple[str, str, str, dict[str, str]], ...]:
     return tuple((case.id, case.skill, case.prompt, _files(case.files)) for case in cases)

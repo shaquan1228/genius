@@ -1,15 +1,27 @@
 """Pure Python declarations for the default four-case smoke dataset."""
 
 from evals.python.integrations.smoke import checks
-from kernel import Ast, Fixture
+from kernel import (
+    Answer,
+    Bool,
+    Instruction,
+    Plain,
+    Reference,
+    Rubric,
+    String,
+    Structured,
+    Task,
+    TextRule,
+)
+from kernel._operations import fixture as fixture_ops
 
 info = None
 
 
-def receipt(*, term: str = "price") -> Ast.task:
-    return Ast.task(
+def receipt(*, term: str = "price") -> Task:
+    return Task(
         id="clear-task",
-        fixture=Fixture.of_files(
+        fixture=fixture_ops.of_files(
             [
                 (
                     "receipt.py",
@@ -26,7 +38,7 @@ assert total([(3.0, 1), (4.0, 1)]) == 7.0
                 ),
             ]
         ),
-        instruction=Ast.instruction(
+        instruction=Instruction(
             skill="reasoning",
             prompt=(
                 "Fix total in receipt.py so each item's quantity contributes to the total. "
@@ -47,8 +59,8 @@ assert total([(1.5, 2)]) == 3.0
 """,
         ),
         allowed_files=("receipt.py",),
-        reference=Ast.reference(
-            edits=Fixture.of_files(
+        reference=Reference(
+            edits=fixture_ops.of_files(
                 [
                     (
                         "receipt.py",
@@ -57,7 +69,7 @@ assert total([(1.5, 2)]) == 3.0
                     )
                 ]
             ),
-            completion=Ast.Plain("Each quantity now contributes to the total."),
+            completion=Plain("Each quantity now contributes to the total."),
         ),
     )
 
@@ -75,12 +87,12 @@ def timeout(value=None):
 """
 
 
-def timeout(*, initial: int = 15, requested: int = 30) -> Ast.task:
+def timeout(*, initial: int = 15, requested: int = 30) -> Task:
     if initial <= 0 or requested <= 0 or initial == requested:
         raise ValueError("Timeout changes need distinct positive initial and requested values")
-    return Ast.task(
+    return Task(
         id="known-preflight",
-        fixture=Fixture.of_files(
+        fixture=fixture_ops.of_files(
             [
                 ("config.py", f"timeout_seconds = {initial}\n"),
                 ("client.py", client(initial)),
@@ -102,7 +114,7 @@ else:
                 ),
             ]
         ),
-        instruction=Ast.instruction(
+        instruction=Instruction(
             skill="preflight",
             prompt=(
                 f"On branch eval, change the default timeout from {initial} to {requested} seconds "
@@ -132,26 +144,26 @@ for value in (0, -1):
 """,
         ),
         allowed_files=("config.py", "client.py"),
-        reference=Ast.reference(
-            edits=Fixture.of_files(
+        reference=Reference(
+            edits=fixture_ops.of_files(
                 [
                     ("config.py", f"timeout_seconds = {requested}\n"),
                     ("client.py", client(requested)),
                 ]
             ),
-            completion=Ast.Plain("Updated both defaults and preserved overrides."),
+            completion=Plain("Updated both defaults and preserved overrides."),
         ),
     )
 
 
-def cases() -> tuple[Ast.task, ...]:
+def cases() -> tuple[Task, ...]:
     return (
         receipt(),
         timeout(),
-        Ast.task(
+        Task(
             id="small-decision",
-            fixture=Fixture.empty,
-            instruction=Ast.instruction(
+            fixture=fixture_ops.empty,
+            instruction=Instruction(
                 skill="bayesian",
                 prompt=(
                     "Choose a service for a one-month trial. A costs $10 total; B costs $8 total. "
@@ -160,10 +172,10 @@ def cases() -> tuple[Ast.task, ...]:
                     "Do not change files."
                 ),
             ),
-            criterion=Ast.Answer(
-                Ast.answer(
-                    expected=[("choice", Ast.String("B"))],
-                    text_rule=Ast.text_rule(
+            criterion=Answer(
+                Rubric(
+                    expected=[("choice", String("B"))],
+                    text_rule=TextRule(
                         field="reason",
                         min_words=1,
                         max_words=40,
@@ -171,20 +183,20 @@ def cases() -> tuple[Ast.task, ...]:
                 )
             ),
             allowed_files=(),
-            reference=Ast.reference(
-                edits=Fixture.empty,
-                completion=Ast.Structured(
+            reference=Reference(
+                edits=fixture_ops.empty,
+                completion=Structured(
                     [
-                        ("choice", Ast.String("B")),
-                        ("reason", Ast.String("B costs less for identical service.")),
+                        ("choice", String("B")),
+                        ("reason", String("B costs less for identical service.")),
                     ]
                 ),
             ),
         ),
-        Ast.task(
+        Task(
             id="decision-review",
-            fixture=Fixture.empty,
-            instruction=Ast.instruction(
+            fixture=fixture_ops.empty,
+            instruction=Instruction(
                 skill="bayesian",
                 prompt=(
                     "I took a one-time $1 bet with a known 80% chance of winning $1 profit "
@@ -195,23 +207,23 @@ def cases() -> tuple[Ast.task, ...]:
                     "change_rule (boolean), and reason (one sentence). Do not change files."
                 ),
             ),
-            criterion=Ast.Answer(
-                Ast.answer(
+            criterion=Answer(
+                Rubric(
                     expected=[
-                        ("decision_was_supported", Ast.Bool(True)),  # noqa: FBT003
-                        ("change_rule", Ast.Bool(False)),  # noqa: FBT003
+                        ("decision_was_supported", Bool(True)),  # noqa: FBT003
+                        ("change_rule", Bool(False)),  # noqa: FBT003
                     ],
-                    text_rule=Ast.text_rule(field="reason", min_words=1, max_words=40),
+                    text_rule=TextRule(field="reason", min_words=1, max_words=40),
                 )
             ),
             allowed_files=(),
-            reference=Ast.reference(
-                edits=Fixture.empty,
-                completion=Ast.Structured(
+            reference=Reference(
+                edits=fixture_ops.empty,
+                completion=Structured(
                     [
-                        ("decision_was_supported", Ast.Bool(True)),  # noqa: FBT003
-                        ("change_rule", Ast.Bool(False)),  # noqa: FBT003
-                        ("reason", Ast.String("One loss did not change the known odds.")),
+                        ("decision_was_supported", Bool(True)),  # noqa: FBT003
+                        ("change_rule", Bool(False)),  # noqa: FBT003
+                        ("reason", String("One loss did not change the known odds.")),
                     ]
                 ),
             ),

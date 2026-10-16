@@ -6,13 +6,16 @@ from unittest.mock import patch
 
 import pytest
 
-import kernel as native
 from evals.python import datasets, queries
 from evals.python.datasets import Selection
 from evals.python.queries import score_case
 from evals.python.tests.declarations import _declaration, _reference_files, _reference_text
 from evals.python.tests.projections import reference, verifier
-from kernel import Ast, Fixture, Response
+from kernel import Answer, Bool, Instruction, Reference, Rubric, String, Structured, Task, Unchecked
+from kernel._operations import fixture as fixture_ops
+from kernel._operations import grader as grader_ops
+from kernel._operations import response as response_ops
+from kernel._operations import sources
 
 
 def commands_and_queries_use_in_process_kernel_calls() -> None:
@@ -33,7 +36,7 @@ def _judgment(*, response: str, suite: Selection = "smoke") -> bool:
         case_id="small-decision",
         response=response,
         changed_files=(),
-        verification=Ast.Unchecked(),
+        verification=Unchecked(),
         selection=suite,
     )["correctness"]
 
@@ -43,7 +46,7 @@ def kernel_grades_response_and_scope() -> None:
         case_id="small-decision",
         response='{"choice":"B","reason":"Lower cost."}',
         changed_files=(),
-        verification=Ast.Unchecked(),
+        verification=Unchecked(),
     )
     assert dict(scores) == {"correctness": True, "scope": True}
     with pytest.raises(TypeError):
@@ -52,7 +55,7 @@ def kernel_grades_response_and_scope() -> None:
 
 def unknown_kernel_score_names_are_rejected() -> None:
     with (
-        patch.object(native.Grader, "grade", return_value=[]),
+        patch.object(grader_ops, "grade", return_value=[]),
         pytest.raises(ValueError, match="score names"),
     ):
         _judgment(response="{}")
@@ -64,13 +67,13 @@ def unknown_case_is_a_harness_error() -> None:
             case_id="unknown",
             response="{}",
             changed_files=(),
-            verification=Ast.Unchecked(),
+            verification=Unchecked(),
         )
 
 
 def native_kernel_errors_propagate() -> None:
     with (
-        patch.object(native.Grader, "grade", side_effect=RuntimeError("kernel failed")),
+        patch.object(grader_ops, "grade", side_effect=RuntimeError("kernel failed")),
         pytest.raises(RuntimeError, match="kernel failed"),
     ):
         _judgment(response="{}")
@@ -88,13 +91,13 @@ def grading_does_not_recompile_or_cache_results() -> None:
     responses = ("invalid", '{"choice":"B","reason":"Cheap"}', '{"choice":"A","reason":"Cheap"}')
     with (
         patch("subprocess.run", side_effect=AssertionError("Unexpected compilation")),
-        patch.object(native.Grader, "grade", wraps=native.Grader.grade) as grade,
+        patch.object(grader_ops, "grade", wraps=grader_ops.grade) as grade,
     ):
         assert [_judgment(response=response) for response in responses] == [False, True, False]
         assert grade.call_count == 3
 
 
-@pytest.mark.parametrize("source", [name for name, _ in native.sources()])
+@pytest.mark.parametrize("source", [name for name, _ in sources()])
 def kernel_fingerprint_tracks_every_trusted_source(source: str) -> None:
     original = datasets.kernel_sources()
     changed = datasets.Sources(
@@ -130,7 +133,7 @@ def candidate_duplicate_keys_keep_last_value() -> None:
 
 def additional_named_scores_cross_bridge_without_decoder_changes() -> None:
     with patch.object(
-        native.Grader,
+        grader_ops,
         "grade",
         return_value=[("correctness", True), ("scope", False), ("new_metric", True)],
     ):
@@ -138,7 +141,7 @@ def additional_named_scores_cross_bridge_without_decoder_changes() -> None:
             case_id="small-decision",
             response="{}",
             changed_files=(),
-            verification=Ast.Unchecked(),
+            verification=Unchecked(),
         )
     assert dict(scores) == {"correctness": True, "scope": False, "new_metric": True}
 
@@ -147,18 +150,18 @@ def reference_channels_export_independently_and_escape() -> None:
     state = 'quote" \\ \n é'
     fields: dict[str, str | bool] = {"state": state, "safe": True}
     safe = True
-    expected_fields = Response.of_fields([("state", Ast.String(state)), ("safe", Ast.Bool(safe))])
+    expected_fields = response_ops.of_fields([("state", String(state)), ("safe", Bool(safe))])
     dataset = queries.compile_dataset(
         cases=(
-            Ast.task(
+            Task(
                 id="reference",
-                fixture=Fixture.empty,
-                instruction=Ast.instruction(skill="reasoning", prompt="fields"),
-                criterion=Ast.Answer(Ast.answer(expected=expected_fields, text_rule=None)),
+                fixture=fixture_ops.empty,
+                instruction=Instruction(skill="reasoning", prompt="fields"),
+                criterion=Answer(Rubric(expected=expected_fields, text_rule=None)),
                 allowed_files=("result.txt",),
-                reference=Ast.reference(
-                    edits=Fixture.of_files([("result.txt", "result")]),
-                    completion=Ast.Structured(expected_fields),
+                reference=Reference(
+                    edits=fixture_ops.of_files([("result.txt", "result")]),
+                    completion=Structured(expected_fields),
                 ),
             ),
         )
@@ -172,7 +175,7 @@ def reference_channels_export_independently_and_escape() -> None:
         case_id="reference",
         response=_reference_text(expected),
         changed_files=(),
-        verification=Ast.Unchecked(),
+        verification=Unchecked(),
         selection=dataset,
     )["correctness"]
 

@@ -5,27 +5,45 @@ from typing import cast
 
 import pytest
 
+import kernel as kernel_types
 from kernel import (
-    Ast,
+    Answer,
     Case,
-    Criterion,
+    Code,
     Experiment,
-    Fixture,
-    Grader,
+    Failed,
+    Inline,
+    Instruction,
     InvalidArgument,
-    Projection,
+    Outcome,
+    Passed,
+    Plain,
+    Reference,
     Response,
-    Verifier,
+    Rubric,
+    String,
+    Structured,
+    Task,
+    Unchecked,
+    Verification,
 )
+from kernel._bridge import native as native_kernel
+from kernel._operations import case as case_ops
+from kernel._operations import experiment as experiment_ops
+from kernel._operations import fixture as fixture_ops
+from kernel._operations import grader as grader_ops
+from kernel._operations import projection as projection_ops
+from kernel._operations import response as response_ops
+from kernel._operations import verifier as verifier_ops
 
 
-def _answer() -> tuple[Ast.task, Ast.response]:
-    expected = Response.of_fields([("choice", Ast.String("B"))])
-    fixture = Fixture.of_files([("context.txt", "Public context")])
-    reference = Ast.reference(edits=Fixture.empty, completion=Ast.Structured(expected))
-    criterion = Criterion.answer(expected=expected)
-    instruction = Ast.instruction(skill="reasoning", prompt="Choose B")
-    case = Case.make(
+def _answer() -> tuple[Task, Response]:
+    expected = response_ops.of_fields([("choice", String("B"))])
+    fixture = fixture_ops.of_files([("context.txt", "Public context")])
+    reference = Reference(edits=fixture_ops.empty, completion=Structured(expected))
+    criterion = Answer(Rubric(expected=expected, text_rule=None))
+    instruction = Instruction(skill="reasoning", prompt="Choose B")
+    case = case_ops.make(
         id="native-answer",
         fixture=fixture,
         instruction=instruction,
@@ -38,67 +56,83 @@ def _answer() -> tuple[Ast.task, Ast.response]:
 
 def check_answer_projection() -> None:
     case, _ = _answer()
-    assert isinstance(case, Ast.task)
-    public = Projection.case(case)
-    assert isinstance(public, Ast.case)
-    assert (public.id, hasattr(public, "reference"), Projection.verifier(case)) == (
+    assert isinstance(case, Task)
+    public = projection_ops.case(case)
+    assert isinstance(public, Case)
+    assert (public.id, hasattr(public, "reference"), projection_ops.verifier(case)) == (
         case.id,
         False,
         None,
     )
     assert (
         [(name, text[0]) for name, text in public.files],
-        Projection.reference(case).completion[0][0][0],
+        projection_ops.reference(case).completion[0][0][0],
     ) == ([("context.txt", "Public context")], "choice")
 
 
 def check_answer_grading() -> None:
-    assert Experiment.resolve(epochs=1).epochs == 1
+    assert experiment_ops.resolve(epochs=1).epochs == 1
     case, expected = _answer()
-    outcome = Ast.outcome(changed_files=[], verification=Ast.Unchecked())
-    scores = Grader.grade(case, response=expected, outcome=outcome)
+    outcome = Outcome(changed_files=[], verification=Unchecked())
+    scores = grader_ops.grade(case, response=expected, outcome=outcome)
     assert dict(scores) == {"correctness": True, "scope": True}
-    assert not dict(Grader.grade(case, response=None, outcome=outcome))["correctness"]
+    assert not dict(grader_ops.grade(case, response=None, outcome=outcome))["correctness"]
 
 
-@pytest.mark.parametrize(("status", "correctness"), [(Ast.Passed(), True), (Ast.Failed(), False)])
-def check_code(status: Ast.verification, *, correctness: bool) -> None:
-    checks = Verifier.make(
+@pytest.mark.parametrize(("status", "correctness"), [(Passed(), True), (Failed(), False)])
+def check_code(status: Verification, *, correctness: bool) -> None:
+    checks = verifier_ops.make(
         inputs=["solution.py"],
-        files=[("verify.py", Ast.Inline("private check"))],
+        files=[("verify.py", Inline("private check"))],
         tools=[],
         command=["python3", "verify.py"],
         stdin="private input",
         timeout_seconds=5,
     )
-    case = Case.make(
+    case = case_ops.make(
         id="native-code",
-        fixture=Fixture.of_files([("solution.py", "pass")]),
-        instruction=Ast.instruction(skill="reasoning", prompt="Fix solution.py"),
-        criterion=Ast.Code(checks),
+        fixture=fixture_ops.of_files([("solution.py", "pass")]),
+        instruction=Instruction(skill="reasoning", prompt="Fix solution.py"),
+        criterion=Code(checks),
         allowed_files=["solution.py"],
-        reference=Ast.reference(
-            edits=Fixture.of_files([("solution.py", "fixed")]), completion=Ast.Plain("")
+        reference=Reference(
+            edits=fixture_ops.of_files([("solution.py", "fixed")]), completion=Plain("")
         ),
     )
-    projected = Projection.verifier(case)
+    projected = projection_ops.verifier(case)
     assert projected is not None
-    public_files = [name for name, _ in Projection.case(case).files]
-    outcome = Ast.outcome(changed_files=["workspace/solution.py"], verification=status)
-    assert dict(Grader.grade(case, response=None, outcome=outcome)) == {
+    public_files = [name for name, _ in projection_ops.case(case).files]
+    outcome = Outcome(changed_files=["workspace/solution.py"], verification=status)
+    assert dict(grader_ops.grade(case, response=None, outcome=outcome)) == {
         "correctness": correctness,
         "scope": True,
     }
-    outside_scope = Ast.outcome(changed_files=["workspace/other.py"], verification=Ast.Passed())
+    outside_scope = Outcome(changed_files=["workspace/other.py"], verification=Passed())
     assert (
         projected.stdin,
         public_files,
-        dict(Grader.grade(case, response=None, outcome=outside_scope))["scope"],
+        dict(grader_ops.grade(case, response=None, outcome=outside_scope))["scope"],
     ) == ("private input", ["solution.py"], False)
 
 
 def check_rejections() -> None:
     with pytest.raises(InvalidArgument):
-        Fixture.of_files([("duplicate.txt", "one"), ("duplicate.txt", "two")])
+        fixture_ops.of_files([("duplicate.txt", "one"), ("duplicate.txt", "two")])
     with pytest.raises(TypeError):
-        cast(Callable[..., Ast.experiment], Experiment.resolve)(epochs="wrong type")
+        cast(Callable[..., Experiment], experiment_ops.resolve)(epochs="wrong type")
+
+
+@pytest.mark.parametrize(
+    ("public_name", "native_name"),
+    [("Case", "case"), ("Task", "task"), ("Rubric", "answer"), ("Answer", "Answer")],
+)
+def explicit_types_preserve_native_identity(public_name: str, *, native_name: str) -> None:
+    assert getattr(kernel_types, public_name) is getattr(native_kernel, native_name)
+
+
+def public_kernel_exports_only_capitalized_types_and_constructors() -> None:
+    assert all(
+        name[0].isupper() and isinstance(getattr(kernel_types, name), type)
+        for name in vars(kernel_types)["__all__"]
+    )
+    assert not {"Ast", "Grader", "Projection", "sources"} & vars(kernel_types).keys()

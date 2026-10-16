@@ -8,15 +8,16 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import commands, datasets, queries
-from kernel import Ast, Projection
+from kernel import Case, Experiment, Passed
+from kernel._operations import projection as projection_ops
 
 
 def public_queries_preserve_canonical_objects() -> None:
     dataset = assert_type(queries.load_dataset(), queries.Dataset)
     assert queries.load_dataset(selection=dataset) is dataset
-    cases = assert_type(queries.list_cases(), tuple[Ast.case, ...])
+    cases = assert_type(queries.list_cases(), tuple[Case, ...])
     assert cases[0] is dataset.cases[cases[0].id]
-    assert all(isinstance(case, Ast.case) for case in cases)
+    assert all(isinstance(case, Case) for case in cases)
 
 
 def public_queries_select_canonical_projections() -> None:
@@ -29,7 +30,7 @@ def public_queries_select_canonical_projections() -> None:
 
 
 def public_experiment_resolves_canonical_overrides() -> None:
-    spec = assert_type(queries.resolve_settings(epochs=2), Ast.experiment)
+    spec = assert_type(queries.resolve_settings(epochs=2), Experiment)
     assert spec.epochs == 2
 
 
@@ -41,9 +42,9 @@ def public_hashes_match_existing_provenance() -> None:
 
 
 def public_grade_preserves_input_and_result() -> None:
-    verification = Ast.Passed()
+    verification = Passed()
     with patch(
-        "kernel.Grader.grade", return_value=[("correctness", True), ("scope", True)]
+        "kernel._operations.grader.grade", return_value=[("correctness", True), ("scope", True)]
     ) as grade:
         result = assert_type(
             queries.score_case(
@@ -55,7 +56,7 @@ def public_grade_preserves_input_and_result() -> None:
             queries.Scores,
         )
     assert grade.call_args.args[0] is queries.load_dataset().records["clear-task"]
-    assert isinstance(grade.call_args.kwargs["outcome"].verification, Ast.Passed)
+    assert isinstance(grade.call_args.kwargs["outcome"].verification, Passed)
     assert result == dict(grade.return_value)
 
 
@@ -85,8 +86,8 @@ def malformed_candidates_receive_incorrect_scores(response: str) -> None:
 
 def reference_query_returns_canonical_reference() -> None:
     dataset = queries.load_dataset()
-    expected = Projection.reference(dataset.records["small-decision"])
-    with patch("kernel.Projection.reference", return_value=expected) as project:
+    expected = projection_ops.reference(dataset.records["small-decision"])
+    with patch("kernel._operations.projection.reference", return_value=expected) as project:
         actual = queries.get_reference(case_id="small-decision", selection=dataset)
     assert actual is expected
     project.assert_called_once_with(dataset.records["small-decision"])

@@ -1,63 +1,74 @@
-"""OCaml-backed modules; public bindings are derived from the kernel interfaces."""
+# Generated from compiled OCaml interfaces; do not edit.
+"""Native domain types and constructors, imported directly from kernel."""
 
-import os
-import sys
-from functools import cache
-from importlib import import_module
-from pathlib import Path
-from types import ModuleType
-from typing import cast
+from ._bridge import InvalidArgument as InvalidArgument
+from ._bridge import native as _native
 
-_environment = {name: os.environ.get(name) for name in ("PATH", "PYTHONHOME", "PYTHONPATH")}
-os.environ["PATH"] = str(Path(sys.executable).parent) + os.pathsep + (_environment["PATH"] or "")
-try:
-    _ocaml = import_module("ocaml")
-finally:
-    # PyML mutates libc's environment without updating Python's os.environ mapping.
-    for _name, _value in _environment.items():
-        if _value is None:
-            os.unsetenv(_name)
-            os.environ.pop(_name, None)
-        else:
-            os.environ[_name] = _value
-
-
-try:
-    _ocaml.require("genius_evals_kernel")
-except ImportError as error:
-    raise ImportError("OCaml kernel is not installed; run make -C evals setup-kernel") from error
-
-Ast = cast(ModuleType, _ocaml.Genius_evals_kernel)
-
-
-@cache
-def sources() -> tuple[tuple[str, str], ...]:
-    """The exact trusted sources embedded in the installed native library."""
-    return tuple((str(name), str(contents)) for name, contents in Ast.sources)
-
-
-Case = Ast.Case
-Criterion = Ast.Criterion
-Experiment = Ast.Experiment
-Fixture = Ast.Fixture
-Grader = Ast.Grader
-Projection = Ast.Projection
-Reference = Ast.Reference
-Response = Ast.Response
-Verifier = Ast.Verifier
-InvalidArgument = _ocaml.Invalid_argument
+Answer = _native.Answer
+Bool = _native.Bool
+Case = _native.case
+Code = _native.Code
+Completion = _native.completion
+Content = _native.content
+Criterion = _native.criterion
+Experiment = _native.experiment
+Failed = _native.Failed
+Fixture = _native.fixture
+HarnessError = _native.Harness_error
+Inline = _native.Inline
+Instruction = _native.instruction
+InvalidSubmission = _native.Invalid_submission
+Outcome = _native.outcome
+Passed = _native.Passed
+Plain = _native.Plain
+Profile = _native.profile
+Reference = _native.reference
+Resource = _native.Resource
+Response = _native.response
+ResponseValue = _native.response_value
+Rubric = _native.answer
+Score = _native.score
+String = _native.String
+Structured = _native.Structured
+Task = _native.task
+TextRule = _native.text_rule
+TimedOut = _native.Timed_out
+Unchecked = _native.Unchecked
+Verification = _native.verification
+Verifier = _native.verifier
 
 __all__ = [
-    "Ast",
+    "Answer",
+    "Bool",
     "Case",
+    "Code",
+    "Completion",
+    "Content",
     "Criterion",
     "Experiment",
+    "Failed",
     "Fixture",
-    "Grader",
+    "HarnessError",
+    "Inline",
+    "Instruction",
     "InvalidArgument",
-    "Projection",
+    "InvalidSubmission",
+    "Outcome",
+    "Passed",
+    "Plain",
+    "Profile",
     "Reference",
+    "Resource",
     "Response",
+    "ResponseValue",
+    "Rubric",
+    "Score",
+    "String",
+    "Structured",
+    "Task",
+    "TextRule",
+    "TimedOut",
+    "Unchecked",
+    "Verification",
     "Verifier",
-    "sources",
 ]

@@ -1,7 +1,7 @@
 """Prepared inputs stay consistent through composition, scoring, and native logs."""
+
 # Native boolean variants have a single positional payload.
 # ruff: noqa: FBT003
-
 import base64
 from collections.abc import Mapping
 from dataclasses import replace
@@ -22,7 +22,19 @@ from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.declarations import _copy_case, _declaration
 from evals.python.tests.support import offline_run as _offline_run
 from evals.python.tests.support import results as _results
-from kernel import Ast, Fixture
+from kernel import (
+    Answer,
+    Bool,
+    Case,
+    Instruction,
+    Plain,
+    Reference,
+    Resource,
+    Rubric,
+    String,
+    TextRule,
+)
+from kernel._operations import fixture as fixture_ops
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
@@ -95,12 +107,12 @@ def evaluation_prepares_once_for_all_tasks(
 def private_tasks() -> list[Task]:
     definition = _copy_case(
         _declaration(code=False),
-        instruction=Ast.instruction(
+        instruction=Instruction(
             skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
         ),
-        reference=Ast.reference(
-            edits=Fixture.of_files([("main.py", PRIVATE_SENTINEL)]),
-            completion=Ast.Plain(PRIVATE_SENTINEL),
+        reference=Reference(
+            edits=fixture_ops.of_files([("main.py", PRIVATE_SENTINEL)]),
+            completion=Plain(PRIVATE_SENTINEL),
         ),
     )
     datasets = [
@@ -108,13 +120,13 @@ def private_tasks() -> list[Task]:
             cases=(
                 _copy_case(
                     definition,
-                    criterion=Ast.Answer(
-                        Ast.answer(
+                    criterion=Answer(
+                        Rubric(
                             expected=[
-                                ("choice", Ast.String(choice)),
-                                ("safe", Ast.Bool(True)),
+                                ("choice", String(choice)),
+                                ("safe", Bool(True)),
                             ],
-                            text_rule=Ast.text_rule(field="reason", min_words=1, max_words=5),
+                            text_rule=TextRule(field="reason", min_words=1, max_words=5),
                         )
                     ),
                 ),
@@ -222,11 +234,11 @@ def _assert_guidance_logs(logs: list[EvalLog], *, digest: str) -> None:
 
 def unresolved_public_resource_cannot_reach_agent_files() -> None:
     spec = queries.resolve_settings()
-    case = Ast.case(
+    case = Case(
         id="unresolved",
         skill="reasoning",
         prompt="Use the supplied context",
-        files=[("context.txt", Ast.Resource("private-resource"))],
+        files=[("context.txt", Resource("private-resource"))],
     )
     with pytest.raises(ValueError, match="Unresolved resource in public case unresolved"):
         profiles.files(profiles.load_profile("baseline", spec=spec), case=case, instructions={})

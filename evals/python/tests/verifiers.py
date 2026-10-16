@@ -15,7 +15,7 @@ from evals.python.datasets import smoke as declarations
 from evals.python.integrations.inspect.environments import environment, runtime
 from evals.python.tests.declarations import _files, _reference_files
 from evals.python.tests.projections import reference, verifier
-from kernel import Ast
+from kernel import Case, Passed, Task, Verifier
 
 CASES = {case.id: case for case in queries.list_cases()}
 
@@ -24,9 +24,9 @@ def _snapshot(directory: Path) -> dict[str, bytes]:
     return {path.name: path.read_bytes() for path in directory.iterdir()}
 
 
-def _verify(case: Ast.case, *, directory: Path, selection: Selection = "smoke") -> bool:
+def _verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> bool:
     checks = verifier(case.id, selection=selection)
-    assert isinstance(checks, Ast.verifier)
+    assert isinstance(checks, Verifier)
 
     async def execute() -> bool:
         agent = LocalSandboxEnvironment()
@@ -40,7 +40,7 @@ def _verify(case: Ast.case, *, directory: Path, selection: Selection = "smoke") 
                 agent=environment(agent),
                 runtime=runtime(agent),
             )
-            return isinstance(result.verification, Ast.Passed)
+            return isinstance(result.verification, Passed)
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
                 "test", None, {"default": agent}, interrupted=False
@@ -54,7 +54,7 @@ def _write_files(directory: Path, *, files: Mapping[str, str]) -> None:
         (directory / name).write_text(text)
 
 
-def _seed(case_id: str, *, directory: Path) -> Ast.case:
+def _seed(case_id: str, *, directory: Path) -> Case:
     case = CASES[case_id]
     _write_files(directory, files=_files(case.files))
     return case
@@ -164,7 +164,7 @@ def visible_check_command_leaves_no_build_files(
 )
 def family_variants_generate_working_seeds_and_solutions(
     *,
-    definition: Ast.task,
+    definition: Task,
     filename: str,
     fragment: str,
     tmp_path: Path,

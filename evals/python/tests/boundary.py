@@ -11,7 +11,8 @@ import pytest
 
 import kernel as native
 from evals.python import commands, queries
-from kernel import Ast, sources
+from kernel import Case, Experiment
+from kernel._operations import sources
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
 OCAML_ROOT = PYTHON_ROOT.parent / "ocaml"
@@ -269,8 +270,8 @@ libc = ctypes.CDLL(None)
 libc.getenv.restype = ctypes.c_char_p
 names = (b"PATH", b"PYTHONHOME", b"PYTHONPATH")
 before = tuple(libc.getenv(name) for name in names)
-from kernel import Experiment
-assert Experiment.resolve(epochs=1).epochs == 1
+from kernel._operations import experiment as experiment_ops
+assert experiment_ops.resolve(epochs=1).epochs == 1
 assert tuple(libc.getenv(name) for name in names) == before
 assert list(pathlib.Path.cwd().iterdir()) == []
 subprocess.run([sys.executable, "-c", "import re, pathlib"], check=True)
@@ -288,9 +289,11 @@ subprocess.run([sys.executable, "-c", "import re, pathlib"], check=True)
 
 def public_domain_values_are_native_types() -> None:
     assert not (PYTHON_ROOT / "_kernel.py").exists()
-    assert isinstance(queries.list_cases()[0], Ast.case)
-    assert isinstance(queries.resolve_settings(), Ast.experiment)
+    assert isinstance(queries.list_cases()[0], Case)
+    assert isinstance(queries.resolve_settings(), Experiment)
 
 
-def public_operations_do_not_reexport_kernel_namespaces() -> None:
-    assert set(vars(native)["__all__"]).isdisjoint(commands.__all__ + queries.__all__)
+@pytest.mark.parametrize("module", [commands, queries])
+def public_operations_do_not_reexport_native_types(module: object) -> None:
+    exported = set(vars(native)["__all__"]) & set(vars(module)["__all__"])
+    assert all(getattr(native, name) is not getattr(module, name) for name in exported)

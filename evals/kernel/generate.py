@@ -13,6 +13,7 @@ HEADER = "# Generated from compiled OCaml interfaces; do not edit.\n"
 PREAMBLE = "from collections.abc import Sequence\n\n"
 ROOT = Path(__file__).resolve().parent.parent
 PRIMITIVES = {"string": "str", "bool": "bool", "int": "int", "float": "float", "unit": "None"}
+TYPE_NAMES = {"answer": "Rubric"}
 type Node = dict[str, Any]
 
 
@@ -21,6 +22,13 @@ def identifier(value: object) -> str:
     if not name.isidentifier() or keyword.iskeyword(name):
         raise ValueError(f"Unsupported Python identifier: {name}")
     return name
+
+
+def public_name(value: object) -> str:
+    name = identifier(value)
+    return identifier(
+        TYPE_NAMES.get(name, "".join(part[:1].upper() + part[1:] for part in name.split("_")))
+    )
 
 
 def schema(paths: tuple[Path, ...], *, reader: Path) -> list[Node]:
@@ -49,9 +57,9 @@ def type_name(value: Node, *, qualify: bool = False) -> str:
                 return PRIMITIVES[name]
             parts = name.split(".")
             if len(parts) == 1:
-                return ("Ast." if qualify else "") + identifier(name)
+                return ("_types." if qualify else "") + public_name(name)
             if parts[-2] == "Ast":
-                return ("Ast." if qualify else "") + identifier(parts[-1])
+                return ("_types." if qualify else "") + public_name(parts[-1])
             raise ValueError(f"Unsupported type reference: {name}")
         case _:
             raise ValueError(f"Unsupported type node: {value['kind']}")
@@ -60,7 +68,7 @@ def type_name(value: Node, *, qualify: bool = False) -> str:
 def record(value: Node) -> str:
     fields = [(identifier(field["name"]), type_name(field["type"])) for field in value["fields"]]
     parameters = ", ".join(f"{name}: {annotation}" for name, annotation in fields)
-    name = identifier(value["name"])
+    name = public_name(value["name"])
     result = f"class {name}:\n    def __init__(self, *, {parameters}) -> None: ...\n"
     for name, annotation in fields:
         result += f"    @property\n    def {name}(self) -> {annotation}: ...\n"
@@ -70,7 +78,7 @@ def record(value: Node) -> str:
 def ast_bindings(items: list[Node]) -> str:
     result = HEADER + PREAMBLE
     for value in items:
-        name, kind = identifier(value["name"]), value["kind"]
+        name, kind = public_name(value["name"]), value["kind"]
         if kind == "abstract":
             result += f"class {name}: ...\n\n"
         elif kind == "record":
@@ -78,7 +86,7 @@ def ast_bindings(items: list[Node]) -> str:
         elif kind == "variant":
             variants = []
             for constructor in value["constructors"]:
-                variant, arguments = identifier(constructor["name"]), constructor["arguments"]
+                variant, arguments = public_name(constructor["name"]), constructor["arguments"]
                 variants.append(variant)
                 result += f"class {variant}:\n"
                 if arguments:
@@ -98,6 +106,46 @@ def ast_bindings(items: list[Node]) -> str:
         else:
             raise ValueError(f"Unsupported AST declaration: {kind}")
     return result
+
+
+def type_exports(items: list[Node]) -> list[tuple[str, str]]:
+    names = [str(item["name"]) for item in items]
+    names += [
+        str(constructor["name"]) for item in items for constructor in item.get("constructors", [])
+    ]
+    exports = [(public_name(name), name) for name in names]
+    if len({"InvalidArgument", *(name for name, _ in exports)}) != len(exports) + 1:
+        raise ValueError("Public Python type and constructor names collide")
+    return sorted(exports)
+
+
+def runtime_types(items: list[Node]) -> str:
+    exports = type_exports(items)
+    names = ["InvalidArgument", *(name for name, _ in exports)]
+    return (
+        HEADER
+        + '"""Native domain types and constructors, imported directly from kernel."""\n\n'
+        + "from ._bridge import InvalidArgument as InvalidArgument\n"
+        + "from ._bridge import native as _native\n\n"
+        + "\n".join(f"{name} = _native.{original}" for name, original in exports)
+        + "\n\n__all__ = "
+        + repr(sorted(names))
+        + "\n"
+    )
+
+
+def runtime_operations(modules: list[str]) -> str:
+    return (
+        HEADER
+        + '"""Private native operations used by the Python implementation."""\n\n'
+        + "from functools import cache\n\nfrom ._bridge import native as _native\n\n"
+        + "\n".join(f"{name.lower()} = _native.{name}" for name in modules)
+        + "\n\n@cache\ndef sources() -> tuple[tuple[str, str], ...]:\n"
+        + "    return tuple((str(name), str(contents)) for name, contents in _native.sources)\n"
+        + "\n__all__ = "
+        + repr(sorted([*(name.lower() for name in modules), "sources"]))
+        + "\n"
+    )
 
 
 def arrows(value: Node) -> tuple[list[Node], Node]:
@@ -149,7 +197,10 @@ def render(modules: list[Node]) -> dict[str, str]:
         raise ValueError("Expected one compiled public kernel interface")
     items = modules[0]["items"]
     ast = [item for item in items if item["kind"] not in ("module", "value")]
-    outputs = {"Ast.pyi": ast_bindings(ast)}
+    outputs = {
+        "__init__.py": runtime_types(ast),
+        "__init__.pyi": ast_bindings(ast) + "class InvalidArgument(Exception): ...\n",
+    }
     exports = []
     for module in items:
         if module["kind"] != "module":
@@ -158,21 +209,24 @@ def render(modules: list[Node]) -> dict[str, str]:
         if any(item["kind"] != "value" for item in declarations):
             raise ValueError(f"Operation module {name} contains non-value declarations")
         exports.append(name)
-        outputs[name + ".pyi"] = (
+        outputs["_" + name.lower() + ".pyi"] = (
             HEADER
             + PREAMBLE
-            + "from typing import Required, TypedDict\nfrom . import Ast\n\n"
+            + "from typing import Required, TypedDict\nimport kernel as _types\n\n"
             + "".join(options(item) for item in declarations)
             + "".join(operation(item) for item in declarations)
         )
     if any(item["kind"] == "value" and item["name"] != "sources" for item in items):
         raise ValueError("Unexpected public root value")
-    outputs["__init__.pyi"] = (
+    outputs["_operations.py"] = runtime_operations(exports)
+    outputs["_operations.pyi"] = (
         HEADER
         + "\n"
-        + "\n".join(f"from . import {name} as {name}" for name in ("Ast", *exports))
-        + "\n\nclass InvalidArgument(Exception): ...\n"
+        + "\n".join(f"from . import _{name.lower()} as {name.lower()}" for name in exports)
         + "\ndef sources() -> tuple[tuple[str, str], ...]: ...\n"
+        + "\n__all__ = "
+        + repr(sorted([*(name.lower() for name in exports), "sources"]))
+        + "\n"
     )
     return outputs
 
@@ -212,7 +266,9 @@ def write(outputs: dict[str, str], *, destination: Path, check: bool) -> None:
                 if check:
                     raise SystemExit("Kernel types changed; rerun make setup-kernel")
                 path.unlink()
-        for path in staging.glob("*.pyi"):
+        for path in staging.iterdir():
+            if not path.is_file():
+                continue
             target = destination / path.name
             content = path.read_text()
             if check:

@@ -19,7 +19,7 @@ import evals.python.integrations.inspect.progress as progress_adapter
 import evals.python.integrations.inspect.remote  # noqa: F401 - register the HF sandbox
 import evals.python.integrations.inspect.tasks as task_adapter
 from evals.python import commands, queries
-from kernel import Ast
+from kernel import Experiment
 
 
 @modelapi(name="genius-hf")
@@ -51,7 +51,7 @@ def selected_samples(task: Task, *, request: commands.EvaluationSettings) -> lis
     return list(selected)
 
 
-def evaluation_tasks(spec: Ast.experiment, *, request: commands.EvaluationSettings) -> list[Task]:
+def evaluation_tasks(spec: Experiment, *, request: commands.EvaluationSettings) -> list[Task]:
     catalog = queries.load_dataset(selection=request.dataset)
     instructions = profile_adapter.load_instructions(spec)
     provenance = queries.get_provenance(selection=catalog)
@@ -76,10 +76,10 @@ def evaluation_tasks(spec: Ast.experiment, *, request: commands.EvaluationSettin
 
 
 def diagnostic_tasks(
-    spec: Ast.experiment, *, request: commands.EvaluationSettings, build: partial[Task]
+    spec: Experiment, *, request: commands.EvaluationSettings, build: partial[Task]
 ) -> list[Task]:
     modes = request.deliveries or ()
-    single = Ast.experiment(
+    single = Experiment(
         profiles=spec.profiles,
         epochs=1,
         message_limit=spec.message_limit,
@@ -141,7 +141,7 @@ async def execute(
     tasks: list[Task],
     *,
     request: commands.EvaluationSettings,
-    spec: Ast.experiment,
+    spec: Experiment,
     model: Any,
     state: progress_adapter.Progress,
 ) -> int:

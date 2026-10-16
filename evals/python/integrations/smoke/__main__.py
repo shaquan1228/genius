@@ -4,28 +4,31 @@ import sys
 from typing import assert_never
 
 from evals.python import commands, queries
-from kernel import Ast, Fixture
+from kernel import Case, Completion, HarnessError, Passed, Plain, Structured, Unchecked
+from kernel._operations import fixture as fixture_ops
 
 
-def response(completion: Ast.completion) -> str:
+def response(completion: Completion) -> str:
     match completion:
-        case Ast.Plain():
+        case Plain():
             return completion[0]
-        case Ast.Structured():
+        case Structured():
             return json.dumps({name: value[0] for name, value in completion[0]})
         case _ as unreachable:
             assert_never(unreachable)
 
 
-async def validate(case: Ast.case, *, dataset: queries.Dataset) -> bool:
+async def validate(case: Case, *, dataset: queries.Dataset) -> bool:
     reference = queries.get_reference(case_id=case.id, selection=dataset)
     result = await commands.validate_reference(case_id=case.id, selection=dataset)
     scores: queries.Scores = {}
-    if not isinstance(result.verification, Ast.Harness_error):
+    if not isinstance(result.verification, HarnessError):
         scores = queries.score_case(
             case_id=case.id,
             response=response(reference.completion),
-            changed_files=tuple(f"workspace/{name}" for name, _ in Fixture.files(reference.edits)),
+            changed_files=tuple(
+                f"workspace/{name}" for name, _ in fixture_ops.files(reference.edits)
+            ),
             verification=result.verification,
             selection=dataset,
         )
@@ -38,7 +41,7 @@ async def validate(case: Ast.case, *, dataset: queries.Dataset) -> bool:
             }
         )
     )
-    return isinstance(result.verification, (Ast.Passed, Ast.Unchecked)) and all(scores.values())
+    return isinstance(result.verification, (Passed, Unchecked)) and all(scores.values())
 
 
 async def main() -> int:

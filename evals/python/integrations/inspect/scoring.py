@@ -10,7 +10,7 @@ from pydantic import JsonValue
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import commands, queries
-from kernel import Ast
+from kernel import Unchecked
 
 
 def score_values(scores: Mapping[str, bool]) -> dict[str, str]:
@@ -48,7 +48,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
         agent=environments_adapter.environment(current),
         runtime=environments_adapter.runtime(current),
     )
-    explanation = completion if isinstance(result.verification, Ast.Unchecked) else result.detail
+    explanation = completion if isinstance(result.verification, Unchecked) else result.detail
     return Score(
         value=score_values(result.scores),
         explanation=with_failure(explanation, failure=failure),

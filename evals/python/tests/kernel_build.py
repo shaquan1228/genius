@@ -44,10 +44,10 @@ def compiled_includes_and_inference_drive_bindings(tmp_path: Path) -> None:
         "@property\n    def flag(self) -> bool:" in stub,
     ) == (True, True, True, True)
     assert generate.operation(items[-1]) == (
-        "def choose(*, fallback: str | None = ..., expected: Ast.token) -> Ast.token: ...\n"
+        "def choose(*, fallback: str | None = ..., expected: _types.Token) -> _types.Token: ...\n"
     )
     assert "fallback: str | None" in generate.options(items[-1])
-    assert "expected: Required[Ast.token]" in generate.options(items[-1])
+    assert "expected: Required[_types.Token]" in generate.options(items[-1])
 
 
 def inferred_compiled_values_drive_bindings(tmp_path: Path) -> None:
@@ -77,13 +77,13 @@ def unsupported_compiled_interfaces_fail_loudly(tmp_path: Path, *, text: str) ->
 def generated_stubs_detect_stale_compiled_signatures(tmp_path: Path) -> None:
     path = _compile(tmp_path / "sample", text="type state = { value : int }")
     original = generate.schema((path,), reader=READER)[0]["items"]
-    outputs = {"Ast.pyi": generate.ast_bindings(original)}
+    outputs = {"__init__.pyi": generate.ast_bindings(original)}
     destination = tmp_path / "stubs"
     destination.mkdir()
     generate.write(outputs, destination=destination, check=False)
-    before = (destination / "Ast.pyi").read_bytes()
+    before = (destination / "__init__.pyi").read_bytes()
     generate.write(outputs, destination=destination, check=True)
-    assert (destination / "Ast.pyi").read_bytes() == before
+    assert (destination / "__init__.pyi").read_bytes() == before
     # Editing source cannot change a compiler-derived interface until it is compiled.
     path.with_suffix(".mli").write_text("type state = { value : string }")
     assert generate.schema((path,), reader=READER)[0]["items"] == original
@@ -91,12 +91,12 @@ def generated_stubs_detect_stale_compiled_signatures(tmp_path: Path) -> None:
     updated = generate.schema((path,), reader=READER)[0]["items"]
     with pytest.raises(SystemExit, match="Kernel types changed"):
         generate.write(
-            {"Ast.pyi": generate.ast_bindings(updated)}, destination=destination, check=True
+            {"__init__.pyi": generate.ast_bindings(updated)}, destination=destination, check=True
         )
     generate.write(
-        {"Ast.pyi": generate.ast_bindings(updated)}, destination=destination, check=False
+        {"__init__.pyi": generate.ast_bindings(updated)}, destination=destination, check=False
     )
-    assert "value: str" in (destination / "Ast.pyi").read_text()
+    assert "value: str" in (destination / "__init__.pyi").read_text()
 
 
 def installed_kernel_keeps_policy_and_provenance_together(tmp_path: Path) -> None:
@@ -114,10 +114,11 @@ def installed_kernel_keeps_policy_and_provenance_together(tmp_path: Path) -> Non
     script = """import json
 from unittest.mock import patch
 with patch('subprocess.run', side_effect=AssertionError('Import compiled the kernel')):
-    from kernel import Ast, Experiment, Fixture, sources
-    spec = Experiment.resolve()
-    assert isinstance(Fixture.empty, Ast.fixture)
-    assert not hasattr(Fixture.empty, 'add')
+    from kernel import Fixture
+    from kernel._operations import experiment as experiment_ops, fixture as fixture_ops, sources
+    spec = experiment_ops.resolve()
+    assert isinstance(fixture_ops.empty, Fixture)
+    assert not hasattr(fixture_ops.empty, 'add')
     assert dict(sources())['experiment.ml'].find('epochs = 7') >= 0
     assert dict(sources())['experiment.ml'].find('epochs = 9') == -1
     print(json.dumps({'epochs': spec.epochs}))
@@ -142,10 +143,18 @@ def missing_installed_package_reports_setup_command() -> None:
         patch("ocaml.require", side_effect=ImportError("No such package")),
         pytest.raises(ImportError, match="make -C evals setup-kernel"),
     ):
-        runpy.run_path(str(EVALS / "kernel/__init__.py"))
+        runpy.run_path(str(EVALS / "kernel/_bridge.py"))
 
 
 def incompatible_python_identifiers_fail_loudly(tmp_path: Path) -> None:
     path = _compile(tmp_path / "keywords", text="type state = None | Value")
     with pytest.raises(ValueError, match="Unsupported Python identifier: None"):
         generate.ast_bindings(generate.schema((path,), reader=READER)[0]["items"])
+
+
+@pytest.mark.parametrize("text", ["type entry = Entry", "type invalid_argument = { code : int }"])
+def capitalized_binding_names_cannot_silently_collide(tmp_path: Path, *, text: str) -> None:
+    path = _compile(tmp_path / "collision", text=text)
+    items = generate.schema((path,), reader=READER)[0]["items"]
+    with pytest.raises(ValueError, match="names collide"):
+        generate.runtime_types(items)

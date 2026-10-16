@@ -2,17 +2,17 @@
 
 from pathlib import Path
 
-from kernel import Ast
+from kernel import Code, Criterion, Inline, Verifier
 
 
-def checks(*, inputs: tuple[str, ...], program: str) -> Ast.criterion:
-    return Ast.Code(
-        Ast.verifier(
+def checks(*, inputs: tuple[str, ...], program: str) -> Criterion:
+    return Code(
+        Verifier(
             inputs=inputs,
             files=(
                 (
                     "verifier.py",
-                    Ast.Inline(Path(__file__).with_name("verifier.py").read_text()),
+                    Inline(Path(__file__).with_name("verifier.py").read_text()),
                 ),
             ),
             tools=(),

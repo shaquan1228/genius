@@ -7,7 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from evals.python import queries
 from evals.python.integrations.datasets.download import Download, cache_path, download
 from evals.python.integrations.evalplus import checks
-from kernel import Ast, Fixture
+from kernel import Instruction, Plain, Reference, Task
+from kernel._operations import fixture as fixture_ops
 
 info = queries.DatasetInfo(
     source="https://github.com/evalplus/humanevalplus_release/releases/download/v0.1.10/HumanEvalPlus.jsonl.gz",
@@ -30,16 +31,16 @@ class Problem(BaseModel):
     canonical_solution: str
 
 
-def declarations(records: Iterable[str]) -> tuple[Ast.task, ...]:
+def declarations(records: Iterable[str]) -> tuple[Task, ...]:
     return tuple(declaration(raw) for raw in records)
 
 
-def declaration(raw: str) -> Ast.task:
+def declaration(raw: str) -> Task:
     problem = Problem.model_validate_json(raw)
-    return Ast.task(
+    return Task(
         id="humaneval-" + problem.task_id.split("/")[1],
-        fixture=Fixture.of_files([("solution.py", problem.prompt)]),
-        instruction=Ast.instruction(
+        fixture=fixture_ops.of_files([("solution.py", problem.prompt)]),
+        instruction=Instruction(
             skill="reasoning",
             prompt=(
                 "Implement the specified function in solution.py. Preserve its signature and edit "
@@ -50,14 +51,16 @@ def declaration(raw: str) -> Ast.task:
             record=raw, manifest={**info.model_dump(exclude={"attributes"}), **info.attributes}
         ),
         allowed_files=("solution.py",),
-        reference=Ast.reference(
-            edits=Fixture.of_files([("solution.py", problem.prompt + problem.canonical_solution)]),
-            completion=Ast.Plain(""),
+        reference=Reference(
+            edits=fixture_ops.of_files(
+                [("solution.py", problem.prompt + problem.canonical_solution)]
+            ),
+            completion=Plain(""),
         ),
     )
 
 
-def cases() -> tuple[Ast.task, ...]:
+def cases() -> tuple[Task, ...]:
     data = download(
         request=Download(
             source=info.source, sha256=info.sha256, destination=cache_path(info.sha256)

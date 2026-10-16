@@ -9,7 +9,6 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-import kernel as native
 from evals.python import datasets, queries
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.integrations.inspect import profiles
@@ -18,7 +17,10 @@ from evals.python.queries import resolve_settings, score_case
 from evals.python.tests.declarations import _reference_text
 from evals.python.tests.projections import reference, verifier
 from evals.python.tests.support import choice_case as _choice_case
-from kernel import Ast, Fixture, InvalidArgument
+from kernel import Case, Experiment, InvalidArgument, Passed, Unchecked
+from kernel._operations import fixture as fixture_ops
+from kernel._operations import grader as grader_ops
+from kernel._operations import projection as projection_ops
 
 
 @pytest.fixture
@@ -37,7 +39,7 @@ def _third_grade(*, case_id: str = "third-case", selection: queries.Dataset) -> 
         selection=selection,
         response='{"choice":"A","reason":"Less"}',
         changed_files=(),
-        verification=Ast.Unchecked(),
+        verification=Unchecked(),
     )
 
 
@@ -83,7 +85,7 @@ def third_dataset_imports_and_grades_records(third_dataset: queries.Dataset) -> 
 
 def public_projection_contains_no_private_material() -> None:
     for case in queries.list_cases():
-        assert isinstance(case, Ast.case)
+        assert isinstance(case, Case)
         assert (hasattr(case, "reference"), hasattr(case, "criterion")) == (False, False)
         assert "verifier.py" not in dict(case.files)
 
@@ -103,7 +105,7 @@ def all_contract_collections_are_immutable() -> None:
     with pytest.raises(TypeError):
         info.attributes["new"] = "value"  # type: ignore[index]
     with pytest.raises(TypeError):
-        Fixture.files(expected.edits)[0] = ("new", "value")  # type: ignore[index]
+        fixture_ops.files(expected.edits)[0] = ("new", "value")  # type: ignore[index]
     spec = queries.resolve_settings()
     with pytest.raises((AttributeError, TypeError)):
         spec.profiles[0].preamble = "changed"  # type: ignore[misc]
@@ -133,14 +135,14 @@ def run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
 @pytest.mark.parametrize("field", ["epochs", "message_limit", "cost_limit", "time_limit"])
 @pytest.mark.parametrize("value", [0, -1])
 def kernel_rejects_invalid_run_overrides(field: str, *, value: int) -> None:
-    operation = cast(Callable[..., Ast.experiment], resolve_settings)
+    operation = cast(Callable[..., Experiment], resolve_settings)
     with pytest.raises(InvalidArgument):
         operation(**{field: value})
 
 
 @pytest.mark.parametrize("payload", [{"epochs": 1.5}, {"cache": 1}, {"unknown": 1}])
 def public_query_rejects_malformed_run_overrides(payload: dict[str, object]) -> None:
-    operation = cast(Callable[..., Ast.experiment], resolve_settings)
+    operation = cast(Callable[..., Experiment], resolve_settings)
     with pytest.raises(ValidationError):
         operation(**payload)
 
@@ -174,11 +176,11 @@ def verifier_projection_and_grading_use_native_values() -> None:
         case_id=case_id,
         response="",
         changed_files=(),
-        verification=Ast.Passed(),
+        verification=Passed(),
     )
     with (
-        patch.object(native.Projection, "verifier", wraps=native.Projection.verifier) as projection,
-        patch.object(native.Grader, "grade", wraps=native.Grader.grade) as kernel_grade,
+        patch.object(projection_ops, "verifier", wraps=projection_ops.verifier) as projection,
+        patch.object(grader_ops, "grade", wraps=grader_ops.grade) as kernel_grade,
     ):
         projected = verifier(case_id)
         assert projected is not None
