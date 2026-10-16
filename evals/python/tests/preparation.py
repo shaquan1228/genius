@@ -16,8 +16,9 @@ from inspect_ai.solver import generate
 from evals.python import commands, query
 from evals.python.integrations.inspect import evaluation, profiles, scoring
 from evals.python.integrations.inspect.tasks import build_task
-from evals.python.tests.support import offline_run as _offline_run, results as _results
 from evals.python.tests.declarations import _declaration
+from evals.python.tests.support import offline_run as _offline_run
+from evals.python.tests.support import results as _results
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 

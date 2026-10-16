@@ -21,7 +21,7 @@ from evals.python.tests.humaneval import _record
 
 
 def _payload() -> driver.Payload:
-    return {"manifest": cast(driver.Manifest, benchmark_info().model_dump()), "record": record()}
+    return {"manifest": cast(driver.Manifest, benchmark_info().model_dump()), "record": _record()}
 
 
 @pytest.mark.parametrize("memory_limit", [None, "1"])
@@ -36,9 +36,7 @@ def _payload() -> driver.Payload:
         ("import os\nos._exit(0)\ndef identity(x):\n    return x\n", "timed_out"),
     ],
 )
-def official_checker(
-    *, tmp_path: Path, source: str, status: str, memory_limit: str | None
-) -> None:
+def official_checker(*, tmp_path: Path, source: str, status: str, memory_limit: str | None) -> None:
     (tmp_path / "solution.py").write_text(source)
     environment = {
         **os.environ,
@@ -114,9 +112,7 @@ def dependency_bootstrap_uses_private_target() -> None:
         ({"base": "timeout", "plus": "fail"}, "timed_out"),
     ],
 )
-def phase_statuses(
-    *, statuses: dict[driver.PhaseName, driver.PhaseStatus], expected: str
-) -> None:
+def phase_statuses(*, statuses: dict[driver.PhaseName, driver.PhaseStatus], expected: str) -> None:
     assert driver.outcome(statuses) == expected
 
 
@@ -130,7 +126,7 @@ def unknown_upstream_status_rejected() -> None:
     ):
         driver.phase(
             request=driver.Phase(
-                record=cast(driver.Problem, json.loads(record())), name="base", code="candidate"
+                record=cast(driver.Problem, json.loads(_record())), name="base", code="candidate"
             )
         )
     reference.trusted_exec.assert_called_once()
@@ -167,7 +163,7 @@ def phase_exception_retains_provenance() -> None:
     with patch.object(driver, "phase", side_effect=["pass", RuntimeError("reference failed")]):
         evidence = driver.evaluate_phases(
             request=driver.Evaluation(
-                record=cast(driver.Problem, json.loads(record())),
+                record=cast(driver.Problem, json.loads(_record())),
                 code="candidate",
                 metadata=metadata,
             )
@@ -212,9 +208,7 @@ def evaluate_preserves_upstream_evidence(
     _assert_runtime_evidence(evidence["metadata"])
 
 
-def syntax_error_retains_provenance(
-    *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def syntax_error_retains_provenance(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "solution.py").write_text("invalid python!")
     evidence = driver.evaluate(_payload())
@@ -239,7 +233,7 @@ def invalid_phase_inputs_are_harness_errors(
     *, missing: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("EVALPLUS_MAX_MEMORY_BYTES", raising=False)
-    data = cast(driver.Problem, json.loads(record()))
+    data = cast(driver.Problem, json.loads(_record()))
     data["plus_input"] = cast(list[object], None)
     if missing:
         cast(dict[str, object], data).pop("plus_input", None)
@@ -251,9 +245,7 @@ def invalid_phase_inputs_are_harness_errors(
     assert evidence["metadata"]["phases"] == {"base": "pass"}
 
 
-def execute_cleans_private_dependencies(
-    *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def execute_cleans_private_dependencies(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("EVALPLUS_MAX_MEMORY_BYTES", raising=False)
     (tmp_path / "solution.py").write_text("def identity(x):\n    return x\n")

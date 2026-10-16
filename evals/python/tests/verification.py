@@ -510,7 +510,9 @@ def reference_nonzero_mkdir_is_harness_error() -> None:
             patch("evals.python.catalog.verifier", return_value=_checks()),
             patch("evals.python.catalog.reference", return_value=Reference(solution={}, answer="")),
         ):
-            result = await commands.ValidateReference(case_id="python", runtime=_runtime_port(agent))
+            result = await commands.ValidateReference(
+                case_id="python", runtime=_runtime_port(agent)
+            )
         assert result.verification.status == "harness_error"
         assert "create reference workspace" in result.verification.detail
 

@@ -17,8 +17,17 @@ from evals.python.catalog import grade
 from evals.python.integrations.inspect import environments, scoring, workspace
 from evals.python.integrations.inspect.agents import AGENT_REGISTRY
 from evals.python.integrations.inspect.tasks import baseline, genius
-from evals.python.tests.scenarios import Mode, crashing as _crashing
-from evals.python.tests.support import crash_evidence as _crash_evidence, offline_run as _offline_run, results as _results
+from evals.python.tests.scenarios import Mode
+from evals.python.tests.scenarios import crashing as _crashing
+from evals.python.tests.support import (
+    crash_evidence as _crash_evidence,
+)
+from evals.python.tests.support import (
+    offline_run as _offline_run,
+)
+from evals.python.tests.support import (
+    results as _results,
+)
 from evals.python.tests.verification import _agent_port, _grader_port, _runtime_port
 
 
@@ -138,7 +147,7 @@ def scorer_maps_sdk_observation_to_public_assessment() -> None:
         metadata={"case_id": "clear-task", "dataset": "smoke"},
     )
     state.output = ModelOutput.from_content("mockllm/model", "observed answer")
-    agent, runtime = agent_port(), runtime_port(grader_port())
+    agent, runtime = _agent_port(), _runtime_port(_grader_port())
     assessment = commands.Assessment(
         verification=commands.Verification(status="passed", detail="canonical evidence"),
         metadata={"nested": {"items": (True, None, 4.2)}},

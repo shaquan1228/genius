@@ -1,5 +1,3 @@
-__test__ = False
-
 """Scripted agents for offline framework tests, never for measuring Genius."""
 
 from collections.abc import Awaitable, Callable
@@ -15,6 +13,8 @@ from inspect_ai.util import sandbox
 from evals.python._kernel import Reference
 from evals.python.catalog import reference
 from evals.python.integrations.inspect.workspace import GIT_IDENTITY, execute
+
+__test__ = False
 
 Mode = Literal[
     "pass",

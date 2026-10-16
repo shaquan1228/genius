@@ -31,7 +31,12 @@ from evals.python.integrations.inspect.profiles import (
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.paths import REPO_ROOT
 from evals.python.query import GradeCase
-from evals.python.tests.support import native_choice_case as _native_choice_case, native_timeout_case as _native_timeout_case
+from evals.python.tests.support import (
+    native_choice_case as _native_choice_case,
+)
+from evals.python.tests.support import (
+    native_timeout_case as _native_timeout_case,
+)
 from evals.python.transport import decode
 
 
@@ -44,9 +49,7 @@ def manifest_roundtrip() -> None:
     assert decode(_encode([case.model_dump() for case in cases])) == cases
 
 
-def invalid_ocaml_suite_is_rejected(
-    *, tmp_path: Path, capfd: pytest.CaptureFixture[str]
-) -> None:
+def invalid_ocaml_suite_is_rejected(*, tmp_path: Path, capfd: pytest.CaptureFixture[str]) -> None:
     path = tmp_path / "suite.ml"
     path.write_text("this is not valid OCaml")
     with pytest.raises(subprocess.CalledProcessError):

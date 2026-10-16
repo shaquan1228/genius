@@ -1,5 +1,3 @@
-__test__ = False
-
 """Run scripted agents through Inspect for integration tests."""
 
 import json
@@ -13,7 +11,11 @@ from inspect_ai.model import get_model
 from evals.python import catalog, transport
 from evals.python._kernel import Case, ExecutableChecks, Reference
 from evals.python.paths import EVALS_ROOT
-from evals.python.tests.scenarios import Mode, echo_model as _echo_model, scripted as _scripted
+from evals.python.tests.scenarios import Mode
+from evals.python.tests.scenarios import echo_model as _echo_model
+from evals.python.tests.scenarios import scripted as _scripted
+
+__test__ = False
 
 
 def offline_run(

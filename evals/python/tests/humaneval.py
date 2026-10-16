@@ -24,7 +24,15 @@ from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import load_profile
 from evals.python.integrations.inspect.tasks import baseline
 from evals.python.query import GradeCase
-from evals.python.tests.support import import_records as _import_records, imported_reference as _imported_reference, imported_verifier as _imported_verifier
+from evals.python.tests.support import (
+    import_records as _import_records,
+)
+from evals.python.tests.support import (
+    imported_reference as _imported_reference,
+)
+from evals.python.tests.support import (
+    imported_verifier as _imported_verifier,
+)
 from evals.python.transport import Sources
 
 
@@ -172,9 +180,7 @@ def import_cache_tracks_verifier_source(
     assert checks.files["verifier.py"] == (dict(resources)["evalplus_verifier.py"] + "\n")
 
 
-def dataset_count_mismatch(
-    *, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def dataset_count_mismatch(*, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("evals.python.catalog.download", lambda request: _record().encode())
     with pytest.raises(ValueError, match="count"):
         load_cases(selection="humanevalplus")
@@ -193,9 +199,7 @@ def custom_smoke_suite_still_supported(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("driver", ["verifier.py", "evalplus_verifier.py"])
-def case_hash_tracks_private_verifier_code(
-    *, driver: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def case_hash_tracks_private_verifier_code(*, driver: str, monkeypatch: pytest.MonkeyPatch) -> None:
     before = cases_hash("smoke")
     source_before = query.Provenance(selection="smoke").source_hash
     resources = catalog.sources().resources

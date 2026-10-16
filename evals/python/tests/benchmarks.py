@@ -13,8 +13,8 @@ import pytest
 from evals.python import commands
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.paths import EVALS_ROOT
-from evals.python.tests.support import import_records as _import_records
 from evals.python.tests.humaneval import _record
+from evals.python.tests.support import import_records as _import_records
 
 
 def info(capsys: pytest.CaptureFixture[str]) -> None:
@@ -24,7 +24,7 @@ def info(capsys: pytest.CaptureFixture[str]) -> None:
 
 @pytest.mark.parametrize("status", ["passed", "failed", "harness_error"])
 def validate_reports_real_status(*, status: str, capsys: pytest.CaptureFixture[str]) -> None:
-    case = _import_records((record(),))[0]
+    case = _import_records((_record(),))[0]
     with (
         patch("evals.python.catalog.load_cases", return_value=(case,)),
         patch.object(benchmarks, "validate_case", new=AsyncMock(return_value={"status": status})),
@@ -54,7 +54,7 @@ def memory_workaround_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def reference_validation_uses_public_operation_and_thaws_only_cli_output() -> None:
-    case = _import_records((record(),))[0]
+    case = _import_records((_record(),))[0]
     canonical = commands.VerificationResult(
         verification=commands.Verification(status="passed"), metadata={"test": {"items": (True,)}}
     )

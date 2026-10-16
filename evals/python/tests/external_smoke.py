@@ -152,9 +152,7 @@ def offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[str])
     ]
 
 
-def offline_cli_exits_nonzero_on_grading_failure(
-    *, capsys: pytest.CaptureFixture[str]
-) -> None:
+def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixture[str]) -> None:
     with patch.object(query, "GradeCase", return_value={"correctness": False, "scope": True}):
         assert _run_cli() == 1
     assert all(
