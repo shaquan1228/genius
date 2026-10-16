@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-from evals.python import query
 from kernel import Ast
 
 

@@ -4,7 +4,6 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
-from evals.python import query
 from kernel import Ast
 
 

@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import commands, datasets, query
+from evals.python import commands, query
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import (
     REASONING_DOCUMENTS,
@@ -26,9 +26,9 @@ from evals.python.tests.support import (
     choice_case as _choice_case,
 )
 from evals.python.tests.support import (
-from kernel import Ast, Grader, InvalidArgument, load
     timeout_case as _timeout_case,
 )
+from kernel import Ast, Grader, InvalidArgument
 
 
 def public_projection_uses_native_types() -> None:
@@ -207,7 +207,7 @@ def compilation_cache_invalidates_when_declarations_change() -> None:
     definition = _choice_case(case_id="cache", a=10, b=8)
     first = query.CompileDataset(cases=(definition,))
     with patch(
-        "kernel.build.subprocess.run",
+        "subprocess.run",
         side_effect=AssertionError("Declarations must not compile code"),
     ) as compiler:
         assert query.CompileDataset(cases=(definition,)) is first
@@ -233,37 +233,38 @@ def generic_python_case_exports_without_language_restriction() -> None:
             )
         ),
         allowed_files=("solution.py",),
-        reference=Ast.reference(
-            edits=query.Fixture.empty, completion=Ast.Plain("done")
-        ),
+        reference=Ast.reference(edits=query.Fixture.empty, completion=Ast.Plain("done")),
     )
     dataset = query.CompileDataset(cases=(definition,))
     case = query.Cases(selection=dataset)[0]
     checks = verifier(case.id, selection=dataset)
     assert checks is not None
-    assert tuple(checks.inputs) == ("solution.py",)
+    assert (tuple(checks.inputs), tuple(checks.tools), tuple(checks.command)) == (
+        ("solution.py",),
+        (),
+        ("python3", "grader.py"),
+    )
     assert _files(checks.files) == {"grader.py": "trusted"}
-    assert tuple(checks.tools) == ()
-    assert tuple(checks.command) == ("python3", "grader.py")
     assert (checks.stdin, checks.timeout_seconds) == ("private", 5)
 
 
-def experiment_cache_tracks_native_configuration() -> None:
+def experiment_configuration_reaches_tasks_and_profiles() -> None:
     before = query.ExperimentSettings()
-    original = datasets.kernel_sources()
-    changed = datasets.Sources(
-        modules=tuple(
-            (
-                name,
-                text.replace("epochs = 5", "epochs = 7").replace("Apply that", "Follow that")
-                if name == "experiment.ml"
-                else text,
+    spec = Ast.experiment(
+        profiles=[
+            Ast.profile(
+                name=item.name,
+                preamble=item.preamble.replace("Apply that", "Follow that"),
+                instructions=item.instructions,
             )
-            for name, text in original.modules
-        ),
-        resources=original.resources,
+            for item in before.profiles
+        ],
+        epochs=7,
+        message_limit=before.message_limit,
+        cost_limit=before.cost_limit,
+        time_limit=before.time_limit,
+        cache=before.cache,
     )
-    spec = load(changed.modules).Experiment.resolve()
     task = build_task(
         profile=profiles.load_profile("genius", spec=spec),
         spec=spec,

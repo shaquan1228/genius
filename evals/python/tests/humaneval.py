@@ -28,9 +28,9 @@ from evals.python.tests.support import (
     imported_reference as _imported_reference,
 )
 from evals.python.tests.support import (
-from kernel import Ast
     imported_verifier as _imported_verifier,
 )
+from kernel import Ast
 
 
 def _record(**updates: object) -> str:
@@ -163,15 +163,19 @@ def import_cache_tracks_verifier_source(
     monkeypatch.setattr(evalplus, "__file__", str(tmp_path / "__init__.py"))
     second = query.LoadDataset(selection="humanevalplus")
     checks = cast(Ast.verifier, verifier("humaneval-0", selection=second))
-    assert _files(checks.files)["verifier.py"] == _files(before.files)["verifier.py"] + "\n"
     assert _public_snapshot(query.Cases(selection=first)) == _public_snapshot(
         query.Cases(selection=second)
     )
-    assert cases_hash(first) != cases_hash(second)
+    assert (_files(checks.files)["verifier.py"], cases_hash(first) == cases_hash(second)) == (
+        _files(before.files)["verifier.py"] + "\n",
+        False,
+    )
     original_checks = verifier("humaneval-0", selection=first)
     assert original_checks is not None
-    assert _files(original_checks.files) == _files(before.files)
-    assert original_checks.stdin == before.stdin
+    assert (_files(original_checks.files), original_checks.stdin) == (
+        _files(before.files),
+        before.stdin,
+    )
 
 
 def dataset_count_mismatch(*, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch) -> None:

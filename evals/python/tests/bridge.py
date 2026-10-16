@@ -1,20 +1,18 @@
 """Exercise trusted kernel requests independently of Inspect adapters."""
 
 import json
-import subprocess
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import pytest
 
+import kernel as native
 from evals.python import datasets, query
 from evals.python.datasets import Selection
 from evals.python.query import GradeCase
 from evals.python.tests.declarations import _declaration, _reference_files, _reference_text
 from evals.python.tests.projections import reference, verifier
-from kernel import Ast, load
-from kernel.build import LIBRARY, build
+from kernel import Ast, Response
 
 
 def commands_and_queries_use_in_process_kernel_calls() -> None:
@@ -53,7 +51,6 @@ def kernel_grades_response_and_scope() -> None:
 
 
 def unknown_kernel_score_names_are_rejected() -> None:
-    native = load(datasets.kernel_sources().modules)
     with (
         patch.object(native.Grader, "grade", return_value=[]),
         pytest.raises(ValueError, match="score names"),
@@ -72,7 +69,6 @@ def unknown_case_is_a_harness_error() -> None:
 
 
 def native_kernel_errors_propagate() -> None:
-    native = load(datasets.kernel_sources().modules)
     with (
         patch.object(native.Grader, "grade", side_effect=RuntimeError("kernel failed")),
         pytest.raises(RuntimeError, match="kernel failed"),
@@ -89,41 +85,26 @@ def candidate_response_cannot_execute_code(tmp_path: Path) -> None:
 
 def grading_does_not_recompile_or_cache_results() -> None:
     _judgment(response="{}")
-    native = load(datasets.kernel_sources().modules)
     responses = ("invalid", '{"choice":"B","reason":"Cheap"}', '{"choice":"A","reason":"Cheap"}')
     with (
-        patch("kernel.build.subprocess.run", side_effect=AssertionError("Unexpected compilation")),
+        patch("subprocess.run", side_effect=AssertionError("Unexpected compilation")),
         patch.object(native.Grader, "grade", wraps=native.Grader.grade) as grade,
     ):
         assert [_judgment(response=response) for response in responses] == [False, True, False]
         assert grade.call_count == 3
 
 
-@pytest.mark.parametrize("source", LIBRARY)
-def kernel_fingerprint_tracks_every_trusted_source(source: Path) -> None:
+@pytest.mark.parametrize("source", [name for name, _ in native.sources()])
+def kernel_fingerprint_tracks_every_trusted_source(source: str) -> None:
     original = datasets.kernel_sources()
     changed = datasets.Sources(
         modules=tuple(
-            (name, contents + "\n" if name == source.name else contents)
+            (name, contents + "\n" if name == source else contents)
             for name, contents in original.modules
         ),
         resources=original.resources,
     )
     assert datasets.fingerprint(changed) != datasets.fingerprint(original)
-
-
-def kernel_compilation_failure_cleans_temporary_directory(tmp_path: Path) -> None:
-    directory = TemporaryDirectory(dir=tmp_path)
-    modules = tuple(
-        (name, "this is not OCaml" if name == "criterion.ml" else contents)
-        for name, contents in datasets.kernel_sources().modules
-    )
-    with (
-        patch("kernel.build.TemporaryDirectory", return_value=directory),
-        pytest.raises(subprocess.CalledProcessError),
-    ):
-        build(modules)
-    assert not Path(directory.name).exists()
 
 
 @pytest.mark.parametrize(
@@ -148,7 +129,6 @@ def candidate_duplicate_keys_keep_last_value() -> None:
 
 
 def additional_named_scores_cross_bridge_without_decoder_changes() -> None:
-    native = load(datasets.kernel_sources().modules)
     with patch.object(
         native.Grader,
         "grade",
@@ -164,41 +144,21 @@ def additional_named_scores_cross_bridge_without_decoder_changes() -> None:
 
 
 def reference_channels_export_independently_and_escape() -> None:
-    fields: dict[str, str | bool] = {"state": 'quote" \\ \n é', "safe": True}
+    state = 'quote" \\ \n é'
+    fields: dict[str, str | bool] = {"state": state, "safe": True}
+    safe = True
+    expected_fields = Response.of_fields([("state", Ast.String(state)), ("safe", Ast.Bool(safe))])
     dataset = query.CompileDataset(
         cases=(
             Ast.task(
                 id="reference",
                 fixture=query.Fixture.empty,
                 instruction=Ast.instruction(skill="reasoning", prompt="fields"),
-                criterion=Ast.Answer(
-                    Ast.answer(
-                        expected=[
-                            (
-                                name,
-                                Ast.Bool(value)
-                                if isinstance(value, bool)
-                                else Ast.String(value),
-                            )
-                            for name, value in fields.items()
-                        ],
-                        text_rule=None,
-                    )
-                ),
+                criterion=Ast.Answer(Ast.answer(expected=expected_fields, text_rule=None)),
                 allowed_files=("result.txt",),
                 reference=Ast.reference(
                     edits=query.Fixture.of_files([("result.txt", "result")]),
-                    completion=Ast.Structured(
-                        [
-                            (
-                                name,
-                                Ast.Bool(value)
-                                if isinstance(value, bool)
-                                else Ast.String(value),
-                            )
-                            for name, value in fields.items()
-                        ]
-                    ),
+                    completion=Ast.Structured(expected_fields),
                 ),
             ),
         )

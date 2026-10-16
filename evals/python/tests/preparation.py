@@ -218,3 +218,15 @@ def _assert_guidance_logs(logs: list[EvalLog], *, digest: str) -> None:
         assert native.eval.metadata is not None
         assert native.eval.metadata["agent_system_prompt_sha256"] == digest
         assert native.status == "success"
+
+
+def unresolved_public_resource_cannot_reach_agent_files() -> None:
+    spec = query.ExperimentSettings()
+    case = Ast.case(
+        id="unresolved",
+        skill="reasoning",
+        prompt="Use the supplied context",
+        files=[("context.txt", Ast.Resource("private-resource"))],
+    )
+    with pytest.raises(ValueError, match="Unresolved resource in public case unresolved"):
+        profiles.files(profiles.load_profile("baseline", spec=spec), case=case, instructions={})

@@ -10,11 +10,11 @@ from pathlib import Path
 import pytest
 
 from evals.python import query
-from kernel import Ast
-from kernel.build import LIBRARY
-from kernel.build import ROOT as OCAML_ROOT
+from kernel import Ast, sources
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
+OCAML_ROOT = PYTHON_ROOT.parent / "ocaml"
+LIBRARY = tuple(OCAML_ROOT / name for name, _ in sources() if name.endswith((".ml", ".mli")))
 
 
 def _nodes[T: ast.AST](path: Path, *, kind: type[T]) -> list[T]:
@@ -35,7 +35,7 @@ def _runtime_files() -> tuple[Path, ...]:
     return tuple(path for path in PYTHON_ROOT.rglob("*.py") if "tests" not in path.parts)
 
 
-def only_native_builder_and_standalone_drivers_use_subprocess() -> None:
+def only_standalone_drivers_use_subprocess() -> None:
     callers = {
         str(path.relative_to(PYTHON_ROOT))
         for path in _runtime_files()
@@ -99,7 +99,8 @@ def domain_modules_are_codec_free() -> None:
 def public_operations_use_native_calls_without_a_transport_layer() -> None:
     assert "subprocess" not in _imported(PYTHON_ROOT / "query.py")
     assert "subprocess" not in _imported(PYTHON_ROOT / "commands.py")
-    assert "subprocess" in _imported(PYTHON_ROOT.parent / "kernel/build.py")
+    assert not (PYTHON_ROOT.parent / "kernel/build.py").exists()
+    assert "subprocess" not in _imported(PYTHON_ROOT.parent / "kernel/__init__.py")
 
 
 def public_operations_carry_dataset_selection() -> None:
@@ -131,8 +132,11 @@ def shared_domain_types_live_in_ast() -> None:
 
 
 def public_interfaces_only_declare_operations() -> None:
-    interfaces = [path.read_text() for path in OCAML_ROOT.glob("*.mli")]
-    assert not any(re.search(r"^type ", body, re.M) for body in interfaces)
+    assert not any(
+        re.search(r"^type ", path.read_text(), re.M)
+        for path in OCAML_ROOT.glob("*.mli")
+        if path.name != "fixture_store.mli"
+    )
 
 
 def integrations_do_not_import_sibling_implementations() -> None:

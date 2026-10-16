@@ -12,7 +12,7 @@ from evals.python import datasets
 from evals.python.datasets import Dataset, Selection
 from evals.python.schema import FROZEN, DatasetInfo, Files
 from evals.python.verification import Runtime
-from kernel import Ast, Experiment, Fixture, Grader, Response
+from kernel import Ast, Experiment, Fixture, Grader, InvalidArgument, Projection, Response
 
 if TYPE_CHECKING:
     from kernel.Experiment import ResolveArgs
@@ -38,7 +38,7 @@ def _candidate(text: str) -> Ast.response | None:
         text = text[8:-4]
     try:
         return _response(json.loads(text))
-    except (ValueError, RecursionError):
+    except (ValueError, RecursionError, InvalidArgument):
         return None
 
 
@@ -56,6 +56,7 @@ __all__ = [
     "GradeCase",
     "LoadDataset",
     "Provenance",
+    "Reference",
     "Runtime",
     "Scores",
     "Selection",
@@ -92,6 +93,11 @@ def LoadDataset(*, selection: Selection = "smoke") -> Dataset:
 @validate_call(config=FROZEN)
 def Cases(*, selection: Selection = "smoke") -> tuple[Ast.case, ...]:
     return tuple(datasets.load_dataset(selection).cases.values())
+
+
+@validate_call(config=FROZEN)
+def Reference(*, case_id: str, selection: Selection = "smoke") -> Ast.reference:
+    return Projection.reference(datasets.record(case_id, selection=selection))
 
 
 @validate_call(config=FROZEN)

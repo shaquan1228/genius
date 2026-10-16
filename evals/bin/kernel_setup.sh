@@ -30,8 +30,12 @@ if ! git -C "$bridge_source" apply --reverse --check "$evals_root/kernel/bridge.
     git -C "$bridge_source" apply "$evals_root/kernel/bridge.patch"
 fi
 opam pin add --switch="$kernel_switch" --kind=path ocaml-in-python "$bridge_source" --yes --no-action
-opam install --switch="$kernel_switch" ocaml-in-python ppxlib.0.26.0 --yes --assume-depexts --jobs=4
+opam install --switch="$kernel_switch" ocaml-in-python ppxlib.0.26.0 dune.3.24.2 --yes --assume-depexts --jobs=4
 bridge_library=$(opam var --switch="$kernel_switch" ocaml-in-python:lib)
 # A real search path also avoids the source ocaml/ directory shadowing an editable finder.
 .venv/bin/python -c 'import pathlib, sys, sysconfig; pathlib.Path(sysconfig.get_paths()["purelib"], "genius-ocaml.pth").write_text(sys.argv[1] + "\n")' "$bridge_library"
+# Build and install the normal findlib package before any Python import.
+opam exec --switch="$kernel_switch" -- dune build @install tools/bindings.exe
+opam exec --switch="$kernel_switch" -- .venv/bin/python kernel/generate.py
+opam exec --switch="$kernel_switch" -- dune install
 opam exec --switch="$kernel_switch" -- .venv/bin/python -c 'from kernel import Ast, Grader, Projection'

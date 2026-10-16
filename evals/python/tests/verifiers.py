@@ -24,9 +24,7 @@ def _snapshot(directory: Path) -> dict[str, bytes]:
     return {path.name: path.read_bytes() for path in directory.iterdir()}
 
 
-def _verify(
-    case: Ast.case, *, directory: Path, selection: Selection = "smoke"
-) -> bool:
+def _verify(case: Ast.case, *, directory: Path, selection: Selection = "smoke") -> bool:
     checks = verifier(case.id, selection=selection)
     assert isinstance(checks, Ast.verifier)
 

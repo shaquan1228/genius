@@ -11,8 +11,7 @@ from typing import Protocol, cast
 from pydantic import TypeAdapter
 
 from evals.python.schema import FROZEN, DatasetInfo, FileName
-from kernel import Ast, Case, Fixture, Projection
-from kernel.build import LIBRARY
+from kernel import Ast, Case, Fixture, Projection, sources
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -21,7 +20,7 @@ class Sources:
     resources: tuple[tuple[str, str], ...]
 
 
-_MODULES = tuple((path.name, path.read_text()) for path in LIBRARY)
+_MODULES = sources()
 
 
 def kernel_sources(*, resources: Mapping[str, str] = MappingProxyType({})) -> Sources:

@@ -5,27 +5,29 @@ from typing import assert_never
 
 import evals.python.query as queries
 from evals.python import commands
-from evals.python.datasets import smoke as declarations
 from kernel import Ast
 
 
 def response(completion: Ast.completion) -> str:
-    if isinstance(completion, Ast.Plain):
-        return completion[0]
-    if isinstance(completion, Ast.Structured):
-        return json.dumps({name: value[0] for name, value in completion[0]})
-    assert_never(completion)
+    match completion:
+        case Ast.Plain():
+            return completion[0]
+        case Ast.Structured():
+            return json.dumps({name: value[0] for name, value in completion[0]})
+        case _ as unreachable:
+            assert_never(unreachable)
 
 
-async def validate(definition: Ast.task, *, dataset: queries.Dataset) -> bool:
-    result = await commands.ValidateReference(case_id=definition.id, selection=dataset)
+async def validate(case: Ast.case, *, dataset: queries.Dataset) -> bool:
+    reference = queries.Reference(case_id=case.id, selection=dataset)
+    result = await commands.ValidateReference(case_id=case.id, selection=dataset)
     scores: queries.Scores = {}
     if not isinstance(result.verification, Ast.Harness_error):
         scores = queries.GradeCase(
-            case_id=definition.id,
-            response=response(definition.reference.completion),
+            case_id=case.id,
+            response=response(reference.completion),
             changed_files=tuple(
-                f"workspace/{name}" for name, _ in queries.Fixture.files(definition.reference.edits)
+                f"workspace/{name}" for name, _ in queries.Fixture.files(reference.edits)
             ),
             verification=result.verification,
             selection=dataset,
@@ -33,21 +35,18 @@ async def validate(definition: Ast.task, *, dataset: queries.Dataset) -> bool:
     print(
         json.dumps(
             {
-                "id": definition.id,
+                "id": case.id,
                 "verification": type(result.verification).__name__.lower(),
                 "scores": dict(scores),
             }
         )
     )
-    return isinstance(result.verification, (Ast.Passed, Ast.Unchecked)) and all(
-        scores.values()
-    )
+    return isinstance(result.verification, (Ast.Passed, Ast.Unchecked)) and all(scores.values())
 
 
 async def main() -> int:
-    definitions = declarations.cases()
-    dataset = queries.CompileDataset(cases=definitions)
-    results = [await validate(definition, dataset=dataset) for definition in definitions]
+    dataset = queries.LoadDataset()
+    results = [await validate(case, dataset=dataset) for case in queries.Cases(selection=dataset)]
     return int(not all(results))
 
 

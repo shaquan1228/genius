@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import commands, datasets, query
-from kernel import Ast
+from kernel import Ast, Projection
 
 
 def public_queries_preserve_canonical_objects() -> None:
@@ -92,3 +92,18 @@ def queries_are_separate_from_commands() -> None:
         "ExperimentSettings",
     ):
         assert not hasattr(commands, name)
+
+
+@pytest.mark.parametrize("response", ['{"":"x"}', '{"answer": 1}', "not json"])
+def malformed_candidates_receive_incorrect_scores(response: str) -> None:
+    scores = query.GradeCase(case_id="small-decision", response=response, changed_files=())
+    assert not scores["correctness"]
+
+
+def reference_query_returns_canonical_reference() -> None:
+    dataset = query.LoadDataset()
+    expected = Projection.reference(dataset.records["small-decision"])
+    with patch("kernel.Projection.reference", return_value=expected) as project:
+        actual = query.Reference(case_id="small-decision", selection=dataset)
+    assert actual is expected
+    project.assert_called_once_with(dataset.records["small-decision"])

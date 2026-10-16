@@ -1,0 +1,20 @@
+(library
+ (name genius_evals_kernel)
+ (public_name genius_evals_kernel)
+ (modules ast case criterion experiment fixture fixture_store grader projection reference response verifier build_info genius_evals_kernel))
+
+(rule
+ (targets build_info.ml)
+ (deps ast.ml case.ml case.mli criterion.ml criterion.mli experiment.ml experiment.mli fixture.ml fixture.mli fixture_store.ml fixture_store.mli grader.ml grader.mli projection.ml projection.mli reference.ml reference.mli response.ml response.mli verifier.ml verifier.mli genius_evals_kernel.ml dune)
+ (action
+  (with-stdout-to %{targets}
+   (run %{exe:../tools/embed_sources.exe} %{deps}))))
+
+; The upstream bridge requires a flat type namespace. Generate this facade from
+; compiled interfaces so it never duplicates handwritten domain declarations.
+(rule
+ (targets genius_evals_kernel.mli)
+ (deps .genius_evals_kernel.objs/byte/genius_evals_kernel__Ast.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Case.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Criterion.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Experiment.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Fixture.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Grader.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Projection.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Reference.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Response.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Verifier.cmi)
+ (action
+  (with-stdout-to %{targets}
+   (run %{exe:../tools/bindings.exe} --interface %{deps}))))

@@ -48,9 +48,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
         agent=environments_adapter.environment(current),
         runtime=environments_adapter.runtime(current),
     )
-    explanation = (
-        completion if isinstance(result.verification, Ast.Unchecked) else result.detail
-    )
+    explanation = completion if isinstance(result.verification, Ast.Unchecked) else result.detail
     return Score(
         value=score_values(result.scores),
         explanation=with_failure(explanation, failure=failure),

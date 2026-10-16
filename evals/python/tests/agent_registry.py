@@ -137,6 +137,12 @@ def codex_options_disable_network() -> None:
         "home_dir": "/root/genius-codex",
         "network_access": False,
         "retry_refusals": 0,
+        "system_prompt": (
+            "Use only tools registered for this session. "
+            "If apply_patch is not registered, edit files through exec_command with cmd "
+            "as a shell command string, not an argv array. "
+            "Do not call an unregistered apply_patch tool."
+        ),
         "config_overrides": {
             "model_reasoning_effort": '"medium"',
             "allow_login_shell": "false",

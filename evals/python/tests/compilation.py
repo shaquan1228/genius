@@ -68,19 +68,22 @@ def _independent_datasets() -> tuple[query.Dataset, query.Dataset]:
     return query.CompileDataset(cases=(first,)), query.CompileDataset(cases=(second,))
 
 
-def compilation_preserves_independent_private_inputs() -> None:
+def compilation_preserves_independent_public_inputs() -> None:
     a, b = _independent_datasets()
     assert _public_snapshot(query.Cases(selection=a)) == _public_snapshot(query.Cases(selection=b))
+
+
+def compilation_preserves_independent_private_inputs() -> None:
+    a, b = _independent_datasets()
     first_checks = verifier("external", selection=a)
     second_checks = verifier("external", selection=b)
     assert first_checks is not None
     assert second_checks is not None
-    assert first_checks.stdin == "private stdin"
-    assert second_checks.stdin == "different private stdin"
-    assert _reference_files(reference("external", selection=a)) == {"main.py": "fixed"}
-    assert _reference_files(reference("external", selection=b)) == {
-        "main.py": "another fixed solution"
-    }
+    assert (first_checks.stdin, second_checks.stdin) == ("private stdin", "different private stdin")
+    assert (
+        _reference_files(reference("external", selection=a)),
+        _reference_files(reference("external", selection=b)),
+    ) == ({"main.py": "fixed"}, {"main.py": "another fixed solution"})
 
 
 def compiled_metadata_queries_do_not_download() -> None:
@@ -195,9 +198,7 @@ def compiled_dataset_is_immutable() -> None:
     with pytest.raises(TypeError):
         cast(dict[str, object], dataset.records)["external"] = "changed"
     with pytest.raises(TypeError):
-        cast(dict[str, Ast.case], dataset.cases)["external"] = dataset.cases[
-            "external"
-        ]
+        cast(dict[str, Ast.case], dataset.cases)["external"] = dataset.cases["external"]
     with pytest.raises(TypeError):
         dataset.cases["external"].files[0] = ("main.py", Ast.Inline("changed"))  # type: ignore[index]
     with pytest.raises(FrozenInstanceError):
@@ -272,3 +273,19 @@ def compiled_selection_flows_through_all_verification_commands() -> None:
     asyncio.run(execute())
     cast(AsyncMock, runtime.create).assert_not_awaited()
     cast(AsyncMock, runtime.cleanup).assert_not_awaited()
+
+
+def compilation_rejects_a_foreign_kernel_source_snapshot() -> None:
+    foreign = replace(datasets.kernel_sources(), modules=())
+    with (
+        patch("evals.python.datasets.kernel_sources", return_value=foreign),
+        pytest.raises(ValueError, match="Kernel sources differ"),
+    ):
+        query.CompileDataset(cases=(_copy_case(_declaration(), id="foreign-kernel"),))
+
+
+def mismatched_record_identity_is_rejected() -> None:
+    dataset = query.CompileDataset(cases=(_declaration(),))
+    mismatched = replace(dataset, records={"wrong-id": dataset.records["external"]})
+    with pytest.raises(ValueError, match="Unknown case: wrong-id"):
+        query.Reference(case_id="wrong-id", selection=mismatched)

@@ -8,8 +8,6 @@ from pathlib import Path
 from types import ModuleType
 from typing import cast
 
-from kernel.build import build, sources
-
 _environment = {name: os.environ.get(name) for name in ("PATH", "PYTHONHOME", "PYTHONPATH")}
 os.environ["PATH"] = str(Path(sys.executable).parent) + os.pathsep + (_environment["PATH"] or "")
 try:
@@ -24,15 +22,20 @@ finally:
             os.environ[_name] = _value
 
 
+try:
+    _ocaml.require("genius_evals_kernel")
+except ImportError as error:
+    raise ImportError("OCaml kernel is not installed; run make -C evals setup-kernel") from error
+
+Ast = cast(ModuleType, _ocaml.Genius_evals_kernel)
+
+
 @cache
-def load(modules: tuple[tuple[str, str], ...]) -> ModuleType:
-    directory, name = build(modules)
-    _ocaml.add_dir(str(directory))
-    _ocaml.loadfile(str(directory / "kernel.cmxs"))
-    return cast(ModuleType, getattr(_ocaml, name))
+def sources() -> tuple[tuple[str, str], ...]:
+    """The exact trusted sources embedded in the installed native library."""
+    return tuple((str(name), str(contents)) for name, contents in Ast.sources)
 
 
-Ast = load(sources())
 Case = Ast.Case
 Criterion = Ast.Criterion
 Experiment = Ast.Experiment
@@ -56,5 +59,5 @@ __all__ = [
     "Reference",
     "Response",
     "Verifier",
-    "load",
+    "sources",
 ]

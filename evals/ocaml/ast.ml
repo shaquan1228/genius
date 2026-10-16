@@ -4,7 +4,7 @@
 (* Fixture: immutable initial files. The map implementation belongs to Fixture.
    https://inspect.aisi.org.uk/datasets.html#sample-files
    https://docs.harborframework.com/tasks/environment *)
-type fixture = string Map.Make(String).t
+type fixture = Fixture_store.t
 
 (* Response: named scalar values shared by expectations and reference replies.
    https://huggingface.co/docs/lighteval/main/en/package_reference/models_outputs

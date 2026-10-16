@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
+import kernel as native
 from evals.python import datasets, query
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.integrations.inspect import profiles
@@ -17,7 +18,7 @@ from evals.python.query import ExperimentSettings, GradeCase
 from evals.python.tests.declarations import _reference_text
 from evals.python.tests.projections import reference, verifier
 from evals.python.tests.support import choice_case as _choice_case
-from kernel import Ast, InvalidArgument, load
+from kernel import Ast, InvalidArgument
 
 
 @pytest.fixture
@@ -83,8 +84,7 @@ def third_dataset_imports_and_grades_records(third_dataset: query.Dataset) -> No
 def public_projection_contains_no_private_material() -> None:
     for case in query.Cases():
         assert isinstance(case, Ast.case)
-        assert not hasattr(case, "reference")
-        assert not hasattr(case, "criterion")
+        assert (hasattr(case, "reference"), hasattr(case, "criterion")) == (False, False)
         assert "verifier.py" not in dict(case.files)
 
 
@@ -176,7 +176,6 @@ def verifier_projection_and_grading_use_native_values() -> None:
         changed_files=(),
         verification=Ast.Passed(),
     )
-    native = load(datasets.kernel_sources().modules)
     with (
         patch.object(native.Projection, "verifier", wraps=native.Projection.verifier) as projection,
         patch.object(native.Grader, "grade", wraps=native.Grader.grade) as kernel_grade,
@@ -184,7 +183,6 @@ def verifier_projection_and_grading_use_native_values() -> None:
         projected = verifier(case_id)
         assert projected is not None
         assert checks is not None
-        assert projected.stdin == checks.stdin
         projection.assert_called_once_with(datasets.record(case_id, selection="smoke"))
         assert (grade()["correctness"], grade()["correctness"]) == (True, True)
-        assert kernel_grade.call_count == 2
+        assert (projected.stdin, kernel_grade.call_count) == (checks.stdin, 2)

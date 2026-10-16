@@ -11,7 +11,6 @@ from inspect_ai import Task, eval_async
 from inspect_ai.log import EvalLog
 from inspect_ai.model import GenerateConfig, get_model, modelapi
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
-from kernel import Ast
 
 import evals.python.integrations.inspect.completeness as completeness_adapter
 import evals.python.integrations.inspect.pricing as pricing_adapter
@@ -20,6 +19,7 @@ import evals.python.integrations.inspect.progress as progress_adapter
 import evals.python.integrations.inspect.remote  # noqa: F401 - register the HF sandbox
 import evals.python.integrations.inspect.tasks as task_adapter
 from evals.python import commands, query
+from kernel import Ast
 
 
 @modelapi(name="genius-hf")
@@ -51,9 +51,7 @@ def selected_samples(task: Task, *, request: commands.EvaluationSettings) -> lis
     return list(selected)
 
 
-def evaluation_tasks(
-    spec: Ast.experiment, *, request: commands.EvaluationSettings
-) -> list[Task]:
+def evaluation_tasks(spec: Ast.experiment, *, request: commands.EvaluationSettings) -> list[Task]:
     catalog = query.LoadDataset(selection=request.dataset)
     instructions = profile_adapter.load_instructions(spec)
     provenance = query.Provenance(selection=catalog)
@@ -143,7 +141,7 @@ async def execute(
     tasks: list[Task],
     *,
     request: commands.EvaluationSettings,
-    spec: commands.Experiment,
+    spec: Ast.experiment,
     model: Any,
     state: progress_adapter.Progress,
 ) -> int:

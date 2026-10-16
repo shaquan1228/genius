@@ -24,12 +24,12 @@ flowchart LR
 
 | Boundary | Owns |
 | --- | --- |
-| `ocaml/ast.ml` | Shared immutable domain type definitions; compiles without domain-module dependencies |
+| `ocaml/ast.ml` | Shared immutable domain types; fixture aliases the private abstract store |
 | Primitive `.mli` / `.ml` files | Public operation signatures / executable constructors, validation and pure grading |
 | `ocaml/projection.mli` | Separate public case, trusted verifier, and offline reference projections |
 | `ocaml/experiment.mli` | Immutable defaults and validated launch overrides |
 | `python/datasets/` | Dataset loading, native case snapshots, resource resolution, provenance, and case construction |
-| `kernel/` | Native OCaml module loading, content-addressed builds, and generated Python typing declarations |
+| `kernel/` | Standard findlib loading and Python stubs rendered from compiled interfaces |
 | `python/integrations/datasets/` | Pinned download effects |
 | `python/integrations/smoke/` | Reusable private Python assertion driver and reference-validation CLI |
 | `python/integrations/inspect/` | SDK task/sample/score adaptation, agents, and sandbox capability adaptation |
@@ -40,24 +40,24 @@ flowchart LR
 | `python/integrations/evalplus/` | Benchmark reference-validation CLI, EvalPlus manifest adaptation and trusted EvalPlus driver |
 | `bin/` | Local launch and hosted bootstrap scripts |
 
-Public `Ast.public_case` values contain only ID, skill, prompt, and public files, including visible helper tools.
+Public `Ast.case` values contain only ID, skill, prompt, and public files, including visible helper tools.
 Reference solutions, expected answers, private verifier programs and private inputs use separate projections.
 Only the trusted host or fresh grading sandbox receives those projections; agent samples and metadata receive public inputs and identifiers.
 Commands and queries accept and return the OCaml-backed types directly; validation and grading policy remain in OCaml.
 
 The public command and query operations remain. Their signatures use native
-`Ast.case`, `Ast.public_case`, `Ast.experiment` and `Ast.verification` values directly; projection, settings and grading calls stay in the same process. There is
+`Ast.task`, `Ast.case`, `Ast.experiment` and `Ast.verification` values directly; projection, settings and grading calls stay in the same process. There is
 no JSON envelope, kernel executable or per-call subprocess. Dataset descriptions
 and provenance remain Python-owned queries. Grading returns named boolean scores.
 
 Dataset selection is a Python module name under `python/datasets/` or an immutable
 `Dataset` returned by `LoadDataset` or `CompileDataset`. Each bundled module supplies
-`info` (optional provenance) and `cases()` (native `Ast.case` values).
+`info` (optional provenance) and `cases()` (native `Ast.task` values).
 Python owns downloading and parsing upstream records. OCaml accepts the same
 canonical declarations for every dataset, validates them through its constructors,
 and exposes separate public, verifier, and reference projections.
 
-To add a dataset, map its Python records into `Ast.case` values and call
+To add a dataset, map its Python records into `Ast.task` values and call
 `CompileDataset(cases=..., info=...)`; no OCaml adapter or selector registration is
 needed. A module under `python/datasets/` makes a dataset available by name to the
 CLI. Evaluator integrations provide reusable executable checks, independently of
@@ -85,8 +85,8 @@ Public operations carry dataset selection as context. `Cases` returns public inp
 `VerifyCase` and `AssessCase` resolve private checks internally. Selection stays out of
 the kernel grading observation; scoring supplies the case ID it already has.
 
-Primitive modules have no SDK dependencies. Only `kernel/build.py` invokes the compiler;
-ordinary command/query calls invoke the bound OCaml operations directly. The default smoke driver executes Python candidates and private assertions in its isolated grading workspace.
+Primitive modules have no SDK dependencies. Setup builds and installs the kernel with Dune;
+ordinary imports load the findlib package with `ocaml.require`, and command/query calls invoke its bound operations directly. The default smoke driver executes Python candidates and private assertions in its isolated grading workspace.
 Kernel domain projections are nonrecursive. Recursive diagnostics are frozen in public
 results and converted to JSON values only at process or SDK output interfaces.
 Boundary tests enforce these imports and the separation of dataset loading from SDK integration code.
@@ -98,7 +98,7 @@ Invalid candidate submissions produce unsuccessful outcomes; provisioning, trans
 Install opam, Python 3.12, [uv](https://docs.astral.sh/uv/getting-started/installation/),
 Git, Make and a C compiler. The setup script creates the isolated
 `genius-kernel-414` switch with OCaml 4.14.2 and installs a pinned
-`ocaml-in-python` bridge. A small pinned patch keeps its compiler scratch files
+`ocaml-in-python` bridge and Dune 3.24.2. Setup builds and installs the `genius_evals_kernel` findlib library. A small pinned bridge patch keeps its compiler scratch files
 out of the working directory.
 
 ```sh
@@ -109,9 +109,15 @@ opam install --switch genius-kernel-414 --yes ocamlformat.0.29.0
 opam exec --switch=genius-kernel-414 -- make -C evals check
 ```
 
-Python entrypoints below run under that same opam switch. `check-python`
-generates `.pyi` files from `ocaml/ast.ml` and the public `.mli` signatures before
-running mypy; the generated files are ignored by Git. To regenerate them alone:
+Python entrypoints below run under that same opam switch. Setup compiles the library
+and its binding reader with OCaml 4.14 compiler-libs. The reader uses
+`Cmi_format.read_cmi` to inspect the compiled public interface; Python renders that
+structural description into `.pyi` files. Includes, inferred signatures, labels,
+and type identities come from the compiler. Unsupported constructs fail explicitly.
+`check-python` verifies the generated stubs before mypy; the stubs and Dune's
+`_build/` directory are ignored by Git. After changing OCaml sources, rebuild with
+`make -C evals setup-kernel` and restart Python. To refresh only the stubs of an
+already built library:
 
 ```sh
 opam exec --switch=genius-kernel-414 -- uv run --project evals python evals/kernel/generate.py
@@ -122,7 +128,7 @@ This installs locked dependencies, checks strict typing, runs tests, and enforce
 (ocamlformat style), `lint-ocaml` (compilation with every warning as an error),
 `test-ocaml` (kernel tests in `ocaml/tests/`), and `check-python` (Ruff format and lint,
 strict mypy, tests, coverage, Xenon).
-`make -C evals format` applies both styles: ocamlformat from `ocaml/.ocamlformat`
+`make -C evals format` applies both styles: ocamlformat from `.ocamlformat`
 and Ruff from `pyproject.toml`.
 
 Functions take at most one positional argument, usually an ID or the value they
@@ -248,10 +254,10 @@ Sandbox and verifier failures still stop the task.
 
 ## Author cases
 
-Python datasets construct native `query.Ast.case` values. The example in
+Python datasets construct native `query.Ast.task` values. The example in
 `python/datasets/smoke.py` uses `Ast.instruction`, `Ast.Code` or `Ast.Answer`, and
 `Ast.reference`; `Fixture.of_files` constructs the opaque file map. Public queries
-return `Ast.public_case`, which excludes private checks and reference solutions.
+return `Ast.case`, which excludes private checks and reference solutions.
 Python-only metadata and SDK execution capabilities remain Python-owned.
 
 ```python
@@ -311,15 +317,27 @@ the criterion declares it. Adding answer fields does not require a new binding o
 
 ## Execution boundary
 
-`from kernel import Ast, Grader, Projection` exposes bindings derived from the
-compiled OCaml interfaces. The build generates one export signature, keeping the
-functor-backed fixture opaque, and packs the pure modules to avoid name collisions
-with the bridge runtime. The AST and public `.mli` files remain authoritative.
+`from kernel import Ast, Grader, Projection` loads the installed
+`genius_evals_kernel` findlib package with `ocaml.require`. Dune wraps the pure
+modules to avoid collisions with modules already loaded by the bridge. The fixture
+map lives behind `fixture_store.mli`'s abstract type.
 
-The host compiles immutable source snapshots into native plugins cached under
-`$XDG_CACHE_HOME/genius-evals/kernel` (or `~/.cache/genius-evals/kernel`). Restart Python after changing kernel sources;
-the native type identities are fixed for each process. Compiler files stay outside the checkout;
-generated `.pyi` files are the only local binding artifacts and are ignored.
+The pinned bridge cannot bind the ordinary nested module aliases for these domain
+records (it raises an unbound converter error). A Dune build rule therefore generates
+a flat public interface from the compiled domain and operation `.cmi` files using
+compiler-libs `Subst` and `Printtyp`. It exposes the fixture as abstract and preserves
+the compiler's constructors and operation signatures. No domain declaration is copied
+into a handwritten binding interface. The Python stub reader consumes this final
+public `.cmi`, including its nested operation signatures.
+
+Python imports never build the kernel library. The bridge still compiles its own
+conversion functions internally; `kernel/bridge.patch` addresses its independent
+scratch-file bug. Dune does not replace or remove that upstream patch.
+
+The library embeds its exact trusted build sources. Dataset provenance uses this
+installed snapshot, so editing source after setup cannot attribute new source to old
+loaded policy. Rebuild and restart to use changed policy; native type identities stay
+fixed for each process. There is no content-addressed runtime plugin cache.
 Dataset snapshots retain typed declarations and explicit resources. Resource
 changes invalidate consumer projections without rebuilding native code.
 

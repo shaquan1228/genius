@@ -13,6 +13,10 @@ from evals.python.tests.projections import verifier
 from kernel import Ast, InvalidArgument
 
 
+def _override[T](value: T | None, *, original: T) -> T:
+    return original if value is None else value
+
+
 def _copy_case(  # noqa: PLR0913 - Reconstruct the actual native record fields.
     value: Ast.task,
     *,
@@ -24,12 +28,12 @@ def _copy_case(  # noqa: PLR0913 - Reconstruct the actual native record fields.
     reference: Ast.reference | None = None,
 ) -> Ast.task:
     return Ast.task(
-        id=value.id if id is None else id,
-        fixture=value.fixture if fixture is None else fixture,
-        instruction=value.instruction if instruction is None else instruction,
-        criterion=value.criterion if criterion is None else criterion,
-        allowed_files=value.allowed_files if allowed_files is None else allowed_files,
-        reference=value.reference if reference is None else reference,
+        id=_override(id, original=value.id),
+        fixture=_override(fixture, original=value.fixture),
+        instruction=_override(instruction, original=value.instruction),
+        criterion=_override(criterion, original=value.criterion),
+        allowed_files=_override(allowed_files, original=value.allowed_files),
+        reference=_override(reference, original=value.reference),
     )
 
 
@@ -44,12 +48,12 @@ def _copy_verifier(  # noqa: PLR0913 - Reconstruct the actual native record fiel
     timeout_seconds: int | None = None,
 ) -> Ast.verifier:
     return Ast.verifier(
-        inputs=value.inputs if inputs is None else inputs,
-        files=value.files if files is None else files,
-        tools=value.tools if tools is None else tools,
-        command=value.command if command is None else command,
-        stdin=value.stdin if stdin is None else stdin,
-        timeout_seconds=value.timeout_seconds if timeout_seconds is None else timeout_seconds,
+        inputs=_override(inputs, original=value.inputs),
+        files=_override(files, original=value.files),
+        tools=_override(tools, original=value.tools),
+        command=_override(command, original=value.command),
+        stdin=_override(stdin, original=value.stdin),
+        timeout_seconds=_override(timeout_seconds, original=value.timeout_seconds),
     )
 
 
@@ -91,9 +95,7 @@ def _declaration(*, code: bool = True) -> Ast.task:
             edits=query.Fixture.of_files([("main.py", "fixed")]),
             completion=Ast.Plain("done")
             if code
-            else Ast.Structured(
-                [("choice", Ast.String("B")), ("safe", Ast.Bool(True))]
-            ),
+            else Ast.Structured([("choice", Ast.String("B")), ("safe", Ast.Bool(True))]),
         ),
     )
 
@@ -107,8 +109,7 @@ def external_declarations_preserve_public_projection(*, code: bool) -> None:
     assert _files(case.files) == (
         {"main.py": "broken", "check.sh": "visible helper"} if code else {"main.py": "broken"}
     )
-    assert not hasattr(case, "criterion")
-    assert not hasattr(case, "reference")
+    assert (hasattr(case, "criterion"), hasattr(case, "reference")) == (False, False)
 
 
 def code_declarations_preserve_private_checks_and_resolve_resources() -> None:
@@ -132,20 +133,26 @@ def missing_private_resource_fails_at_resolution() -> None:
 
 
 @pytest.mark.parametrize("code", [True, False])
-def declarations_preserve_private_references(*, code: bool) -> None:
+def declarations_preserve_private_reference_edits(*, code: bool) -> None:
     dataset = query.CompileDataset(cases=(_declaration(code=code),))
     reference = private_reference("external", selection=dataset)
     assert dict(query.Fixture.files(reference.edits)) == {"main.py": "fixed"}
-    if code:
-        assert isinstance(reference.completion, Ast.Plain)
-        assert reference.completion[0] == "done"
-    else:
-        assert isinstance(reference.completion, Ast.Structured)
-        fields = dict(reference.completion[0])
-        assert isinstance(fields["choice"], Ast.String)
-        assert fields["choice"][0] == "B"
-        assert isinstance(fields["safe"], Ast.Bool)
-        assert fields["safe"][0] is True
+
+
+def code_declarations_preserve_plain_completion() -> None:
+    dataset = query.CompileDataset(cases=(_declaration(),))
+    completion = private_reference("external", selection=dataset).completion
+    assert isinstance(completion, Ast.Plain)
+    assert completion[0] == "done"
+
+
+def answer_declarations_preserve_typed_completion_fields() -> None:
+    dataset = query.CompileDataset(cases=(_declaration(code=False),))
+    completion = private_reference("external", selection=dataset).completion
+    assert isinstance(completion, Ast.Structured)
+    fields = dict(completion[0])
+    assert (isinstance(fields["choice"], Ast.String), fields["choice"][0]) == (True, "B")
+    assert (isinstance(fields["safe"], Ast.Bool), fields["safe"][0]) == (True, True)
 
 
 def answer_declarations_do_not_supply_executable_checks() -> None:
@@ -174,9 +181,7 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
     [
         lambda c: _copy_case(c, allowed_files=()),
         lambda c: _copy_case(c, fixture=query.Fixture.empty),
-        lambda c: _copy_case(
-            c, criterion=Ast.Answer(Ast.answer(expected=[], text_rule=None))
-        ),
+        lambda c: _copy_case(c, criterion=Ast.Answer(Ast.answer(expected=[], text_rule=None))),
         lambda c: _copy_case(
             c,
             criterion=Ast.Answer(
@@ -261,9 +266,7 @@ def native_fields_retain_immutable_snapshots() -> None:
 @pytest.mark.parametrize(
     "criterion",
     [
-        Ast.Answer(
-            Ast.answer(expected=[("choice", Ast.String("B"))], text_rule=None)
-        ),
+        Ast.Answer(Ast.answer(expected=[("choice", Ast.String("B"))], text_rule=None)),
         Ast.Answer(
             Ast.answer(
                 expected=[], text_rule=Ast.text_rule(field="reason", min_words=1, max_words=5)

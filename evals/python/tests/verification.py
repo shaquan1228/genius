@@ -322,9 +322,7 @@ def invalid_executable_contract_is_rejected(updates: dict[str, object]) -> None:
                     fixture=query.Fixture.of_files([("solution.py", "print(42)")]),
                     criterion=Ast.Code(_checks(**updates)),
                     allowed_files=("solution.py",),
-                    reference=Ast.reference(
-                        edits=query.Fixture.empty, completion=Ast.Plain("")
-                    ),
+                    reference=Ast.reference(edits=query.Fixture.empty, completion=Ast.Plain("")),
                 ),
             )
         )
@@ -433,9 +431,7 @@ def candidate_inspection_classifies_missing_and_infrastructure(code: int) -> Non
         result = await _run(environment(sandbox), runtime=_runtime_port(_grader_port()))
         assert isinstance(
             result.verification,
-            {0: Ast.Passed, 1: Ast.Invalid_submission, 2: Ast.Harness_error}[
-                code
-            ],
+            {0: Ast.Passed, 1: Ast.Invalid_submission, 2: Ast.Harness_error}[code],
         )
         if code == 2:
             assert "inspect candidate" in result.detail
@@ -542,9 +538,7 @@ def reference_nonzero_mkdir_is_harness_error() -> None:
             patch("kernel.Projection.verifier", return_value=_checks()),
             patch(
                 "kernel.Projection.reference",
-                return_value=Ast.reference(
-                    edits=query.Fixture.empty, completion=Ast.Plain("")
-                ),
+                return_value=Ast.reference(edits=query.Fixture.empty, completion=Ast.Plain("")),
             ),
         ):
             result = await commands.ValidateReference(
@@ -667,3 +661,15 @@ def cancelled_allocation_never_cleans_candidate() -> None:
         cast(AsyncMock, ports.cleanup).assert_not_awaited()
 
     asyncio.run(execute())
+
+
+def unresolved_verifier_resource_is_a_harness_error() -> None:
+    agent, grader = _agent_port(), _grader_port()
+    ports = _runtime_port(grader)
+    checks = _checks(files=[("grader.py", Ast.Resource("unresolved"))])
+    with patch("kernel.Projection.verifier", return_value=checks):
+        result = asyncio.run(commands.VerifyCase(case_id="clear-task", agent=agent, runtime=ports))
+    assert isinstance(result.verification, Ast.Harness_error)
+    assert result.detail == "Verifier resources must be resolved before execution"
+    cast(AsyncMock, grader.write_bytes).assert_not_awaited()
+    cast(AsyncMock, ports.cleanup).assert_awaited_once_with(grader, interrupted=False)
