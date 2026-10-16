@@ -11,6 +11,7 @@ from typing import Literal, assert_never
 from pydantic import BaseModel, ConfigDict
 
 from evals.python import commands, query
+from kernel import Ast
 
 
 class BenchmarkInfo(BaseModel):
@@ -34,7 +35,7 @@ def benchmark_info() -> BenchmarkInfo:
 
 
 async def validate_case(
-    case: commands.Ast.public_case, *, dataset: query.Dataset
+    case: Ast.public_case, *, dataset: query.Dataset
 ) -> dict[str, object]:
     result = await commands.ValidateReference(case_id=case.id, selection=dataset)
     return {

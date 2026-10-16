@@ -11,6 +11,7 @@ from inspect_ai import Task, eval_async
 from inspect_ai.log import EvalLog
 from inspect_ai.model import GenerateConfig, get_model, modelapi
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
+from kernel import Ast
 
 import evals.python.integrations.inspect.completeness as completeness_adapter
 import evals.python.integrations.inspect.pricing as pricing_adapter
@@ -51,7 +52,7 @@ def selected_samples(task: Task, *, request: commands.EvaluationSettings) -> lis
 
 
 def evaluation_tasks(
-    spec: commands.Ast.experiment, *, request: commands.EvaluationSettings
+    spec: Ast.experiment, *, request: commands.EvaluationSettings
 ) -> list[Task]:
     catalog = query.LoadDataset(selection=request.dataset)
     instructions = profile_adapter.load_instructions(spec)
@@ -77,14 +78,14 @@ def evaluation_tasks(
 
 
 def diagnostic_tasks(
-    spec: commands.Ast.experiment, *, request: commands.EvaluationSettings, build: partial[Task]
+    spec: Ast.experiment, *, request: commands.EvaluationSettings, build: partial[Task]
 ) -> list[Task]:
     modes = request.deliveries or ()
-    single = commands.Ast.experiment(
+    single = Ast.experiment(
         profiles=spec.profiles,
         epochs=1,
         message_limit=spec.message_limit,
-        token_limit=spec.token_limit,
+        cost_limit=spec.cost_limit,
         time_limit=spec.time_limit,
         cache=spec.cache,
     )

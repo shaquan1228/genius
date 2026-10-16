@@ -9,12 +9,13 @@ import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.scoring as scoring_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import commands, query
+from kernel import Ast
 
 
 def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
     *,
-    profile: commands.Ast.profile,
-    spec: commands.Ast.experiment,
+    profile: Ast.profile,
+    spec: Ast.experiment,
     catalog: query.Dataset,
     instructions: Mapping[str, bytes],
     provenance: query.DatasetProvenance,
