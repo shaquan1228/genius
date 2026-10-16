@@ -215,12 +215,14 @@ def test_nonstandard_json_is_an_incorrect_candidate(response: str) -> None:
 
 def test_kernel_cache_tracks_trusted_python_runtime(tmp_path: Path) -> None:
     judgment(response="{}")
-    runtime = tmp_path / "python/integrations/verifiers"
-    runtime.mkdir(parents=True)
-    for source in (RUNNER.parent.parent / "python/integrations/verifiers").glob("verifier.py"):
-        (runtime / source.name).write_text(source.read_text() + "\n")
+    runtime = tmp_path / "ocaml_verifier.py"
+    driver = RUNNER.parent.parent / "python/integrations/ocaml/ocaml_verifier.py"
+    runtime.write_text(driver.read_text() + "\n")
     with (
-        patch("evals.python.integrations.datasets.catalog.DRIVER", runtime / "verifier.py"),
+        patch(
+            "evals.python.integrations.datasets.catalog.DRIVERS",
+            (runtime, RUNNER.parent.parent / "python/integrations/evalplus/evalplus_verifier.py"),
+        ),
         patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as process,
     ):
         assert judgment(response='{"choice":"B","reason":"Cheap"}')

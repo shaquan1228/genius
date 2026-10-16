@@ -8,4 +8,4 @@ apt-get update -qq
 apt-get install -y --no-install-recommends git ocaml-nox ocaml-findlib libjsonm-ocaml-dev
 rm -rf /var/lib/apt/lists/*
 uv sync --project evals --locked
-exec uv run --project evals python -m "${EVAL_RUNNER_MODULE:-evals.python.integrations.inspect.job}"
+exec uv run --project evals python -m "${EVAL_RUNNER_MODULE:-evals.python.integrations.hugging_face.job}"

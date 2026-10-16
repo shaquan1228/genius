@@ -1,19 +1,21 @@
 """Trusted OCaml driver reports execution evidence without exposing the generic marker."""
 
 import json
+import os
 import runpy
 import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from evals.python.integrations.verifiers.verifier import (
+from evals.python.integrations.ocaml.ocaml_verifier import (
     Compilation,
     Invocation,
     Result,
     classify,
-    execute,
+    compile_ocaml,
     main,
 )
 from evals.python.paths import EVALS_ROOT
@@ -35,8 +37,8 @@ def test_classification(*, code: int, stdout: str, status: str) -> None:
 
 
 def test_missing_compiler_is_harness_error() -> None:
-    with patch("evals.python.integrations.verifiers.verifier.shutil.which", return_value=None):
-        assert execute(invocation=Invocation(mode="ocaml")) == Result(
+    with patch("evals.python.integrations.ocaml.ocaml_verifier.shutil.which", return_value=None):
+        assert compile_ocaml(invocation=Invocation()) == Result(
             status="harness_error", detail="OCaml compiler is unavailable"
         )
 
@@ -44,21 +46,21 @@ def test_missing_compiler_is_harness_error() -> None:
 def test_trusted_driver_uses_separate_inner_marker() -> None:
     result = subprocess.CompletedProcess([], 0, stdout="inner\n", stderr="")
     with (
-        patch("evals.python.integrations.verifiers.verifier.shutil.which", return_value="compiler"),
         patch(
-            "evals.python.integrations.verifiers.verifier.secrets.token_hex", return_value="inner"
+            "evals.python.integrations.ocaml.ocaml_verifier.shutil.which", return_value="compiler"
         ),
         patch(
-            "evals.python.integrations.verifiers.verifier.sys.stdin.read",
+            "evals.python.integrations.ocaml.ocaml_verifier.secrets.token_hex", return_value="inner"
+        ),
+        patch(
+            "evals.python.integrations.ocaml.ocaml_verifier.sys.stdin.read",
             return_value="assert true",
         ),
         patch(
-            "evals.python.integrations.verifiers.verifier.subprocess.run", return_value=result
+            "evals.python.integrations.ocaml.ocaml_verifier.subprocess.run", return_value=result
         ) as process,
     ):
-        assert execute(invocation=Invocation(mode="ocaml")) == Result(
-            status="passed", detail="inner\n"
-        )
+        assert compile_ocaml(invocation=Invocation()) == Result(status="passed", detail="inner\n")
     assert "inner" in process.call_args.kwargs["input"]
 
 
@@ -68,7 +70,7 @@ def test_main_emits_generic_envelope(
 ) -> None:
     with (
         patch(
-            "evals.python.integrations.verifiers.verifier.execute",
+            "evals.python.integrations.ocaml.ocaml_verifier.compile_ocaml",
             return_value=Result(status="passed", detail="done"),
             side_effect=failure,
         ),
@@ -93,7 +95,7 @@ def test_driver_entrypoint_emits_evidence(*, mode: str, capsys: pytest.CaptureFi
         patch.object(sys, "argv", ["verifier", mode]),
     ):
         runpy.run_path(
-            str(EVALS_ROOT / "python/integrations/verifiers/verifier.py"), run_name="__main__"
+            str(EVALS_ROOT / "python/integrations/ocaml/ocaml_verifier.py"), run_name="__main__"
         )
     evidence = json.loads(capsys.readouterr().out)
     assert evidence["status"] == "harness_error"
@@ -101,6 +103,30 @@ def test_driver_entrypoint_emits_evidence(*, mode: str, capsys: pytest.CaptureFi
         evidence["detail"]
         == {
             "ocaml": "OCaml compiler is unavailable",
-            "unknown": "Expected verifier mode: ocaml <sources...> or evalplus",
+            "unknown": "Expected verifier mode: ocaml <sources...>",
         }[mode]
     )
+
+
+@pytest.mark.parametrize("arguments", [[], ["evalplus"]])
+def test_isolated_driver_rejects_invalid_invocation(
+    *, arguments: list[str], tmp_path: Path
+) -> None:
+    source = EVALS_ROOT / "python/integrations/ocaml/ocaml_verifier.py"
+    driver = tmp_path / "verifier.py"
+    driver.write_text(source.read_text())
+    result = subprocess.run(
+        [sys.executable, "-I", str(driver), *arguments],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env={**os.environ, "GENIUS_VERIFIER_MARKER": "isolated"},
+        check=True,
+        timeout=5,
+    )
+    assert json.loads(result.stdout) == {
+        "marker": "isolated",
+        "status": "harness_error",
+        "detail": "Expected verifier mode: ocaml <sources...>",
+        "metadata": {},
+    }

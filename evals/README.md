@@ -14,10 +14,11 @@ flowchart TB
   D[Dataset adapters and declarations] --> K[OCaml primitives and pure grading]
   K <--> T[Versioned transport and immutable DTOs]
   T <--> I[Inspect execution and reporting]
-  I --> H[Hugging Face sandbox integration]
+  I --> Q[JSON command boundary]
+  Q --> H[Hugging Face sandbox integration]
   C[CI or local launch inputs] --> J[Hugging Face Job integration]
-  J --> T
-  J --> I
+  J --> Q
+  Q --> I
 ```
 
 | Boundary | Owns |
@@ -31,11 +32,12 @@ flowchart TB
 | `python/contracts.py` | Frozen, deeply immutable wire projections; no SDK objects or grading rules |
 | `python/transport.py` | Trusted source compilation, content-keyed executable caches, protocol encoding/decoding |
 | `python/integrations/datasets/` | Adapter discovery, pinned downloads, immutable catalogs and trusted record retention |
-| `python/integrations/inspect/` | Evaluation entry point, tasks, profiles, agents, remote sandbox adaptation, verification and reporting |
+| `python/integrations/inspect/` | Evaluation commands, tasks, profiles, agents, remote sandbox adaptation, verification and reporting |
 | `python/command.py` | One JSON command boundary with fixed, lazy integration endpoints |
-| `python/integrations/hugging_face/` | HF SDK operations for VM lifecycle, command execution and file IO |
-| `python/integrations/evalplus/` | Benchmark reference-validation CLI and EvalPlus manifest adaptation |
-| `python/integrations/verifiers/` | Trusted standalone OCaml/EvalPlus execution driver |
+| `python/integrations/hugging_face/` | Hosted Job entry point and HF SDK operations for VM lifecycle, command execution and file IO |
+| `python/integrations/evalplus/` | Benchmark reference-validation CLI, EvalPlus manifest adaptation and trusted EvalPlus driver |
+| `python/integrations/ocaml/` | Trusted standalone candidate compilation and execution |
+| `bin/` | Local launch, hosted bootstrap and OCaml enforcement scripts |
 
 Public `Case` values contain only ID, skill, prompt, and public files, including visible helper tools.
 Reference solutions, expected answers, private verifier programs and private inputs use separate projections.
@@ -56,7 +58,8 @@ A genuinely new evaluation capability may require a new primitive.
 
 CI and local launchers supply overrides; OCaml resolves them into one immutable experiment specification before execution.
 The HF launcher deliberately requests one epoch by default for its smoke run; direct job invocation uses the kernel default when no override is supplied.
-The generic Inspect task builder accepts a sandbox selection and defaults to local execution; only the HF integration registers and selects the HF provider.
+The generic Inspect task builder accepts a sandbox selection and defaults to local execution.
+The HF Job selects the hosted sandbox through a JSON evaluation request; Inspect adapts that request to its sandbox interface.
 SDK clients, credentials and operational state stay in integrations.
 
 Shared domain types are defined once in `ast.ml`; public `.mli` files declare functions using those types, and `.ml` files implement them.
@@ -124,14 +127,14 @@ GitHub Actions minutes are free for this public repository.
   `format` job runs `check-ocaml-format` with ocamlformat 0.29.0.
 - `.github/workflows/hf-evals.yml` launches a paid hosted run on manual dispatch
   (Actions → HF evals → Run workflow). It runs the `evals.yml` checks first, then
-  `hf_host.sh`, streams the Job logs, and fails if the Job fails. Add an `HF_TOKEN`
+  `bin/hf_host.sh`, streams the Job logs, and fails if the Job fails. Add an `HF_TOKEN`
   repository secret with write access. HF Inference Providers models use this same
   token, with inference permission; no separate provider key is required. Add
   `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` only for direct calls to those providers.
   The `HF_NAMESPACE` repository variable defaults to the repository owner.
 
 GitHub dispatches only workflows that exist on the default branch. Before this
-workflow reaches `main`, launch from a local checkout with `sh evals/hf_host.sh`;
+workflow reaches `main`, launch from a local checkout with `sh evals/bin/hf_host.sh`;
 it needs only uv, Git, and a Hugging Face login.
 
 ## Run live comparisons on Hugging Face
@@ -156,7 +159,7 @@ merge. The private source repository and results bucket already exist for
 uvx --from huggingface_hub==2.2.0 hf auth whoami
 export HF_NAMESPACE='shaquan1228'
 export EVAL_MODEL='hf-inference-providers/openai/gpt-oss-20b:nscale'
-sh evals/hf_host.sh
+sh evals/bin/hf_host.sh
 ```
 
 That first example runs the Codex harness against a Hugging Face hosted model.
@@ -170,10 +173,10 @@ The script selects Codex for Hugging Face and OpenAI models, and Claude Code for
 Anthropic models. Set `EVAL_AGENT` and `EVAL_VERSION` to override the agent or
 its pinned version.
 The first run defaults to one epoch (eight agent sessions) to test the hosted
-path. After checking its results, run `EVAL_EPOCHS=5 sh evals/hf_host.sh` for
+path. After checking its results, run `EVAL_EPOCHS=5 sh evals/bin/hf_host.sh` for
 the full 40-session comparison.
 
-`hf_host.sh` uploads only tracked files from the current Git commit, so commit
+`bin/hf_host.sh` uploads only tracked files from the current Git commit, so commit
 changes before running it. It creates a private dataset repository containing
 the evaluation source, a private results bucket, and a Hugging Face Job. The
 launcher streams logs and waits for the final Job status; it exits nonzero if the
@@ -401,8 +404,11 @@ Integrations do not import sibling implementations. `command(name, payload=...)`
 accepts and returns JSON strings; each owner keeps its SDK objects and operation
 schemas private. Shared immutable wire declarations describe kernel projections.
 Inspect owns task construction, the model adapter, log reporting, and its
-`SandboxEnvironment` adapter. HF owns SDK operations and never imports Inspect.
-The bootstrap launches the configured `EVAL_RUNNER_MODULE` (Inspect by default).
+`SandboxEnvironment` adapter. HF owns the hosted Job and VM operations and never imports Inspect.
+The bootstrap defaults to the HF Job entry point, which reads launch settings once
+and passes a JSON request to `inspect.evaluate`. Inspect receives immutable configuration
+and builds tasks from it. Its `datasets.py` client decodes dataset-command results;
+the kernel remains in OCaml.
 
 Keep the historical file-loading treatment as the default. For a small HF
 comparison of the same reasoning documents with explicit reference paths:
@@ -412,7 +418,7 @@ export EVAL_DATASET=humanevalplus
 export EVAL_SAMPLE_IDS='["humaneval-20","humaneval-38"]'
 export EVAL_EPOCHS=2
 export EVAL_DELIVERIES='["files","manifest"]'
-sh evals/hf_host.sh
+sh evals/bin/hf_host.sh
 ```
 
 `EVAL_SAMPLE_IDS` must be a nonempty JSON list of unique known IDs and cannot
@@ -434,14 +440,4 @@ Cached history still counts toward that cap; a billed model response can cross
 it before the proxy dispatches its requested tools. Generated patches are not
 proof of executed edits. Report cutoffs separately from agent crashes and errors.
 
-The [2026-10-16 optimization receipt](optimization/hf-harness-2026-10-16.json)
-records a counterbalanced two-case, two-repeat HF comparison. Explicit paths
-reduced mean counted tokens before the first patch request from 27,116 to 7,693
-(71.6%). Both treatments passed all four sessions; token-limit stops fell from
-four to one. The skill files and 50k cumulative cap were identical. This confirms
-a loading improvement on those selected cases; it does not establish an
-accuracy advantage over an unmodified coding agent. Original benchmark results
-remain unchanged. Use `EVAL_INSTRUCTION_DELIVERY=manifest` for this measured
-reasoning treatment; `files` retains the historical default. Inline delivery and
-a larger token cap were not needed to reach this run's target and were not
-measured live.
+Keep optimization receipts and native run logs local and uncommitted.

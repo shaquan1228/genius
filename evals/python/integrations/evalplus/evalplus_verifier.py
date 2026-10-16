@@ -1,11 +1,9 @@
-"""Standalone trusted verifier driver; only standard-library imports are required."""
+"""Standalone EvalPlus verifier; only standard-library imports precede bootstrap."""
 
 import importlib
 import importlib.metadata
 import json
 import os
-import secrets
-import shutil
 import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
@@ -14,7 +12,6 @@ from tempfile import TemporaryDirectory
 from typing import Literal, Protocol, TypedDict, Unpack, assert_never, cast
 
 Status = Literal["passed", "failed", "invalid_submission", "timed_out", "harness_error"]
-Mode = Literal["ocaml", "evalplus"]
 PhaseName = Literal["base", "plus"]
 PhaseStatus = Literal["pass", "fail", "timeout"]
 PHASES: tuple[PhaseName, ...] = ("base", "plus")
@@ -66,18 +63,6 @@ class Evaluation:
     record: Problem
     code: str
     metadata: dict[str, object] = field(default_factory=dict)
-
-
-@dataclass(frozen=True, kw_only=True)
-class Invocation:
-    mode: Mode
-    sources: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, kw_only=True)
-class Compilation:
-    result: subprocess.CompletedProcess[str]
-    marker: str
 
 
 class ReferenceAPI(Protocol):
@@ -249,62 +234,18 @@ def evaluate_phases(request: Evaluation) -> Result:
     )
 
 
-def compile_ocaml(invocation: Invocation) -> Result:
-    if shutil.which("ocamlc") is None:
-        return Result(status="harness_error", detail="OCaml compiler is unavailable")
-    marker = secrets.token_hex(24)
-    program = sys.stdin.read() + '\nlet () = print_endline "\\n' + marker + '"\n'
-    result = subprocess.run(
-        ["sh", "check.sh", "--stdin", *invocation.sources],
-        input=program,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return Result(
-        status=classify(compilation=Compilation(result=result, marker=marker)),
-        detail=(result.stdout + result.stderr)[-2000:],
-    )
-
-
-def classify(compilation: Compilation) -> Status:
-    result, marker = compilation.result, compilation.marker
-    match result.returncode:
-        case 65:
-            return "invalid_submission"
-        case 127:
-            return "harness_error"
-        case 0:
-            return "passed" if marker in result.stdout.splitlines() else "failed"
-        case _:
-            return "failed"
-
-
-def execute(invocation: Invocation) -> Result:
-    match invocation.mode:
-        case "ocaml":
-            return compile_ocaml(invocation=invocation)
-        case "evalplus":
-            payload = cast(Payload, json.load(sys.stdin))
-            with TemporaryDirectory(prefix="genius-evaluator-", dir=Path.cwd()) as destination:
-                dependencies(
-                    request=Dependencies(manifest=payload["manifest"], destination=destination)
-                )
-                return evaluate(payload=payload)
-        case _ as unreachable:
-            assert_never(unreachable)
+def execute() -> Result:
+    payload = cast(Payload, json.load(sys.stdin))
+    with TemporaryDirectory(prefix="genius-evaluator-", dir=Path.cwd()) as destination:
+        dependencies(request=Dependencies(manifest=payload["manifest"], destination=destination))
+        return evaluate(payload=payload)
 
 
 def main() -> None:
     try:
-        match sys.argv[1:]:
-            case ["ocaml", *sources]:
-                invocation = Invocation(mode="ocaml", sources=tuple(sources))
-            case ["evalplus"]:
-                invocation = Invocation(mode="evalplus")
-            case _:
-                raise ValueError("Expected verifier mode: ocaml <sources...> or evalplus")
-        result = execute(invocation=invocation)
+        if sys.argv[1:] != ["evalplus"]:
+            raise ValueError("Expected verifier mode: evalplus")
+        result = execute()
     except Exception as error:
         result = Result(status="harness_error", detail=str(error))
     print(

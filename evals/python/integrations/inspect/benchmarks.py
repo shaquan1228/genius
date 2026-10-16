@@ -5,7 +5,7 @@ from typing import assert_never
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
 from evals.python.contracts import ExecutableChecks
-from evals.python.integrations.inspect.kernel import reference, verifier
+from evals.python.integrations.inspect.datasets import reference, verifier
 from evals.python.integrations.inspect.verification import Verifier
 
 

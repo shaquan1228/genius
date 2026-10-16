@@ -18,7 +18,7 @@ let ocaml ~sources ~assertions =
   Ast.Code
     (Verifier.make
        ~inputs:sources
-       ~files:[ ("verifier.py", Ast.Resource "verifier.py") ]
+       ~files:[ ("verifier.py", Ast.Resource "ocaml_verifier.py") ]
        ~tools:[ ("check.sh", Ast.Resource "check.sh") ]
        ~command:([ "python3"; "-I"; "verifier.py"; "ocaml" ] @ sources)
        ~stdin:("let () =\n  " ^ String.concat ";\n  " assertions ^ "\n")

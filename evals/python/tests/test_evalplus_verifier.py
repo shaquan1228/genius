@@ -14,8 +14,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from evals.python.integrations.evalplus import evalplus_verifier as driver
 from evals.python.integrations.evalplus.benchmarks import benchmark_info
-from evals.python.integrations.verifiers import verifier as driver
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.test_humaneval import record
 
@@ -51,7 +51,7 @@ def test_official_checker(
         [
             sys.executable,
             "-I",
-            str(EVALS_ROOT / "python/integrations/verifiers/verifier.py"),
+            str(EVALS_ROOT / "python/integrations/evalplus/evalplus_verifier.py"),
             "evalplus",
         ],
         input=json.dumps(payload()),
@@ -258,7 +258,7 @@ def test_execute_cleans_private_dependencies(
         patch.object(sys, "stdin", io.StringIO(json.dumps(payload()))),
         patch.object(driver, "dependencies") as dependencies,
     ):
-        evidence = driver.execute(invocation=driver.Invocation(mode="evalplus"))
+        evidence = driver.execute()
     assert evidence.status == "passed", evidence.detail
     assert evidence.metadata["phases"] == {"base": "pass", "plus": "pass"}
     destination = Path(dependencies.call_args.kwargs["request"].destination)
@@ -269,22 +269,35 @@ def test_execute_cleans_private_dependencies(
     )
 
 
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        (["evalplus"], "Expecting value"),
+        ([], "Expected verifier mode: evalplus"),
+        (["ocaml"], "Expected verifier mode: evalplus"),
+    ],
+)
 def test_driver_entrypoint(
-    *, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    *,
+    arguments: list[str],
+    expected_error: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setenv("GENIUS_VERIFIER_MARKER", "entrypoint")
     with (
         patch.object(sys, "stdin", io.StringIO("invalid JSON")),
-        patch.object(sys, "argv", ["verifier", "evalplus"]),
+        patch.object(sys, "argv", ["verifier", *arguments]),
     ):
         runpy.run_path(
-            str(EVALS_ROOT / "python/integrations/verifiers/verifier.py"), run_name="__main__"
+            str(EVALS_ROOT / "python/integrations/evalplus/evalplus_verifier.py"),
+            run_name="__main__",
         )
     evidence = json.loads(capsys.readouterr().out)
     assert evidence["status"] == "harness_error"
     assert evidence["marker"] == "entrypoint"
     assert evidence["metadata"] == {}
-    assert "Expecting value" in evidence["detail"]
+    assert expected_error in evidence["detail"]
 
 
 def test_expanded_inputs_can_fail_after_base_passes(

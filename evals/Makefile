@@ -61,6 +61,6 @@ test-ocaml:
 	$(call ocaml_test,$(KERNEL) tests/test_kernel.ml)
 
 check-scaffolding:
-	sh -n hf_host.sh
-	sh -n hf_bootstrap.sh
+	sh -n bin/hf_host.sh
+	sh -n bin/hf_bootstrap.sh
 	uv lock --check

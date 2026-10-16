@@ -9,7 +9,7 @@ from typing import Literal
 from inspect_ai.dataset import Sample
 
 from evals.python.contracts import Case, Experiment, ProfileSpec
-from evals.python.integrations.inspect.kernel import experiment, load_cases
+from evals.python.integrations.inspect.datasets import experiment, load_cases
 from evals.python.paths import REPO_ROOT
 
 InstructionDelivery = Literal["files", "manifest", "inline"]

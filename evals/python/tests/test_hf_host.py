@@ -1,5 +1,6 @@
 """Check the hosted runner without creating paid Hugging Face Jobs."""
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -11,15 +12,73 @@ from inspect_ai.model import GenerateConfig, get_model
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 from inspect_ai.scorer import Score
 
-from evals.python.integrations.datasets.catalog import experiment, load_cases
-from evals.python.integrations.inspect.job import (
-    HfChatAPI,
-    job_tasks,
-    run,
-    sample_ids,
-    sample_limit,
-)
+from evals.python.command import command
+from evals.python.integrations.datasets.catalog import load_cases
+from evals.python.integrations.hugging_face.job import configuration, run
+from evals.python.integrations.inspect.evaluation import EvaluationRequest, HfChatAPI
 from evals.python.paths import REPO_ROOT
+
+
+def configured_request() -> EvaluationRequest:
+    environment = {"EVAL_MODEL": "openai/test-model", **os.environ}
+    return EvaluationRequest.model_validate_json(json.dumps(configuration(environment)))
+
+
+def test_hf_job_dispatches_only_json_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
+    monkeypatch.setenv("EVAL_SAMPLE_IDS", '["clear-task"]')
+    monkeypatch.setenv("EVAL_DELIVERIES", '["files", "manifest"]')
+    monkeypatch.setenv("EVAL_EPOCHS", "2")
+    monkeypatch.setenv("EVAL_TOKEN_LIMIT", "50000")
+    before = dict(os.environ)
+    with (
+        patch("evals.python.integrations.hugging_face.job.command", wraps=command) as dispatch,
+        patch("evals.python.integrations.inspect.commands.evaluate", return_value=7) as evaluate,
+    ):
+        assert run() == 7
+    payload = dispatch.call_args.kwargs["payload"]
+    request = evaluate.call_args.args[0]
+    assert (
+        dispatch.call_args.args,
+        isinstance(payload, str),
+        isinstance(request, EvaluationRequest),
+        json.loads(payload),
+    ) == (("inspect.evaluate",), True, True, request.model_dump(mode="json"))
+    assert (request.sample_ids, request.deliveries, request.epochs, request.token_limit) == (
+        ("clear-task",),
+        ("files", "manifest"),
+        2,
+        50000,
+    )
+    assert (request.sandbox, request.instruction_root, dict(os.environ)) == (
+        "hf",
+        "/eval/instructions",
+        before,
+    )
+
+
+def test_inspect_evaluation_uses_request_without_reading_job_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = EvaluationRequest(model="openai/explicit")
+    monkeypatch.setenv("EVAL_MODEL", "invalid-environment-model")
+    monkeypatch.setenv("EVAL_AGENT", "invalid-environment-agent")
+    monkeypatch.setenv("EVAL_SAMPLE_IDS", "invalid")
+    monkeypatch.setenv("EVAL_DELIVERIES", "invalid")
+    with (
+        patch("evals.python.integrations.inspect.evaluation.get_model") as model,
+        patch("evals.python.integrations.inspect.evaluation.eval", return_value=[]) as evaluate,
+    ):
+        assert command("inspect.evaluate", payload=request.model_dump_json()) == "0"
+    model.assert_called_once_with("openai/explicit")
+    tasks = evaluate.call_args.args[0]
+    assert [
+        (task.name, task.metadata["agent"], task.metadata["instruction_delivery"]) for task in tasks
+    ] == [
+        ("baseline", "claude", "files"),
+        ("genius", "claude", "files"),
+    ]
+    assert evaluate.call_args.kwargs["sandbox"] == "local"
 
 
 @pytest.mark.parametrize("provider", ["openai", "hf-inference-providers"])
@@ -37,7 +96,9 @@ def test_hf_job_runs_both_profiles(provider: str, *, monkeypatch: pytest.MonkeyP
         )
         for name in ("baseline", "genius")
     ]
-    with patch("evals.python.integrations.inspect.job.eval", return_value=logs) as inspect_eval:
+    with patch(
+        "evals.python.integrations.inspect.evaluation.eval", return_value=logs
+    ) as inspect_eval:
         assert run() == 0
     assert (
         [task.name for task in inspect_eval.call_args.args[0]],
@@ -68,7 +129,7 @@ def test_hf_job_reports_failed_profile(monkeypatch: pytest.MonkeyPatch) -> None:
             eval=SimpleNamespace(task="baseline"), status="error", location="log", samples=None
         )
     ]
-    with patch("evals.python.integrations.inspect.job.eval", return_value=logs):
+    with patch("evals.python.integrations.inspect.evaluation.eval", return_value=logs):
         assert run() == 1
 
 
@@ -99,7 +160,7 @@ def test_hf_job_counts_crashed_samples(
     log = SimpleNamespace(
         eval=SimpleNamespace(task="baseline"), status="success", location="log", samples=samples
     )
-    with patch("evals.python.integrations.inspect.job.eval", return_value=[log]):
+    with patch("evals.python.integrations.inspect.evaluation.eval", return_value=[log]):
         assert run() == 0
     assert capsys.readouterr().out.splitlines() == ["baseline: success (log)", summary]
 
@@ -124,7 +185,7 @@ def test_host_script_launches_job_without_exposing_key(
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     result = subprocess.run(
-        ["sh", "evals/hf_host.sh"],
+        ["sh", "evals/bin/hf_host.sh"],
         cwd=REPO_ROOT,
         env=os.environ.copy(),
         capture_output=True,
@@ -132,8 +193,11 @@ def test_host_script_launches_job_without_exposing_key(
     )
     commands = calls.read_text()
     assert (result.returncode, commands.count("--from huggingface_hub==2.2.0 hf")) == (job_exit, 4)
-    assert "hf://datasets/example/genius-evals:/source:ro" in commands
-    assert "hf://buckets/example/genius-eval-results:/results:rw" in commands
+    assert (
+        "hf://datasets/example/genius-evals:/source:ro" in commands,
+        "hf://buckets/example/genius-eval-results:/results:rw" in commands,
+        "sh /source/evals/bin/hf_bootstrap.sh" in commands,
+    ) == (True, True, True)
     assert (
         "private-test-key" in commands,
         "--env EVAL_VERSION=test-pinned-version" in commands,
@@ -156,7 +220,7 @@ def test_host_script_uses_hf_model_without_provider_key(
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     result = subprocess.run(
-        ["sh", "evals/hf_host.sh"],
+        ["sh", "evals/bin/hf_host.sh"],
         cwd=REPO_ROOT,
         env=os.environ.copy(),
         capture_output=True,
@@ -185,7 +249,7 @@ def test_host_script_rejects_empty_provider_key(
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     result = subprocess.run(
-        ["sh", "evals/hf_host.sh"],
+        ["sh", "evals/bin/hf_host.sh"],
         cwd=REPO_ROOT,
         env=os.environ.copy(),
         capture_output=True,
@@ -211,22 +275,22 @@ def test_hf_sample_limit(
     monkeypatch.delenv("EVAL_LIMIT", raising=False)
     if value is not None:
         monkeypatch.setenv("EVAL_LIMIT", value)
-    assert sample_limit() == expected
+    assert configured_request().limit == expected
 
 
 @pytest.mark.parametrize("value", ["0", "-1", "invalid"])
 def test_hf_sample_limit_rejects_invalid(*, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
     monkeypatch.setenv("EVAL_LIMIT", value)
-    with pytest.raises(ValueError, match=r"positive|invalid literal"):
-        sample_limit()
+    with pytest.raises(ValueError, match=r"greater than 0|invalid literal"):
+        configured_request()
 
 
 def test_hf_epoch_override_is_shared_with_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     monkeypatch.setenv("EVAL_EPOCHS", "3")
     with (
-        patch("evals.python.integrations.inspect.job.get_model"),
-        patch("evals.python.integrations.inspect.job.eval", return_value=[]) as inspect_eval,
+        patch("evals.python.integrations.inspect.evaluation.get_model"),
+        patch("evals.python.integrations.inspect.evaluation.eval", return_value=[]) as inspect_eval,
     ):
         assert run() == 0
     tasks = inspect_eval.call_args.args[0]
@@ -242,8 +306,8 @@ def test_explicit_cohort_rejects_invalid_json_or_duplicates(
 ) -> None:
 
     monkeypatch.setenv("EVAL_SAMPLE_IDS", value)
-    with pytest.raises(ValueError, match=r"unique|validation error"):
-        sample_ids()
+    with pytest.raises(ValueError, match=r"unique|validation error|Expecting|JSON list"):
+        configured_request()
 
 
 @pytest.mark.parametrize("deliveries", ["[]", '["files"]', '["files", "files"]', '["typo"]'])
@@ -252,8 +316,27 @@ def test_delivery_comparison_rejects_invalid_modes(
 ) -> None:
 
     monkeypatch.setenv("EVAL_DELIVERIES", deliveries)
-    with pytest.raises(ValueError, match=r"unique|validation error"):
-        job_tasks(experiment())
+    with pytest.raises(ValueError, match=r"unique|validation error|Expecting"):
+        configured_request()
+
+
+@pytest.mark.parametrize("setting", ["EVAL_SAMPLE_IDS", "EVAL_DELIVERIES"])
+@pytest.mark.parametrize("value", ["null", "{}", '"files"', "1", "true"])
+def test_explicit_non_list_selection_never_reaches_evaluation(
+    setting: str, *, value: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
+    monkeypatch.setenv(setting, value)
+    with (
+        patch("evals.python.integrations.hugging_face.job.command") as dispatch,
+        patch("evals.python.integrations.inspect.evaluation.get_model") as model,
+        patch("evals.python.integrations.inspect.evaluation.eval") as evaluate,
+        pytest.raises(ValueError, match="JSON list"),
+    ):
+        run()
+    dispatch.assert_not_called()
+    model.assert_not_called()
+    evaluate.assert_not_called()
 
 
 @pytest.mark.parametrize("limit", ["", "1"])
@@ -265,8 +348,8 @@ def test_explicit_cohort_validation_precedes_sandbox_allocation(
     monkeypatch.setenv("EVAL_LIMIT", limit)
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     with (
-        patch("evals.python.integrations.inspect.job.get_model"),
-        patch("evals.python.integrations.inspect.job.eval") as evaluate,
+        patch("evals.python.integrations.inspect.evaluation.get_model"),
+        patch("evals.python.integrations.inspect.evaluation.eval") as evaluate,
         pytest.raises(ValueError, match=r"Unknown sample|Choose EVAL_SAMPLE_IDS"),
     ):
         run()
@@ -283,11 +366,11 @@ def test_counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort(
     monkeypatch.setenv("EVAL_TOKEN_LIMIT", "50000")
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     with (
-        patch("evals.python.integrations.inspect.job.get_model"),
+        patch("evals.python.integrations.inspect.evaluation.get_model"),
         patch(
             "evals.python.integrations.inspect.profiles.load_cases", return_value=load_cases()[:1]
         ),
-        patch("evals.python.integrations.inspect.job.eval", return_value=[]) as evaluate,
+        patch("evals.python.integrations.inspect.evaluation.eval", return_value=[]) as evaluate,
     ):
         assert run() == 0
     tasks = evaluate.call_args.args[0]

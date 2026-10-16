@@ -30,7 +30,10 @@ Selection = str | Path
 
 ADAPTER_ROOT = EVALS_ROOT / "ocaml/datasets"
 RUNNER = EVALS_ROOT / "ocaml/check.sh"
-DRIVER = EVALS_ROOT / "python/integrations/verifiers/verifier.py"
+DRIVERS = (
+    EVALS_ROOT / "python/integrations/evalplus/evalplus_verifier.py",
+    EVALS_ROOT / "python/integrations/ocaml/ocaml_verifier.py",
+)
 
 
 class Catalog(BaseModel):
@@ -47,7 +50,7 @@ def sources(selection: Selection = "smoke") -> Sources:
     else:
         name = TypeAdapter(FileName).validate_python(selection, strict=True)
         suite, adapter = transport.SUITE, ADAPTER_ROOT / f"{name}.ml"
-    return transport.sources(Program(suite=suite, adapter=adapter, resources=(RUNNER, DRIVER)))
+    return transport.sources(Program(suite=suite, adapter=adapter, resources=(RUNNER, *DRIVERS)))
 
 
 def compile_records(*, sources: Sources, records: tuple[str, ...]) -> Catalog:

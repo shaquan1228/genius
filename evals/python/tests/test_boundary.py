@@ -2,7 +2,10 @@
 
 import ast
 import re
+import sys
 from pathlib import Path
+
+import pytest
 
 from evals.python.transport import DATASET_INTERFACE, EXPORTER, LIBRARY, OCAML_ROOT, SUITE
 
@@ -33,7 +36,11 @@ def test_only_transport_and_trusted_driver_invoke_compilers() -> None:
         for path in runtime_files()
         if "subprocess" in imported(path)
     }
-    assert callers == {"transport.py", "integrations/verifiers/verifier.py"}
+    assert callers == {
+        "transport.py",
+        "integrations/evalplus/evalplus_verifier.py",
+        "integrations/ocaml/ocaml_verifier.py",
+    }
 
 
 def test_core_cannot_import_integrations_or_sdks() -> None:
@@ -134,3 +141,9 @@ def test_hugging_face_owns_only_its_sdk() -> None:
         name.startswith(("inspect_ai", "inspect_swe", "evals.python.contracts"))
         for name in dependencies
     )
+
+
+@pytest.mark.parametrize("framework", ["evalplus", "ocaml"])
+def test_framework_driver_is_standalone(framework: str) -> None:
+    path = PYTHON_ROOT / f"integrations/{framework}/{framework}_verifier.py"
+    assert {name.split(".")[0] for name in imported(path)} <= sys.stdlib_module_names

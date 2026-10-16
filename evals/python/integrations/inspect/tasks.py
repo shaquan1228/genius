@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from evals.python.contracts import Experiment
 from evals.python.integrations.inspect.agents import DEFAULT_VERSIONS, AgentKind, contained_agent
-from evals.python.integrations.inspect.kernel import (
+from evals.python.integrations.inspect.datasets import (
     benchmark_metadata,
     cases_hash,
     experiment,
@@ -33,6 +33,7 @@ class TaskRequest(BaseModel):
     instruction_delivery: InstructionDelivery = "files"
     instruction_root: str = "../instructions"
     task_name: str | None = None
+    diagnostic_epoch: int | None = None
 
 
 def build_task(*, request: TaskRequest) -> Task:
@@ -57,6 +58,7 @@ def build_task(*, request: TaskRequest) -> Task:
         token_limit=spec.token_limit,
         time_limit=spec.time_limit,
         metadata={
+            **({"diagnostic_epoch": request.diagnostic_epoch} if request.diagnostic_epoch else {}),
             "profile": profile.name,
             "dataset": str(dataset),
             "benchmark": benchmark_metadata(dataset=dataset),

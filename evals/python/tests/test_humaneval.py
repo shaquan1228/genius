@@ -140,7 +140,8 @@ def test_import_cache_tracks_verifier_source(
     load_cases(selection="humanevalplus")
     resources = catalog.sources().resources
     updated = tuple(
-        (name, source + "\n" if name == "verifier.py" else source) for name, source in resources
+        (name, source + "\n" if name == "evalplus_verifier.py" else source)
+        for name, source in resources
     )
     original = catalog.sources
     monkeypatch.setattr(
@@ -151,7 +152,7 @@ def test_import_cache_tracks_verifier_source(
     second = load_cases(selection="humanevalplus")[0]
     checks = catalog.verifier(second.id, selection="humanevalplus")
     assert isinstance(checks, ExecutableChecks)
-    assert checks.files["verifier.py"] == (dict(resources)["verifier.py"] + "\n")
+    assert checks.files["verifier.py"] == (dict(resources)["evalplus_verifier.py"] + "\n")
 
 
 def test_dataset_count_mismatch(
@@ -176,11 +177,14 @@ def test_custom_smoke_suite_still_supported(tmp_path: Path) -> None:
     assert load_cases(selection=suite) == ()
 
 
-def test_case_hash_tracks_private_verifier_code(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("driver", ["ocaml_verifier.py", "evalplus_verifier.py"])
+def test_case_hash_tracks_private_verifier_code(
+    *, driver: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     before = cases_hash("smoke")
     resources = catalog.sources().resources
     updated = tuple(
-        (name, source + "\n" if name == "verifier.py" else source) for name, source in resources
+        (name, source + "\n" if name == driver else source) for name, source in resources
     )
     original = catalog.sources
     monkeypatch.setattr(
