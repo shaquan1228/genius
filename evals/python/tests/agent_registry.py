@@ -11,8 +11,7 @@ from inspect_ai.model import ModelName
 from inspect_ai.solver import TaskState
 from inspect_swe import claude_code, codex_cli
 
-from evals.python import commands, query
-from evals.python.catalog import experiment
+from evals.python import commands, queries
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.agents import (
     AGENT_REGISTRY,
@@ -137,8 +136,13 @@ def codex_options_disable_network() -> None:
         "web_search": "disabled",
         "home_dir": "/root/genius-codex",
         "network_access": False,
-        "system_prompt": AGENT_REGISTRY["codex"].system_prompt,
         "retry_refusals": 0,
+        "system_prompt": (
+            "Use only tools registered for this session. "
+            "If apply_patch is not registered, edit files through exec_command with cmd "
+            "as a shell command string, not an argv array. "
+            "Do not call an unregistered apply_patch tool."
+        ),
         "config_overrides": {
             "model_reasoning_effort": '"medium"',
             "allow_login_shell": "false",
@@ -148,15 +152,15 @@ def codex_options_disable_network() -> None:
 
 def explicit_agent_version_is_logged() -> None:
     task = build_task(
-        profile=profiles.load_profile("genius", spec=query.ExperimentSettings()),
-        spec=query.ExperimentSettings(),
+        profile=profiles.load_profile("genius", spec=queries.resolve_settings()),
+        spec=queries.resolve_settings(),
         agent="codex",
         version="0.137.0",
-        catalog=query.LoadDataset(selection="smoke"),
-        instructions=profiles.load_instructions(query.ExperimentSettings()),
-        provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
+        catalog=queries.load_dataset(selection="smoke"),
+        instructions=profiles.load_instructions(queries.resolve_settings()),
+        provenance=queries.get_provenance(selection=queries.load_dataset(selection="smoke")),
     )
-    spec = experiment()
+    spec = queries.resolve_settings()
     assert (task.epochs, task.message_limit, task.cost_limit, task.time_limit) == (
         spec.epochs,
         spec.message_limit,
@@ -175,39 +179,14 @@ def custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
         AGENT_REGISTRY, "other", replace(AGENT_REGISTRY["codex"], default_version="custom-version")
     )
     request = commands.EvaluationSettings(model="mockllm/model", agent="other")
-    spec = query.ExperimentSettings()
+    spec = queries.resolve_settings()
     task = build_task(
         profile=profiles.load_profile("baseline", spec=spec),
         spec=spec,
         agent=request.agent,
-        catalog=query.LoadDataset(selection="smoke"),
+        catalog=queries.load_dataset(selection="smoke"),
         instructions=profiles.load_instructions(spec),
-        provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
+        provenance=queries.get_provenance(selection=queries.load_dataset(selection="smoke")),
     )
     assert task.metadata is not None
     assert (task.metadata["agent"], task.metadata["agent_version"]) == ("other", "custom-version")
-
-
-def codex_compatibility_guidance_is_conditional_and_common() -> None:
-    assert AGENT_REGISTRY["codex"].system_prompt == (
-        "Use only tools registered for this session. "
-        "If apply_patch is not registered, edit files through exec_command with cmd "
-        "as a shell command string, not an argv array. "
-        "Do not call an unregistered apply_patch tool."
-    )
-    assert AGENT_REGISTRY["claude"].system_prompt == ""
-
-
-def changed_agent_guidance_changes_task_fingerprint(monkeypatch: pytest.MonkeyPatch) -> None:
-    from hashlib import sha256  # noqa: PLC0415
-    from typing import cast  # noqa: PLC0415
-
-    from evals.python.integrations.inspect.tasks import baseline  # noqa: PLC0415
-
-    original = cast(dict[str, str], baseline(agent="codex").metadata)["agent_system_prompt_sha256"]
-    spec = AGENT_REGISTRY["codex"]
-    changed_prompt = spec.system_prompt + "\nAdditional shared compatibility guidance."
-    monkeypatch.setitem(AGENT_REGISTRY, "codex", replace(spec, system_prompt=changed_prompt))
-    changed = cast(dict[str, str], baseline(agent="codex").metadata)["agent_system_prompt_sha256"]
-    assert changed == sha256(changed_prompt.encode()).hexdigest()
-    assert changed != original

@@ -2,7 +2,7 @@
    of sample files and task environments, not a universal evaluation fixture schema.
    https://inspect.aisi.org.uk/datasets.html#sample-files
    https://docs.harborframework.com/tasks/environment *)
-module Files = Map.Make (String)
+module Files = Fixture_store
 
 let empty : Ast.fixture = Files.empty
 
@@ -13,5 +13,5 @@ let add ~path ~contents fixture =
 let of_files files =
   List.fold_left (fun fixture (path, contents) -> add ~path ~contents fixture) empty files
 
-let overlay base ~overrides = Files.union (fun _ _ replacement -> Some replacement) base overrides
-let files = Files.bindings
+let overlay base ~overrides = Files.overlay base overrides
+let files = Files.files

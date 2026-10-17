@@ -9,7 +9,8 @@ from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import commands, query
+from evals.python import commands, queries
+from kernel import Verification
 
 
 def score_values(scores: Mapping[str, bool]) -> dict[str, str]:
@@ -31,13 +32,13 @@ def diagnostic(value: commands.Diagnostic) -> JsonValue:
 
 
 async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
-    state: TaskState, target: Target, *, dataset: query.Dataset | None = None
+    state: TaskState, target: Target, *, dataset: queries.Dataset | None = None
 ) -> Score:
     failure = state.metadata.get("agent_failure")
     completion = state.output.completion
     changed = tuple(sorted(await workspace_adapter.changed_files(state)))
     current = sandbox()
-    result = await commands.AssessCase(
+    result = await commands.assess(
         case_id=str(state.metadata["case_id"]),
         response=completion,
         changed_files=changed,
@@ -48,13 +49,16 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
         runtime=environments_adapter.runtime(current),
     )
     explanation = (
-        completion if result.verification.status == "unchecked" else result.verification.detail
+        completion if isinstance(result.verification, Verification.Unchecked) else result.detail
     )
     return Score(
         value=score_values(result.scores),
         explanation=with_failure(explanation, failure=failure),
         metadata={
-            "verification": result.verification.model_dump(),
+            "verification": {
+                "status": type(result.verification).__name__.lower(),
+                "detail": result.detail,
+            },
             "verifier_metadata": diagnostic(result.metadata),
             "changed_files": changed,
             "agent_failure": failure,
@@ -67,6 +71,6 @@ def evaluation() -> Scorer:
     return score_sample
 
 
-def bound_evaluation(*, dataset: query.Dataset) -> Scorer:
+def bound_evaluation(*, dataset: queries.Dataset) -> Scorer:
     # Copy only the public registration; private inputs stay in the bound callback.
     return wraps(evaluation())(partial(score_sample, dataset=dataset))

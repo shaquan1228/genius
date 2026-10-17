@@ -1,11 +1,19 @@
-(* Validating constructors for Ast.case. *)
-let validate (case : Ast.case) =
-  let { Ast.id; fixture; instruction = _; criterion; allowed_files; reference } = case in
+(* Validating constructors for Ast.task. *)
+let validate (case : Ast.task) =
+  let { Ast.id; fixture; instruction; criterion; allowed_files; reference } = case in
+  let valid_name name =
+    name <> ""
+    && (match name.[0] with 'a' .. 'z' -> true | _ -> false)
+    && String.for_all (function 'a' .. 'z' | '0' .. '9' | '-' -> true | _ -> false) name
+  in
+  if not (valid_name id && valid_name instruction.skill) then invalid_arg "Invalid case identity";
+  let paths fixture = List.map fst (Fixture.files fixture) in
+  if not (List.for_all Verifier.valid_path (paths fixture @ paths reference.edits @ allowed_files))
+  then invalid_arg "Invalid case paths";
   ignore (Criterion.validate criterion);
   (match reference.completion with
   | Ast.Plain _ -> ()
   | Ast.Structured fields -> ignore (Response.of_fields fields));
-  let paths fixture = List.map fst (Fixture.files fixture) in
   let require ~problem ~within names =
     match List.filter (fun name -> not (List.mem name within)) names with
     | [] -> ()

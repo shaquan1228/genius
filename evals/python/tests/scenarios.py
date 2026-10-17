@@ -10,9 +10,10 @@ from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
 from inspect_ai.util import sandbox
 
-from evals.python._kernel import Reference
-from evals.python.catalog import reference
 from evals.python.integrations.inspect.workspace import GIT_IDENTITY, execute
+from evals.python.tests.declarations import _reference_files, _reference_text
+from evals.python.tests.projections import reference
+from kernel import Reference
 
 __test__ = False
 
@@ -41,7 +42,7 @@ Step = Callable[[Reference], Awaitable[None]]
 
 
 async def apply_solution(case: Reference) -> None:
-    for name, text in case.solution.items():
+    for name, text in _reference_files(case).items():
         await sandbox().write_file(f"workspace/{name}", text)
 
 
@@ -63,7 +64,7 @@ async def tamper_runner(case: Reference) -> None:
 
 
 async def exit_early(case: Reference) -> None:
-    for name in case.solution:
+    for name in _reference_files(case):
         path = f"workspace/{name}"
         source = await sandbox().read_file(path)
         await sandbox().write_file(path, "import os\nos._exit(0)\n" + source)
@@ -98,7 +99,7 @@ class Scripted:
         )
         for step in self.scenario.steps:
             await step(case)
-        state.messages.append(ChatMessageUser(content=self.scenario.reply or case.answer))
+        state.messages.append(ChatMessageUser(content=self.scenario.reply or _reference_text(case)))
         return await generate(state)
 
 

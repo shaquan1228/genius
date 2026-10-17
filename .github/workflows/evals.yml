@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   check:
-    name: Check on the hosted runtime (OCaml 4.13)
+    name: Check on the hosted runtime (OCaml 4.14)
     runs-on: ubuntu-24.04
     # The Hugging Face Job image, so compiler and Python versions match hosted runs.
     container: ghcr.io/astral-sh/uv:python3.12-bookworm
@@ -21,9 +21,12 @@ jobs:
       - name: Install OCaml and build tools
         run: |
           apt-get update -qq
-          apt-get install -y --no-install-recommends git make ocaml-nox ocaml-findlib libjsonm-ocaml-dev
+          apt-get install -y --no-install-recommends git make opam build-essential pkg-config ocaml-nox rsync
       - uses: actions/checkout@v4
-      - run: make -C evals check-scaffolding lint-ocaml test-ocaml check-python
+      - name: Check setup, generated bindings, and Python
+        run: make -C evals check-scaffolding check-python
+      - name: Check the kernel with the pinned compiler
+        run: opam exec --switch=genius-kernel-414 -- make -C evals lint-ocaml test-ocaml
 
   format:
     name: OCaml format

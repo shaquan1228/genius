@@ -1,36 +1,42 @@
 """Pure Python declarations for the default four-case smoke dataset."""
 
-from evals.python import query
+from evals.python.integrations.smoke import checks
+from kernel import (
+    Completion,
+    Criterion,
+    Instruction,
+    Reference,
+    ResponseValue,
+    Rubric,
+    Task,
+    TextRule,
+)
+from kernel._operations import fixture as fixture_ops
+
+info = None
 
 
-def checks(*, inputs: tuple[str, ...], program: str) -> query.CodeCriterion:
-    return query.CodeCriterion(
-        verifier=query.VerifierDefinition(
-            inputs=inputs,
-            files={"verifier.py": query.Resource(name="verifier.py")},
-            tools={},
-            command=("python3", "-I", "verifier.py", *inputs),
-            stdin=program,
-            timeout_seconds=30,
-        )
-    )
-
-
-def receipt(*, term: str = "price") -> query.CaseDefinition:
-    return query.CaseDefinition(
+def receipt(*, term: str = "price") -> Task:
+    return Task(
         id="clear-task",
-        fixture={
-            "receipt.py": (
-                f"def total(items):\n    return sum({term} for price, quantity in items)\n"
-            ),
-            "test_receipt.py": """import runpy
+        fixture=fixture_ops.of_files(
+            [
+                (
+                    "receipt.py",
+                    f"def total(items):\n    return sum({term} for price, quantity in items)\n",
+                ),
+                (
+                    "test_receipt.py",
+                    """import runpy
 
 total = runpy.run_path("receipt.py")["total"]
 assert total([]) == 0
 assert total([(3.0, 1), (4.0, 1)]) == 7.0
 """,
-        },
-        instruction=query.Instruction(
+                ),
+            ]
+        ),
+        instruction=Instruction(
             skill="reasoning",
             prompt=(
                 "Fix total in receipt.py so each item's quantity contributes to the total. "
@@ -51,14 +57,17 @@ assert total([(1.5, 2)]) == 3.0
 """,
         ),
         allowed_files=("receipt.py",),
-        reference=query.ReferenceDefinition(
-            edits={
-                "receipt.py": (
-                    "def total(items):\n"
-                    "    return sum(price * quantity for price, quantity in items)\n"
-                )
-            },
-            completion=query.PlainCompletion(text="Each quantity now contributes to the total."),
+        reference=Reference(
+            edits=fixture_ops.of_files(
+                [
+                    (
+                        "receipt.py",
+                        "def total(items):\n"
+                        "    return sum(price * quantity for price, quantity in items)\n",
+                    )
+                ]
+            ),
+            completion=Completion.Plain("Each quantity now contributes to the total."),
         ),
     )
 
@@ -76,15 +85,18 @@ def timeout(value=None):
 """
 
 
-def timeout(*, initial: int = 15, requested: int = 30) -> query.CaseDefinition:
+def timeout(*, initial: int = 15, requested: int = 30) -> Task:
     if initial <= 0 or requested <= 0 or initial == requested:
         raise ValueError("Timeout changes need distinct positive initial and requested values")
-    return query.CaseDefinition(
+    return Task(
         id="known-preflight",
-        fixture={
-            "config.py": f"timeout_seconds = {initial}\n",
-            "client.py": client(initial),
-            "test_client.py": """import runpy
+        fixture=fixture_ops.of_files(
+            [
+                ("config.py", f"timeout_seconds = {initial}\n"),
+                ("client.py", client(initial)),
+                (
+                    "test_client.py",
+                    """import runpy
 
 config = runpy.run_path("config.py")
 client = runpy.run_path("client.py")
@@ -97,8 +109,10 @@ except ValueError:
 else:
     raise AssertionError("nonpositive timeout accepted")
 """,
-        },
-        instruction=query.Instruction(
+                ),
+            ]
+        ),
+        instruction=Instruction(
             skill="preflight",
             prompt=(
                 f"On branch eval, change the default timeout from {initial} to {requested} seconds "
@@ -128,21 +142,26 @@ for value in (0, -1):
 """,
         ),
         allowed_files=("config.py", "client.py"),
-        reference=query.ReferenceDefinition(
-            edits={"config.py": f"timeout_seconds = {requested}\n", "client.py": client(requested)},
-            completion=query.PlainCompletion(text="Updated both defaults and preserved overrides."),
+        reference=Reference(
+            edits=fixture_ops.of_files(
+                [
+                    ("config.py", f"timeout_seconds = {requested}\n"),
+                    ("client.py", client(requested)),
+                ]
+            ),
+            completion=Completion.Plain("Updated both defaults and preserved overrides."),
         ),
     )
 
 
-def cases() -> tuple[query.CaseDefinition, ...]:
+def cases() -> tuple[Task, ...]:
     return (
         receipt(),
         timeout(),
-        query.CaseDefinition(
+        Task(
             id="small-decision",
-            fixture={},
-            instruction=query.Instruction(
+            fixture=fixture_ops.empty,
+            instruction=Instruction(
                 skill="bayesian",
                 prompt=(
                     "Choose a service for a one-month trial. A costs $10 total; B costs $8 total. "
@@ -151,26 +170,31 @@ def cases() -> tuple[query.CaseDefinition, ...]:
                     "Do not change files."
                 ),
             ),
-            criterion=query.AnswerCriterion(
-                expected={"choice": "B"},
-                text_rule=query.TextRule(
-                    field="reason",
-                    min_words=1,
-                    max_words=40,
-                ),
+            criterion=Criterion.Answer(
+                Rubric(
+                    expected=[("choice", ResponseValue.String("B"))],
+                    text_rule=TextRule(
+                        field="reason",
+                        min_words=1,
+                        max_words=40,
+                    ),
+                )
             ),
             allowed_files=(),
-            reference=query.ReferenceDefinition(
-                edits={},
-                completion=query.StructuredCompletion(
-                    fields={"choice": "B", "reason": "B costs less for identical service."},
+            reference=Reference(
+                edits=fixture_ops.empty,
+                completion=Completion.Structured(
+                    [
+                        ("choice", ResponseValue.String("B")),
+                        ("reason", ResponseValue.String("B costs less for identical service.")),
+                    ]
                 ),
             ),
         ),
-        query.CaseDefinition(
+        Task(
             id="decision-review",
-            fixture={},
-            instruction=query.Instruction(
+            fixture=fixture_ops.empty,
+            instruction=Instruction(
                 skill="bayesian",
                 prompt=(
                     "I took a one-time $1 bet with a known 80% chance of winning $1 profit "
@@ -181,19 +205,24 @@ def cases() -> tuple[query.CaseDefinition, ...]:
                     "change_rule (boolean), and reason (one sentence). Do not change files."
                 ),
             ),
-            criterion=query.AnswerCriterion(
-                expected={"decision_was_supported": True, "change_rule": False},
-                text_rule=query.TextRule(field="reason", min_words=1, max_words=40),
+            criterion=Criterion.Answer(
+                Rubric(
+                    expected=[
+                        ("decision_was_supported", ResponseValue.Bool(True)),  # noqa: FBT003
+                        ("change_rule", ResponseValue.Bool(False)),  # noqa: FBT003
+                    ],
+                    text_rule=TextRule(field="reason", min_words=1, max_words=40),
+                )
             ),
             allowed_files=(),
-            reference=query.ReferenceDefinition(
-                edits={},
-                completion=query.StructuredCompletion(
-                    fields={
-                        "decision_was_supported": True,
-                        "change_rule": False,
-                        "reason": "One loss did not change the known odds.",
-                    },
+            reference=Reference(
+                edits=fixture_ops.empty,
+                completion=Completion.Structured(
+                    [
+                        ("decision_was_supported", ResponseValue.Bool(True)),  # noqa: FBT003
+                        ("change_rule", ResponseValue.Bool(False)),  # noqa: FBT003
+                        ("reason", ResponseValue.String("One loss did not change the known odds.")),
+                    ]
                 ),
             ),
         ),

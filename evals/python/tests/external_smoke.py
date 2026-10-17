@@ -8,30 +8,32 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from evals.python import commands, query
+from evals.python import commands, queries
+from evals.python.datasets import smoke as declarations
 from evals.python.integrations.smoke import __main__ as cli
-from evals.python.integrations.smoke import declarations
+from evals.python.tests.declarations import _files, _reference_files
+from kernel import Case, Criterion, Verification
 
 
 def python_smoke_compiles_to_public_cases() -> None:
     definitions = declarations.cases()
-    dataset = query.CompileDataset(cases=definitions)
-    cases = query.Cases(selection=dataset)
+    dataset = queries.compile_dataset(cases=definitions)
+    cases = queries.list_cases(selection=dataset)
     assert tuple(case.id for case in cases) == tuple(case.id for case in definitions)
-    assert all(set(case.model_dump()) == {"id", "skill", "prompt", "files"} for case in cases)
+    assert all(isinstance(case, Case) for case in cases)
 
 
 def default_smoke_uses_python_owned_cases() -> None:
     definitions = declarations.cases()
-    dataset = query.LoadDataset()
-    assert dataset is query.CompileDataset(cases=definitions)
+    dataset = queries.load_dataset()
+    assert dataset is queries.compile_dataset(cases=definitions)
     assert tuple(dataset.cases) == (
         "clear-task",
         "known-preflight",
         "small-decision",
         "decision-review",
     )
-    assert tuple(dataset.cases["clear-task"].files) == ("receipt.py", "test_receipt.py")
+    assert tuple(dict(dataset.cases["clear-task"].files)) == ("receipt.py", "test_receipt.py")
 
 
 @pytest.mark.parametrize(("initial", "requested"), [(15, 15), (0, 30), (-1, 30), (15, 0), (15, -1)])
@@ -42,22 +44,22 @@ def timeout_variants_require_a_real_positive_change(initial: int, *, requested: 
 
 def python_smoke_keeps_checks_and_references_private() -> None:
     definitions = declarations.cases()
-    dataset = query.CompileDataset(cases=definitions)
-    cases = query.Cases(selection=dataset)
+    dataset = queries.compile_dataset(cases=definitions)
+    cases = queries.list_cases(selection=dataset)
     code = definitions[0]
-    assert isinstance(code.criterion, query.CodeCriterion)
-    assert code.criterion.verifier.stdin not in cases[0].model_dump_json()
-    assert code.reference.edits["receipt.py"] not in cases[0].files.values()
-    assert "verifier.py" not in cases[0].files
+    assert isinstance(code.criterion, Criterion.Code)
+    assert code.criterion[0].stdin not in json.dumps(_files(cases[0].files))
+    assert _reference_files(code.reference)["receipt.py"] not in _files(cases[0].files).values()
+    assert "verifier.py" not in dict(cases[0].files)
 
 
 async def _assess_code(
-    *, dataset: query.Dataset, agent: commands.Environment
+    *, dataset: queries.Dataset, agent: commands.Environment
 ) -> tuple[commands.Assessment, ...]:
-    runtime = query.ExecutionRuntime()
+    runtime = commands.create_runtime()
 
     async def assess(changed_files: tuple[str, ...]) -> commands.Assessment:
-        return await commands.AssessCase(
+        return await commands.assess(
             case_id="clear-task",
             selection=dataset,
             response="done",
@@ -69,7 +71,7 @@ async def _assess_code(
     seed = await assess(("workspace/receipt.py",))
     definition = declarations.cases()[0]
     await agent.write_bytes(
-        "workspace/receipt.py", definition.reference.edits["receipt.py"].encode()
+        "workspace/receipt.py", _reference_files(definition.reference)["receipt.py"].encode()
     )
     fixed = await assess(("workspace/receipt.py",))
     outside = await assess(("secret",))
@@ -77,21 +79,22 @@ async def _assess_code(
 
 
 def external_seed_fails_reference_passes_and_scope_is_enforced() -> None:
-    dataset = query.CompileDataset(cases=declarations.cases())
-    runtime = query.ExecutionRuntime()
+    dataset = queries.compile_dataset(cases=declarations.cases())
+    runtime = commands.create_runtime()
 
     async def execute() -> tuple[commands.Assessment, ...]:
         agent = await runtime.create()
         try:
             await agent.execute(commands.Execution(command=("mkdir", "workspace")))
-            for name, content in query.Cases(selection=dataset)[0].files.items():
+            for name, content in _files(queries.list_cases(selection=dataset)[0].files).items():
                 await agent.write_bytes(f"workspace/{name}", content.encode())
             return await _assess_code(dataset=dataset, agent=agent)
         finally:
             await runtime.cleanup(agent, interrupted=False)
 
     results = asyncio.run(execute())
-    assert tuple(result.verification.status for result in results) == ("failed", "passed", "passed")
+    assert isinstance(results[0].verification, Verification.Failed)
+    assert all(isinstance(result.verification, Verification.Passed) for result in results[1:])
     assert tuple(result.scores for result in results) == (
         {"correctness": False, "scope": True},
         {"correctness": True, "scope": True},
@@ -100,14 +103,14 @@ def external_seed_fails_reference_passes_and_scope_is_enforced() -> None:
 
 
 def external_answer_uses_kernel_rules_without_allocating() -> None:
-    dataset = query.CompileDataset(cases=declarations.cases())
+    dataset = queries.compile_dataset(cases=declarations.cases())
     agent = commands.Environment(
         execute=AsyncMock(), read_bytes=AsyncMock(), write_bytes=AsyncMock()
     )
     runtime = commands.Runtime(create=AsyncMock(), cleanup=AsyncMock())
 
     async def assess(response: str) -> commands.Assessment:
-        return await commands.AssessCase(
+        return await commands.assess(
             case_id="decision-review",
             selection=dataset,
             response=response,
@@ -120,7 +123,7 @@ def external_answer_uses_kernel_rules_without_allocating() -> None:
         '{"decision_was_supported":true,"change_rule":false,"reason":"Check existing behavior"}'
     )
     result = asyncio.run(assess(response))
-    assert result.verification.status == "unchecked"
+    assert isinstance(result.verification, Verification.Unchecked)
     assert result.scores == {"correctness": True, "scope": True}
     wrong_type = asyncio.run(assess(response.replace("true", '"true"')))
     assert wrong_type.scores == {"correctness": False, "scope": True}
@@ -153,7 +156,7 @@ def offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[str])
 
 
 def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixture[str]) -> None:
-    with patch.object(query, "GradeCase", return_value={"correctness": False, "scope": True}):
+    with patch.object(queries, "score_case", return_value={"correctness": False, "scope": True}):
         assert _run_cli() == 1
     assert all(
         not json.loads(line)["scores"]["correctness"]
@@ -165,9 +168,9 @@ def offline_cli_reports_harness_failure_without_success(
     *, capsys: pytest.CaptureFixture[str]
 ) -> None:
     result = commands.VerificationResult(
-        verification=query.Verification(status="harness_error", detail="private diagnostic")
+        verification=Verification.HarnessError("private diagnostic")
     )
-    with patch.object(commands, "ValidateReference", new=AsyncMock(return_value=result)):
+    with patch.object(commands, "validate_reference", new=AsyncMock(return_value=result)):
         assert _run_cli() == 1
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert all(row["verification"] == "harness_error" and row["scores"] == {} for row in rows)

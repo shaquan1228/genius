@@ -1,4 +1,4 @@
-val validate : Ast.case -> Ast.case
+val validate : Ast.task -> Ast.task
 
 val make :
   id:string ->
@@ -7,4 +7,4 @@ val make :
   criterion:Ast.criterion ->
   allowed_files:string list ->
   reference:Ast.reference ->
-  Ast.case
+  Ast.task

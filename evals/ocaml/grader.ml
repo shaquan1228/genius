@@ -73,7 +73,7 @@ let answer (criterion : Ast.answer) response =
       in
       text_valid && List.sort compare exact = List.sort compare (Response.fields criterion.expected)
 
-let grade (case : Ast.case) ~response ~(outcome : Ast.outcome) =
+let grade (case : Ast.task) ~response ~(outcome : Ast.outcome) =
   let case = Case.validate case in
   let correctness =
     match case.criterion with

@@ -1,7 +1,10 @@
 """Prepared inputs stay consistent through composition, scoring, and native logs."""
 
+# Native boolean variants have a single positional payload.
+# ruff: noqa: FBT003
 import base64
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 from unittest.mock import patch
@@ -13,12 +16,24 @@ from inspect_ai.scorer import CORRECT, INCORRECT
 from inspect_ai.scorer._scorer import scorer_create
 from inspect_ai.solver import generate
 
-from evals.python import commands, query
+from evals.python import commands, queries
 from evals.python.integrations.inspect import evaluation, profiles, scoring
 from evals.python.integrations.inspect.tasks import build_task
-from evals.python.tests.declarations import _declaration
+from evals.python.tests.declarations import _copy_case, _declaration
 from evals.python.tests.support import offline_run as _offline_run
 from evals.python.tests.support import results as _results
+from kernel import (
+    Case,
+    Completion,
+    Content,
+    Criterion,
+    Instruction,
+    Reference,
+    ResponseValue,
+    Rubric,
+    TextRule,
+)
+from kernel._operations import fixture as fixture_ops
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
@@ -26,7 +41,7 @@ PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 def instruction_snapshot_survives_source_changes(
     tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    spec = query.ExperimentSettings()
+    spec = queries.resolve_settings()
     monkeypatch.setattr(profiles, "REPO_ROOT", tmp_path)
     material = {name: f"{name}: unchanged é\n".encode() for name in profiles.REASONING_DOCUMENTS}
     material["skills/reasoning/image.bin"] = b"\x00\xff\x80"
@@ -41,10 +56,10 @@ def instruction_snapshot_survives_source_changes(
 
 
 def composition_uses_supplied_bytes_without_filesystem_access() -> None:
-    spec = query.ExperimentSettings()
+    spec = queries.resolve_settings()
     profile = profiles.load_profile("genius", spec=spec)
     snapshot = profiles.load_instructions(spec)
-    case = query.Cases()[0]
+    case = queries.list_cases()[0]
     expected_hash = profiles.content_hash(snapshot)
     with (
         patch.object(Path, "read_bytes", side_effect=AssertionError("late byte read")),
@@ -67,14 +82,14 @@ def composition_uses_supplied_bytes_without_filesystem_access() -> None:
 def evaluation_prepares_once_for_all_tasks(
     deliveries: tuple[commands.InstructionDelivery, ...] | None,
 ) -> None:
-    spec = query.ExperimentSettings(epochs=2)
-    original = query.LoadDataset()
-    cohort = original.model_copy(update={"cases": {"clear-task": original.cases["clear-task"]}})
+    spec = queries.resolve_settings(epochs=2)
+    original = queries.load_dataset()
+    cohort = replace(original, cases={"clear-task": original.cases["clear-task"]})
     request = commands.EvaluationSettings(model="mockllm/model", deliveries=deliveries)
     with (
-        patch.object(query, "LoadDataset", return_value=cohort) as load,
+        patch.object(queries, "load_dataset", return_value=cohort) as load,
         patch.object(profiles, "load_instructions", wraps=profiles.load_instructions) as read,
-        patch.object(query, "Provenance", wraps=query.Provenance) as provenance,
+        patch.object(queries, "get_provenance", wraps=queries.get_provenance) as provenance,
     ):
         tasks = evaluation.evaluation_tasks(spec, request=request)
     hashes = {cast(Mapping[str, str], task.metadata)["instructions_sha256"] for task in tasks}
@@ -89,33 +104,36 @@ def evaluation_prepares_once_for_all_tasks(
 
 @pytest.fixture
 def private_tasks() -> list[Task]:
-    definition = _declaration(code=False).model_copy(
-        update={
-            "instruction": query.Instruction(
-                skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
-            ),
-            "reference": query.ReferenceDefinition(
-                edits={"main.py": PRIVATE_SENTINEL},
-                completion=query.PlainCompletion(text=PRIVATE_SENTINEL),
-            ),
-        }
+    definition = _copy_case(
+        _declaration(code=False),
+        instruction=Instruction(
+            skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
+        ),
+        reference=Reference(
+            edits=fixture_ops.of_files([("main.py", PRIVATE_SENTINEL)]),
+            completion=Completion.Plain(PRIVATE_SENTINEL),
+        ),
     )
     datasets = [
-        query.CompileDataset(
+        queries.compile_dataset(
             cases=(
-                definition.model_copy(
-                    update={
-                        "criterion": query.AnswerCriterion(
-                            expected={"choice": choice, "safe": True},
-                            text_rule=query.TextRule(field="reason", min_words=1, max_words=5),
+                _copy_case(
+                    definition,
+                    criterion=Criterion.Answer(
+                        Rubric(
+                            expected=[
+                                ("choice", ResponseValue.String(choice)),
+                                ("safe", ResponseValue.Bool(True)),
+                            ],
+                            text_rule=TextRule(field="reason", min_words=1, max_words=5),
                         )
-                    }
+                    ),
                 ),
             )
         )
         for choice in ("B", "A")
     ]
-    spec = query.ExperimentSettings(epochs=1)
+    spec = queries.resolve_settings(epochs=1)
     instructions = profiles.load_instructions(spec)
     tasks = [
         build_task(
@@ -123,7 +141,7 @@ def private_tasks() -> list[Task]:
             spec=spec,
             catalog=dataset,
             instructions=instructions,
-            provenance=query.Provenance(selection=dataset),
+            provenance=queries.get_provenance(selection=dataset),
             agent="codex",
             task_name=f"private-{index}",
         )
@@ -137,7 +155,9 @@ def private_tasks() -> list[Task]:
 def native_logs_keep_private_snapshots_out_and_score_each_dataset(
     private_tasks: list[Task], *, tmp_path: Path
 ) -> None:
-    with patch("evals.python.catalog.sources", side_effect=AssertionError("late source read")):
+    with patch(
+        "evals.python.datasets.kernel_sources", side_effect=AssertionError("late source read")
+    ):
         logs = _offline_run(private_tasks, mode=None, directory=tmp_path)
     assert (
         [_results(read_eval_log(str(log.location))) for log in logs],
@@ -182,8 +202,8 @@ def native_profiles_share_fingerprinted_codex_guidance(
     monkeypatch.setitem(
         AGENT_REGISTRY, "codex", replace(AGENT_REGISTRY["codex"], factory=lambda: factory)
     )
-    spec = query.ExperimentSettings(epochs=1)
-    dataset = query.CompileDataset(cases=(_declaration(code=False),))
+    spec = queries.resolve_settings(epochs=1)
+    dataset = queries.compile_dataset(cases=(_declaration(code=False),))
     instructions = profiles.load_instructions(spec)
     tasks = [
         build_task(
@@ -192,7 +212,7 @@ def native_profiles_share_fingerprinted_codex_guidance(
             agent="codex",
             catalog=dataset,
             instructions=instructions,
-            provenance=query.Provenance(selection=dataset),
+            provenance=queries.get_provenance(selection=dataset),
         )
         for profile in spec.profiles
     ]
@@ -209,3 +229,15 @@ def _assert_guidance_logs(logs: list[EvalLog], *, digest: str) -> None:
         assert native.eval.metadata is not None
         assert native.eval.metadata["agent_system_prompt_sha256"] == digest
         assert native.status == "success"
+
+
+def unresolved_public_resource_cannot_reach_agent_files() -> None:
+    spec = queries.resolve_settings()
+    case = Case(
+        id="unresolved",
+        skill="reasoning",
+        prompt="Use the supplied context",
+        files=[("context.txt", Content.Resource("private-resource"))],
+    )
+    with pytest.raises(ValueError, match="Unresolved resource in public case unresolved"):
+        profiles.files(profiles.load_profile("baseline", spec=spec), case=case, instructions={})

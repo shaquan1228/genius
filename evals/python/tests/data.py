@@ -1,7 +1,6 @@
 """Validate schemas and keep the comparison's inputs controlled."""
 
 import json
-import subprocess
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -11,17 +10,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import commands, query, transport
-from evals.python._kernel import Verification
-from evals.python.catalog import (
-    case as catalog_case,
-)
-from evals.python.catalog import (
-    experiment,
-    load_cases,
-    reference,
-    verifier,
-)
+from evals.python import commands, queries
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import (
     REASONING_DOCUMENTS,
@@ -30,111 +19,117 @@ from evals.python.integrations.inspect.profiles import (
 )
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.paths import REPO_ROOT
-from evals.python.query import GradeCase
+from evals.python.queries import score_case
+from evals.python.tests.declarations import _copy_case, _files, _reference_files, _reference_text
+from evals.python.tests.projections import public_case, reference, verifier
 from evals.python.tests.support import (
-    native_choice_case as _native_choice_case,
+    choice_case as _choice_case,
 )
 from evals.python.tests.support import (
-    native_timeout_case as _native_timeout_case,
+    timeout_case as _timeout_case,
 )
-from evals.python.transport import decode
+from kernel import (
+    Case,
+    Completion,
+    Content,
+    Criterion,
+    Experiment,
+    Instruction,
+    InvalidArgument,
+    Outcome,
+    Profile,
+    Reference,
+    Task,
+    Verification,
+    Verifier,
+)
+from kernel._operations import fixture as fixture_ops
+from kernel._operations import grader as grader_ops
 
 
-def _encode(cases: list[dict[str, object]]) -> str:
-    return json.dumps({"version": 3, "value": cases})
+def public_projection_uses_native_types() -> None:
+    assert all(isinstance(case, Case) for case in queries.list_cases())
 
 
-def manifest_roundtrip() -> None:
-    cases = load_cases()
-    assert decode(_encode([case.model_dump() for case in cases])) == cases
-
-
-def invalid_ocaml_suite_is_rejected(*, tmp_path: Path, capfd: pytest.CaptureFixture[str]) -> None:
+def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
     path = tmp_path / "suite.ml"
-    path.write_text("this is not valid OCaml")
-    with pytest.raises(subprocess.CalledProcessError):
-        load_cases(selection=path)
-    assert 'File "suite.ml"' in capfd.readouterr().err
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("checks", {"sources": ["../outside.ml"], "program": ""}),
-        ("files", {"../outside.ml": "bad"}),
-        ("solution", {"../outside.ml": "bad"}),
-    ],
-)
-def generated_paths_are_validated(*, field: str, value: object) -> None:
-    data = load_cases()[0].model_dump()
-    data[field] = value
+    path.write_text("let cases = []")
+    operation = cast(Callable[..., queries.Dataset], queries.load_dataset)
     with pytest.raises(ValidationError):
-        decode(_encode([data]))
+        operation(selection=path)
 
 
-def _grade(case_id: str, *, text: str, suite: Path | None = None) -> bool:
-    return GradeCase(
+@pytest.mark.parametrize("path", ["../outside.ml", "/outside.ml"])
+def generated_paths_are_validated(path: str) -> None:
+    declaration = _choice_case(case_id="paths", a=1, b=2)
+    invalid = _copy_case(declaration, fixture=fixture_ops.of_files([(path, "bad")]))
+    with pytest.raises(InvalidArgument):
+        queries.compile_dataset(cases=(invalid,))
+
+
+def _grade(case_id: str, *, text: str) -> bool:
+    return score_case(
         case_id=case_id,
         response=text,
         changed_files=(),
-        verification=Verification(status="unchecked"),
-        selection="smoke" if suite is None else suite,
+        verification=Verification.Unchecked(),
+        selection="smoke",
     )["correctness"]
 
 
 def profiles_share_fixture_files() -> None:
-    spec = query.ExperimentSettings()
-    assert load_profile("genius", spec=spec) is spec.profiles[1]
-    case = load_cases()[0]
+    spec = queries.resolve_settings()
+    assert load_profile("genius", spec=spec).name == spec.profiles[1].name
+    case = queries.list_cases()[0]
     baseline = profiles.files(
-        load_profile(name="baseline", spec=query.ExperimentSettings()),
+        load_profile(name="baseline", spec=queries.resolve_settings()),
         case=case,
-        instructions=profiles.load_instructions(query.ExperimentSettings()),
+        instructions=profiles.load_instructions(queries.resolve_settings()),
     )
     genius = profiles.files(
-        load_profile(name="genius", spec=query.ExperimentSettings()),
+        load_profile(name="genius", spec=queries.resolve_settings()),
         case=case,
-        instructions=profiles.load_instructions(query.ExperimentSettings()),
+        instructions=profiles.load_instructions(queries.resolve_settings()),
     )
     assert {key: genius[key] for key in baseline} == baseline
 
 
 def only_genius_receives_instructions() -> None:
-    case = load_cases()[0]
+    case = queries.list_cases()[0]
     assert (
         any(
             key.startswith("instructions/")
             for key in profiles.files(
-                load_profile(name="baseline", spec=query.ExperimentSettings()),
+                load_profile(name="baseline", spec=queries.resolve_settings()),
                 case=case,
-                instructions=profiles.load_instructions(query.ExperimentSettings()),
+                instructions=profiles.load_instructions(queries.resolve_settings()),
             )
         ),
         any(
             key.startswith("instructions/")
             for key in profiles.files(
-                load_profile(name="genius", spec=query.ExperimentSettings()),
+                load_profile(name="genius", spec=queries.resolve_settings()),
                 case=case,
-                instructions=profiles.load_instructions(query.ExperimentSettings()),
+                instructions=profiles.load_instructions(queries.resolve_settings()),
             )
         ),
     ) == (False, True)
 
 
 def profile_prompts() -> None:
-    case = load_cases()[0]
+    case = queries.list_cases()[0]
     assert (
         profiles.prompt(
-            load_profile(name="baseline", spec=query.ExperimentSettings()),
+            load_profile(name="baseline", spec=queries.resolve_settings()),
             case=case,
-            instructions=profiles.load_instructions(query.ExperimentSettings()),
+            instructions=profiles.load_instructions(queries.resolve_settings()),
         )
         == case.prompt,
         "../instructions/skills/reasoning/SKILL.md"
         in profiles.prompt(
-            load_profile(name="genius", spec=query.ExperimentSettings()),
+            load_profile(name="genius", spec=queries.resolve_settings()),
             case=case,
-            instructions=profiles.load_instructions(query.ExperimentSettings()),
+            instructions=profiles.load_instructions(queries.resolve_settings()),
         ),
     ) == (True, True)
 
@@ -143,11 +138,11 @@ def samples_keep_task_ids_and_metadata() -> None:
     assert [
         sample.id
         for sample in profiles.samples(
-            load_profile(name="genius", spec=query.ExperimentSettings()),
-            cases=query.Cases(),
-            instructions=profiles.load_instructions(query.ExperimentSettings()),
+            load_profile(name="genius", spec=queries.resolve_settings()),
+            cases=queries.list_cases(),
+            instructions=profiles.load_instructions(queries.resolve_settings()),
         )
-    ] == [case.id for case in load_cases()]
+    ] == [case.id for case in queries.list_cases()]
 
 
 def hash_tracks_contents_and_ignores_mapping_order() -> None:
@@ -164,27 +159,25 @@ def json_fences(text: str) -> None:
     assert _grade("small-decision", text=text)
 
 
-def cases_200_cases_are_values_in_one_ocaml_suite(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    expression = _native_timeout_case(
-        id_expression='Printf.sprintf "timeout-%d" i',
-        initial="15",
-        requested="30 + i",
+def cases_200_cases_are_python_values() -> None:
+    dataset = queries.compile_dataset(
+        cases=tuple(
+            _timeout_case(case_id=f"timeout-{i}", initial=15, requested=30 + i) for i in range(200)
+        )
     )
-    suite.write_text(f"let cases = List.init 200 (fun i -> {expression})\n")
-    cases = load_cases(selection=suite)
+    cases = queries.list_cases(selection=dataset)
     assert len(cases) == 200
     assert (
-        reference(cases[199].id, selection=suite).solution["config.py"] == "timeout_seconds = 229\n"
+        _reference_files(reference(cases[199].id, selection=dataset))["config.py"]
+        == "timeout_seconds = 229\n"
     )
-    assert [path.name for path in tmp_path.iterdir()] == ["suite.ml"]
 
 
 def generated_artifacts_stay_out_of_sample_metadata() -> None:
     for sample in profiles.samples(
-        load_profile(name="baseline", spec=query.ExperimentSettings()),
-        cases=query.Cases(),
-        instructions=profiles.load_instructions(query.ExperimentSettings()),
+        load_profile(name="baseline", spec=queries.resolve_settings()),
+        cases=queries.list_cases(),
+        instructions=profiles.load_instructions(queries.resolve_settings()),
     ):
         assert sample.metadata == {
             "case_id": sample.id,
@@ -194,157 +187,163 @@ def generated_artifacts_stay_out_of_sample_metadata() -> None:
         assert not any("heldout" in path for path in sample.files or {})
 
 
-def duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    expression = _native_choice_case(case_id="duplicate", a=10, b=8)
-    suite.write_text(f"let c = {expression}\nlet cases = [c; c]\n")
-    with pytest.raises(subprocess.CalledProcessError):
-        load_cases(selection=suite)
+def duplicate_case_ids_are_rejected() -> None:
+    definition = _choice_case(case_id="duplicate", a=10, b=8)
+    with pytest.raises(ValueError, match="unique"):
+        queries.compile_dataset(cases=(definition, definition))
 
 
-def exporter_escapes_strings(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    expression = _native_choice_case(case_id="escaped", a=10, b=8)
-    suite.write_text(
-        f"let c = {expression}\n"
-        + r"""
-let text = "quote\" slash\\ newline\n tab\t return\r zero\000 é"
-let cases = [{ c with instruction = { c.instruction with prompt = text } }]
-"""
+def native_projection_preserves_strings() -> None:
+    text = 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
+    definition = _copy_case(
+        _choice_case(case_id="escaped", a=10, b=8),
+        instruction=Instruction(skill="reasoning", prompt=text),
     )
-    assert (
-        load_cases(selection=suite)[0].prompt
-        == 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
-    )
+    dataset = queries.compile_dataset(cases=(definition,))
+    assert queries.list_cases(selection=dataset)[0].prompt == text
 
 
 def cases_are_immutable() -> None:
-    case = catalog_case("clear-task")
-    with pytest.raises(ValidationError):
-        case.id = "changed"
+    case = public_case("clear-task")
+    with pytest.raises((AttributeError, TypeError)):
+        case.id = "changed"  # type: ignore[misc]
     with pytest.raises(TypeError):
-        case.files["receipt.py"] = "changed"  # type: ignore[index]
+        case.files[0] = ("receipt.py", Content.Inline("changed"))  # type: ignore[index]
     with pytest.raises(TypeError):
-        reference(case.id).solution["receipt.py"] = "changed"  # type: ignore[index]
+        fixture_ops.files(reference(case.id).edits)[0] = ("receipt.py", "changed")  # type: ignore[index]
     checks = verifier(case.id)
     assert checks is not None
-    with pytest.raises(ValidationError):
-        checks.stdin = "changed"
-    assert isinstance(checks.inputs, tuple)
-    assert catalog_case("clear-task") is case
+    with pytest.raises((AttributeError, TypeError)):
+        checks.stdin = "changed"  # type: ignore[misc]
+    assert tuple(checks.inputs) == ("receipt.py",)
+    assert public_case("clear-task") is case
 
 
-def compilation_cache_invalidates_when_suite_changes(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    expression = _native_choice_case(case_id="cache", a=10, b=8)
-    source = f"let cases = [{expression}]\n"
-    suite.write_text(source)
-    with patch("evals.python.transport.subprocess.run", wraps=subprocess.run) as compiler:
-        first = load_cases(selection=suite)
-        assert load_cases(selection=suite) == first
-        assert compiler.call_count == 3
-        changed = _native_choice_case(case_id="cache", a=4, b=8)
-        suite.write_text(f"let cases = [{changed}]\n")
-        assert json.loads(reference("cache", selection=suite).answer)["choice"] == "A"
-        assert compiler.call_count == 7
+def compilation_cache_invalidates_when_declarations_change() -> None:
+    definition = _choice_case(case_id="cache", a=10, b=8)
+    first = queries.compile_dataset(cases=(definition,))
+    with patch(
+        "subprocess.run",
+        side_effect=AssertionError("Declarations must not compile code"),
+    ) as compiler:
+        assert queries.compile_dataset(cases=(definition,)) is first
+        assert compiler.call_count == 0
+        changed = queries.compile_dataset(cases=(_choice_case(case_id="cache", a=4, b=8),))
+        assert json.loads(_reference_text(reference("cache", selection=changed)))["choice"] == "A"
+        assert compiler.call_count == 0
 
 
-def generic_python_case_exports_without_language_restriction(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    suite.write_text("""let cases = [Case.make ~id:"python-case"
-      ~fixture:(Fixture.of_files ["solution.py", "print(42)"])
-      ~instruction:{ Ast.skill = "reasoning"; prompt = "Return 42" }
-      ~criterion:(Ast.Code (Verifier.make ~inputs:["solution.py"]
-        ~files:["grader.py", Inline "trusted"] ~tools:[]
-        ~command:["python3"; "grader.py"] ~stdin:"private" ~timeout_seconds:5))
-      ~allowed_files:["solution.py"]
-      ~reference:{ Ast.edits = Fixture.empty; completion = Plain "done" }]
-""")
-    case = load_cases(selection=suite)[0]
-    checks = verifier(case.id, selection=suite)
-    assert checks is not None
-    assert checks.model_dump() == {
-        "inputs": ("solution.py",),
-        "files": {"grader.py": "trusted"},
-        "tools": {},
-        "command": ("python3", "grader.py"),
-        "stdin": "private",
-        "timeout_seconds": 5,
-    }
-
-
-def experiment_cache_tracks_native_configuration(tmp_path: Path) -> None:
-    before = experiment()
-    source = transport.OCAML_ROOT / "experiment.ml"
-    copied = tmp_path / source.name
-    copied.write_text(
-        source.read_text().replace("epochs = 5", "epochs = 7").replace("Apply that", "Follow that")
+def generic_python_case_exports_without_language_restriction() -> None:
+    definition = Task(
+        id="python-case",
+        fixture=fixture_ops.of_files([("solution.py", "print(42)")]),
+        instruction=Instruction(skill="reasoning", prompt="Return 42"),
+        criterion=Criterion.Code(
+            Verifier(
+                inputs=("solution.py",),
+                files=[("grader.py", Content.Inline("trusted"))],
+                tools=[],
+                command=("python3", "grader.py"),
+                stdin="private",
+                timeout_seconds=5,
+            )
+        ),
+        allowed_files=("solution.py",),
+        reference=Reference(edits=fixture_ops.empty, completion=Completion.Plain("done")),
     )
-    library = tuple({source: copied}.get(path, path) for path in transport.LIBRARY)
-    with patch("evals.python.transport.LIBRARY", library):
-        task = build_task(
-            profile=profiles.load_profile("genius", spec=query.ExperimentSettings()),
-            spec=query.ExperimentSettings(),
-            agent="codex",
-            catalog=query.LoadDataset(selection="smoke"),
-            instructions=profiles.load_instructions(query.ExperimentSettings()),
-            provenance=query.Provenance(selection=query.LoadDataset(selection="smoke")),
-        )
-        assert (
-            experiment().epochs,
-            task.epochs,
-            "Follow that" in str(task.dataset[0].input),
-            "Follow that" in load_profile(name="genius", spec=query.ExperimentSettings()).preamble,
-        ) == (7, 7, True, True)
-    assert experiment() == before
+    dataset = queries.compile_dataset(cases=(definition,))
+    case = queries.list_cases(selection=dataset)[0]
+    checks = verifier(case.id, selection=dataset)
+    assert checks is not None
+    assert (tuple(checks.inputs), tuple(checks.tools), tuple(checks.command)) == (
+        ("solution.py",),
+        (),
+        ("python3", "grader.py"),
+    )
+    assert _files(checks.files) == {"grader.py": "trusted"}
+    assert (checks.stdin, checks.timeout_seconds) == ("private", 5)
+
+
+def experiment_configuration_reaches_tasks_and_profiles() -> None:
+    before = queries.resolve_settings()
+    spec = Experiment(
+        profiles=[
+            Profile(
+                name=item.name,
+                preamble=item.preamble.replace("Apply that", "Follow that"),
+                instructions=item.instructions,
+            )
+            for item in before.profiles
+        ],
+        epochs=7,
+        message_limit=before.message_limit,
+        cost_limit=before.cost_limit,
+        time_limit=before.time_limit,
+        cache=before.cache,
+    )
+    task = build_task(
+        profile=profiles.load_profile("genius", spec=spec),
+        spec=spec,
+        agent="codex",
+        catalog=queries.load_dataset(selection="smoke"),
+        instructions=profiles.load_instructions(spec),
+        provenance=queries.get_provenance(selection=queries.load_dataset(selection="smoke")),
+    )
+    assert (
+        spec.epochs,
+        task.epochs,
+        "Follow that" in str(task.dataset[0].input),
+        "Follow that" in profiles.load_profile("genius", spec=spec).preamble,
+    ) == (7, 7, True, True)
+    assert queries.resolve_settings().epochs == before.epochs
 
 
 @pytest.mark.parametrize("grade_only", [False, True])
-def record_updates_cannot_bypass_kernel_validation(
-    *, grade_only: bool, tmp_path: Path, capfd: pytest.CaptureFixture[str]
-) -> None:
-    suite = tmp_path / "suite.ml"
-    expression = _native_timeout_case(id_expression='"updated"', initial="15", requested="30")
-    suite.write_text(f"let c = {expression}\nlet cases = [{{c with fixture = Fixture.empty}}]\n")
+def record_updates_cannot_bypass_kernel_validation(*, grade_only: bool) -> None:
+    definition = _timeout_case(case_id="updated", initial=15, requested=30)
+    invalid = _copy_case(definition, fixture=fixture_ops.empty)
+    records = (invalid,)
     operation: Callable[[], object]
     if grade_only:
         operation = partial(
-            GradeCase, case_id="updated", response="", changed_files=(), selection=suite
+            grader_ops.grade,
+            records[0],
+            response=None,
+            outcome=Outcome(changed_files=(), verification=Verification.Unchecked()),
         )
     else:
-        operation = partial(load_cases, selection=suite)
-    with pytest.raises(subprocess.CalledProcessError):
+        operation = partial(queries.compile_dataset, cases=records)
+    with pytest.raises(InvalidArgument, match="criteria read files missing from the fixture"):
         operation()
-    assert "criteria read files missing from the fixture" in capfd.readouterr().err
 
 
 @pytest.mark.parametrize("delivery", ["manifest", "inline"])
 @pytest.mark.parametrize("name", REASONING_DOCUMENTS)
 def delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, name: str) -> None:
     mode = cast(commands.InstructionDelivery, delivery)
-    case = load_cases()[0]
+    case = queries.list_cases()[0]
     root = "/eval/instructions"
-    profile = load_profile(name="genius", spec=query.ExperimentSettings())
+    profile = load_profile(name="genius", spec=queries.resolve_settings())
     before = profiles.files(
-        profile, case=case, instructions=profiles.load_instructions(query.ExperimentSettings())
+        profile, case=case, instructions=profiles.load_instructions(queries.resolve_settings())
     )
     prompt = profiles.prompt(
         profile,
         case=case,
         delivery=mode,
         instruction_root=root,
-        instructions=profiles.load_instructions(query.ExperimentSettings()),
+        instructions=profiles.load_instructions(queries.resolve_settings()),
     )
     assert (
         prompt.endswith(case.prompt),
         profiles.files(
-            profile, case=case, instructions=profiles.load_instructions(query.ExperimentSettings())
+            profile, case=case, instructions=profiles.load_instructions(queries.resolve_settings())
         ),
         profiles.prompt(
-            load_profile(name="baseline", spec=query.ExperimentSettings()),
+            load_profile(name="baseline", spec=queries.resolve_settings()),
             case=case,
             delivery=mode,
-            instructions=profiles.load_instructions(query.ExperimentSettings()),
+            instructions=profiles.load_instructions(queries.resolve_settings()),
         ),
     ) == (True, before, case.prompt)
     assert f"{root}/{name}" in prompt
@@ -354,8 +353,8 @@ def delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, name: st
 def delivery_rejects_unimplemented_skill_instead_of_silently_changing_it() -> None:
     with pytest.raises(ValueError, match="reasoning only"):
         profiles.prompt(
-            load_profile(name="genius", spec=query.ExperimentSettings()),
-            case=load_cases()[1],
+            load_profile(name="genius", spec=queries.resolve_settings()),
+            case=queries.list_cases()[1],
             delivery="inline",
-            instructions=profiles.load_instructions(query.ExperimentSettings()),
+            instructions=profiles.load_instructions(queries.resolve_settings()),
         )

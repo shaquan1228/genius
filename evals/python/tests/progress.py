@@ -230,7 +230,7 @@ def incomplete_native_records_fail() -> None:
 
 def public_concurrency_override() -> None:
     with patch.object(evaluation, "evaluate_async", return_value=0) as execute:
-        assert asyncio.run(commands.Evaluate(model="mockllm/model", max_samples=3)) == 0
+        assert asyncio.run(commands.evaluate(model="mockllm/model", max_samples=3)) == 0
     assert execute.call_args.args[0].max_samples == 3
 
 

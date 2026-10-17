@@ -59,13 +59,15 @@ Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply 
 
 Use [Inspect AI](https://inspect.aisi.org.uk/) for repeated baseline/Genius comparisons.
 Default smoke cases are pure Python declarations in
-`evals/python/integrations/smoke/declarations.py`; OCaml validates and grades them.
+`evals/python/datasets/smoke.py`; OCaml validates and grades them.
 Smoke candidate programs and executable checks use Python.
-GitHub Actions runs the same checks on every eval change. Locally, install OCaml 4.13+
-and ocamlformat 0.29.0, then run the offline checks, strict typing, coverage, and CRAP gate:
+GitHub Actions runs the same checks on every eval change. Follow the
+[toolchain setup](evals/README.md#check-the-harness-offline) for the pinned OCaml 4.14
+native bridge and ocamlformat 0.29.0, then run the offline checks, strict typing,
+coverage, and CRAP gate:
 
 ```sh
-make -C evals check
+opam exec --switch=genius-kernel-414 -- make -C evals check
 ```
 
 From a checkout of the completed eval stack (or `main` after merge), launch a one-epoch

@@ -12,8 +12,6 @@ from inspect_ai.scorer import CORRECT, INCORRECT, Target
 from inspect_ai.solver import TaskState
 
 from evals.python import commands
-from evals.python._kernel import Verification
-from evals.python.catalog import grade
 from evals.python.integrations.inspect import environments, scoring, workspace
 from evals.python.integrations.inspect.agents import AGENT_REGISTRY
 from evals.python.integrations.inspect.tasks import baseline, genius
@@ -29,10 +27,12 @@ from evals.python.tests.support import (
     results as _results,
 )
 from evals.python.tests.verification import _agent_port, _grader_port, _runtime_port
+from kernel import Verification
+from kernel._operations import grader as grader_ops
 
 
 def complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
-    with patch("evals.python.catalog.grade", wraps=grade) as grading:
+    with patch("kernel._operations.grader.grade", wraps=grader_ops.grade) as grading:
         logs = _offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
     assert grading.call_count == 16
     expected = [
@@ -127,7 +127,7 @@ def verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
     with patch(
         "evals.python.verification.verify",
         return_value=commands.VerificationResult(
-            verification=Verification(status="harness_error", detail="grader failed to import")
+            verification=Verification.HarnessError("grader failed to import")
         ),
     ):
         log = _offline_run([baseline()], mode="pass", directory=tmp_path)[0]
@@ -149,7 +149,8 @@ def scorer_maps_sdk_observation_to_public_assessment() -> None:
     state.output = ModelOutput.from_content("mockllm/model", "observed answer")
     agent, runtime = _agent_port(), _runtime_port(_grader_port())
     assessment = commands.Assessment(
-        verification=commands.Verification(status="passed", detail="canonical evidence"),
+        verification=Verification.Passed(),
+        detail="canonical evidence",
         metadata={"nested": {"items": (True, None, 4.2)}},
         scores={"correctness": True, "scope": False},
     )
@@ -158,7 +159,7 @@ def scorer_maps_sdk_observation_to_public_assessment() -> None:
         patch.object(scoring, "sandbox"),
         patch.object(environments, "environment", return_value=agent),
         patch.object(environments, "runtime", return_value=runtime),
-        patch.object(commands, "AssessCase", return_value=assessment) as execute,
+        patch.object(commands, "assess", return_value=assessment) as execute,
     ):
         score = asyncio.run(scoring.score_sample(state, Target([""])))
     assert score.metadata is not None

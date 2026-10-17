@@ -9,19 +9,15 @@ from pathlib import Path
 import pytest
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
-from evals.python import commands, query
-from evals.python._kernel import Case, ExecutableChecks
-from evals.python.catalog import (
-    Selection,
-    load_cases,
-    reference,
-    verifier,
-)
+from evals.python import commands, queries
+from evals.python.datasets import Selection
+from evals.python.datasets import smoke as declarations
 from evals.python.integrations.inspect.environments import environment, runtime
-from evals.python.integrations.smoke import declarations
-from evals.python.tests.support import native_timeout_case as _native_timeout_case
+from evals.python.tests.declarations import _files, _reference_files
+from evals.python.tests.projections import reference, verifier
+from kernel import Case, Task, Verification, Verifier
 
-CASES = {case.id: case for case in load_cases()}
+CASES = {case.id: case for case in queries.list_cases()}
 
 
 def _snapshot(directory: Path) -> dict[str, bytes]:
@@ -30,7 +26,7 @@ def _snapshot(directory: Path) -> dict[str, bytes]:
 
 def _verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> bool:
     checks = verifier(case.id, selection=selection)
-    assert isinstance(checks, ExecutableChecks)
+    assert isinstance(checks, Verifier)
 
     async def execute() -> bool:
         agent = LocalSandboxEnvironment()
@@ -38,13 +34,13 @@ def _verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> b
             await agent.exec(["mkdir", "workspace"])
             for name, data in _snapshot(directory).items():
                 await agent.write_file(f"workspace/{name}", data)
-            result = await commands.VerifyCase(
+            result = await commands.verify(
                 case_id=case.id,
                 selection=selection,
                 agent=environment(agent),
                 runtime=runtime(agent),
             )
-            return result.verification.status == "passed"
+            return isinstance(result.verification, Verification.Passed)
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
                 "test", None, {"default": agent}, interrupted=False
@@ -60,7 +56,7 @@ def _write_files(directory: Path, *, files: Mapping[str, str]) -> None:
 
 def _seed(case_id: str, *, directory: Path) -> Case:
     case = CASES[case_id]
-    _write_files(directory, files=case.files)
+    _write_files(directory, files=_files(case.files))
     return case
 
 
@@ -68,7 +64,7 @@ def _seed(case_id: str, *, directory: Path) -> Case:
 def seeds_fail_and_solutions_pass(*, case_id: str, tmp_path: Path) -> None:
     case = _seed(case_id, directory=tmp_path)
     assert not _verify(case, directory=tmp_path)
-    _write_files(tmp_path, files=reference(case.id).solution)
+    _write_files(tmp_path, files=_reference_files(reference(case.id)))
     before = _snapshot(tmp_path)
     assert _verify(case, directory=tmp_path)
     assert _snapshot(tmp_path) == before
@@ -104,8 +100,7 @@ def preflight_defaults_overrides_and_validation(
     case = _seed("known-preflight", directory=tmp_path)
     (tmp_path / "config.py").write_text(f"timeout_seconds = {config}\n")
     source = (
-        reference(case.id)
-        .solution["client.py"]
+        _reference_files(reference(case.id))["client.py"]
         .replace("= 30", f"= {client}")
         .replace("    return value\n", f"    return {override}\n")
     )
@@ -169,28 +164,15 @@ def visible_check_command_leaves_no_build_files(
 )
 def family_variants_generate_working_seeds_and_solutions(
     *,
-    definition: query.CaseDefinition,
+    definition: Task,
     filename: str,
     fragment: str,
     tmp_path: Path,
 ) -> None:
-    dataset = query.CompileDataset(cases=(definition,))
-    case = load_cases(selection=dataset)[0]
-    assert fragment in case.files[filename]
-    _write_files(tmp_path, files=case.files)
+    dataset = queries.compile_dataset(cases=(definition,))
+    case = queries.list_cases(selection=dataset)[0]
+    assert fragment in _files(case.files)[filename]
+    _write_files(tmp_path, files=_files(case.files))
     assert not _verify(case, directory=tmp_path, selection=dataset)
-    _write_files(tmp_path, files=reference(case.id, selection=dataset).solution)
+    _write_files(tmp_path, files=_reference_files(reference(case.id, selection=dataset)))
     assert _verify(case, directory=tmp_path, selection=dataset)
-
-
-def native_suite_can_declare_python_candidate_checks(tmp_path: Path) -> None:
-    suite = tmp_path / "suite.ml"
-    expression = _native_timeout_case(id_expression='"native"', initial="7", requested="17")
-    suite.write_text(f"let cases = [{expression}]\n")
-    case = load_cases(selection=suite)[0]
-    work = tmp_path / "candidate"
-    work.mkdir()
-    _write_files(work, files=case.files)
-    assert not _verify(case, directory=work, selection=suite)
-    _write_files(work, files=reference(case.id, selection=suite).solution)
-    assert _verify(case, directory=work, selection=suite)

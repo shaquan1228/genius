@@ -3,48 +3,54 @@ import json
 import sys
 from typing import assert_never
 
-import evals.python.query as queries
-from evals.python import commands
-from evals.python.integrations.smoke import declarations
+from evals.python import commands, queries
+from kernel import Case, Completion, Verification
+from kernel._operations import fixture as fixture_ops
 
 
-def response(completion: queries.PlainCompletion | queries.StructuredCompletion) -> str:
+def response(completion: Completion.Value) -> str:
     match completion:
-        case queries.PlainCompletion(text=text):
-            return text
-        case queries.StructuredCompletion(fields=fields):
-            return json.dumps(dict(fields))
+        case Completion.Plain():
+            return completion[0]
+        case Completion.Structured():
+            return json.dumps({name: value[0] for name, value in completion[0]})
         case _ as unreachable:
             assert_never(unreachable)
 
 
-async def validate(definition: queries.CaseDefinition, *, dataset: queries.Dataset) -> bool:
-    result = await commands.ValidateReference(case_id=definition.id, selection=dataset)
+async def validate(case: Case, *, dataset: queries.Dataset) -> bool:
+    reference = queries.get_reference(case_id=case.id, selection=dataset)
+    result = await commands.validate_reference(case_id=case.id, selection=dataset)
     scores: queries.Scores = {}
-    if result.verification.status != "harness_error":
-        scores = queries.GradeCase(
-            case_id=definition.id,
-            response=response(definition.reference.completion),
-            changed_files=tuple(f"workspace/{name}" for name in definition.reference.edits),
+    if not isinstance(result.verification, Verification.HarnessError):
+        scores = queries.score_case(
+            case_id=case.id,
+            response=response(reference.completion),
+            changed_files=tuple(
+                f"workspace/{name}" for name, _ in fixture_ops.files(reference.edits)
+            ),
             verification=result.verification,
             selection=dataset,
         )
     print(
         json.dumps(
             {
-                "id": definition.id,
-                "verification": result.verification.status,
+                "id": case.id,
+                "verification": type(result.verification).__name__.lower(),
                 "scores": dict(scores),
             }
         )
     )
-    return result.verification.status in ("passed", "unchecked") and all(scores.values())
+    return isinstance(result.verification, (Verification.Passed, Verification.Unchecked)) and all(
+        scores.values()
+    )
 
 
 async def main() -> int:
-    definitions = declarations.cases()
-    dataset = queries.CompileDataset(cases=definitions)
-    results = [await validate(definition, dataset=dataset) for definition in definitions]
+    dataset = queries.load_dataset()
+    results = [
+        await validate(case, dataset=dataset) for case in queries.list_cases(selection=dataset)
+    ]
     return int(not all(results))
 
 

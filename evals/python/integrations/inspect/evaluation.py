@@ -18,7 +18,8 @@ import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.progress as progress_adapter
 import evals.python.integrations.inspect.remote  # noqa: F401 - register the HF sandbox
 import evals.python.integrations.inspect.tasks as task_adapter
-from evals.python import commands, query
+from evals.python import commands, queries
+from kernel import Experiment
 
 
 @modelapi(name="genius-hf")
@@ -50,12 +51,10 @@ def selected_samples(task: Task, *, request: commands.EvaluationSettings) -> lis
     return list(selected)
 
 
-def evaluation_tasks(
-    spec: commands.Experiment, *, request: commands.EvaluationSettings
-) -> list[Task]:
-    catalog = query.LoadDataset(selection=request.dataset)
+def evaluation_tasks(spec: Experiment, *, request: commands.EvaluationSettings) -> list[Task]:
+    catalog = queries.load_dataset(selection=request.dataset)
     instructions = profile_adapter.load_instructions(spec)
-    provenance = query.Provenance(selection=catalog)
+    provenance = queries.get_provenance(selection=catalog)
     build = partial(
         task_adapter.build_task,
         spec=spec,
@@ -77,10 +76,17 @@ def evaluation_tasks(
 
 
 def diagnostic_tasks(
-    spec: commands.Experiment, *, request: commands.EvaluationSettings, build: partial[Task]
+    spec: Experiment, *, request: commands.EvaluationSettings, build: partial[Task]
 ) -> list[Task]:
     modes = request.deliveries or ()
-    single = spec.model_copy(update={"epochs": 1})
+    single = Experiment(
+        profiles=spec.profiles,
+        epochs=1,
+        message_limit=spec.message_limit,
+        cost_limit=spec.cost_limit,
+        time_limit=spec.time_limit,
+        cache=spec.cache,
+    )
     profile = profile_adapter.load_profile("genius", spec=spec)
     return [
         build(
@@ -96,7 +102,7 @@ def diagnostic_tasks(
 
 
 async def evaluate_async(request: commands.EvaluationSettings) -> int:
-    spec = query.ExperimentSettings(epochs=request.epochs, cost_limit=request.cost_limit)
+    spec = queries.resolve_settings(epochs=request.epochs, cost_limit=request.cost_limit)
     tasks = evaluation_tasks(spec, request=request)
     selected_samples(tasks[0], request=request)
     if request.model.startswith("hf-inference-providers/"):
@@ -135,7 +141,7 @@ async def execute(
     tasks: list[Task],
     *,
     request: commands.EvaluationSettings,
-    spec: commands.Experiment,
+    spec: Experiment,
     model: Any,
     state: progress_adapter.Progress,
 ) -> int:
