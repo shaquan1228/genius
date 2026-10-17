@@ -301,6 +301,78 @@ def compilation_rejects_a_foreign_kernel_source_snapshot() -> None:
 
 def mismatched_record_identity_is_rejected() -> None:
     dataset = queries.compile_dataset(cases=(_declaration(),))
-    mismatched = replace(dataset, records={"wrong-id": dataset.records["external"]})
-    with pytest.raises(ValueError, match="Unknown case: wrong-id"):
-        queries.get_reference(case_id="wrong-id", selection=mismatched)
+    with pytest.raises(ValueError, match="record ID"):
+        replace(dataset, records={"wrong-id": dataset.records["external"]})
+
+
+def direct_dataset_construction_derives_public_cases_and_copies_records() -> None:
+    definition = _declaration()
+    records = {definition.id: definition}
+    dataset = datasets.Dataset(sources=datasets.kernel_sources(), records=records)
+    before = queries.get_provenance(selection=dataset)
+    records.clear()
+    assert queries.list_cases(selection=dataset)[0].prompt == definition.instruction.prompt
+    assert queries.get_provenance(selection=dataset) == before
+    with patch("evals.python.datasets._module", side_effect=AssertionError("reload")):
+        assert queries.load_dataset(selection=dataset) is dataset
+        assert (
+            queries.get_reference(case_id=definition.id, selection=dataset).completion[0] == "done"
+        )
+
+
+def direct_dataset_construction_rejects_foreign_sources_even_when_empty() -> None:
+    with pytest.raises(ValueError, match="Kernel sources differ"):
+        datasets.Dataset(sources=replace(datasets.kernel_sources(), modules=()), records={})
+
+
+def direct_dataset_construction_validates_metadata_count() -> None:
+    info = schema.DatasetInfo(
+        source="python://external", revision="one", sha256="digest", count=1, attributes={}
+    )
+    with pytest.raises(ValueError, match="count"):
+        datasets.Dataset(sources=datasets.kernel_sources(), records={}, info=info)
+
+
+def direct_dataset_construction_validates_native_records() -> None:
+    invalid = _copy_case(_declaration(), allowed_files=())
+    with pytest.raises(InvalidArgument, match="outside allowed_files"):
+        datasets.Dataset(sources=datasets.kernel_sources(), records={invalid.id: invalid})
+
+
+def direct_dataset_construction_resolves_resources() -> None:
+    definition = _declaration()
+    assert isinstance(definition.criterion, Criterion.Code)
+    checks = _copy_verifier(
+        definition.criterion[0], files=[("verify.py", Content.Resource("checker"))]
+    )
+    definition = _copy_case(definition, criterion=Criterion.Code(checks))
+    with pytest.raises(KeyError, match="checker"):
+        datasets.Dataset(sources=datasets.kernel_sources(), records={definition.id: definition})
+    resources = {"checker": "private checker"}
+    dataset = datasets.Dataset(
+        sources=datasets.kernel_sources(resources=resources), records={definition.id: definition}
+    )
+    resources.clear()
+    resolved = verifier(definition.id, selection=dataset)
+    assert resolved is not None
+    assert _files(resolved.files) == {"verify.py": "private checker"}
+    assert "verify.py" not in dict(dataset.cases[definition.id].files)
+
+
+def direct_sources_retain_owned_immutable_collections() -> None:
+    installed = datasets.kernel_sources()
+    modules = [list(pair) for pair in installed.modules]
+    resources = [["extra", "original"]]
+    sources = datasets.Sources(
+        modules=cast(tuple[tuple[str, str], ...], modules),
+        resources=cast(tuple[tuple[str, str], ...], resources),
+    )
+    dataset = datasets.Dataset(sources=sources, records={})
+    before = queries.get_provenance(selection=dataset)
+    modules[0][1] = "edited"
+    resources[0][1] = "edited"
+    modules.clear()
+    resources.clear()
+    assert dataset.sources.modules == installed.modules
+    assert dataset.sources.resources == (("extra", "original"),)
+    assert queries.get_provenance(selection=dataset) == before
