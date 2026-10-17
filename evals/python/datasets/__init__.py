@@ -8,14 +8,26 @@ from importlib import import_module
 from types import MappingProxyType
 from typing import Protocol, cast
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, validate_call
 
-from evals.python.schema import FROZEN, DatasetInfo, FileName
-from kernel import Case, Content, Criterion, Fixture, Task, Verifier
+from evals.python.schema import FROZEN, DatasetInfo, FileName, Files
+from kernel import Case, Content, Criterion, Fixture, Reference, Task, Verifier
 from kernel._operations import case as case_ops
 from kernel._operations import fixture as fixture_ops
 from kernel._operations import projection as projection_ops
 from kernel._operations import sources
+
+__all__ = [
+    "Dataset",
+    "DatasetProvenance",
+    "Selection",
+    "compile_dataset",
+    "describe_dataset",
+    "get_provenance",
+    "get_reference",
+    "list_cases",
+    "load_dataset",
+]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -182,7 +194,8 @@ def _module(selection: str) -> DatasetModule:
     return cast(DatasetModule, import_module(f"evals.python.datasets.{name}"))
 
 
-def load_dataset(selection: Selection) -> Dataset:
+@validate_call(config=FROZEN)
+def load_dataset(*, selection: Selection = "smoke") -> Dataset:
     selection = TypeAdapter(Selection, config=FROZEN).validate_python(selection, strict=True)
     if isinstance(selection, Dataset):
         return selection
@@ -191,7 +204,7 @@ def load_dataset(selection: Selection) -> Dataset:
 
 
 def record(case_id: str, *, selection: Selection) -> Task:
-    return load_dataset(selection).records[case_id]
+    return load_dataset(selection=selection).records[case_id]
 
 
 def dataset_info(selection: Selection) -> DatasetInfo | None:
@@ -208,4 +221,39 @@ def cases_hash(dataset: Dataset) -> str:
                 ("dataset-info", dataset.info.model_dump_json() if dataset.info else "null"),
             ),
         )
+    )
+
+
+@validate_call(config=FROZEN)
+def compile_dataset(
+    *,
+    cases: tuple[Task, ...],
+    info: DatasetInfo | None = None,
+    resources: Files | None = None,
+) -> Dataset:
+    return compile_declarations(cases, info=info, resources={} if resources is None else resources)
+
+
+@validate_call(config=FROZEN)
+def list_cases(*, selection: Selection = "smoke") -> tuple[Case, ...]:
+    return tuple(load_dataset(selection=selection).cases.values())
+
+
+@validate_call(config=FROZEN)
+def get_reference(*, case_id: str, selection: Selection = "smoke") -> Reference:
+    return projection_ops.reference(record(case_id, selection=selection))
+
+
+@validate_call(config=FROZEN)
+def describe_dataset(*, selection: Selection = "smoke") -> DatasetInfo | None:
+    return dataset_info(selection)
+
+
+@validate_call(config=FROZEN)
+def get_provenance(*, selection: Selection = "smoke") -> DatasetProvenance:
+    dataset = load_dataset(selection=selection)
+    return DatasetProvenance(
+        info=dataset.info,
+        source_hash=fingerprint(dataset.sources),
+        cases_hash=cases_hash(dataset),
     )

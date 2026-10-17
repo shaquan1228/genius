@@ -10,7 +10,7 @@ from typing import Literal, assert_never
 
 from pydantic import BaseModel, ConfigDict
 
-from evals.python import commands, datasets, queries, verification
+from evals.python import datasets, verification
 from kernel import Case
 
 
@@ -26,7 +26,7 @@ class BenchmarkInfo(BaseModel):
 
 
 def benchmark_info() -> BenchmarkInfo:
-    info = queries.describe_dataset(selection="humanevalplus")
+    info = datasets.describe_dataset(selection="humanevalplus")
     if info is None:
         raise ValueError("Benchmark adapter must declare provenance")
     return BenchmarkInfo.model_validate(
@@ -35,7 +35,7 @@ def benchmark_info() -> BenchmarkInfo:
 
 
 async def validate_case(case: Case, *, dataset: datasets.Dataset) -> dict[str, object]:
-    result = await commands.validate_reference(case_id=case.id, selection=dataset)
+    result = await verification.validate_reference(case_id=case.id, selection=dataset)
     return {
         "case_id": case.id,
         "status": type(result.verification).__name__.lower(),
@@ -84,10 +84,10 @@ def validate(arguments: Options) -> int:
     if arguments.limit is not None and arguments.limit < 1:
         raise ValueError("--limit must be positive")
     configure_memory(arguments=arguments)
-    dataset = queries.load_dataset(selection="humanevalplus")
+    dataset = datasets.load_dataset(selection="humanevalplus")
     results = [
         asyncio.run(validate_case(case=case, dataset=dataset))
-        for case in queries.list_cases(selection=dataset)[: arguments.limit]
+        for case in datasets.list_cases(selection=dataset)[: arguments.limit]
     ]
     print(json.dumps({"provenance": benchmark_info().model_dump(), "results": results}, indent=2))
     return int(any(result["status"] != "passed" for result in results))

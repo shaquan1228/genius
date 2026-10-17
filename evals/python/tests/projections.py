@@ -16,4 +16,4 @@ def reference(case_id: str, *, selection: datasets.Selection = "smoke") -> Refer
 
 
 def public_case(case_id: str, *, selection: datasets.Selection = "smoke") -> Case:
-    return datasets.load_dataset(selection).cases[case_id]
+    return datasets.load_dataset(selection=selection).cases[case_id]

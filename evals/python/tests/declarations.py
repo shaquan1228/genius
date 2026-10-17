@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 
 import pytest
 
-from evals.python import queries
+from evals.python import datasets, grading
 from evals.python.tests.projections import reference as private_reference
 from evals.python.tests.projections import verifier
 from kernel import (
@@ -123,8 +123,8 @@ def _declaration(*, code: bool = True) -> Task:
 
 @pytest.mark.parametrize("code", [True, False])
 def external_declarations_preserve_public_projection(*, code: bool) -> None:
-    dataset = queries.compile_dataset(cases=(_declaration(code=code),))
-    (case,) = queries.list_cases(selection=dataset)
+    dataset = datasets.compile_dataset(cases=(_declaration(code=code),))
+    (case,) = datasets.list_cases(selection=dataset)
     assert isinstance(case, Case)
     assert (case.id, case.skill, case.prompt) == ("external", "reasoning", "Fix it: é")
     assert _files(case.files) == (
@@ -134,7 +134,7 @@ def external_declarations_preserve_public_projection(*, code: bool) -> None:
 
 
 def code_declarations_preserve_private_checks_and_resolve_resources() -> None:
-    dataset = queries.compile_dataset(cases=(_declaration(),))
+    dataset = datasets.compile_dataset(cases=(_declaration(),))
     checks = verifier("external", selection=dataset)
     assert checks is not None
     assert _files(checks.files) == {"verify.py": "private assertions"}
@@ -150,25 +150,25 @@ def missing_private_resource_fails_at_resolution() -> None:
     )
     definition = _copy_case(definition, criterion=Criterion.Code(checks))
     with pytest.raises(KeyError, match=r"missing\.py"):
-        queries.compile_dataset(cases=(definition,))
+        datasets.compile_dataset(cases=(definition,))
 
 
 @pytest.mark.parametrize("code", [True, False])
 def declarations_preserve_private_reference_edits(*, code: bool) -> None:
-    dataset = queries.compile_dataset(cases=(_declaration(code=code),))
+    dataset = datasets.compile_dataset(cases=(_declaration(code=code),))
     reference = private_reference("external", selection=dataset)
     assert dict(fixture_ops.files(reference.edits)) == {"main.py": "fixed"}
 
 
 def code_declarations_preserve_plain_completion() -> None:
-    dataset = queries.compile_dataset(cases=(_declaration(),))
+    dataset = datasets.compile_dataset(cases=(_declaration(),))
     completion = private_reference("external", selection=dataset).completion
     assert isinstance(completion, Completion.Plain)
     assert completion[0] == "done"
 
 
 def answer_declarations_preserve_typed_completion_fields() -> None:
-    dataset = queries.compile_dataset(cases=(_declaration(code=False),))
+    dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
     completion = private_reference("external", selection=dataset).completion
     assert isinstance(completion, Completion.Structured)
     fields = dict(completion[0])
@@ -177,14 +177,14 @@ def answer_declarations_preserve_typed_completion_fields() -> None:
 
 
 def answer_declarations_do_not_supply_executable_checks() -> None:
-    dataset = queries.compile_dataset(cases=(_declaration(code=False),))
+    dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
     assert verifier("external", selection=dataset) is None
 
 
 @pytest.mark.parametrize("code", [True, False])
 def imported_declarations_use_existing_grading(*, code: bool) -> None:
-    dataset = queries.compile_dataset(cases=(_declaration(code=code),))
-    assert queries.score_case(
+    dataset = datasets.compile_dataset(cases=(_declaration(code=code),))
+    assert grading.score_case(
         selection=dataset,
         case_id="external",
         response='{"choice":"B","safe":true,"reason":"clear"}',
@@ -194,7 +194,7 @@ def imported_declarations_use_existing_grading(*, code: bool) -> None:
 
 
 def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
-    assert queries.list_cases(selection=queries.compile_dataset(cases=())) == ()
+    assert datasets.list_cases(selection=datasets.compile_dataset(cases=())) == ()
 
 
 @pytest.mark.parametrize(
@@ -225,7 +225,7 @@ def kernel_constructors_validate_raw_declarations(
     invalid: Callable[[Task], Task],
 ) -> None:
     with pytest.raises(InvalidArgument):
-        queries.compile_dataset(cases=(invalid(_declaration()),))
+        datasets.compile_dataset(cases=(invalid(_declaration()),))
 
 
 @pytest.mark.parametrize(
@@ -250,7 +250,7 @@ def nested_constructor_rules_fail_closed(field: str, *, value: object) -> None:
     fields[field] = value
     checks = Verifier(**fields)
     with pytest.raises(InvalidArgument):
-        queries.compile_dataset(cases=(_copy_case(definition, criterion=Criterion.Code(checks)),))
+        datasets.compile_dataset(cases=(_copy_case(definition, criterion=Criterion.Code(checks)),))
 
 
 @pytest.mark.parametrize(("minimum", "maximum"), [(-1, 2), (3, 2)])
@@ -262,7 +262,7 @@ def answer_constructor_rules_fail_closed(minimum: int, *, maximum: int) -> None:
         )
     )
     with pytest.raises(InvalidArgument):
-        queries.compile_dataset(cases=(_copy_case(_declaration(code=False), criterion=criterion),))
+        datasets.compile_dataset(cases=(_copy_case(_declaration(code=False), criterion=criterion),))
 
 
 def native_fields_retain_immutable_snapshots() -> None:
@@ -294,10 +294,10 @@ def native_fields_retain_immutable_snapshots() -> None:
     ],
 )
 def answer_construction_supports_each_optional_rule_shape(criterion: Criterion.Value) -> None:
-    dataset = queries.compile_dataset(
+    dataset = datasets.compile_dataset(
         cases=(_copy_case(_declaration(code=False), criterion=criterion),)
     )
-    assert queries.list_cases(selection=dataset)[0].id == "external"
+    assert datasets.list_cases(selection=dataset)[0].id == "external"
 
 
 def _reference_files(value: Reference) -> dict[str, str]:

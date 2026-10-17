@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from evals.python import commands, datasets, queries, verification
+from evals.python import assessment, datasets, execution, grading, verification
 from evals.python.datasets import smoke as declarations
 from evals.python.integrations.smoke import __main__ as cli
 from evals.python.tests.declarations import _files, _reference_files
@@ -17,16 +17,16 @@ from kernel import Case, Criterion, Verification
 
 def python_smoke_compiles_to_public_cases() -> None:
     definitions = declarations.cases()
-    dataset = queries.compile_dataset(cases=definitions)
-    cases = queries.list_cases(selection=dataset)
+    dataset = datasets.compile_dataset(cases=definitions)
+    cases = datasets.list_cases(selection=dataset)
     assert tuple(case.id for case in cases) == tuple(case.id for case in definitions)
     assert all(isinstance(case, Case) for case in cases)
 
 
 def default_smoke_uses_python_owned_cases() -> None:
     definitions = declarations.cases()
-    dataset = queries.load_dataset()
-    assert dataset is queries.compile_dataset(cases=definitions)
+    dataset = datasets.load_dataset()
+    assert dataset is datasets.compile_dataset(cases=definitions)
     assert tuple(dataset.cases) == (
         "clear-task",
         "known-preflight",
@@ -44,8 +44,8 @@ def timeout_variants_require_a_real_positive_change(initial: int, *, requested: 
 
 def python_smoke_keeps_checks_and_references_private() -> None:
     definitions = declarations.cases()
-    dataset = queries.compile_dataset(cases=definitions)
-    cases = queries.list_cases(selection=dataset)
+    dataset = datasets.compile_dataset(cases=definitions)
+    cases = datasets.list_cases(selection=dataset)
     code = definitions[0]
     assert isinstance(code.criterion, Criterion.Code)
     assert code.criterion[0].stdin not in json.dumps(_files(cases[0].files))
@@ -54,12 +54,12 @@ def python_smoke_keeps_checks_and_references_private() -> None:
 
 
 async def _assess_code(
-    *, dataset: datasets.Dataset, agent: verification.Environment
-) -> tuple[verification.Assessment, ...]:
-    runtime = commands.create_runtime()
+    *, dataset: datasets.Dataset, agent: execution.Environment
+) -> tuple[assessment.Assessment, ...]:
+    runtime = execution.create_runtime()
 
-    async def assess(changed_files: tuple[str, ...]) -> verification.Assessment:
-        return await commands.assess(
+    async def assess(changed_files: tuple[str, ...]) -> assessment.Assessment:
+        return await assessment.assess(
             case_id="clear-task",
             selection=dataset,
             response="done",
@@ -79,14 +79,14 @@ async def _assess_code(
 
 
 def external_seed_fails_reference_passes_and_scope_is_enforced() -> None:
-    dataset = queries.compile_dataset(cases=declarations.cases())
-    runtime = commands.create_runtime()
+    dataset = datasets.compile_dataset(cases=declarations.cases())
+    runtime = execution.create_runtime()
 
-    async def execute() -> tuple[verification.Assessment, ...]:
+    async def execute() -> tuple[assessment.Assessment, ...]:
         agent = await runtime.create()
         try:
-            await agent.execute(verification.Execution(command=("mkdir", "workspace")))
-            for name, content in _files(queries.list_cases(selection=dataset)[0].files).items():
+            await agent.execute(execution.Execution(command=("mkdir", "workspace")))
+            for name, content in _files(datasets.list_cases(selection=dataset)[0].files).items():
                 await agent.write_bytes(f"workspace/{name}", content.encode())
             return await _assess_code(dataset=dataset, agent=agent)
         finally:
@@ -103,14 +103,14 @@ def external_seed_fails_reference_passes_and_scope_is_enforced() -> None:
 
 
 def external_answer_uses_kernel_rules_without_allocating() -> None:
-    dataset = queries.compile_dataset(cases=declarations.cases())
-    agent = verification.Environment(
+    dataset = datasets.compile_dataset(cases=declarations.cases())
+    agent = execution.Environment(
         execute=AsyncMock(), read_bytes=AsyncMock(), write_bytes=AsyncMock()
     )
-    runtime = verification.Runtime(create=AsyncMock(), cleanup=AsyncMock())
+    runtime = execution.Runtime(create=AsyncMock(), cleanup=AsyncMock())
 
-    async def assess(response: str) -> verification.Assessment:
-        return await commands.assess(
+    async def assess(response: str) -> assessment.Assessment:
+        return await assessment.assess(
             case_id="decision-review",
             selection=dataset,
             response=response,
@@ -156,7 +156,7 @@ def offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[str])
 
 
 def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixture[str]) -> None:
-    with patch.object(queries, "score_case", return_value={"correctness": False, "scope": True}):
+    with patch.object(grading, "score_case", return_value={"correctness": False, "scope": True}):
         assert _run_cli() == 1
     assert all(
         not json.loads(line)["scores"]["correctness"]
@@ -170,7 +170,7 @@ def offline_cli_reports_harness_failure_without_success(
     result = verification.VerificationResult(
         verification=Verification.HarnessError("private diagnostic")
     )
-    with patch.object(commands, "validate_reference", new=AsyncMock(return_value=result)):
+    with patch.object(verification, "validate_reference", new=AsyncMock(return_value=result)):
         assert _run_cli() == 1
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert all(row["verification"] == "harness_error" and row["scores"] == {} for row in rows)

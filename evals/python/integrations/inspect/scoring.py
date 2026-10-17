@@ -9,7 +9,7 @@ from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import commands, datasets, verification
+from evals.python import assessment, datasets, verification
 from kernel import Verification
 from kernel._operations import grader as grader_ops
 
@@ -39,7 +39,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
     completion = state.output.completion
     changed = tuple(sorted(await workspace_adapter.changed_files(state)))
     current = sandbox()
-    result = await commands.assess(
+    result = await assessment.assess(
         case_id=str(state.metadata["case_id"]),
         response=completion,
         changed_files=changed,

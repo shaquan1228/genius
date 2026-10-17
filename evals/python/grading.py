@@ -5,9 +5,16 @@ from collections.abc import Mapping
 from operator import itemgetter
 from types import MappingProxyType
 
+from pydantic import validate_call
+
+from evals.python import datasets
+from evals.python.datasets import Selection
+from evals.python.schema import FROZEN
 from kernel import InvalidArgument, Outcome, Response, ResponseValue, Task, Verification
 from kernel._operations import grader as grader_ops
 from kernel._operations import response as response_ops
+
+__all__ = ["Scores", "score_case"]
 
 type Scores = Mapping[str, bool]
 UNCHECKED = Verification.Unchecked()
@@ -53,3 +60,20 @@ def score(
     if not set(grader_ops.required_names) <= set(names):
         raise ValueError("Kernel omitted required score names")
     return MappingProxyType(dict(pairs))
+
+
+@validate_call(config=FROZEN)
+def score_case(
+    *,
+    case_id: str,
+    response: str,
+    changed_files: tuple[str, ...],
+    verification: Verification.Value = UNCHECKED,
+    selection: Selection = "smoke",
+) -> Scores:
+    return score(
+        datasets.record(case_id, selection=selection),
+        response=response,
+        changed_files=changed_files,
+        verification=verification,
+    )

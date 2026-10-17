@@ -10,7 +10,8 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import datasets, evaluation_settings, queries
+from evals.python import datasets, evaluation, evaluation_settings
+from evals.python.grading import score_case
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import (
     REASONING_DOCUMENTS,
@@ -19,7 +20,6 @@ from evals.python.integrations.inspect.profiles import (
 )
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.paths import REPO_ROOT
-from evals.python.queries import score_case
 from evals.python.tests.declarations import _copy_case, _files, _reference_files, _reference_text
 from evals.python.tests.projections import public_case, reference, verifier
 from evals.python.tests.support import (
@@ -48,13 +48,13 @@ from kernel._operations import grader as grader_ops
 
 
 def public_projection_uses_native_types() -> None:
-    assert all(isinstance(case, Case) for case in queries.list_cases())
+    assert all(isinstance(case, Case) for case in datasets.list_cases())
 
 
 def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
     path = tmp_path / "suite.ml"
     path.write_text("let cases = []")
-    operation = cast(Callable[..., datasets.Dataset], queries.load_dataset)
+    operation = cast(Callable[..., datasets.Dataset], datasets.load_dataset)
     with pytest.raises(ValidationError):
         operation(selection=path)
 
@@ -64,7 +64,7 @@ def generated_paths_are_validated(path: str) -> None:
     declaration = _choice_case(case_id="paths", a=1, b=2)
     invalid = _copy_case(declaration, fixture=fixture_ops.of_files([(path, "bad")]))
     with pytest.raises(InvalidArgument):
-        queries.compile_dataset(cases=(invalid,))
+        datasets.compile_dataset(cases=(invalid,))
 
 
 def _grade(case_id: str, *, text: str) -> bool:
@@ -78,58 +78,58 @@ def _grade(case_id: str, *, text: str) -> bool:
 
 
 def profiles_share_fixture_files() -> None:
-    spec = queries.resolve_settings()
+    spec = evaluation.resolve_settings()
     assert load_profile("genius", spec=spec).name == spec.profiles[1].name
-    case = queries.list_cases()[0]
+    case = datasets.list_cases()[0]
     baseline = profiles.files(
-        load_profile(name="baseline", spec=queries.resolve_settings()),
+        load_profile(name="baseline", spec=evaluation.resolve_settings()),
         case=case,
-        instructions=profiles.load_instructions(queries.resolve_settings()),
+        instructions=profiles.load_instructions(evaluation.resolve_settings()),
     )
     genius = profiles.files(
-        load_profile(name="genius", spec=queries.resolve_settings()),
+        load_profile(name="genius", spec=evaluation.resolve_settings()),
         case=case,
-        instructions=profiles.load_instructions(queries.resolve_settings()),
+        instructions=profiles.load_instructions(evaluation.resolve_settings()),
     )
     assert {key: genius[key] for key in baseline} == baseline
 
 
 def only_genius_receives_instructions() -> None:
-    case = queries.list_cases()[0]
+    case = datasets.list_cases()[0]
     assert (
         any(
             key.startswith("instructions/")
             for key in profiles.files(
-                load_profile(name="baseline", spec=queries.resolve_settings()),
+                load_profile(name="baseline", spec=evaluation.resolve_settings()),
                 case=case,
-                instructions=profiles.load_instructions(queries.resolve_settings()),
+                instructions=profiles.load_instructions(evaluation.resolve_settings()),
             )
         ),
         any(
             key.startswith("instructions/")
             for key in profiles.files(
-                load_profile(name="genius", spec=queries.resolve_settings()),
+                load_profile(name="genius", spec=evaluation.resolve_settings()),
                 case=case,
-                instructions=profiles.load_instructions(queries.resolve_settings()),
+                instructions=profiles.load_instructions(evaluation.resolve_settings()),
             )
         ),
     ) == (False, True)
 
 
 def profile_prompts() -> None:
-    case = queries.list_cases()[0]
+    case = datasets.list_cases()[0]
     assert (
         profiles.prompt(
-            load_profile(name="baseline", spec=queries.resolve_settings()),
+            load_profile(name="baseline", spec=evaluation.resolve_settings()),
             case=case,
-            instructions=profiles.load_instructions(queries.resolve_settings()),
+            instructions=profiles.load_instructions(evaluation.resolve_settings()),
         )
         == case.prompt,
         "../instructions/skills/reasoning/SKILL.md"
         in profiles.prompt(
-            load_profile(name="genius", spec=queries.resolve_settings()),
+            load_profile(name="genius", spec=evaluation.resolve_settings()),
             case=case,
-            instructions=profiles.load_instructions(queries.resolve_settings()),
+            instructions=profiles.load_instructions(evaluation.resolve_settings()),
         ),
     ) == (True, True)
 
@@ -138,11 +138,11 @@ def samples_keep_task_ids_and_metadata() -> None:
     assert [
         sample.id
         for sample in profiles.samples(
-            load_profile(name="genius", spec=queries.resolve_settings()),
-            cases=queries.list_cases(),
-            instructions=profiles.load_instructions(queries.resolve_settings()),
+            load_profile(name="genius", spec=evaluation.resolve_settings()),
+            cases=datasets.list_cases(),
+            instructions=profiles.load_instructions(evaluation.resolve_settings()),
         )
-    ] == [case.id for case in queries.list_cases()]
+    ] == [case.id for case in datasets.list_cases()]
 
 
 def hash_tracks_contents_and_ignores_mapping_order() -> None:
@@ -160,12 +160,12 @@ def json_fences(text: str) -> None:
 
 
 def cases_200_cases_are_python_values() -> None:
-    dataset = queries.compile_dataset(
+    dataset = datasets.compile_dataset(
         cases=tuple(
             _timeout_case(case_id=f"timeout-{i}", initial=15, requested=30 + i) for i in range(200)
         )
     )
-    cases = queries.list_cases(selection=dataset)
+    cases = datasets.list_cases(selection=dataset)
     assert len(cases) == 200
     assert (
         _reference_files(reference(cases[199].id, selection=dataset))["config.py"]
@@ -175,9 +175,9 @@ def cases_200_cases_are_python_values() -> None:
 
 def generated_artifacts_stay_out_of_sample_metadata() -> None:
     for sample in profiles.samples(
-        load_profile(name="baseline", spec=queries.resolve_settings()),
-        cases=queries.list_cases(),
-        instructions=profiles.load_instructions(queries.resolve_settings()),
+        load_profile(name="baseline", spec=evaluation.resolve_settings()),
+        cases=datasets.list_cases(),
+        instructions=profiles.load_instructions(evaluation.resolve_settings()),
     ):
         assert sample.metadata == {
             "case_id": sample.id,
@@ -190,7 +190,7 @@ def generated_artifacts_stay_out_of_sample_metadata() -> None:
 def duplicate_case_ids_are_rejected() -> None:
     definition = _choice_case(case_id="duplicate", a=10, b=8)
     with pytest.raises(ValueError, match="unique"):
-        queries.compile_dataset(cases=(definition, definition))
+        datasets.compile_dataset(cases=(definition, definition))
 
 
 def native_projection_preserves_strings() -> None:
@@ -199,8 +199,8 @@ def native_projection_preserves_strings() -> None:
         _choice_case(case_id="escaped", a=10, b=8),
         instruction=Instruction(skill="reasoning", prompt=text),
     )
-    dataset = queries.compile_dataset(cases=(definition,))
-    assert queries.list_cases(selection=dataset)[0].prompt == text
+    dataset = datasets.compile_dataset(cases=(definition,))
+    assert datasets.list_cases(selection=dataset)[0].prompt == text
 
 
 def cases_are_immutable() -> None:
@@ -221,14 +221,14 @@ def cases_are_immutable() -> None:
 
 def compilation_cache_invalidates_when_declarations_change() -> None:
     definition = _choice_case(case_id="cache", a=10, b=8)
-    first = queries.compile_dataset(cases=(definition,))
+    first = datasets.compile_dataset(cases=(definition,))
     with patch(
         "subprocess.run",
         side_effect=AssertionError("Declarations must not compile code"),
     ) as compiler:
-        assert queries.compile_dataset(cases=(definition,)) is first
+        assert datasets.compile_dataset(cases=(definition,)) is first
         assert compiler.call_count == 0
-        changed = queries.compile_dataset(cases=(_choice_case(case_id="cache", a=4, b=8),))
+        changed = datasets.compile_dataset(cases=(_choice_case(case_id="cache", a=4, b=8),))
         assert json.loads(_reference_text(reference("cache", selection=changed)))["choice"] == "A"
         assert compiler.call_count == 0
 
@@ -251,8 +251,8 @@ def generic_python_case_exports_without_language_restriction() -> None:
         allowed_files=("solution.py",),
         reference=Reference(edits=fixture_ops.empty, completion=Completion.Plain("done")),
     )
-    dataset = queries.compile_dataset(cases=(definition,))
-    case = queries.list_cases(selection=dataset)[0]
+    dataset = datasets.compile_dataset(cases=(definition,))
+    case = datasets.list_cases(selection=dataset)[0]
     checks = verifier(case.id, selection=dataset)
     assert checks is not None
     assert (tuple(checks.inputs), tuple(checks.tools), tuple(checks.command)) == (
@@ -265,7 +265,7 @@ def generic_python_case_exports_without_language_restriction() -> None:
 
 
 def experiment_configuration_reaches_tasks_and_profiles() -> None:
-    before = queries.resolve_settings()
+    before = evaluation.resolve_settings()
     spec = Experiment(
         profiles=[
             Profile(
@@ -285,9 +285,9 @@ def experiment_configuration_reaches_tasks_and_profiles() -> None:
         profile=profiles.load_profile("genius", spec=spec),
         spec=spec,
         agent="codex",
-        catalog=queries.load_dataset(selection="smoke"),
+        catalog=datasets.load_dataset(selection="smoke"),
         instructions=profiles.load_instructions(spec),
-        provenance=queries.get_provenance(selection=queries.load_dataset(selection="smoke")),
+        provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     assert (
         spec.epochs,
@@ -295,7 +295,7 @@ def experiment_configuration_reaches_tasks_and_profiles() -> None:
         "Follow that" in str(task.dataset[0].input),
         "Follow that" in profiles.load_profile("genius", spec=spec).preamble,
     ) == (7, 7, True, True)
-    assert queries.resolve_settings().epochs == before.epochs
+    assert evaluation.resolve_settings().epochs == before.epochs
 
 
 @pytest.mark.parametrize("grade_only", [False, True])
@@ -312,7 +312,7 @@ def record_updates_cannot_bypass_kernel_validation(*, grade_only: bool) -> None:
             outcome=Outcome(changed_files=(), verification=Verification.Unchecked()),
         )
     else:
-        operation = partial(queries.compile_dataset, cases=records)
+        operation = partial(datasets.compile_dataset, cases=records)
     with pytest.raises(InvalidArgument, match="criteria read files missing from the fixture"):
         operation()
 
@@ -321,29 +321,31 @@ def record_updates_cannot_bypass_kernel_validation(*, grade_only: bool) -> None:
 @pytest.mark.parametrize("name", REASONING_DOCUMENTS)
 def delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, name: str) -> None:
     mode = cast(evaluation_settings.InstructionDelivery, delivery)
-    case = queries.list_cases()[0]
+    case = datasets.list_cases()[0]
     root = "/eval/instructions"
-    profile = load_profile(name="genius", spec=queries.resolve_settings())
+    profile = load_profile(name="genius", spec=evaluation.resolve_settings())
     before = profiles.files(
-        profile, case=case, instructions=profiles.load_instructions(queries.resolve_settings())
+        profile, case=case, instructions=profiles.load_instructions(evaluation.resolve_settings())
     )
     prompt = profiles.prompt(
         profile,
         case=case,
         delivery=mode,
         instruction_root=root,
-        instructions=profiles.load_instructions(queries.resolve_settings()),
+        instructions=profiles.load_instructions(evaluation.resolve_settings()),
     )
     assert (
         prompt.endswith(case.prompt),
         profiles.files(
-            profile, case=case, instructions=profiles.load_instructions(queries.resolve_settings())
+            profile,
+            case=case,
+            instructions=profiles.load_instructions(evaluation.resolve_settings()),
         ),
         profiles.prompt(
-            load_profile(name="baseline", spec=queries.resolve_settings()),
+            load_profile(name="baseline", spec=evaluation.resolve_settings()),
             case=case,
             delivery=mode,
-            instructions=profiles.load_instructions(queries.resolve_settings()),
+            instructions=profiles.load_instructions(evaluation.resolve_settings()),
         ),
     ) == (True, before, case.prompt)
     assert f"{root}/{name}" in prompt
@@ -353,8 +355,8 @@ def delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, name: st
 def delivery_rejects_unimplemented_skill_instead_of_silently_changing_it() -> None:
     with pytest.raises(ValueError, match="reasoning only"):
         profiles.prompt(
-            load_profile(name="genius", spec=queries.resolve_settings()),
-            case=queries.list_cases()[1],
+            load_profile(name="genius", spec=evaluation.resolve_settings()),
+            case=datasets.list_cases()[1],
             delivery="inline",
-            instructions=profiles.load_instructions(queries.resolve_settings()),
+            instructions=profiles.load_instructions(evaluation.resolve_settings()),
         )

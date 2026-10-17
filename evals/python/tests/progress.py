@@ -11,7 +11,8 @@ from inspect_ai.dataset import Sample
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, scorer
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 
-from evals.python import commands, evaluation_settings
+from evals.python import evaluation as evaluation_api
+from evals.python import evaluation_settings
 from evals.python.integrations.hugging_face.job import configuration
 from evals.python.integrations.inspect import completeness, evaluation, progress
 
@@ -231,7 +232,7 @@ def incomplete_native_records_fail() -> None:
 
 def public_concurrency_override() -> None:
     with patch.object(evaluation, "evaluate_async", return_value=0) as execute:
-        assert asyncio.run(commands.evaluate(model="mockllm/model", max_samples=3)) == 0
+        assert asyncio.run(evaluation_api.evaluate(model="mockllm/model", max_samples=3)) == 0
     assert execute.call_args.args[0].max_samples == 3
 
 

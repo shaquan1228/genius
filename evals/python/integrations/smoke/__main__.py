@@ -3,7 +3,7 @@ import json
 import sys
 from typing import assert_never
 
-from evals.python import commands, datasets, grading, queries
+from evals.python import datasets, grading, verification
 from kernel import Case, Completion, Verification
 from kernel._operations import fixture as fixture_ops
 
@@ -19,11 +19,11 @@ def response(completion: Completion.Value) -> str:
 
 
 async def validate(case: Case, *, dataset: datasets.Dataset) -> bool:
-    reference = queries.get_reference(case_id=case.id, selection=dataset)
-    result = await commands.validate_reference(case_id=case.id, selection=dataset)
+    reference = datasets.get_reference(case_id=case.id, selection=dataset)
+    result = await verification.validate_reference(case_id=case.id, selection=dataset)
     scores: grading.Scores = {}
     if not isinstance(result.verification, Verification.HarnessError):
-        scores = queries.score_case(
+        scores = grading.score_case(
             case_id=case.id,
             response=response(reference.completion),
             changed_files=tuple(
@@ -47,9 +47,9 @@ async def validate(case: Case, *, dataset: datasets.Dataset) -> bool:
 
 
 async def main() -> int:
-    dataset = queries.load_dataset()
+    dataset = datasets.load_dataset()
     results = [
-        await validate(case, dataset=dataset) for case in queries.list_cases(selection=dataset)
+        await validate(case, dataset=dataset) for case in datasets.list_cases(selection=dataset)
     ]
     return int(not all(results))
 

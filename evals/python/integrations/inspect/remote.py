@@ -7,15 +7,13 @@ from inspect_ai.util import (
     sandboxenv,
 )
 
-from evals.python import commands, verification
+from evals.python import execution
 
 
 @sandboxenv(name="hf")
 class HfSandboxEnvironment(SandboxEnvironment):
     @override
-    def __init__(
-        self, environment: verification.Environment, runtime: verification.Runtime
-    ) -> None:
+    def __init__(self, environment: execution.Environment, runtime: execution.Runtime) -> None:
         super().__init__()
         self.environment = environment
         self.runtime = runtime
@@ -25,7 +23,7 @@ class HfSandboxEnvironment(SandboxEnvironment):
     async def sample_init(
         cls, task_name: str, config: object, metadata: dict[str, str]
     ) -> dict[str, SandboxEnvironment]:
-        runtime = commands.create_runtime(provider="hf")
+        runtime = execution.create_runtime(provider="hf")
         environment = await runtime.create()
         return {"default": cls(environment, runtime)}
 
@@ -57,7 +55,7 @@ class HfSandboxEnvironment(SandboxEnvironment):
         if user not in (None, "root", "0"):
             raise SandboxUserUnsupportedError(f"Hugging Face Sandbox cannot execute as {user!r}")
         result = await self.environment.execute(
-            verification.Execution(
+            execution.Execution(
                 command=tuple(cmd), input=input, cwd=cwd, env=env or {}, timeout=timeout
             )
         )

@@ -1,23 +1,54 @@
-"""Enforce the kernel/transport/integration dependency seams."""
+"""Enforce the concern and integration dependency seams."""
 
 import ast
+import inspect
 import os
 import re
 import subprocess
 import sys
-import types
+from importlib import import_module
 from pathlib import Path
 
 import pytest
 
 import kernel as native
-from evals.python import commands, queries
+from evals.python import datasets, evaluation
 from kernel import Case, Experiment
 from kernel._operations import sources
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
 OCAML_ROOT = PYTHON_ROOT.parent / "ocaml"
 LIBRARY = tuple(OCAML_ROOT / name for name, _ in sources() if name.endswith((".ml", ".mli")))
+
+
+PUBLIC_OPERATIONS = {
+    "datasets": {
+        "compile_dataset",
+        "describe_dataset",
+        "get_provenance",
+        "get_reference",
+        "list_cases",
+        "load_dataset",
+    },
+    "grading": {"score_case"},
+    "verification": {"verify_case", "validate_reference"},
+    "assessment": {"assess"},
+    "execution": {"create_runtime"},
+    "evaluation": {"evaluate", "resolve_settings"},
+}
+OWNER_TYPES = {
+    "schema": {"DatasetInfo", "FileName", "Files", "Attributes"},
+    "datasets": {"Dataset", "Selection", "DatasetProvenance"},
+    "grading": {"Scores"},
+    "evaluation_settings": {"EvaluationSettings", "ModelPricing", "InstructionDelivery"},
+    "verification": {"Diagnostic", "VerificationResult"},
+    "assessment": {"Assessment"},
+    "execution": {"Execution", "Completion", "Environment", "Runtime", "Cleanup"},
+    "evaluation": set(),
+}
+PUBLIC_NAMES = {
+    owner: names | PUBLIC_OPERATIONS.get(owner, set()) for owner, names in OWNER_TYPES.items()
+}
 
 
 def _nodes[T: ast.AST](path: Path, *, kind: type[T]) -> list[T]:
@@ -59,6 +90,7 @@ def core_cannot_import_integrations_or_sdks() -> None:
             "grading.py",
             "evaluation_settings.py",
             "verification.py",
+            "assessment.py",
         )
         for name in _imported(PYTHON_ROOT / file)
     }
@@ -105,22 +137,28 @@ def domain_modules_are_codec_free() -> None:
     assert not any(re.search(r"Jsonm|Codec|print_", path.read_text()) for path in LIBRARY)
 
 
-def public_operations_use_native_calls_without_a_transport_layer() -> None:
-    assert "subprocess" not in _imported(PYTHON_ROOT / "queries.py")
-    assert "subprocess" not in _imported(PYTHON_ROOT / "commands.py")
+@pytest.mark.parametrize("owner", PUBLIC_OPERATIONS)
+def public_operations_use_native_calls_without_a_transport_layer(owner: str) -> None:
+    path = PYTHON_ROOT / ("datasets/__init__.py" if owner == "datasets" else f"{owner}.py")
+    assert "subprocess" not in _imported(path)
     assert not (PYTHON_ROOT.parent / "kernel/build.py").exists()
     assert "subprocess" not in _imported(PYTHON_ROOT.parent / "kernel/__init__.py")
 
 
-def public_operations_carry_dataset_selection() -> None:
-    names = {"list_cases", "score_case", "verify", "assess", "validate_reference"}
-    operations = [
-        node
-        for file in ("queries.py", "commands.py")
-        for node in _nodes(PYTHON_ROOT / file, kind=ast.FunctionDef)
-        if node.name in names
-    ]
-    assert all("selection" in {arg.arg for arg in node.args.kwonlyargs} for node in operations)
+@pytest.mark.parametrize(
+    ("owner", "name"),
+    [
+        ("datasets", "list_cases"),
+        ("grading", "score_case"),
+        ("verification", "verify_case"),
+        ("verification", "validate_reference"),
+        ("assessment", "assess"),
+    ],
+)
+def public_operations_carry_dataset_selection(owner: str, *, name: str) -> None:
+    operation = getattr(import_module(f"evals.python.{owner}"), name)
+    parameter = inspect.signature(operation).parameters["selection"]
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
 
 
 def shared_domain_types_live_in_ast() -> None:
@@ -183,6 +221,8 @@ def framework_driver_is_standalone(owner: str, *, filename: str) -> None:
 def integrations_use_typed_public_operations_without_legacy_facades() -> None:
     obsolete = (
         "command.py",
+        "commands.py",
+        "queries.py",
         "catalog.py",
         "transport.py",
         "_kernel.py",
@@ -197,28 +237,10 @@ def integrations_use_typed_public_operations_without_legacy_facades() -> None:
     assert not [name for name in obsolete if (PYTHON_ROOT / name).exists()]
 
 
-OWNER_TYPES = {
-    "schema": {"DatasetInfo", "FileName", "Files", "Attributes"},
-    "datasets": {"Dataset", "Selection", "DatasetProvenance"},
-    "grading": {"Scores"},
-    "evaluation_settings": {"EvaluationSettings", "ModelPricing", "InstructionDelivery"},
-    "verification": {
-        "Execution",
-        "Completion",
-        "Environment",
-        "Runtime",
-        "Cleanup",
-        "Diagnostic",
-        "Assessment",
-        "VerificationResult",
-    },
-}
-
-
 @pytest.mark.parametrize("path", sorted((PYTHON_ROOT / "integrations").rglob("*.py")))
-@pytest.mark.parametrize("owner", OWNER_TYPES)
-def integrations_import_only_types_from_owners(path: Path, *, owner: str) -> None:
-    allowed = {f"evals.python.{owner}.{name}" for name in OWNER_TYPES[owner]}
+@pytest.mark.parametrize("owner", PUBLIC_NAMES)
+def integrations_import_only_public_operations_and_types(path: Path, *, owner: str) -> None:
+    allowed = {f"evals.python.{owner}.{name}" for name in PUBLIC_NAMES[owner]}
     owned = {name for name in _imported(path) if name.startswith(f"evals.python.{owner}.")}
     assert owned <= allowed
 
@@ -226,7 +248,7 @@ def integrations_import_only_types_from_owners(path: Path, *, owner: str) -> Non
 @pytest.mark.parametrize("path", sorted((PYTHON_ROOT / "integrations").rglob("*.py")))
 def integrations_use_supported_owner_import_style(path: Path) -> None:
     plain = {alias.name for node in _nodes(path, kind=ast.Import) for alias in node.names}
-    assert plain.isdisjoint(f"evals.python.{owner}" for owner in OWNER_TYPES)
+    assert plain.isdisjoint(f"evals.python.{owner}" for owner in PUBLIC_NAMES)
 
 
 def _owner_aliases(path: Path) -> dict[str, str]:
@@ -242,8 +264,8 @@ def _owner_aliases(path: Path) -> dict[str, str]:
 def integrations_do_not_call_owner_implementations(path: Path) -> None:
     aliases = _owner_aliases(path)
     for node in _nodes(path, kind=ast.Attribute):
-        if isinstance(node.value, ast.Name) and aliases.get(node.value.id) in OWNER_TYPES:
-            assert node.attr in OWNER_TYPES[aliases[node.value.id]]
+        if isinstance(node.value, ast.Name) and aliases.get(node.value.id) in PUBLIC_NAMES:
+            assert node.attr in PUBLIC_NAMES[aliases[node.value.id]]
 
 
 def _check_owner_access(path: Path) -> None:
@@ -254,13 +276,17 @@ def _check_owner_access(path: Path) -> None:
 @pytest.mark.parametrize(
     ("source", "accepted"),
     [
-        ("import evals.python.verification as v\nv.verify()", False),
+        ("import evals.python.verification as v\nv.verify_case()", False),
         ("from evals.python import verification as v\nv.verify()", False),
-        ("from evals.python import verification as v\nv.Runtime()", True),
-        ("from evals.python.verification import Runtime", True),
+        ("from evals.python import verification as v\nv.verify_case()", True),
+        ("from evals.python import execution as e\ne.Runtime()", True),
+        ("from evals.python.execution import Runtime", True),
+        ("from evals.python import grading as g\ng.score()", False),
+        ("from evals.python import grading as g\ng.score_case()", True),
+        ("from evals.python import datasets as d\nd.record()", False),
     ],
 )
-def owner_import_rules_reject_bypasses_and_allow_types(
+def owner_import_rules_reject_bypasses_and_allow_public_operations(
     tmp_path: Path, *, source: str, accepted: bool
 ) -> None:
     path = tmp_path / "adapter.py"
@@ -272,52 +298,55 @@ def owner_import_rules_reject_bypasses_and_allow_types(
         _check_owner_access(path)
 
 
-@pytest.mark.parametrize("module", [commands, queries])
-def public_modules_define_only_exported_operations(module: types.ModuleType) -> None:
-    path = Path(str(module.__file__))
-    definitions = _nodes(path, kind=ast.FunctionDef) + _nodes(path, kind=ast.AsyncFunctionDef)
-    assert {node.name for node in definitions} == set(module.__all__)
+@pytest.mark.parametrize("owner", PUBLIC_OPERATIONS)
+def public_operations_are_defined_by_their_concern(owner: str) -> None:
+    module = import_module(f"evals.python.{owner}")
+    for name in PUBLIC_OPERATIONS[owner]:
+        operation = getattr(module, name)
+        assert operation.__module__ == module.__name__
 
 
-@pytest.mark.parametrize("filename", ["commands.py", "queries.py"])
-def public_modules_define_no_models_or_aliases(filename: str) -> None:
-    path = PYTHON_ROOT / filename
-    assert not _nodes(path, kind=ast.ClassDef)
-    assert not _nodes(path, kind=ast.TypeAlias)
+@pytest.mark.parametrize("owner", PUBLIC_OPERATIONS)
+def public_concerns_export_only_their_operations_and_types(owner: str) -> None:
+    module = import_module(f"evals.python.{owner}")
+    assert set(module.__all__) == PUBLIC_NAMES[owner]
 
 
 @pytest.mark.parametrize(
-    "filename",
-    [
-        "schema.py",
-        "datasets/__init__.py",
-        "grading.py",
-        "evaluation_settings.py",
-        "verification.py",
-    ],
+    "filename", ["schema.py", "datasets/__init__.py", "grading.py", "evaluation_settings.py"]
 )
-def type_owners_do_not_import_public_operations(filename: str) -> None:
+def query_concerns_do_not_import_execution_workflows(filename: str) -> None:
     imports = _imported(PYTHON_ROOT / filename)
     assert not any(
-        name.startswith(("evals.python.commands", "evals.python.queries")) for name in imports
+        name.startswith(
+            tuple(
+                f"evals.python.{owner}"
+                for owner in ("assessment", "execution", "evaluation", "verification")
+            )
+        )
+        and not name.startswith("evals.python.evaluation_settings")
+        for name in imports
     )
 
 
-def public_commands_and_verification_have_no_sdk_imports() -> None:
+def public_concerns_have_no_direct_sdk_imports() -> None:
     imports = {
         name
-        for file in ("commands.py", "queries.py", "verification.py")
-        for name in _imported(PYTHON_ROOT / file)
+        for owner in PUBLIC_OPERATIONS
+        for name in _imported(
+            PYTHON_ROOT / ("datasets/__init__.py" if owner == "datasets" else f"{owner}.py")
+        )
     }
     assert not any(
         name.startswith(("inspect_ai", "inspect_swe", "huggingface_hub")) for name in imports
     )
 
 
-def queries_do_not_compose_execution_adapters() -> None:
+def query_concerns_do_not_compose_execution_adapters() -> None:
     assert not any(
-        name.startswith(("evals.python.integrations", "evals.python.verification"))
-        for name in _imported(PYTHON_ROOT / "queries.py")
+        name.startswith("evals.python.integrations")
+        for filename in ("datasets/__init__.py", "grading.py")
+        for name in _imported(PYTHON_ROOT / filename)
     )
 
 
@@ -332,26 +361,17 @@ def integrations_import_public_namespaces_or_single_values(path: Path) -> None:
         len(node.names) == 1
         or (
             node.module == "evals.python"
-            and {name.name for name in node.names}
-            <= {
-                "commands",
-                "queries",
-                "schema",
-                "datasets",
-                "grading",
-                "evaluation_settings",
-                "verification",
-            }
+            and {name.name for name in node.names} <= PUBLIC_NAMES.keys()
         )
         for node in imports
     )
 
 
 def case_query_does_not_load_runner_sdks() -> None:
-    script = """from evals.python import queries
-from evals.python import commands
+    script = """from evals.python import assessment, datasets, evaluation
+from evals.python import execution, grading, verification
 import sys
-assert queries.list_cases()
+assert datasets.list_cases()
 assert not {'inspect_ai', 'inspect_swe', 'huggingface_hub'}.intersection(sys.modules)
 print('kernel-only')
 """
@@ -395,11 +415,12 @@ subprocess.run([sys.executable, "-c", "import re, pathlib"], check=True)
 
 def public_domain_values_are_native_types() -> None:
     assert not (PYTHON_ROOT / "_kernel.py").exists()
-    assert isinstance(queries.list_cases()[0], Case)
-    assert isinstance(queries.resolve_settings(), Experiment)
+    assert isinstance(datasets.list_cases()[0], Case)
+    assert isinstance(evaluation.resolve_settings(), Experiment)
 
 
-@pytest.mark.parametrize("module", [commands, queries])
-def public_operations_do_not_reexport_native_types(module: object) -> None:
-    exported = set(vars(native)["__all__"]) & set(vars(module)["__all__"])
+@pytest.mark.parametrize("owner", PUBLIC_OPERATIONS)
+def public_operations_do_not_reexport_native_types(owner: str) -> None:
+    module = import_module(f"evals.python.{owner}")
+    exported = set(vars(native)["__all__"]) & set(module.__all__)
     assert all(getattr(native, name) is not getattr(module, name) for name in exported)

@@ -15,7 +15,7 @@ from inspect_ai.model import GenerateConfig, get_model
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 from inspect_ai.scorer import Score
 
-from evals.python import commands, evaluation_settings, queries
+from evals.python import datasets, evaluation, evaluation_settings
 from evals.python.integrations.hugging_face.job import configuration, run
 from evals.python.integrations.inspect.evaluation import HfChatAPI
 from evals.python.paths import REPO_ROOT
@@ -43,7 +43,7 @@ def hf_job_calls_evaluation_with_validated_settings(monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("EVAL_EPOCHS", "2")
     monkeypatch.setenv("EVAL_COST_LIMIT", "0.25")
     before = dict(os.environ)
-    with patch.object(commands, "evaluate", new_callable=AsyncMock, return_value=7) as execute:
+    with patch.object(evaluation, "evaluate", new_callable=AsyncMock, return_value=7) as execute:
         assert run() == 7
     request = evaluation_settings.EvaluationSettings.model_validate(execute.call_args.kwargs)
     assert isinstance(request, evaluation_settings.EvaluationSettings)
@@ -84,7 +84,7 @@ def inspect_evaluation_uses_request_without_reading_job_environment(
     ):
 
         async def execute() -> int:
-            return assert_type(await commands.evaluate(**request.model_dump()), int)
+            return assert_type(await evaluation.evaluate(**request.model_dump()), int)
 
         assert asyncio.run(execute()) == 1
         assert evaluate.call_args.args[0] is not None
@@ -367,7 +367,7 @@ def explicit_non_list_selection_never_reaches_evaluation(
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     monkeypatch.setenv(setting, value)
     with (
-        patch("evals.python.integrations.hugging_face.job.commands.evaluate") as dispatch,
+        patch("evals.python.integrations.hugging_face.job.evaluation.evaluate") as dispatch,
         patch(
             "evals.python.integrations.inspect.evaluation.get_model",
             return_value=get_model("mockllm/model"),
@@ -410,14 +410,14 @@ def counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort(
     monkeypatch.setenv("EVAL_EPOCHS", "2")
     monkeypatch.setenv("EVAL_COST_LIMIT", "0.25")
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
-    catalog = queries.load_dataset()
+    catalog = datasets.load_dataset()
     cohort = replace(catalog, records={"clear-task": catalog.records["clear-task"]})
     with (
         patch(
             "evals.python.integrations.inspect.evaluation.get_model",
             return_value=get_model("mockllm/model"),
         ),
-        patch("evals.python.queries.load_dataset", return_value=cohort),
+        patch("evals.python.datasets.load_dataset", return_value=cohort),
         patch(
             "evals.python.integrations.inspect.evaluation.eval_async", return_value=[]
         ) as evaluate,

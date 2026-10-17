@@ -3,7 +3,7 @@ import json
 import os
 from collections.abc import Mapping
 
-from evals.python import commands, evaluation_settings
+from evals.python import evaluation, evaluation_settings
 
 
 def optional_int(value: str | None) -> int | None:
@@ -52,7 +52,7 @@ def configuration(environment: Mapping[str, str]) -> evaluation_settings.Evaluat
 
 def run() -> int:
     operation = configuration(dict(os.environ))
-    return asyncio.run(commands.evaluate(**operation.model_dump()))
+    return asyncio.run(evaluation.evaluate(**operation.model_dump()))
 
 
 if __name__ == "__main__":

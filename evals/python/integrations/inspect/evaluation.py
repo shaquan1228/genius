@@ -18,7 +18,7 @@ import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.progress as progress_adapter
 import evals.python.integrations.inspect.remote  # noqa: F401 - register the HF sandbox
 import evals.python.integrations.inspect.tasks as task_adapter
-from evals.python import evaluation_settings, queries
+from evals.python import datasets, evaluation, evaluation_settings
 from kernel import Experiment
 
 
@@ -56,9 +56,9 @@ def selected_samples(
 def evaluation_tasks(
     spec: Experiment, *, request: evaluation_settings.EvaluationSettings
 ) -> list[Task]:
-    catalog = queries.load_dataset(selection=request.dataset)
+    catalog = datasets.load_dataset(selection=request.dataset)
     instructions = profile_adapter.load_instructions(spec)
-    provenance = queries.get_provenance(selection=catalog)
+    provenance = datasets.get_provenance(selection=catalog)
     build = partial(
         task_adapter.build_task,
         spec=spec,
@@ -106,7 +106,7 @@ def diagnostic_tasks(
 
 
 async def evaluate_async(request: evaluation_settings.EvaluationSettings) -> int:
-    spec = queries.resolve_settings(epochs=request.epochs, cost_limit=request.cost_limit)
+    spec = evaluation.resolve_settings(epochs=request.epochs, cost_limit=request.cost_limit)
     tasks = evaluation_tasks(spec, request=request)
     selected_samples(tasks[0], request=request)
     if request.model.startswith("hf-inference-providers/"):
