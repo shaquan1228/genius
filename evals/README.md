@@ -109,8 +109,9 @@ Python authors use `Task.create(...)`, `Verifier.create(...)`, `Instruction.crea
 values after checking their invariants. Raw representations stay inside the OCaml
 implementation; projections and graders accept the validated values directly.
 
-`Rubric.create(expected=...)` accepts named scalar fields. Structured reference
-completions take a checked `Response.create(fields)`; its fields remain readable through
+`Rubric.create(expected=...)` accepts a checked `Response`. Create responses with
+`Response.create(fields=[ResponseField.create(name="choice", value=ResponseValue.String(value="B"))])`.
+Structured reference completions use `Completion.Structured(response=...)`; fields remain readable through
 `response.fields`. Resource resolution returns a new validated task and preserves the
 original declaration.
 

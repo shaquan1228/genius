@@ -131,7 +131,7 @@ def verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
     with patch(
         "evals.python.verification.verify",
         return_value=VerificationResult(
-            verification=Verification.HarnessError("grader failed to import")
+            verification=Verification.HarnessError(detail="grader failed to import")
         ),
     ):
         log = _offline_run([baseline()], mode="pass", directory=tmp_path)[0]

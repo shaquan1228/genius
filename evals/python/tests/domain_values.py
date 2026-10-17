@@ -1,17 +1,21 @@
 """Validated domain values and typed failures cross the native bridge directly."""
 
 from collections.abc import Callable
+from inspect import Parameter, signature
 from typing import cast
 from unittest.mock import patch
 
 import pytest
 
+import kernel as domain
 from evals.python import datasets, grading
 from evals.python.tests.support import choice_case
 from kernel import (
     Criterion,
+    Fixture,
     GradingError,
     Outcome,
+    Response,
     Task,
     ValidationCode,
     ValidationError,
@@ -19,6 +23,13 @@ from kernel import (
     Verifier,
 )
 from kernel._bridge import native
+
+
+def public_factories_name_their_collection_arguments() -> None:
+    fixture = Fixture.create(files=[])
+    response = Response.create(fields=[])
+    assert isinstance(fixture, Fixture)
+    assert tuple(response.fields) == ()
 
 
 def checked_factories_preserve_native_identity() -> None:
@@ -46,8 +57,8 @@ def validation_errors_retain_native_issues() -> None:
     with pytest.raises(ValidationError) as caught:
         Verifier.create(
             inputs=("missing/path.py",),
-            files=(),
-            tools=(),
+            files=[],
+            tools=[],
             command=(),
             stdin="",
             timeout_seconds=0,
@@ -69,10 +80,10 @@ def harness_failures_have_a_distinct_error_contract() -> None:
             case_id="clear-task",
             response="",
             changed_files=(),
-            verification=Verification.HarnessError("verifier unavailable"),
+            verification=Verification.HarnessError(detail="verifier unavailable"),
         )
     assert "verifier unavailable" in str(caught.value)
-    assert caught.value.error[0] == "verifier unavailable"
+    assert caught.value.error.detail == "verifier unavailable"
 
 
 def construction_and_grading_do_not_serialize_domain_values() -> None:
@@ -97,7 +108,7 @@ def implicit_dictionary_conversion_cannot_bypass_factories(consumer: str) -> Non
     create = cast(Callable[..., Task], Task.create)
     operations: dict[str, Callable[[], object]] = {
         "grader": lambda: native.Grader.grade(
-            fields,
+            task=fields,
             response=None,
             outcome=Outcome(changed_files=(), verification=Verification.Unchecked()),
         ),
@@ -108,7 +119,7 @@ def implicit_dictionary_conversion_cannot_bypass_factories(consumer: str) -> Non
             **{
                 **fields,
                 "criterion": cast(Callable[..., object], Criterion.Code)(
-                    {
+                    verifier={
                         "inputs": ("solution.py",),
                         "files": (),
                         "tools": (),
@@ -119,7 +130,84 @@ def implicit_dictionary_conversion_cannot_bypass_factories(consumer: str) -> Non
                 ),
             }
         ),
-        "response": lambda: native.Response.fields({"fields": [("x", True), ("x", False)]}),
+        "response": lambda: native.Construct.rubric(expected={"fields": []}, text_rule=None),
     }
     with pytest.raises(TypeError):
         operations[consumer]()
+
+
+def _public_factories() -> list[Callable[..., object]]:
+    return [
+        value.create
+        for name in cast(list[str], vars(domain)["__all__"])
+        if hasattr(value := getattr(domain, name), "create")
+    ]
+
+
+@pytest.mark.parametrize(
+    "constructor",
+    [
+        *_public_factories(),
+        domain.Reference,
+        domain.Outcome,
+        domain.Profile,
+        domain.ResponseValue.String,
+        domain.ResponseValue.Bool,
+        domain.Content.Inline,
+        domain.Content.Resource,
+        domain.Criterion.Code,
+        domain.Criterion.Answer,
+        domain.Completion.Plain,
+        domain.Completion.Structured,
+        domain.Verification.Passed,
+        domain.Verification.HarnessError,
+    ],
+)
+def constructors_expose_names_and_reject_positional_inputs(
+    constructor: Callable[..., object],
+) -> None:
+    assert all(
+        parameter.kind is Parameter.KEYWORD_ONLY
+        for parameter in signature(constructor).parameters.values()
+    )
+    with pytest.raises(TypeError):
+        constructor(object())
+
+
+@pytest.mark.parametrize("fields", [{}, {"values": []}, {"fields": [], "extra": True}])
+def factory_calls_reject_missing_or_unknown_names(fields: dict[str, object]) -> None:
+    create = cast(Callable[..., Response], Response.create)
+    with pytest.raises(TypeError):
+        create(**fields)
+
+
+@pytest.mark.parametrize("fields", [{}, {"value": "x"}, {"text": "x", "extra": True}])
+def variant_calls_reject_missing_or_unknown_names(fields: dict[str, object]) -> None:
+    constructor = cast(Callable[..., object], domain.Content.Inline)
+    with pytest.raises(TypeError):
+        constructor(**fields)
+
+
+@pytest.mark.parametrize(
+    ("constructor", "fields"),
+    [
+        (Fixture.create, {"files": [("main.py", "text")]}),
+        (Response.create, {"fields": [("choice", domain.ResponseValue.String(value="B"))]}),
+        (
+            Verifier.create,
+            {
+                "inputs": ["main.py"],
+                "files": [("verify.py", domain.Content.Inline(text="check"))],
+                "tools": [],
+                "command": ["python3", "verify.py"],
+                "stdin": "",
+                "timeout_seconds": 5,
+            },
+        ),
+    ],
+)
+def collections_require_named_domain_entries(
+    constructor: Callable[..., object], *, fields: dict[str, object]
+) -> None:
+    with pytest.raises(TypeError):
+        constructor(**fields)

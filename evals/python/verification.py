@@ -45,7 +45,7 @@ class VerificationResult:
 
     def __post_init__(self) -> None:
         if isinstance(self.verification, Verification.HarnessError) and not self.detail:
-            object.__setattr__(self, "detail", self.verification[0])
+            object.__setattr__(self, "detail", self.verification.detail)
         object.__setattr__(
             self,
             "metadata",
@@ -74,15 +74,17 @@ def completion(result: Completion, *, marker: str) -> VerificationResult:
         evidence = _Evidence.model_validate_json(result.stdout.strip().splitlines()[-1])
     except (ValidationError, IndexError) as error:
         return VerificationResult(
-            verification=Verification.HarnessError(f"Invalid verifier evidence: {error}")
+            verification=Verification.HarnessError(detail=f"Invalid verifier evidence: {error}")
         )
     if not all((evidence.marker == marker, result.returncode == 0, evidence.status != "unchecked")):
         return VerificationResult(
-            verification=Verification.HarnessError("Verifier completion was not authenticated")
+            verification=Verification.HarnessError(
+                detail="Verifier completion was not authenticated"
+            )
         )
     return VerificationResult(
         verification=(
-            Verification.HarnessError(evidence.detail)
+            Verification.HarnessError(detail=evidence.detail)
             if evidence.status == "harness_error"
             else _STATUSES[evidence.status]()
         ),
@@ -108,7 +110,7 @@ async def _inputs(checks: Verifier, *, agent: Environment) -> dict[str, bytes]:
 def _contents(value: Content.Value) -> str:
     if not isinstance(value, Content.Inline):
         raise ValueError("Verifier resources must be resolved before execution")
-    return value[0]
+    return value.text
 
 
 async def _execute(
@@ -119,7 +121,10 @@ async def _execute(
         raise RuntimeError(f"Could not create verifier workspace: {setup.stderr}")
     artifacts = {
         **inputs,
-        **{name: _contents(value).encode() for name, value in (*checks.tools, *checks.files)},
+        **{
+            artifact.path: _contents(artifact.content).encode()
+            for artifact in (*checks.tools, *checks.files)
+        },
     }
     for name, contents in artifacts.items():
         await grader.write_bytes(f"workspace/{name}", contents)
@@ -202,7 +207,7 @@ async def verify(checks: Verifier, *, agent: Environment, runtime: Runtime) -> V
         async with allocated(runtime, candidate=agent) as grader:
             return await _execute(checks, grader=grader, inputs=inputs)
     except Exception as error:
-        return VerificationResult(verification=Verification.HarnessError(str(error)))
+        return VerificationResult(verification=Verification.HarnessError(detail=str(error)))
 
 
 async def stage_reference(files: Mapping[str, str], *, agent: Environment) -> None:
@@ -221,7 +226,7 @@ async def verify_case(
     agent: InstanceOf[Environment],
     runtime: InstanceOf[Runtime],
 ) -> VerificationResult:
-    checks = projection_ops.verifier(datasets.record(case_id, selection=selection))
+    checks = projection_ops.verifier(task=datasets.record(case_id, selection=selection))
     if checks is None:
         return VerificationResult(verification=Verification.Unchecked())
     return await verify(checks, agent=agent, runtime=runtime)
@@ -236,17 +241,22 @@ async def validate_reference(
 ) -> VerificationResult:
     selection = datasets.load_dataset(selection=selection)
     record = datasets.record(case_id, selection=selection)
-    if projection_ops.verifier(record) is None:
+    if projection_ops.verifier(task=record) is None:
         return VerificationResult(verification=Verification.Unchecked())
     runtime = runtime or execution.create_runtime()
     try:
         async with allocated(runtime) as agent:
             await stage_reference(
-                dict(fixture_ops.files(projection_ops.reference(record).edits)),
+                {
+                    file.path: file.contents
+                    for file in fixture_ops.files(
+                        fixture=projection_ops.reference(task=record).edits
+                    )
+                },
                 agent=agent,
             )
             return await verify_case(
                 case_id=case_id, selection=selection, agent=agent, runtime=runtime
             )
     except Exception as error:
-        return VerificationResult(verification=Verification.HarnessError(str(error)))
+        return VerificationResult(verification=Verification.HarnessError(detail=str(error)))

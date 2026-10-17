@@ -1,12 +1,21 @@
-let fixture files = Result.get_ok (Fixture.of_files files)
+let file ~path ~contents = Result.get_ok (Construct.file ~path ~contents)
+let fixture ~files = Result.get_ok (Construct.fixture ~files)
 
 let () =
-  let base = fixture [ ("config.txt", "initial") ] in
-  let override = fixture [ ("config.txt", "changed") ] in
-  assert (Fixture.files base = [ ("config.txt", "initial") ]);
-  assert (Fixture.files (Fixture.overlay base ~overrides:override) = [ ("config.txt", "changed") ]);
-  assert (Result.is_error (Fixture.of_files [ ("a", "one"); ("a", "two") ]));
-  assert (Result.is_error (Fixture.of_files [ ("../bad", "contents") ]));
-  let project = fixture [ ("source.txt", "seed"); ("visible.txt", "public check") ] in
-  assert (List.mem_assoc "source.txt" (Fixture.files project));
-  assert (List.length (Fixture.files project) = 2)
+  let initial = file ~path:"config.txt" ~contents:"initial" in
+  let replacement = file ~path:"config.txt" ~contents:"changed" in
+  let base = fixture ~files:[ initial ] in
+  let overrides = fixture ~files:[ replacement ] in
+  assert (Fixture.files ~fixture:base = [ initial ]);
+  assert (Fixture.files ~fixture:(Fixture.overlay ~base ~overrides) = [ replacement ]);
+  assert (Result.is_error (Construct.fixture ~files:[ initial; replacement ]));
+  assert (Result.is_error (Construct.file ~path:"../bad" ~contents:"contents"));
+  let project =
+    fixture
+      ~files:
+        [
+          file ~path:"source.txt" ~contents:"seed";
+          file ~path:"visible.txt" ~contents:"public check";
+        ]
+  in
+  assert (List.length (Fixture.files ~fixture:project) = 2)

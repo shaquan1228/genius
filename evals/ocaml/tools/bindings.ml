@@ -49,14 +49,13 @@ let field value =
 
 let constructor value =
   if value.cd_res <> None then unsupported "GADT constructor";
-  let arguments =
+  let fields =
     match value.cd_args with
-    | Cstr_tuple (([] | [ _ ]) as arguments) -> arguments
-    | Cstr_tuple _ -> unsupported "multi-argument constructor"
-    | Cstr_record _ -> unsupported "inline record constructor"
+    | Cstr_tuple [] -> []
+    | Cstr_record fields -> List.map field fields
+    | Cstr_tuple _ -> unsupported "unnamed constructor arguments"
   in
-  object_
-    [ ("name", quote (Ident.name value.cd_id)); ("arguments", array (List.map type_ arguments)) ]
+  object_ [ ("name", quote (Ident.name value.cd_id)); ("fields", array fields) ]
 
 let declaration name value =
   if value.type_params <> [] then unsupported ("parameterized type " ^ name);

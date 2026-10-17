@@ -40,7 +40,7 @@ async def assess(
         case_id=case_id, selection=selection, agent=agent, runtime=runtime
     )
     if isinstance(result.verification, Verification.HarnessError):
-        raise RuntimeError(f"Verification harness error: {result.verification[0]}")
+        raise RuntimeError(f"Verification harness error: {result.verification.detail}")
     return Assessment(
         evidence=result,
         scores=grading.score_case(

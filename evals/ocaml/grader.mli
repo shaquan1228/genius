@@ -6,11 +6,11 @@
 val required_names : string list
 
 val grade :
-  Ast.task ->
+  task:Ast.task ->
   response:Ast.response option ->
   outcome:Ast.outcome ->
   (Ast.score, Ast.grading_failure) result
 
 (* Whitespace follows Python's Unicode str.split and str.strip. *)
-val word_count : string -> int
-val trim : string -> string
+val word_count : text:string -> int
+val trim : text:string -> string

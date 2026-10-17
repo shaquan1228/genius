@@ -35,7 +35,7 @@ let whitespace_width text index =
       in
       match List.find_opt starts spaces with None -> 0 | Some value -> String.length value)
 
-let word_count text =
+let word_count ~text =
   let rec count index in_word total =
     if index = String.length text then total
     else
@@ -45,7 +45,7 @@ let word_count text =
   in
   count 0 false 0
 
-let trim text =
+let trim ~text =
   let rec bounds index first last =
     if index = String.length text then
       match first with None -> "" | Some start -> String.sub text start (last - start)
@@ -59,36 +59,42 @@ let trim text =
 let answer (criterion : Ast.rubric) response =
   match response with
   | None -> false
-  | Some response ->
-      let fields = Response.fields response in
+  | Some (response : Ast.response) ->
       let exact, text_valid =
         match criterion.text_rule with
-        | None -> (fields, true)
+        | None -> (response.fields, true)
         | Some rule ->
             let valid =
-              match List.assoc_opt rule.field fields with
-              | Some (Ast.String text) ->
-                  let words = word_count text in
+              match
+                List.find_opt
+                  (fun (field : Ast.response_field) -> field.name = rule.field)
+                  response.fields
+              with
+              | Some { value = Ast.String { value = text }; _ } ->
+                  let words = word_count ~text in
                   rule.min_words <= words && words <= rule.max_words
-              | Some (Ast.Bool _) | None -> false
+              | Some { value = Ast.Bool _; _ } | None -> false
             in
-            (List.remove_assoc rule.field fields, valid)
+            ( List.filter
+                (fun (field : Ast.response_field) -> field.name <> rule.field)
+                response.fields,
+              valid )
       in
-      text_valid && List.sort compare exact = List.sort compare (Response.fields criterion.expected)
+      text_valid && List.sort compare exact = List.sort compare criterion.expected.fields
 
-let grade (case : Ast.task) ~response ~(outcome : Ast.outcome) =
+let grade ~(task : Ast.task) ~response ~(outcome : Ast.outcome) =
   let correctness =
-    match case.criterion with
+    match task.criterion with
     | Ast.Code _ -> (
         match outcome.verification with
-        | Ast.Harness_error detail -> Error (Ast.Verification_harness_error detail)
+        | Ast.Harness_error { detail } -> Error (Ast.Verification_harness_error { detail })
         | Ast.Passed -> Ok true
         | Ast.Unchecked | Ast.Failed | Ast.Invalid_submission | Ast.Timed_out -> Ok false)
-    | Ast.Answer criterion -> Ok (answer criterion response)
+    | Ast.Answer { rubric } -> Ok (answer rubric response)
   in
   Result.map
     (fun correctness ->
-      let allowed = List.map (fun path -> "workspace/" ^ path) case.allowed_files in
+      let allowed = List.map (fun path -> "workspace/" ^ path) task.allowed_files in
       let scope = List.for_all (fun path -> List.mem path allowed) outcome.changed_files in
       List.map
         (fun (name, criterion) ->

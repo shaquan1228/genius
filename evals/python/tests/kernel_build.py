@@ -35,7 +35,7 @@ def compiled_includes_and_inference_drive_bindings(tmp_path: Path) -> None:
     path = _compile(
         tmp_path / "sample",
         text="""include sig
-          type token = A | B of string
+          type token = A | B of { value : string }
           type item = { flag : bool; values : (string * int option) list }
         end
         val choose : ?fallback:string option -> expected:token -> unit -> token
@@ -71,6 +71,7 @@ def inferred_compiled_values_drive_bindings(tmp_path: Path) -> None:
         "val identity : 'a -> 'a",
         "type 'a box = Box of 'a",
         "type pair = Pair of string * int",
+        "type scalar = Scalar of string",
         "type state = { mutable value : int }",
         "module Alias = String",
     ],
@@ -177,8 +178,8 @@ with patch('subprocess.run', side_effect=AssertionError('Import compiled the ker
     from kernel import Fixture
     from kernel._operations import experiment as experiment_ops, fixture as fixture_ops, sources
     spec = experiment_ops.resolve()
-    assert isinstance(fixture_ops.empty, Fixture)
-    assert not hasattr(fixture_ops.empty, 'add')
+    assert isinstance(Fixture.create(files=[]), Fixture)
+    assert not hasattr(Fixture.create(files=[]), 'add')
     assert dict(sources())['ast.ml'].find('epochs = 7') >= 0
     assert dict(sources())['ast.ml'].find('epochs = 9') == -1
     print(json.dumps({'epochs': spec.epochs}))
@@ -213,19 +214,21 @@ def incompatible_python_identifiers_fail_loudly(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "text", ["type foo_bar = string\ntype fooBar = bool", "type invalid_argument = { code : int }"]
+    "text", ["type foo_bar = string\ntype fooBar = bool", "type grading_error = { code : int }"]
 )
 def capitalized_binding_names_cannot_silently_collide(tmp_path: Path, *, text: str) -> None:
     path = _compile(tmp_path / "collision", text=text)
     items = _schema((path,))[0]["items"]
     with pytest.raises(ValueError, match="names collide"):
-        generate.runtime_types(items)
+        generate.runtime_types(items, constructors={})
 
 
 def constructor_names_can_match_their_owner(tmp_path: Path) -> None:
     path = _compile(tmp_path / "owned", text="type entry = Entry")
     items = _schema((path,))[0]["items"]
-    assert "Entry.Entry = _native.Entry" in generate.runtime_types(items)
+    assert "Entry.Entry = _named(constructor=_native.Entry)" in generate.runtime_types(
+        items, constructors={}
+    )
     assert "class Entry(_types.Entry):" in generate.ast_bindings(items)
 
 
@@ -234,7 +237,7 @@ def alternative_names_cannot_silently_collide(tmp_path: Path, *, text: str) -> N
     path = _compile(tmp_path / "collision", text=text)
     items = _schema((path,))[0]["items"]
     with pytest.raises(ValueError, match="alternative names collide"):
-        generate.runtime_types(items)
+        generate.runtime_types(items, constructors={})
 
 
 @pytest.mark.parametrize(
@@ -257,3 +260,23 @@ def ocaml_clients_cannot_construct_unvalidated_values(tmp_path: Path, *, express
     )
     assert result.returncode != 0
     assert "private type" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "text", ["val create : string -> string", "val create : fields:string list -> string -> string"]
+)
+def unnamed_operation_inputs_fail_generation(tmp_path: Path, *, text: str) -> None:
+    path = _compile(tmp_path / "unnamed", text=text)
+    item = _schema((path,))[0]["items"][0]
+    with pytest.raises(ValueError, match="arguments must be named"):
+        generate.operation(item)
+
+
+def constructors_must_name_the_domain_type_they_return(tmp_path: Path) -> None:
+    path = _compile(
+        tmp_path / "mismatch",
+        text="type response = { fields : string list }\n"
+        "module Construct : sig val of_fields : fields:string list -> response end",
+    )
+    with pytest.raises(ValueError, match="namesake domain type"):
+        generate.constructor_operations(_schema((path,))[0]["items"])

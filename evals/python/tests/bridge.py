@@ -14,16 +14,18 @@ from evals.python.tests.projections import reference, verifier
 from kernel import (
     Completion,
     Criterion,
+    File,
+    Fixture,
     Instruction,
     Reference,
+    Response,
+    ResponseField,
     ResponseValue,
     Rubric,
     Task,
     Verification,
 )
-from kernel._operations import fixture as fixture_ops
 from kernel._operations import grader as grader_ops
-from kernel._operations import response as response_ops
 from kernel._operations import sources
 
 
@@ -159,22 +161,25 @@ def reference_channels_export_independently_and_escape() -> None:
     state = 'quote" \\ \n é'
     fields: dict[str, str | bool] = {"state": state, "safe": True}
     safe = True
-    expected_fields = response_ops.of_fields(
-        [("state", ResponseValue.String(state)), ("safe", ResponseValue.Bool(safe))]
+    expected_fields = Response.create(
+        fields=[
+            ResponseField.create(name="state", value=ResponseValue.String(value=state)),
+            ResponseField.create(name="safe", value=ResponseValue.Bool(value=safe)),
+        ]
     )
     dataset = datasets.compile_dataset(
         cases=(
             Task.create(
                 id="reference",
-                fixture=fixture_ops.empty,
+                fixture=Fixture.create(files=[]),
                 instruction=Instruction.create(skill="reasoning", prompt="fields"),
                 criterion=Criterion.Answer(
-                    Rubric.create(expected=expected_fields.fields, text_rule=None)
+                    rubric=Rubric.create(expected=expected_fields, text_rule=None)
                 ),
                 allowed_files=("result.txt",),
                 reference=Reference(
-                    edits=fixture_ops.of_files([("result.txt", "result")]),
-                    completion=Completion.Structured(expected_fields),
+                    edits=Fixture.create(files=[File.create(path="result.txt", contents="result")]),
+                    completion=Completion.Structured(response=expected_fields),
                 ),
             ),
         )

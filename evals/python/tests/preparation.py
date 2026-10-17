@@ -1,7 +1,5 @@
 """Prepared inputs stay consistent through composition, scoring, and native logs."""
 
-# Native boolean variants have a single positional payload.
-# ruff: noqa: FBT003
 import base64
 from collections.abc import Mapping
 from dataclasses import replace
@@ -21,21 +19,25 @@ from evals.python import evaluation as evaluation_api
 from evals.python.evaluation import EvaluationSettings, InstructionDelivery
 from evals.python.integrations.inspect import evaluation, profiles, scoring
 from evals.python.integrations.inspect.tasks import build_task
-from evals.python.tests.declarations import _copy_case, _declaration
+from evals.python.tests.declarations import _copy_case, _copy_verifier, _declaration
 from evals.python.tests.support import offline_run as _offline_run
 from evals.python.tests.support import results as _results
 from kernel import (
-    Case,
+    Artifact,
     Completion,
     Content,
     Criterion,
+    File,
+    Fixture,
     Instruction,
     Reference,
+    Response,
+    ResponseField,
     ResponseValue,
     Rubric,
     TextRule,
 )
-from kernel._operations import fixture as fixture_ops
+from kernel._operations import projection as projection_ops
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
@@ -114,8 +116,8 @@ def private_tasks() -> list[Task]:
             skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
         ),
         reference=Reference(
-            edits=fixture_ops.of_files([("main.py", PRIVATE_SENTINEL)]),
-            completion=Completion.Plain(PRIVATE_SENTINEL),
+            edits=Fixture.create(files=[File.create(path="main.py", contents=PRIVATE_SENTINEL)]),
+            completion=Completion.Plain(text=PRIVATE_SENTINEL),
         ),
     )
     snapshots = [
@@ -124,11 +126,17 @@ def private_tasks() -> list[Task]:
                 _copy_case(
                     definition,
                     criterion=Criterion.Answer(
-                        Rubric.create(
-                            expected=[
-                                ("choice", ResponseValue.String(choice)),
-                                ("safe", ResponseValue.Bool(True)),
-                            ],
+                        rubric=Rubric.create(
+                            expected=Response.create(
+                                fields=[
+                                    ResponseField.create(
+                                        name="choice", value=ResponseValue.String(value=choice)
+                                    ),
+                                    ResponseField.create(
+                                        name="safe", value=ResponseValue.Bool(value=True)
+                                    ),
+                                ]
+                            ),
                             text_rule=TextRule.create(field="reason", min_words=1, max_words=5),
                         )
                     ),
@@ -237,11 +245,16 @@ def _assert_guidance_logs(logs: list[EvalLog], *, digest: str) -> None:
 
 def unresolved_public_resource_cannot_reach_agent_files() -> None:
     spec = evaluation_api.resolve_settings()
-    case = Case(
-        id="unresolved",
-        skill="reasoning",
-        prompt="Use the supplied context",
-        files=[("context.txt", Content.Resource("private-resource"))],
+    definition = _declaration()
+    assert isinstance(definition.criterion, Criterion.Code)
+    checks = _copy_verifier(
+        definition.criterion.verifier,
+        tools=[
+            Artifact.create(path="context.txt", content=Content.Resource(key="private-resource"))
+        ],
     )
-    with pytest.raises(ValueError, match="Unresolved resource in public case unresolved"):
+    case = projection_ops.case(
+        task=_copy_case(definition, criterion=Criterion.Code(verifier=checks))
+    )
+    with pytest.raises(ValueError, match="Unresolved resource in public case external"):
         profiles.files(profiles.load_profile("baseline", spec=spec), case=case, instructions={})

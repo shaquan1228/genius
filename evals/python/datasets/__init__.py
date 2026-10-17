@@ -11,7 +11,7 @@ from typing import Protocol, cast
 from pydantic import TypeAdapter, validate_call
 
 from evals.python.schema import FROZEN, DatasetInfo, FileName, Files
-from kernel import Case, Fixture, Reference, Task
+from kernel import Case, Fixture, Reference, ResourceBinding, Task
 from kernel._operations import case as case_ops
 from kernel._operations import fixture as fixture_ops
 from kernel._operations import projection as projection_ops
@@ -62,7 +62,7 @@ def _canonical(value: object) -> object:
     if value is None or isinstance(value, (str, bool, int, float)):
         return value
     if isinstance(value, Fixture):
-        return tuple(fixture_ops.files(value))
+        return tuple(_canonical(file) for file in fixture_ops.files(fixture=value))
     return (type(value).__name__, tuple(_canonical(item) for item in cast(Sequence[object], value)))
 
 
@@ -81,7 +81,7 @@ class Dataset:
         records = dict(self.records)
         _validate_snapshot(self.sources, count=len(records), info=self.info)
         normalized = _resolve_records(records, sources=self.sources)
-        public = {name: projection_ops.case(record) for name, record in normalized.items()}
+        public = {name: projection_ops.case(task=record) for name, record in normalized.items()}
         object.__setattr__(self, "cases", MappingProxyType(public))
         object.__setattr__(self, "records", MappingProxyType(normalized))
 
@@ -112,7 +112,12 @@ class _CaseKey:
 
 
 def _resolve(case: Task, *, sources: Sources) -> Task:
-    return case_ops.resolve_resources(case, resources=sources.resources)
+    return case_ops.resolve_resources(
+        task=case,
+        resources=[
+            ResourceBinding.create(key=key, contents=text) for key, text in sources.resources
+        ],
+    )
 
 
 def _resolve_records(records: Mapping[str, Task], *, sources: Sources) -> dict[str, Task]:
@@ -207,7 +212,7 @@ def list_cases(*, selection: Selection = "smoke") -> tuple[Case, ...]:
 
 @validate_call(config=FROZEN)
 def get_reference(*, case_id: str, selection: Selection = "smoke") -> Reference:
-    return projection_ops.reference(record(case_id, selection=selection))
+    return projection_ops.reference(task=record(case_id, selection=selection))
 
 
 @validate_call(config=FROZEN)

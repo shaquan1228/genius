@@ -24,9 +24,12 @@ from evals.python.tests.declarations import _copy_case, _declaration, _reference
 from evals.python.tests.projections import reference, verifier
 from evals.python.verification import VerificationResult
 from kernel import (
+    Artifact,
     Completion,
     Content,
     Criterion,
+    File,
+    Fixture,
     GradingError,
     Reference,
     Task,
@@ -36,7 +39,6 @@ from kernel import (
 from kernel import (
     ValidationError as DomainValidationError,
 )
-from kernel._operations import fixture as fixture_ops
 
 DRIVER = """import json, os, subprocess, sys
 result = subprocess.run([sys.executable, 'solution.py'], capture_output=True, text=True)
@@ -49,8 +51,10 @@ print(json.dumps({'marker': os.environ['GENIUS_VERIFIER_MARKER'],
 def _checks(**updates: object) -> Verifier:
     values = {
         "inputs": ("solution.py",),
-        "files": [("grader.py", Content.Inline(DRIVER))],
-        "tools": [("visible.py", Content.Inline("raise Exception()"))],
+        "files": [Artifact.create(path="grader.py", content=Content.Inline(text=DRIVER))],
+        "tools": [
+            Artifact.create(path="visible.py", content=Content.Inline(text="raise Exception()"))
+        ],
         "command": ("python3", "grader.py"),
         "stdin": "42",
         "timeout_seconds": 30,
@@ -332,10 +336,14 @@ def invalid_executable_contract_is_rejected(updates: dict[str, object]) -> None:
             cases=(
                 _copy_case(
                     case,
-                    fixture=fixture_ops.of_files([("solution.py", "print(42)")]),
-                    criterion=Criterion.Code(_checks(**updates)),
+                    fixture=Fixture.create(
+                        files=[File.create(path="solution.py", contents="print(42)")]
+                    ),
+                    criterion=Criterion.Code(verifier=_checks(**updates)),
                     allowed_files=("solution.py",),
-                    reference=Reference(edits=fixture_ops.empty, completion=Completion.Plain("")),
+                    reference=Reference(
+                        edits=Fixture.create(files=[]), completion=Completion.Plain(text="")
+                    ),
                 ),
             )
         )
@@ -367,7 +375,7 @@ def kernel_refuses_harness_error() -> None:
             case_id="clear-task",
             response="",
             changed_files=(),
-            verification=Verification.HarnessError("server failed"),
+            verification=Verification.HarnessError(detail="server failed"),
         )
 
 
@@ -375,7 +383,10 @@ def private_artifacts_are_excluded_from_public_files() -> None:
     for case in datasets.list_cases():
         executable = verifier(case.id)
         if isinstance(executable, Verifier):
-            assert not dict(executable.files).keys() & dict(case.files).keys()
+            assert (
+                not {artifact.path: artifact.content for artifact in executable.files}.keys()
+                & {artifact.path: artifact.content for artifact in case.files}.keys()
+            )
 
 
 def public_answer_only_verification_never_allocates() -> None:
@@ -513,8 +524,10 @@ def reference_candidate_and_grader_are_both_cleaned() -> None:
             patch(
                 "kernel._operations.projection.reference",
                 return_value=Reference(
-                    edits=fixture_ops.of_files([("solution.py", "print(42)")]),
-                    completion=Completion.Plain(""),
+                    edits=Fixture.create(
+                        files=[File.create(path="solution.py", contents="print(42)")]
+                    ),
+                    completion=Completion.Plain(text=""),
                 ),
             ),
             patch("evals.python.verification.token_hex", return_value="secret"),
@@ -548,8 +561,8 @@ def reference_setup_failures_preserve_lifecycle(stage: str) -> None:
             patch(
                 "kernel._operations.projection.reference",
                 return_value=Reference(
-                    edits=fixture_ops.of_files([("solution.py", "")]),
-                    completion=Completion.Plain(""),
+                    edits=Fixture.create(files=[File.create(path="solution.py", contents="")]),
+                    completion=Completion.Plain(text=""),
                 ),
             ),
         ):
@@ -576,7 +589,9 @@ def reference_nonzero_mkdir_is_harness_error() -> None:
             patch("kernel._operations.projection.verifier", return_value=_checks()),
             patch(
                 "kernel._operations.projection.reference",
-                return_value=Reference(edits=fixture_ops.empty, completion=Completion.Plain("")),
+                return_value=Reference(
+                    edits=Fixture.create(files=[]), completion=Completion.Plain(text="")
+                ),
             ),
         ):
             result = await verification.validate_reference(
@@ -704,7 +719,9 @@ def cancelled_allocation_never_cleans_candidate() -> None:
 def unresolved_verifier_resource_is_a_harness_error() -> None:
     agent, grader = _agent_port(), _grader_port()
     ports = _runtime_port(grader)
-    checks = _checks(files=[("grader.py", Content.Resource("unresolved"))])
+    checks = _checks(
+        files=[Artifact.create(path="grader.py", content=Content.Resource(key="unresolved"))]
+    )
     with patch("kernel._operations.projection.verifier", return_value=checks):
         result = asyncio.run(
             verification.verify_case(case_id="clear-task", agent=agent, runtime=ports)
@@ -777,8 +794,8 @@ def reference_pins_named_dataset_before_awaiting_allocation() -> None:
             current = _copy_case(
                 _declaration(code=False),
                 reference=Reference(
-                    edits=fixture_ops.of_files([("main.py", "changed")]),
-                    completion=Completion.Plain("changed"),
+                    edits=Fixture.create(files=[File.create(path="main.py", contents="changed")]),
+                    completion=Completion.Plain(text="changed"),
                 ),
             )
             return agent if allocated == 1 else grader

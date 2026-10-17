@@ -101,10 +101,11 @@ def files(
     instructions: Mapping[str, bytes],
 ) -> dict[str, str]:
     workspace = {}
-    for name, content in case.files:
+    for artifact in case.files:
+        name, content = artifact.path, artifact.content
         if not isinstance(content, Content.Inline):
             raise ValueError(f"Unresolved resource in public case {case.id}: {name}")
-        workspace[f"workspace/{name}"] = inline_file(contents=content[0].encode())
+        workspace[f"workspace/{name}"] = inline_file(contents=content.text.encode())
     return {
         "workspace/.gitkeep": inline_file(contents=b""),
         **workspace,

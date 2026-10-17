@@ -59,3 +59,13 @@
            List.iter (add_type_info ~target_top_module ocaml_env expansions python_module) type_infos;
            List.iter (add_type_manifest ~target_top_module ocaml_env expansions python_module) type_manifests;
        end;
+--- a/ocaml/__init__.py
++++ b/ocaml/__init__.py
+@@ -70,6 +70,7 @@
+                 self._length = length
+             elif nb_params == 0 and self._field_names != None:
+                 self._items = [kw[field] for field in self._field_names]
++                self._length = len(self._items)
+             else:
+                 if length not in (None, nb_params):
+                     raise IndexError(

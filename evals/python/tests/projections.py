@@ -9,11 +9,11 @@ __test__ = False
 
 
 def verifier(case_id: str, *, selection: Selection = "smoke") -> Verifier | None:
-    return projection_ops.verifier(datasets.record(case_id, selection=selection))
+    return projection_ops.verifier(task=datasets.record(case_id, selection=selection))
 
 
 def reference(case_id: str, *, selection: Selection = "smoke") -> Reference:
-    return projection_ops.reference(datasets.record(case_id, selection=selection))
+    return projection_ops.reference(task=datasets.record(case_id, selection=selection))
 
 
 def public_case(case_id: str, *, selection: Selection = "smoke") -> Case:

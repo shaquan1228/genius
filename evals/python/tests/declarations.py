@@ -1,7 +1,5 @@
 """Native declarations retain validation and separate public/private projections."""
 
-# Native boolean variants have a single positional payload.
-# ruff: noqa: FBT003
 import json
 from collections.abc import Callable, Sequence
 
@@ -11,14 +9,17 @@ from evals.python import datasets, grading
 from evals.python.tests.projections import reference as private_reference
 from evals.python.tests.projections import verifier
 from kernel import (
+    Artifact,
     Case,
     Completion,
     Content,
     Criterion,
+    File,
     Fixture,
     Instruction,
     Reference,
     Response,
+    ResponseField,
     ResponseValue,
     Rubric,
     Task,
@@ -60,8 +61,8 @@ def _copy_verifier(  # noqa: PLR0913 - Reconstruct the actual native record fiel
     value: Verifier,
     *,
     inputs: Sequence[str] | None = None,
-    files: Sequence[tuple[str, Content.Value]] | None = None,
-    tools: Sequence[tuple[str, Content.Value]] | None = None,
+    files: Sequence[Artifact] | None = None,
+    tools: Sequence[Artifact] | None = None,
     command: Sequence[str] | None = None,
     stdin: str | None = None,
     timeout_seconds: int | None = None,
@@ -76,11 +77,11 @@ def _copy_verifier(  # noqa: PLR0913 - Reconstruct the actual native record fiel
     )
 
 
-def _files(value: Sequence[tuple[str, Content.Value]]) -> dict[str, str]:
+def _files(value: Sequence[Artifact]) -> dict[str, str]:
     result = {}
-    for name, content in value:
-        assert isinstance(content, Content.Inline)
-        result[name] = content[0]
+    for artifact in value:
+        assert isinstance(artifact.content, Content.Inline)
+        result[artifact.path] = artifact.content.text
     return result
 
 
@@ -88,10 +89,16 @@ def _declaration(*, code: bool = True) -> Task:
     criterion: Criterion.Value
     if code:
         criterion = Criterion.Code(
-            Verifier.create(
+            verifier=Verifier.create(
                 inputs=("main.py",),
-                files=[("verify.py", Content.Inline("private assertions"))],
-                tools=[("check.sh", Content.Inline("visible helper"))],
+                files=[
+                    Artifact.create(
+                        path="verify.py", content=Content.Inline(text="private assertions")
+                    )
+                ],
+                tools=[
+                    Artifact.create(path="check.sh", content=Content.Inline(text="visible helper"))
+                ],
                 command=("python3", "verify.py"),
                 stdin="private stdin",
                 timeout_seconds=30,
@@ -99,27 +106,32 @@ def _declaration(*, code: bool = True) -> Task:
         )
     else:
         criterion = Criterion.Answer(
-            Rubric.create(
-                expected=[
-                    ("choice", ResponseValue.String("B")),
-                    ("safe", ResponseValue.Bool(True)),
-                ],
+            rubric=Rubric.create(
+                expected=Response.create(
+                    fields=[
+                        ResponseField.create(name="choice", value=ResponseValue.String(value="B")),
+                        ResponseField.create(name="safe", value=ResponseValue.Bool(value=True)),
+                    ]
+                ),
                 text_rule=TextRule.create(field="reason", min_words=1, max_words=5),
             )
         )
     return Task.create(
         id="external",
-        fixture=fixture_ops.of_files([("main.py", "broken")]),
+        fixture=Fixture.create(files=[File.create(path="main.py", contents="broken")]),
         instruction=Instruction.create(skill="reasoning", prompt="Fix it: é"),
         criterion=criterion,
         allowed_files=("main.py",),
         reference=Reference(
-            edits=fixture_ops.of_files([("main.py", "fixed")]),
-            completion=Completion.Plain("done")
+            edits=Fixture.create(files=[File.create(path="main.py", contents="fixed")]),
+            completion=Completion.Plain(text="done")
             if code
             else Completion.Structured(
-                Response.create(
-                    [("choice", ResponseValue.String("B")), ("safe", ResponseValue.Bool(True))]
+                response=Response.create(
+                    fields=[
+                        ResponseField.create(name="choice", value=ResponseValue.String(value="B")),
+                        ResponseField.create(name="safe", value=ResponseValue.Bool(value=True)),
+                    ]
                 )
             ),
         ),
@@ -151,9 +163,10 @@ def missing_private_resource_fails_at_resolution() -> None:
     definition = _declaration()
     assert isinstance(definition.criterion, Criterion.Code)
     checks = _copy_verifier(
-        definition.criterion[0], files=[("verify.py", Content.Resource("missing.py"))]
+        definition.criterion.verifier,
+        files=[Artifact.create(path="verify.py", content=Content.Resource(key="missing.py"))],
     )
-    definition = _copy_case(definition, criterion=Criterion.Code(checks))
+    definition = _copy_case(definition, criterion=Criterion.Code(verifier=checks))
     with pytest.raises(DomainValidationError, match=r"missing\.py"):
         datasets.compile_dataset(cases=(definition,))
 
@@ -162,23 +175,28 @@ def missing_private_resource_fails_at_resolution() -> None:
 def declarations_preserve_private_reference_edits(*, code: bool) -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(code=code),))
     reference = private_reference("external", selection=dataset)
-    assert dict(fixture_ops.files(reference.edits)) == {"main.py": "fixed"}
+    assert {file.path: file.contents for file in fixture_ops.files(fixture=reference.edits)} == {
+        "main.py": "fixed"
+    }
 
 
 def code_declarations_preserve_plain_completion() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(),))
     completion = private_reference("external", selection=dataset).completion
     assert isinstance(completion, Completion.Plain)
-    assert completion[0] == "done"
+    assert completion.text == "done"
 
 
 def answer_declarations_preserve_typed_completion_fields() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
     completion = private_reference("external", selection=dataset).completion
     assert isinstance(completion, Completion.Structured)
-    fields = dict(completion[0].fields)
-    assert (isinstance(fields["choice"], ResponseValue.String), fields["choice"][0]) == (True, "B")
-    assert (isinstance(fields["safe"], ResponseValue.Bool), fields["safe"][0]) == (True, True)
+    fields = {field.name: field.value for field in completion.response.fields}
+    assert (isinstance(fields["choice"], ResponseValue.String), fields["choice"].value) == (
+        True,
+        "B",
+    )
+    assert (isinstance(fields["safe"], ResponseValue.Bool), fields["safe"].value) == (True, True)
 
 
 def answer_declarations_do_not_supply_executable_checks() -> None:
@@ -206,15 +224,24 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
     "invalid",
     [
         lambda c: _copy_case(c, allowed_files=()),
-        lambda c: _copy_case(c, fixture=fixture_ops.empty),
+        lambda c: _copy_case(c, fixture=Fixture.create(files=[])),
         lambda c: _copy_case(
-            c, criterion=Criterion.Answer(Rubric.create(expected=[], text_rule=None))
+            c,
+            criterion=Criterion.Answer(
+                rubric=Rubric.create(expected=Response.create(fields=[]), text_rule=None)
+            ),
         ),
         lambda c: _copy_case(
             c,
             criterion=Criterion.Answer(
-                Rubric.create(
-                    expected=[("choice", ResponseValue.String("B"))],
+                rubric=Rubric.create(
+                    expected=Response.create(
+                        fields=[
+                            ResponseField.create(
+                                name="choice", value=ResponseValue.String(value="B")
+                            )
+                        ]
+                    ),
                     text_rule=TextRule.create(field="choice", min_words=0, max_words=2),
                 )
             ),
@@ -222,8 +249,10 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
         lambda c: _copy_case(
             c,
             reference=Reference(
-                edits=fixture_ops.of_files([("outside.py", "unauthorized")]),
-                completion=Completion.Plain(""),
+                edits=Fixture.create(
+                    files=[File.create(path="outside.py", contents="unauthorized")]
+                ),
+                completion=Completion.Plain(text=""),
             ),
         ),
     ],
@@ -242,21 +271,23 @@ def kernel_constructors_validate_raw_declarations(
         ("inputs", ("missing.py",)),
         ("command", ()),
         ("timeout_seconds", 0),
-        ("files", [("main.py", Content.Inline("overlap"))]),
-        ("tools", [("../secret", Content.Inline("bad"))]),
+        (
+            "files",
+            lambda: [Artifact.create(path="main.py", content=Content.Inline(text="overlap"))],
+        ),
+        ("tools", lambda: [Artifact.create(path="../secret", content=Content.Inline(text="bad"))]),
     ],
 )
 def nested_constructor_rules_fail_closed(field: str, *, value: object) -> None:
     definition = _declaration()
     assert isinstance(definition.criterion, Criterion.Code)
-    old = definition.criterion[0]
+    old = definition.criterion.verifier
     fields = {
         name: getattr(old, name)
         for name in ("inputs", "files", "tools", "command", "stdin", "timeout_seconds")
     }
-    fields[field] = value
     with pytest.raises(DomainValidationError):
-        _copy_case(definition, criterion=Criterion.Code(Verifier.create(**fields)))
+        Verifier.create(**{**fields, field: value() if callable(value) else value})
 
 
 @pytest.mark.parametrize(("minimum", "maximum"), [(-1, 2), (3, 2)])
@@ -266,20 +297,24 @@ def answer_constructor_rules_fail_closed(minimum: int, *, maximum: int) -> None:
 
 
 def native_fields_retain_immutable_snapshots() -> None:
-    fields = [("choice", ResponseValue.String("B"))]
-    answer = Rubric.create(expected=fields, text_rule=None)
+    fields = [ResponseField.create(name="choice", value=ResponseValue.String(value="B"))]
+    answer = Rubric.create(expected=Response.create(fields=fields), text_rule=None)
     fields.clear()
     assert len(answer.expected.fields) == 1
     with pytest.raises((AttributeError, TypeError)):
         answer.expected = []  # type: ignore[misc, assignment]
-    initial = [("main.py", "broken")]
-    fixture = fixture_ops.of_files(initial)
-    initial[0] = ("main.py", "changed")
-    assert dict(fixture_ops.files(fixture)) == {"main.py": "broken"}
-    artifacts = [("verify.py", Content.Inline("private assertions"))]
+    initial = [File.create(path="main.py", contents="broken")]
+    fixture = Fixture.create(files=initial)
+    initial[0] = File.create(path="main.py", contents="changed")
+    assert {file.path: file.contents for file in fixture_ops.files(fixture=fixture)} == {
+        "main.py": "broken"
+    }
+    artifacts = [
+        Artifact.create(path="verify.py", content=Content.Inline(text="private assertions"))
+    ]
     definition = _declaration()
     assert isinstance(definition.criterion, Criterion.Code)
-    checks = _copy_verifier(definition.criterion[0], files=artifacts)
+    checks = _copy_verifier(definition.criterion.verifier, files=artifacts)
     artifacts.clear()
     assert _files(checks.files) == {"verify.py": "private assertions"}
 
@@ -288,11 +323,19 @@ def native_fields_retain_immutable_snapshots() -> None:
     "criterion",
     [
         Criterion.Answer(
-            Rubric.create(expected=[("choice", ResponseValue.String("B"))], text_rule=None)
+            rubric=Rubric.create(
+                expected=Response.create(
+                    fields=[
+                        ResponseField.create(name="choice", value=ResponseValue.String(value="B"))
+                    ]
+                ),
+                text_rule=None,
+            )
         ),
         Criterion.Answer(
-            Rubric.create(
-                expected=[], text_rule=TextRule.create(field="reason", min_words=1, max_words=5)
+            rubric=Rubric.create(
+                expected=Response.create(fields=[]),
+                text_rule=TextRule.create(field="reason", min_words=1, max_words=5),
             )
         ),
     ],
@@ -305,15 +348,15 @@ def answer_construction_supports_each_optional_rule_shape(criterion: Criterion.V
 
 
 def _reference_files(value: Reference) -> dict[str, str]:
-    return dict(fixture_ops.files(value.edits))
+    return {file.path: file.contents for file in fixture_ops.files(fixture=value.edits)}
 
 
 def _reference_text(value: Reference) -> str:
     completion = value.completion
     if isinstance(completion, Completion.Plain):
-        return completion[0]
+        return completion.text
     assert isinstance(completion, Completion.Structured)
-    return json.dumps({name: scalar[0] for name, scalar in completion[0].fields})
+    return json.dumps({field.name: field.value.value for field in completion.response.fields})
 
 
 def _public_snapshot(

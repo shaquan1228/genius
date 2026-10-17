@@ -4,10 +4,12 @@ from evals.python.integrations.smoke import checks
 from kernel import (
     Completion,
     Criterion,
+    File,
     Fixture,
     Instruction,
     Reference,
     Response,
+    ResponseField,
     ResponseValue,
     Rubric,
     Task,
@@ -21,14 +23,15 @@ def receipt(*, term: str = "price") -> Task:
     return Task.create(
         id="clear-task",
         fixture=Fixture.create(
-            [
-                (
-                    "receipt.py",
-                    f"def total(items):\n    return sum({term} for price, quantity in items)\n",
+            files=[
+                File.create(
+                    path="receipt.py",
+                    contents="def total(items):\n"
+                    f"    return sum({term} for price, quantity in items)\n",
                 ),
-                (
-                    "test_receipt.py",
-                    """import runpy
+                File.create(
+                    path="test_receipt.py",
+                    contents="""import runpy
 
 total = runpy.run_path("receipt.py")["total"]
 assert total([]) == 0
@@ -60,15 +63,15 @@ assert total([(1.5, 2)]) == 3.0
         allowed_files=("receipt.py",),
         reference=Reference(
             edits=Fixture.create(
-                [
-                    (
-                        "receipt.py",
-                        "def total(items):\n"
+                files=[
+                    File.create(
+                        path="receipt.py",
+                        contents="def total(items):\n"
                         "    return sum(price * quantity for price, quantity in items)\n",
                     )
                 ]
             ),
-            completion=Completion.Plain("Each quantity now contributes to the total."),
+            completion=Completion.Plain(text="Each quantity now contributes to the total."),
         ),
     )
 
@@ -92,12 +95,12 @@ def timeout(*, initial: int = 15, requested: int = 30) -> Task:
     return Task.create(
         id="known-preflight",
         fixture=Fixture.create(
-            [
-                ("config.py", f"timeout_seconds = {initial}\n"),
-                ("client.py", client(initial)),
-                (
-                    "test_client.py",
-                    """import runpy
+            files=[
+                File.create(path="config.py", contents=f"timeout_seconds = {initial}\n"),
+                File.create(path="client.py", contents=client(initial)),
+                File.create(
+                    path="test_client.py",
+                    contents="""import runpy
 
 config = runpy.run_path("config.py")
 client = runpy.run_path("client.py")
@@ -145,12 +148,12 @@ for value in (0, -1):
         allowed_files=("config.py", "client.py"),
         reference=Reference(
             edits=Fixture.create(
-                [
-                    ("config.py", f"timeout_seconds = {requested}\n"),
-                    ("client.py", client(requested)),
+                files=[
+                    File.create(path="config.py", contents=f"timeout_seconds = {requested}\n"),
+                    File.create(path="client.py", contents=client(requested)),
                 ]
             ),
-            completion=Completion.Plain("Updated both defaults and preserved overrides."),
+            completion=Completion.Plain(text="Updated both defaults and preserved overrides."),
         ),
     )
 
@@ -161,7 +164,7 @@ def cases() -> tuple[Task, ...]:
         timeout(),
         Task.create(
             id="small-decision",
-            fixture=Fixture.create([]),
+            fixture=Fixture.create(files=[]),
             instruction=Instruction.create(
                 skill="bayesian",
                 prompt=(
@@ -172,8 +175,14 @@ def cases() -> tuple[Task, ...]:
                 ),
             ),
             criterion=Criterion.Answer(
-                Rubric.create(
-                    expected=[("choice", ResponseValue.String("B"))],
+                rubric=Rubric.create(
+                    expected=Response.create(
+                        fields=[
+                            ResponseField.create(
+                                name="choice", value=ResponseValue.String(value="B")
+                            )
+                        ]
+                    ),
                     text_rule=TextRule.create(
                         field="reason",
                         min_words=1,
@@ -183,12 +192,19 @@ def cases() -> tuple[Task, ...]:
             ),
             allowed_files=(),
             reference=Reference(
-                edits=Fixture.create([]),
+                edits=Fixture.create(files=[]),
                 completion=Completion.Structured(
-                    Response.create(
-                        [
-                            ("choice", ResponseValue.String("B")),
-                            ("reason", ResponseValue.String("B costs less for identical service.")),
+                    response=Response.create(
+                        fields=[
+                            ResponseField.create(
+                                name="choice", value=ResponseValue.String(value="B")
+                            ),
+                            ResponseField.create(
+                                name="reason",
+                                value=ResponseValue.String(
+                                    value="B costs less for identical service."
+                                ),
+                            ),
                         ]
                     )
                 ),
@@ -196,7 +212,7 @@ def cases() -> tuple[Task, ...]:
         ),
         Task.create(
             id="decision-review",
-            fixture=Fixture.create([]),
+            fixture=Fixture.create(files=[]),
             instruction=Instruction.create(
                 skill="bayesian",
                 prompt=(
@@ -209,25 +225,37 @@ def cases() -> tuple[Task, ...]:
                 ),
             ),
             criterion=Criterion.Answer(
-                Rubric.create(
-                    expected=[
-                        ("decision_was_supported", ResponseValue.Bool(True)),  # noqa: FBT003
-                        ("change_rule", ResponseValue.Bool(False)),  # noqa: FBT003
-                    ],
+                rubric=Rubric.create(
+                    expected=Response.create(
+                        fields=[
+                            ResponseField.create(
+                                name="decision_was_supported", value=ResponseValue.Bool(value=True)
+                            ),
+                            ResponseField.create(
+                                name="change_rule", value=ResponseValue.Bool(value=False)
+                            ),
+                        ]
+                    ),
                     text_rule=TextRule.create(field="reason", min_words=1, max_words=40),
                 )
             ),
             allowed_files=(),
             reference=Reference(
-                edits=Fixture.create([]),
+                edits=Fixture.create(files=[]),
                 completion=Completion.Structured(
-                    Response.create(
-                        [
-                            ("decision_was_supported", ResponseValue.Bool(True)),  # noqa: FBT003
-                            ("change_rule", ResponseValue.Bool(False)),  # noqa: FBT003
-                            (
-                                "reason",
-                                ResponseValue.String("One loss did not change the known odds."),
+                    response=Response.create(
+                        fields=[
+                            ResponseField.create(
+                                name="decision_was_supported", value=ResponseValue.Bool(value=True)
+                            ),
+                            ResponseField.create(
+                                name="change_rule", value=ResponseValue.Bool(value=False)
+                            ),
+                            ResponseField.create(
+                                name="reason",
+                                value=ResponseValue.String(
+                                    value="One loss did not change the known odds."
+                                ),
                             ),
                         ]
                     )

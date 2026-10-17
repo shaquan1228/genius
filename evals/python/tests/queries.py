@@ -100,7 +100,7 @@ def malformed_candidates_receive_incorrect_scores(response: str) -> None:
 
 def reference_query_returns_canonical_reference() -> None:
     dataset = datasets.load_dataset()
-    expected = projection_ops.reference(dataset.records["small-decision"])
+    expected = projection_ops.reference(task=dataset.records["small-decision"])
     with patch("kernel._operations.projection.reference", return_value=expected) as project:
         actual = datasets.get_reference(case_id="small-decision", selection=dataset)
     assert actual is expected

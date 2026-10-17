@@ -65,7 +65,7 @@ def imported_case_keeps_grader_private() -> None:
     assert _files(case.files) == {"solution.py": json.loads(_record())["prompt"]}
     assert (
         "canonical_solution" in case.prompt,
-        "verifier.py" in dict(case.files),
+        "verifier.py" in {artifact.path: artifact.content for artifact in case.files},
     ) == (False, False)
 
 
@@ -150,7 +150,10 @@ def synthetic_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
 def dataset_index_keeps_all_cases(synthetic_dataset: None) -> None:
     cases = datasets.list_cases(selection="humanevalplus")
     assert (len(cases), len({case.id for case in cases})) == (164, 164)
-    assert all(tuple(dict(case.files)) == ("solution.py",) for case in cases)
+    assert all(
+        tuple({artifact.path: artifact.content for artifact in case.files}) == ("solution.py",)
+        for case in cases
+    )
 
 
 def import_cache_tracks_verifier_source(

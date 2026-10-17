@@ -4,19 +4,23 @@
 (* Fixture: immutable initial files. The map implementation belongs to Fixture.
    https://inspect.aisi.org.uk/datasets.html#sample-files
    https://docs.harborframework.com/tasks/environment *)
+type file = { path : string; contents : string }
 type fixture = Fixture_store.t
 
 (* Response: named scalar values shared by expectations and reference replies.
    https://huggingface.co/docs/lighteval/main/en/package_reference/models_outputs
    https://developers.openai.com/api/docs/guides/evals *)
-type response_value = String of string | Bool of bool
-type response = { fields : (string * response_value) list }
-type content = Inline of string | Resource of string
+type response_value = String of { value : string } | Bool of { value : bool }
+type response_field = { name : string; value : response_value }
+type response = { fields : response_field list }
+type content = Inline of { text : string } | Resource of { key : string }
+type artifact = { path : string; content : content }
+type resource_binding = { key : string; contents : string }
 
 type verifier = {
   inputs : string list;
-  files : (string * content) list;
-  tools : (string * content) list;
+  files : artifact list;
+  tools : artifact list;
   command : string list;
   stdin : string;
   timeout_seconds : int;
@@ -44,13 +48,13 @@ type rubric = { expected : response; text_rule : text_rule option }
    the candidate. The code/structured-response distinction is this repository's design.
    https://developers.openai.com/api/docs/guides/evals
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
-type criterion = Code of verifier | Answer of rubric
+type criterion = Code of { verifier : verifier } | Answer of { rubric : rubric }
 
 (* Reference: reference output used for offline validation, distinct from a
    criterion's expected fields. Combining file edits and a completion is our mapping.
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
    https://evalscope.readthedocs.io/en/latest/advanced_guides/custom_dataset/llm.html *)
-type completion = Plain of string | Structured of response
+type completion = Plain of { text : string } | Structured of { response : response }
 type reference = { edits : fixture; completion : completion }
 
 (* Task: one test specification combining instruction, initial state, criteria, and reference.
@@ -77,7 +81,7 @@ type verification =
   | Failed
   | Invalid_submission
   | Timed_out
-  | Harness_error of string
+  | Harness_error of { detail : string }
 
 type outcome = { changed_files : string list; verification : verification }
 
@@ -88,7 +92,7 @@ type outcome = { changed_files : string list; verification : verification }
 type score = (string * bool) list
 
 (* Public case inputs exclude private verifier and reference material. *)
-type case = { id : string; skill : string; prompt : string; files : (string * content) list }
+type case = { id : string; skill : string; prompt : string; files : artifact list }
 type profile = { name : string; preamble : string; instructions : string list }
 
 type experiment = {
@@ -126,7 +130,7 @@ type validation_issue = {
 }
 
 type validation_failure = { case_id : string option; issues : validation_issue list }
-type grading_failure = Verification_harness_error of string
+type grading_failure = Verification_harness_error of { detail : string }
 
 let ( let* ) = Result.bind
 let issue code field message values = { code; field; message; values }
@@ -155,41 +159,51 @@ let path_issues field paths =
       else Some (issue Invalid_path field ("Invalid path: " ^ path) [ path ]))
     paths
 
+let make_file ~path ~contents = checked (path_issues "file.path" [ path ]) { path; contents }
+let make_artifact ~path ~content = checked (path_issues "artifact.path" [ path ]) { path; content }
+let make_resource_binding ~key ~contents = { key; contents }
 let empty_fixture = Fixture_store.empty
-let fixture_files = Fixture_store.files
 
-let add_fixture ~path ~contents fixture =
-  let problems =
-    path_issues "fixture" [ path ]
-    @ when_invalid
-        (not (Fixture_store.mem path fixture))
-        (issue Duplicate_path "fixture" ("Duplicate fixture path: " ^ path) [ path ])
-  in
-  checked problems (Fixture_store.add path contents fixture)
+let fixture_files ~fixture : file list =
+  List.map (fun (path, contents) -> { path; contents }) (Fixture_store.files fixture)
 
-let make_fixture files =
+let add_fixture ~fixture ~(file : file) =
+  checked
+    (when_invalid
+       (not (Fixture_store.mem file.path fixture))
+       (issue Duplicate_path "fixture" ("Duplicate fixture path: " ^ file.path) [ file.path ]))
+    (Fixture_store.add file.path file.contents fixture)
+
+let make_fixture ~files =
   List.fold_left
-    (fun result (path, contents) ->
+    (fun result file ->
       let* fixture = result in
-      add_fixture ~path ~contents fixture)
+      add_fixture ~fixture ~file)
     (Ok empty_fixture)
     files
 
-let overlay_fixture = Fixture_store.overlay
+let overlay_fixture ~base ~overrides = Fixture_store.overlay base overrides
 let empty_response = { fields = [] }
 
-let make_response fields =
+let make_response_field ~name ~value =
+  checked
+    (when_invalid
+       (name <> "")
+       (issue Invalid_response_field "response.name" "Response fields need nonempty names" [ name ]))
+    { name; value }
+
+let make_response ~(fields : response_field list) =
   let rec collect seen = function
     | [] -> []
-    | (name, _) :: rest ->
+    | (field : response_field) :: rest ->
         when_invalid
-          (name <> "" && not (List.mem name seen))
+          (not (List.mem field.name seen))
           (issue
              Invalid_response_field
-             "response"
-             "Response fields need unique nonempty names"
-             [ name ])
-        @ collect (name :: seen) rest
+             "response.fields"
+             "Response fields need unique names"
+             [ field.name ])
+        @ collect (field.name :: seen) rest
   in
   checked (collect [] fields) { fields }
 
@@ -217,7 +231,8 @@ let make_rubric ~(expected : response) ~(text_rule : text_rule option) =
     | None -> []
     | Some rule ->
         when_invalid
-          (not (List.mem_assoc rule.field expected.fields))
+          (not
+             (List.exists (fun (field : response_field) -> field.name = rule.field) expected.fields))
           (issue
              Overlapping_text_field
              "text_rule.field"
@@ -226,10 +241,11 @@ let make_rubric ~(expected : response) ~(text_rule : text_rule option) =
   in
   checked problems { expected; text_rule }
 
-let make_verifier ~inputs ~files ~tools ~command ~stdin ~timeout_seconds =
-  let names = inputs @ List.map fst files @ List.map fst tools in
+let make_verifier ~inputs ~(files : artifact list) ~(tools : artifact list) ~command ~stdin
+    ~timeout_seconds =
+  let names = inputs @ List.map (fun (artifact : artifact) -> artifact.path) (files @ tools) in
   let problems =
-    path_issues "verifier" names
+    path_issues "verifier.inputs" inputs
     @ when_invalid
         (inputs <> [])
         (issue Empty_inputs "verifier.inputs" "Verifier inputs cannot be empty" [])
@@ -251,7 +267,7 @@ let make_verifier ~inputs ~files ~tools ~command ~stdin ~timeout_seconds =
 
 let make_task ~id ~fixture ~(instruction : instruction) ~criterion ~allowed_files
     ~(reference : reference) =
-  let paths fixture = List.map fst (fixture_files fixture) in
+  let paths fixture = List.map (fun (file : file) -> file.path) (fixture_files ~fixture) in
   let require code field problem ~within names =
     let missing = List.filter (fun name -> not (List.mem name within)) names in
     when_invalid
@@ -274,7 +290,7 @@ let make_task ~id ~fixture ~(instruction : instruction) ~criterion ~allowed_file
     @
     match criterion with
     | Answer _ -> []
-    | Code verifier ->
+    | Code { verifier } ->
         require
           Missing_fixture_inputs
           "verifier.inputs"
@@ -284,7 +300,7 @@ let make_task ~id ~fixture ~(instruction : instruction) ~criterion ~allowed_file
         @ when_invalid
             (not
                (List.exists
-                  (fun (name, _) -> List.mem name (paths fixture))
+                  (fun (artifact : artifact) -> List.mem artifact.path (paths fixture))
                   (verifier.files @ verifier.tools)))
             (issue
                Artifact_overlap
@@ -335,33 +351,44 @@ let make_experiment ?(profiles = default_experiment.profiles) ?(epochs = default
   in
   checked problems { profiles; epochs; message_limit; cost_limit; time_limit; cache }
 
-let resolve_resources (task : task) ~resources =
-  let resolve (path, content) =
-    match content with
-    | Inline _ -> Ok (path, content)
-    | Resource key -> (
-        match List.assoc_opt key resources with
-        | Some contents -> Ok (path, Inline contents)
+let project_case ~(task : task) : case =
+  let tools = match task.criterion with Code { verifier } -> verifier.tools | Answer _ -> [] in
+  {
+    id = task.id;
+    skill = task.instruction.skill;
+    prompt = task.instruction.prompt;
+    files =
+      List.map
+        (fun (file : file) -> { path = file.path; content = Inline { text = file.contents } })
+        (fixture_files ~fixture:task.fixture)
+      @ tools;
+  }
+
+let resolve_resources ~(task : task) ~(resources : resource_binding list) =
+  let resolve (artifact : artifact) =
+    match artifact.content with
+    | Inline _ -> Ok artifact
+    | Resource { key } -> (
+        match List.find_opt (fun (binding : resource_binding) -> binding.key = key) resources with
+        | Some binding -> Ok { artifact with content = Inline { text = binding.contents } }
         | None ->
             Error
               {
                 case_id = Some task.id;
-                issues = [ issue Missing_resource path ("Missing resource: " ^ key) [ key ] ];
+                issues =
+                  [ issue Missing_resource artifact.path ("Missing resource: " ^ key) [ key ] ];
               })
   in
-  let resolve_all values =
-    let rec loop = function
-      | [] -> Ok []
-      | value :: rest ->
-          let* value = resolve value in
-          let* rest = loop rest in
-          Ok (value :: rest)
-    in
-    loop values
+  let rec resolve_all = function
+    | [] -> Ok []
+    | value :: rest ->
+        let* value = resolve value in
+        let* rest = resolve_all rest in
+        Ok (value :: rest)
   in
   match task.criterion with
   | Answer _ -> Ok task
-  | Code verifier ->
+  | Code { verifier } ->
       let* files = resolve_all verifier.files in
       let* tools = resolve_all verifier.tools in
-      Ok { task with criterion = Code { verifier with files; tools } }
+      Ok { task with criterion = Code { verifier = { verifier with files; tools } } }

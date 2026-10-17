@@ -10,9 +10,8 @@ from pydantic import validate_call
 from evals.python import datasets
 from evals.python.datasets import Selection
 from evals.python.schema import FROZEN
-from kernel import Outcome, Response, ResponseValue, Task, Verification
+from kernel import Outcome, Response, ResponseField, ResponseValue, Task, Verification
 from kernel._operations import grader as grader_ops
-from kernel._operations import response as response_ops
 
 __all__ = ["Scores", "score_case"]
 
@@ -22,20 +21,24 @@ UNCHECKED = Verification.Unchecked()
 
 def _scalar(value: object) -> ResponseValue.Value:
     if isinstance(value, bool):
-        return ResponseValue.Bool(value)
+        return ResponseValue.Bool(value=value)
     if isinstance(value, str):
-        return ResponseValue.String(value)
+        return ResponseValue.String(value=value)
     raise ValueError("Response fields must be strings or booleans")
 
 
 def _response(fields: object) -> Response:
     if not isinstance(fields, dict):
         raise ValueError("Expected response object")
-    return response_ops.of_fields([(name, _scalar(value)) for name, value in fields.items()])
+    return Response.create(
+        fields=[
+            ResponseField.create(name=name, value=_scalar(value)) for name, value in fields.items()
+        ]
+    )
 
 
 def _candidate(text: str) -> Response | None:
-    text = grader_ops.trim(text)
+    text = grader_ops.trim(text=text)
     if text.startswith("```json\n") and text.endswith("\n```"):
         text = text[8:-4]
     try:
@@ -48,7 +51,7 @@ def score(
     case: Task, *, response: str, changed_files: tuple[str, ...], verification: Verification.Value
 ) -> Scores:
     pairs = grader_ops.grade(
-        case,
+        task=case,
         response=_candidate(response),
         outcome=Outcome(changed_files=changed_files, verification=verification),
     )

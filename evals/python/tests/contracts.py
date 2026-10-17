@@ -19,7 +19,7 @@ from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.declarations import _reference_text
 from evals.python.tests.projections import reference, verifier
 from evals.python.tests.support import choice_case as _choice_case
-from kernel import Case, Experiment, Verification
+from kernel import Case, Experiment, File, Verification
 from kernel import ValidationError as DomainValidationError
 from kernel._operations import fixture as fixture_ops
 from kernel._operations import grader as grader_ops
@@ -90,14 +90,14 @@ def public_projection_contains_no_private_material() -> None:
     for case in datasets.list_cases():
         assert isinstance(case, Case)
         assert (hasattr(case, "reference"), hasattr(case, "criterion")) == (False, False)
-        assert "verifier.py" not in dict(case.files)
+        assert "verifier.py" not in {artifact.path: artifact.content for artifact in case.files}
 
 
 def public_projection_includes_visible_tools() -> None:
     case = datasets.list_cases()[0]
-    assert "test_receipt.py" in dict(
-        case.files
-    )  # The visible helper remains available to the agent.
+    assert "test_receipt.py" in {
+        artifact.path: artifact.content for artifact in case.files
+    }  # The visible helper remains available to the agent.
 
 
 def all_contract_collections_are_immutable() -> None:
@@ -108,7 +108,7 @@ def all_contract_collections_are_immutable() -> None:
     with pytest.raises(TypeError):
         info.attributes["new"] = "value"  # type: ignore[index]
     with pytest.raises(TypeError):
-        fixture_ops.files(expected.edits)[0] = ("new", "value")  # type: ignore[index]
+        fixture_ops.files(fixture=expected.edits)[0] = File.create(path="new", contents="value")  # type: ignore[index]
     spec = evaluation.resolve_settings()
     with pytest.raises((AttributeError, TypeError)):
         spec.profiles[0].preamble = "changed"  # type: ignore[misc]

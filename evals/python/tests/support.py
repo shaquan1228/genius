@@ -20,16 +20,17 @@ from kernel import (
     Case,
     Completion,
     Criterion,
+    Fixture,
     Instruction,
     Reference,
     Response,
+    ResponseField,
     ResponseValue,
     Rubric,
     Task,
     TextRule,
     Verifier,
 )
-from kernel._operations import fixture as fixture_ops
 
 __test__ = False
 
@@ -89,22 +90,32 @@ def choice_case(*, case_id: str, a: int, b: int) -> Task:
     choice = "A" if a < b else "B"
     return Task.create(
         id=case_id,
-        fixture=fixture_ops.empty,
+        fixture=Fixture.create(files=[]),
         instruction=Instruction.create(skill="reasoning", prompt="Choose A or B with a reason"),
         criterion=Criterion.Answer(
-            Rubric.create(
-                expected=[("choice", ResponseValue.String(choice))],
+            rubric=Rubric.create(
+                expected=Response.create(
+                    fields=[
+                        ResponseField.create(
+                            name="choice", value=ResponseValue.String(value=choice)
+                        )
+                    ]
+                ),
                 text_rule=TextRule.create(field="reason", min_words=1, max_words=40),
             )
         ),
         allowed_files=(),
         reference=Reference(
-            edits=fixture_ops.empty,
+            edits=Fixture.create(files=[]),
             completion=Completion.Structured(
-                Response.create(
-                    [
-                        ("choice", ResponseValue.String(choice)),
-                        ("reason", ResponseValue.String("The cost is lower.")),
+                response=Response.create(
+                    fields=[
+                        ResponseField.create(
+                            name="choice", value=ResponseValue.String(value=choice)
+                        ),
+                        ResponseField.create(
+                            name="reason", value=ResponseValue.String(value="The cost is lower.")
+                        ),
                     ]
                 )
             ),

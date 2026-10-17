@@ -30,11 +30,14 @@ from evals.python.tests.support import (
     timeout_case as _timeout_case,
 )
 from kernel import (
+    Artifact,
     Case,
     Completion,
     Content,
     Criterion,
     Experiment,
+    File,
+    Fixture,
     Instruction,
     Profile,
     Reference,
@@ -64,7 +67,9 @@ def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
 def generated_paths_are_validated(path: str) -> None:
     declaration = _choice_case(case_id="paths", a=1, b=2)
     with pytest.raises(DomainValidationError):
-        _copy_case(declaration, fixture=fixture_ops.of_files([(path, "bad")]))
+        _copy_case(
+            declaration, fixture=Fixture.create(files=[File.create(path=path, contents="bad")])
+        )
 
 
 def _grade(case_id: str, *, text: str) -> bool:
@@ -208,9 +213,11 @@ def cases_are_immutable() -> None:
     with pytest.raises((AttributeError, TypeError)):
         case.id = "changed"  # type: ignore[misc]
     with pytest.raises(TypeError):
-        case.files[0] = ("receipt.py", Content.Inline("changed"))  # type: ignore[index]
+        case.files[0] = Artifact.create(path="receipt.py", content=Content.Inline(text="changed"))  # type: ignore[index]
     with pytest.raises(TypeError):
-        fixture_ops.files(reference(case.id).edits)[0] = ("receipt.py", "changed")  # type: ignore[index]
+        fixture_ops.files(fixture=reference(case.id).edits)[0] = File.create(  # type: ignore[index]
+            path="receipt.py", contents="changed"
+        )
     checks = verifier(case.id)
     assert checks is not None
     with pytest.raises((AttributeError, TypeError)):
@@ -236,12 +243,12 @@ def compilation_cache_invalidates_when_declarations_change() -> None:
 def generic_python_case_exports_without_language_restriction() -> None:
     definition = Task.create(
         id="python-case",
-        fixture=fixture_ops.of_files([("solution.py", "print(42)")]),
+        fixture=Fixture.create(files=[File.create(path="solution.py", contents="print(42)")]),
         instruction=Instruction.create(skill="reasoning", prompt="Return 42"),
         criterion=Criterion.Code(
-            Verifier.create(
+            verifier=Verifier.create(
                 inputs=("solution.py",),
-                files=[("grader.py", Content.Inline("trusted"))],
+                files=[Artifact.create(path="grader.py", content=Content.Inline(text="trusted"))],
                 tools=[],
                 command=("python3", "grader.py"),
                 stdin="private",
@@ -249,7 +256,9 @@ def generic_python_case_exports_without_language_restriction() -> None:
             )
         ),
         allowed_files=("solution.py",),
-        reference=Reference(edits=fixture_ops.empty, completion=Completion.Plain("done")),
+        reference=Reference(
+            edits=Fixture.create(files=[]), completion=Completion.Plain(text="done")
+        ),
     )
     dataset = datasets.compile_dataset(cases=(definition,))
     case = datasets.list_cases(selection=dataset)[0]
@@ -301,7 +310,7 @@ def experiment_configuration_reaches_tasks_and_profiles() -> None:
 def record_updates_cannot_bypass_kernel_validation() -> None:
     definition = _timeout_case(case_id="updated", initial=15, requested=30)
     with pytest.raises(DomainValidationError, match="criteria read files missing from the fixture"):
-        _copy_case(definition, fixture=fixture_ops.empty)
+        _copy_case(definition, fixture=Fixture.create(files=[]))
 
 
 @pytest.mark.parametrize("delivery", ["manifest", "inline"])
