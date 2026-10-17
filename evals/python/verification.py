@@ -98,7 +98,6 @@ def completion(result: Completion, *, marker: str) -> VerificationResult:
             else _STATUSES[evidence.status]()
         ),
         detail=evidence.detail,
-        # The constructor normalizes validated wire JSON into immutable diagnostics.
         metadata=cast(Mapping[str, Diagnostic], evidence.metadata or {}),
     )
 

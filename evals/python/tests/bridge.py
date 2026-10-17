@@ -148,10 +148,15 @@ def additional_named_scores_cross_bridge_without_decoder_changes() -> None:
     assert dict(scores) == {"correctness": True, "scope": False, "new_metric": True}
 
 
-def reference_channels_export_independently_and_escape() -> None:
-    state = 'quote" \\ \n é'
-    fields: dict[str, str | bool] = {"state": state, "safe": True}
-    safe = True
+@pytest.mark.parametrize("state", ['quote" \\ \n é', ""])
+@pytest.mark.parametrize(
+    ("safe", "candidate", "correct"),
+    [(True, True, True), (False, False, True), (True, 1, False), (False, 0, False)],
+)
+def reference_channels_export_independently_and_escape(
+    state: str, *, safe: bool, candidate: bool | int, correct: bool
+) -> None:
+    fields: dict[str, str | bool] = {"state": state, "safe": safe}
     expected_fields = Response.create(
         fields=[
             ResponseField.create(name="state", value=ResponseValue.create(string=state)),
@@ -180,13 +185,16 @@ def reference_channels_export_independently_and_escape() -> None:
     assert verifier(case.id, selection=dataset) is None
     assert dict(_reference_files(expected)) == {"result.txt": "result"}
     assert json.loads(_reference_text(expected)) == fields
-    assert score_case(
-        case_id="reference",
-        response=_reference_text(expected),
-        changed_files=(),
-        verification=Verification.Unchecked(),
-        selection=dataset,
-    )["correctness"]
+    assert (
+        score_case(
+            case_id="reference",
+            response=json.dumps({**fields, "safe": candidate}),
+            changed_files=(),
+            verification=Verification.Unchecked(),
+            selection=dataset,
+        )["correctness"]
+        is correct
+    )
 
 
 @pytest.mark.parametrize(

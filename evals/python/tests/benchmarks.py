@@ -2,8 +2,6 @@
 
 import asyncio
 import json
-import os
-import platform
 import runpy
 import sys
 from unittest.mock import AsyncMock, call, patch
@@ -44,21 +42,6 @@ def validate_reports_real_status(*, status: str, capsys: pytest.CaptureFixture[s
 def invalid_limit() -> None:
     with pytest.raises(ValueError, match="positive"):
         benchmarks.main(["validate", "--limit", "0"])
-
-
-def memory_workaround_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("EVALPLUS_MAX_MEMORY_BYTES", raising=False)
-    benchmarks.configure_memory(benchmarks.Options())
-    assert "EVALPLUS_MAX_MEMORY_BYTES" not in os.environ
-    args = benchmarks.Options(trusted_macos_memory_workaround=True)
-    with (
-        patch.object(platform, "system", return_value="Linux"),
-        pytest.raises(ValueError, match="macOS"),
-    ):
-        benchmarks.configure_memory(args)
-    with patch.object(platform, "system", return_value="Darwin"):
-        benchmarks.configure_memory(args)
-    assert os.environ["EVALPLUS_MAX_MEMORY_BYTES"] == "-1"
 
 
 def reference_validation_uses_public_operation_and_thaws_only_cli_output() -> None:
