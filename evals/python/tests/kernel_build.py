@@ -17,6 +17,13 @@ EVALS = Path(__file__).resolve().parents[2]
 READER = EVALS / "_build/default/tools/bindings.exe"
 
 
+def _schema(paths: tuple[Path, ...]) -> list[generate.Node]:
+    result = subprocess.run(
+        [str(READER), *(str(path) for path in paths)], check=True, capture_output=True, text=True
+    )
+    return json.loads(result.stdout)  # type: ignore[no-any-return]
+
+
 def _compile(path: Path, *, text: str, extension: str = ".mli") -> Path:
     source = path.with_suffix(extension)
     source.write_text(text)
@@ -35,7 +42,7 @@ def compiled_includes_and_inference_drive_bindings(tmp_path: Path) -> None:
         """,
     )
     (tmp_path / "sample.mli").unlink()
-    items = generate.schema((path,), reader=READER)[0]["items"]
+    items = _schema((path,))[0]["items"]
     stub = generate.ast_bindings(items[:-1])
     assert (
         "class A(_types.Token):" in stub,
@@ -55,9 +62,7 @@ def compiled_includes_and_inference_drive_bindings(tmp_path: Path) -> None:
 
 def inferred_compiled_values_drive_bindings(tmp_path: Path) -> None:
     inferred = _compile(tmp_path / "inferred", text="let value = true", extension=".ml")
-    assert generate.operation(generate.schema((inferred,), reader=READER)[0]["items"][0]) == (
-        "value: bool\n"
-    )
+    assert generate.operation(_schema((inferred,))[0]["items"][0]) == ("value: bool\n")
 
 
 @pytest.mark.parametrize(
@@ -73,33 +78,75 @@ def inferred_compiled_values_drive_bindings(tmp_path: Path) -> None:
 def unsupported_compiled_interfaces_fail_loudly(tmp_path: Path, *, text: str) -> None:
     path = _compile(tmp_path / "unsupported", text=text)
     with pytest.raises(subprocess.CalledProcessError) as error:
-        generate.schema((path,), reader=READER)
+        _schema((path,))
     assert "Unsupported OCaml interface" in error.value.stderr
 
 
-def generated_stubs_detect_stale_compiled_signatures(tmp_path: Path) -> None:
-    path = _compile(tmp_path / "sample", text="type state = { value : int }")
-    original = generate.schema((path,), reader=READER)[0]["items"]
-    outputs = {"__init__.pyi": generate.ast_bindings(original)}
-    destination = tmp_path / "stubs"
-    destination.mkdir()
-    generate.write(outputs, destination=destination, check=False)
-    before = (destination / "__init__.pyi").read_bytes()
-    generate.write(outputs, destination=destination, check=True)
-    assert (destination / "__init__.pyi").read_bytes() == before
-    # Editing source cannot change a compiler-derived interface until it is compiled.
-    path.with_suffix(".mli").write_text("type state = { value : string }")
-    assert generate.schema((path,), reader=READER)[0]["items"] == original
-    _compile(tmp_path / "sample", text="type state = { value : string }")
-    updated = generate.schema((path,), reader=READER)[0]["items"]
-    with pytest.raises(SystemExit, match="Kernel types changed"):
-        generate.write(
-            {"__init__.pyi": generate.ast_bindings(updated)}, destination=destination, check=True
-        )
-    generate.write(
-        {"__init__.pyi": generate.ast_bindings(updated)}, destination=destination, check=False
+def _build_bindings(workspace: Path, *, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["dune", "build", "--root", str(workspace), "@python-bindings"],
+        check=check,
+        capture_output=True,
+        text=True,
     )
-    assert "value: str" in (destination / "__init__.pyi").read_text()
+
+
+def _add_probe(workspace: Path) -> subprocess.CompletedProcess[str]:
+    source = workspace / "ocaml/ast.ml"
+    source.write_text(source.read_text() + "\ntype dune_probe = { payload : int }\n")
+    return _build_bindings(workspace, check=False)
+
+
+def _promote_bindings(workspace: Path) -> None:
+    subprocess.run(["dune", "promote"], cwd=workspace, check=True, capture_output=True)
+    _build_bindings(workspace)
+
+
+@pytest.fixture
+def binding_workspace(tmp_path: Path) -> Path:
+    for name in ("ocaml", "tools", "kernel"):
+        shutil.copytree(
+            EVALS / name,
+            tmp_path / name,
+            ignore=shutil.ignore_patterns("tests", "__pycache__", "*.pyi"),
+        )
+    for name in ("dune-project", "pyproject.toml"):
+        shutil.copyfile(EVALS / name, tmp_path / name)
+    _build_bindings(tmp_path)
+    return tmp_path
+
+
+def dune_binding_builds_are_incremental(binding_workspace: Path) -> None:
+    generated = binding_workspace / "_build/default/kernel/generated/__init__.pyi"
+    before = generated.stat().st_mtime_ns
+    _build_bindings(binding_workspace)
+    assert generated.stat().st_mtime_ns == before
+
+
+def dune_requires_promotion_for_changed_runtime_exports(binding_workspace: Path) -> None:
+    stale = _add_probe(binding_workspace)
+    assert stale.returncode != 0
+    assert "DuneProbe" in stale.stdout + stale.stderr
+    _promote_bindings(binding_workspace)
+    assert "def payload(self) -> int:" in (binding_workspace / "kernel/__init__.pyi").read_text()
+    assert (
+        "DuneProbe = _native.dune_probe" in (binding_workspace / "kernel/__init__.py").read_text()
+    )
+
+
+def dune_rebuilds_stubs_after_compiled_types_change(binding_workspace: Path) -> None:
+    _add_probe(binding_workspace)
+    _promote_bindings(binding_workspace)
+    source = binding_workspace / "ocaml/ast.ml"
+    source.write_text(source.read_text().replace("payload : int", "payload : string"))
+    _build_bindings(binding_workspace)
+    assert "def payload(self) -> str:" in (binding_workspace / "kernel/__init__.pyi").read_text()
+
+
+def dune_clean_removes_stubs_and_preserves_runtime_sources(binding_workspace: Path) -> None:
+    subprocess.run(["dune", "clean"], cwd=binding_workspace, check=True, capture_output=True)
+    assert not (binding_workspace / "kernel/__init__.pyi").exists()
+    assert (binding_workspace / "kernel/__init__.py").exists()
 
 
 def installed_kernel_keeps_policy_and_provenance_together(tmp_path: Path) -> None:
@@ -152,7 +199,7 @@ def missing_installed_package_reports_setup_command() -> None:
 def incompatible_python_identifiers_fail_loudly(tmp_path: Path) -> None:
     path = _compile(tmp_path / "keywords", text="type state = None | Value")
     with pytest.raises(ValueError, match="Unsupported Python identifier: None"):
-        generate.ast_bindings(generate.schema((path,), reader=READER)[0]["items"])
+        generate.ast_bindings(_schema((path,))[0]["items"])
 
 
 @pytest.mark.parametrize(
@@ -160,14 +207,14 @@ def incompatible_python_identifiers_fail_loudly(tmp_path: Path) -> None:
 )
 def capitalized_binding_names_cannot_silently_collide(tmp_path: Path, *, text: str) -> None:
     path = _compile(tmp_path / "collision", text=text)
-    items = generate.schema((path,), reader=READER)[0]["items"]
+    items = _schema((path,))[0]["items"]
     with pytest.raises(ValueError, match="names collide"):
         generate.runtime_types(items)
 
 
 def constructor_names_can_match_their_owner(tmp_path: Path) -> None:
     path = _compile(tmp_path / "owned", text="type entry = Entry")
-    items = generate.schema((path,), reader=READER)[0]["items"]
+    items = _schema((path,))[0]["items"]
     assert "Entry.Entry = _native.Entry" in generate.runtime_types(items)
     assert "class Entry(_types.Entry):" in generate.ast_bindings(items)
 
@@ -175,6 +222,6 @@ def constructor_names_can_match_their_owner(tmp_path: Path) -> None:
 @pytest.mark.parametrize("text", ["type state = Value", "type state = Foo_bar | FooBar"])
 def alternative_names_cannot_silently_collide(tmp_path: Path, *, text: str) -> None:
     path = _compile(tmp_path / "collision", text=text)
-    items = generate.schema((path,), reader=READER)[0]["items"]
+    items = _schema((path,))[0]["items"]
     with pytest.raises(ValueError, match="alternative names collide"):
         generate.runtime_types(items)

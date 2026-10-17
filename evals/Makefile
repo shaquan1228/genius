@@ -15,7 +15,7 @@ check: check-scaffolding check-ocaml-format lint-ocaml test-ocaml check-python
 check-python:
 	uv sync --python 3.12 --extra dev --locked --inexact
 	$(MAKE) setup-kernel
-	$(KERNEL_RUN) python kernel/generate.py --check
+	$(KERNEL_RUN) dune build @python-bindings
 	$(KERNEL_RUN) ruff format --check python kernel
 	$(KERNEL_RUN) ruff check python kernel
 	$(KERNEL_RUN) mypy

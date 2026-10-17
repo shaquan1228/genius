@@ -112,16 +112,23 @@ opam exec --switch=genius-kernel-414 -- make -C evals check
 Python entrypoints below run under that same opam switch. Setup compiles the library
 and its binding reader with OCaml 4.14 compiler-libs. The reader uses
 `Cmi_format.read_cmi` to inspect the compiled public interface; Python renders that
-structural description into `.pyi` files. Includes, inferred signatures, labels,
+structural description into Python exports and `.pyi` files. Includes, inferred signatures, labels,
 and type identities come from the compiler. Unsupported constructs fail explicitly.
-`check-python` verifies the generated stubs before mypy; the stubs and Dune's
-`_build/` directory are ignored by Git. After changing OCaml sources, rebuild with
-`make -C evals setup-kernel` and restart Python. To refresh only the stubs of an
-already built library:
+Dune's `@python-bindings` alias owns the compiler-schema dependency, rendering,
+Ruff formatting, stub promotion, and freshness checks for checked-in runtime
+exports. The Python renderer only translates the supplied schema into files.
+Stubs are promoted for editors and mypy, ignored by Git, and removed by `dune clean`.
+After changing OCaml sources, rebuild with `make -C evals setup-kernel` and restart
+Python. To rebuild bindings directly:
 
 ```sh
-opam exec --switch=genius-kernel-414 -- uv run --project evals python evals/kernel/generate.py
+opam exec --switch=genius-kernel-414 -- uv run --project evals --no-sync dune build --root evals @python-bindings
 ```
+
+When an intentional API change produces a runtime-export diff, review it, run
+`dune promote` from `evals/` under the same opam switch, and repeat the build.
+Dune keeps the rendered artifacts in `_build/`; it does not change runtime
+exports without explicit promotion.
 
 This installs locked dependencies, checks strict typing, runs tests, and enforces CRAP ≤5.
 `check` runs five parts that also run alone: `check-scaffolding`, `check-ocaml-format`

@@ -35,7 +35,6 @@ bridge_library=$(opam var --switch="$kernel_switch" ocaml-in-python:lib)
 # A real search path also avoids the source ocaml/ directory shadowing an editable finder.
 .venv/bin/python -c 'import pathlib, sys, sysconfig; pathlib.Path(sysconfig.get_paths()["purelib"], "genius-ocaml.pth").write_text(sys.argv[1] + "\n")' "$bridge_library"
 # Build and install the normal findlib package before any Python import.
-opam exec --switch="$kernel_switch" -- dune build @install tools/bindings.exe
-opam exec --switch="$kernel_switch" -- .venv/bin/python kernel/generate.py
+opam exec --switch="$kernel_switch" -- dune build @install @python-bindings
 opam exec --switch="$kernel_switch" -- dune install
 opam exec --switch="$kernel_switch" -- .venv/bin/python -c 'from kernel import Case, Task, Rubric'

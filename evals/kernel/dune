@@ -1,0 +1,32 @@
+; The compiler owns the schema; Python only renders its public API.
+(rule
+ (target schema.json)
+ (deps ../ocaml/.genius_evals_kernel.objs/byte/genius_evals_kernel.cmi)
+ (action
+  (with-stdout-to %{target}
+   (run %{exe:../tools/bindings.exe} %{deps}))))
+
+(subdir generated
+ (rule
+  (targets __init__.py __init__.pyi _operations.py _operations.pyi _case.pyi _criterion.pyi _experiment.pyi _fixture.pyi _grader.pyi _projection.pyi _reference.pyi _response.pyi _verifier.pyi)
+  (deps ../generate.py ../schema.json ../../pyproject.toml)
+  (action
+   (progn
+    (run %{bin:python} %{dep:../generate.py} %{dep:../schema.json} .)
+    (run %{bin:ruff} check --select I --fix --no-cache --no-respect-gitignore --config %{dep:../../pyproject.toml} .)
+    (run %{bin:ruff} format --no-cache --no-respect-gitignore --config %{dep:../../pyproject.toml} .)))))
+
+; Stubs are local editor/build artifacts and disappear with dune clean.
+(copy_files
+ (files generated/*.pyi)
+ (mode (promote (until-clean))))
+
+; Runtime exports remain reviewable source files. Dune reports drift and offers
+; dune promote when a compiled API change intentionally updates them.
+(rule
+ (alias python-bindings)
+ (deps (glob_files *.pyi))
+ (action
+  (progn
+   (diff __init__.py generated/__init__.py)
+   (diff _operations.py generated/_operations.py))))

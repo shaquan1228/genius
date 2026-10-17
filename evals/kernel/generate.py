@@ -1,17 +1,13 @@
-"""Render Python stubs from compiler-parsed, compiled OCaml interfaces."""
+"""Render the Python API from a compiler-derived interface schema supplied by Dune."""
 
 import argparse
 import json
 import keyword
-import subprocess
-import sys
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Any
 
 HEADER = "# Generated from compiled OCaml interfaces; do not edit.\n"
 PREAMBLE = "from collections.abc import Sequence\n\n"
-ROOT = Path(__file__).resolve().parent.parent
 PRIMITIVES = {"string": "str", "bool": "bool", "int": "int", "float": "float", "unit": "None"}
 TYPE_NAMES = {"answer": "Rubric"}
 type Node = dict[str, Any]
@@ -29,13 +25,6 @@ def public_name(value: object) -> str:
     return identifier(
         TYPE_NAMES.get(name, "".join(part[:1].upper() + part[1:] for part in name.split("_")))
     )
-
-
-def schema(paths: tuple[Path, ...], *, reader: Path) -> list[Node]:
-    result = subprocess.run(
-        [str(reader), *(str(path) for path in paths)], check=True, capture_output=True, text=True
-    )
-    return json.loads(result.stdout)  # type: ignore[no-any-return]
 
 
 def type_name(value: Node, *, qualify: bool = False, variants: frozenset[str] = frozenset()) -> str:
@@ -273,68 +262,13 @@ def render(modules: list[Node]) -> dict[str, str]:
     return outputs
 
 
-def generate(*, compiled: Path, reader: Path) -> dict[str, str]:
-    return render(schema((compiled / "genius_evals_kernel.cmi",), reader=reader))
-
-
-def write(outputs: dict[str, str], *, destination: Path, check: bool) -> None:
-    with TemporaryDirectory(prefix="genius-kernel-types-") as temporary:
-        staging = Path(temporary)
-        for name, content in outputs.items():
-            (staging / name).write_text(content)
-        subprocess.run(
-            [sys.executable, "-m", "ruff", "check", "--select", "I", "--fix", str(staging)],
-            check=True,
-            stdout=subprocess.DEVNULL,
-        )
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "ruff",
-                "format",
-                "--target-version",
-                "py312",
-                "--line-length",
-                "100",
-                str(staging),
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-        )
-        expected = set(outputs)
-        for path in destination.glob("*.pyi"):
-            if path.name not in expected:
-                if check:
-                    raise SystemExit("Kernel types changed; rerun make setup-kernel")
-                path.unlink()
-        for path in staging.iterdir():
-            if not path.is_file():
-                continue
-            target = destination / path.name
-            content = path.read_text()
-            if check:
-                if not target.exists() or target.read_text() != content:
-                    raise SystemExit("Kernel types changed; rerun make setup-kernel")
-            else:
-                target.write_text(content)
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true")
-    parser.add_argument(
-        "--compiled",
-        type=Path,
-        default=ROOT / "_build/default/ocaml/.genius_evals_kernel.objs/byte",
-    )
-    parser.add_argument("--reader", type=Path, default=ROOT / "_build/default/tools/bindings.exe")
-    options_ = parser.parse_args()
-    write(
-        generate(compiled=options_.compiled, reader=options_.reader),
-        destination=ROOT / "kernel",
-        check=options_.check,
-    )
+    parser.add_argument("schema", type=Path)
+    parser.add_argument("destination", type=Path)
+    arguments = parser.parse_args()
+    for name, content in render(json.loads(arguments.schema.read_text())).items():
+        (arguments.destination / name).write_text(content)
 
 
 if __name__ == "__main__":
