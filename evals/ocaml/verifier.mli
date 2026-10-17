@@ -1,5 +1,4 @@
 val valid_path : string -> bool
-val validate : Ast.verifier -> Ast.verifier
 
 val make :
   inputs:string list ->
@@ -8,4 +7,4 @@ val make :
   command:string list ->
   stdin:string ->
   timeout_seconds:int ->
-  Ast.verifier
+  (Ast.verifier, Ast.validation_failure) result

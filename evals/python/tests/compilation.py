@@ -31,11 +31,13 @@ from kernel import (
     Completion,
     Content,
     Criterion,
-    InvalidArgument,
     Reference,
     Task,
     Verification,
     Verifier,
+)
+from kernel import (
+    ValidationError as DomainValidationError,
 )
 from kernel._operations import fixture as fixture_ops
 
@@ -246,9 +248,8 @@ def compile_query_validates_its_boundary_without_bypassing_kernel() -> None:
     public_case = Case(id="public", skill="reasoning", prompt="", files=[])
     with pytest.raises(ValidationError):
         compile_dataset(cases=(public_case,))
-    invalid = _copy_case(_declaration(), allowed_files=())
-    with pytest.raises(InvalidArgument, match="outside allowed_files"):
-        datasets.compile_dataset(cases=(invalid,))
+    with pytest.raises(DomainValidationError, match="outside allowed_files"):
+        _copy_case(_declaration(), allowed_files=())
 
 
 def unknown_case_in_compiled_dataset_fails_closed() -> None:
@@ -342,9 +343,8 @@ def direct_dataset_construction_validates_metadata_count() -> None:
 
 
 def direct_dataset_construction_validates_native_records() -> None:
-    invalid = _copy_case(_declaration(), allowed_files=())
-    with pytest.raises(InvalidArgument, match="outside allowed_files"):
-        Dataset(sources=datasets.kernel_sources(), records={invalid.id: invalid})
+    with pytest.raises(DomainValidationError, match="outside allowed_files"):
+        _copy_case(_declaration(), allowed_files=())
 
 
 def direct_dataset_construction_resolves_resources() -> None:
@@ -354,7 +354,7 @@ def direct_dataset_construction_resolves_resources() -> None:
         definition.criterion[0], files=[("verify.py", Content.Resource("checker"))]
     )
     definition = _copy_case(definition, criterion=Criterion.Code(checks))
-    with pytest.raises(KeyError, match="checker"):
+    with pytest.raises(DomainValidationError, match="checker"):
         Dataset(sources=datasets.kernel_sources(), records={definition.id: definition})
     resources = {"checker": "private checker"}
     dataset = Dataset(

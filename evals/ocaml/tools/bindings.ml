@@ -60,7 +60,6 @@ let constructor value =
 
 let declaration name value =
   if value.type_params <> [] then unsupported ("parameterized type " ^ name);
-  if value.type_private <> Public then unsupported ("private type " ^ name);
   let fields =
     match (value.type_kind, value.type_manifest) with
     | Type_abstract, None -> [ ("kind", quote "abstract") ]
@@ -71,7 +70,8 @@ let declaration name value =
         [ ("kind", quote "variant"); ("constructors", array (List.map constructor constructors)) ]
     | _ -> unsupported ("type representation " ^ name)
   in
-  object_ (("name", quote name) :: fields)
+  object_
+    (("name", quote name) :: ("private", string_of_bool (value.type_private = Private)) :: fields)
 
 let rec items signature =
   List.map
@@ -102,7 +102,11 @@ let export_interface paths =
   match paths with
   | [] -> invalid_arg "Expected compiled Ast interface"
   | ast_path :: operations ->
-      let ast = (Cmi_format.read_cmi ast_path).cmi_sign in
+      let ast =
+        List.filter
+          (function Sig_type _ -> true | _ -> false)
+          (Cmi_format.read_cmi ast_path).cmi_sign
+      in
       let ast_module =
         Path.Pdot (Path.Pident (Ident.create_persistent "Genius_evals_kernel__"), "Ast")
       in

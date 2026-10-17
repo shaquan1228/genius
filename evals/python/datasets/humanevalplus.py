@@ -42,10 +42,10 @@ def declarations(records: Iterable[str]) -> tuple[Task, ...]:
 
 def declaration(raw: str) -> Task:
     problem = Problem.model_validate_json(raw)
-    return Task(
+    return Task.create(
         id="humaneval-" + problem.task_id.split("/")[1],
         fixture=fixture_ops.of_files([("solution.py", problem.prompt)]),
-        instruction=Instruction(
+        instruction=Instruction.create(
             skill="reasoning",
             prompt=(
                 "Implement the specified function in solution.py. Preserve its signature and edit "

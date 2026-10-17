@@ -11,7 +11,7 @@ from typing import Protocol, cast
 from pydantic import TypeAdapter, validate_call
 
 from evals.python.schema import FROZEN, DatasetInfo, FileName, Files
-from kernel import Case, Content, Criterion, Fixture, Reference, Task, Verifier
+from kernel import Case, Fixture, Reference, Task
 from kernel._operations import case as case_ops
 from kernel._operations import fixture as fixture_ops
 from kernel._operations import projection as projection_ops
@@ -111,42 +111,8 @@ class _CaseKey:
         object.__setattr__(self, "digest", value_fingerprint(self.value))
 
 
-def _artifacts(
-    values: Sequence[tuple[str, Content.Value]], *, resources: Mapping[str, str]
-) -> tuple[tuple[str, Content.Value], ...]:
-    return tuple(
-        (
-            name,
-            Content.Inline(resources[content[0]])
-            if isinstance(content, Content.Resource)
-            else content,
-        )
-        for name, content in values
-    )
-
-
 def _resolve(case: Task, *, sources: Sources) -> Task:
-    case_ops.validate(case)
-    if isinstance(case.criterion, Criterion.Answer):
-        return case
-    checks = case.criterion[0]
-    resources = dict(sources.resources)
-    verifier = Verifier(
-        inputs=checks.inputs,
-        files=_artifacts(checks.files, resources=resources),
-        tools=_artifacts(checks.tools, resources=resources),
-        command=checks.command,
-        stdin=checks.stdin,
-        timeout_seconds=checks.timeout_seconds,
-    )
-    return case_ops.make(
-        id=case.id,
-        fixture=case.fixture,
-        instruction=case.instruction,
-        criterion=Criterion.Code(verifier),
-        allowed_files=case.allowed_files,
-        reference=case.reference,
-    )
+    return case_ops.resolve_resources(case, resources=sources.resources)
 
 
 def _resolve_records(records: Mapping[str, Task], *, sources: Sources) -> dict[str, Task]:

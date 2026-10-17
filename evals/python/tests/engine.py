@@ -197,10 +197,9 @@ def extended_native_contract_drives_fresh_inspect_registration() -> None:
             sys.executable,
             "-c",
             """
-from unittest.mock import PropertyMock, patch
+from unittest.mock import patch
 from kernel._operations import grader as grader_ops
-with patch.object(type(grader_ops), "required_names", new_callable=PropertyMock,
-                  return_value=["correctness", "scope", "extension"]):
+with patch.object(grader_ops, "required_names", ["correctness", "scope", "extension"]):
     from evals.python import grading
     from evals.python.integrations.inspect import completeness, scoring
     from inspect_ai.scorer._scorer import scorer_metrics

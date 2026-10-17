@@ -60,10 +60,10 @@ ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
   ocamlc $(OCAML_FLAGS) -o test $(notdir $(1)) && ./test
 
 test-ocaml:
-	$(call ocaml_test,fixture_store.mli fixture_store.ml ast.ml experiment.mli experiment.ml tests/test_experiment.ml)
-	$(call ocaml_test,fixture_store.mli fixture_store.ml ast.ml verifier.mli verifier.ml tests/test_verifier.ml)
-	$(call ocaml_test,fixture_store.mli fixture_store.ml ast.ml fixture.mli fixture.ml tests/test_fixture.ml)
-	$(call ocaml_test,fixture_store.mli fixture_store.ml ast.ml response.mli response.ml fixture.mli fixture.ml verifier.mli verifier.ml criterion.mli criterion.ml tests/test_criterion.ml)
+	$(call ocaml_test,fixture_store.mli fixture_store.ml ast.mli ast.ml experiment.mli experiment.ml tests/test_experiment.ml)
+	$(call ocaml_test,fixture_store.mli fixture_store.ml ast.mli ast.ml verifier.mli verifier.ml tests/test_verifier.ml)
+	$(call ocaml_test,fixture_store.mli fixture_store.ml ast.mli ast.ml fixture.mli fixture.ml tests/test_fixture.ml)
+	$(call ocaml_test,fixture_store.mli fixture_store.ml ast.mli ast.ml response.mli response.ml fixture.mli fixture.ml verifier.mli verifier.ml criterion.mli criterion.ml construct.mli construct.ml tests/test_criterion.ml)
 	$(call ocaml_test,$(KERNEL) tests/test_kernel.ml)
 
 check-scaffolding:

@@ -9,7 +9,7 @@ from kernel import Content, Criterion, Verifier
 
 def checks(*, record: str, manifest: Mapping[str, object]) -> Criterion.Value:
     return Criterion.Code(
-        Verifier(
+        Verifier.create(
             inputs=("solution.py",),
             files=(
                 (

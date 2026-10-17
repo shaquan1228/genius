@@ -14,7 +14,6 @@ from kernel import (
     Criterion,
     Experiment,
     Instruction,
-    InvalidArgument,
     Outcome,
     Reference,
     Response,
@@ -22,6 +21,9 @@ from kernel import (
     Rubric,
     Task,
     Verification,
+)
+from kernel import (
+    ValidationError as DomainValidationError,
 )
 from kernel._bridge import native as native_kernel
 from kernel._operations import case as case_ops
@@ -37,8 +39,8 @@ def _answer() -> tuple[Task, Response]:
     expected = response_ops.of_fields([("choice", ResponseValue.String("B"))])
     fixture = fixture_ops.of_files([("context.txt", "Public context")])
     reference = Reference(edits=fixture_ops.empty, completion=Completion.Structured(expected))
-    criterion = Criterion.Answer(Rubric(expected=expected, text_rule=None))
-    instruction = Instruction(skill="reasoning", prompt="Choose B")
+    criterion = Criterion.Answer(Rubric.create(expected=expected.fields, text_rule=None))
+    instruction = Instruction.create(skill="reasoning", prompt="Choose B")
     case = case_ops.make(
         id="native-answer",
         fixture=fixture,
@@ -62,7 +64,7 @@ def check_answer_projection() -> None:
     )
     assert (
         [(name, text[0]) for name, text in public.files],
-        projection_ops.reference(case).completion[0][0][0],
+        cast(Completion.Structured, projection_ops.reference(case).completion)[0].fields[0][0],
     ) == ([("context.txt", "Public context")], "choice")
 
 
@@ -91,7 +93,7 @@ def check_code(status: Verification.Value, *, correctness: bool) -> None:
     case = case_ops.make(
         id="native-code",
         fixture=fixture_ops.of_files([("solution.py", "pass")]),
-        instruction=Instruction(skill="reasoning", prompt="Fix solution.py"),
+        instruction=Instruction.create(skill="reasoning", prompt="Fix solution.py"),
         criterion=Criterion.Code(checks),
         allowed_files=["solution.py"],
         reference=Reference(
@@ -118,7 +120,7 @@ def check_code(status: Verification.Value, *, correctness: bool) -> None:
 
 
 def check_rejections() -> None:
-    with pytest.raises(InvalidArgument):
+    with pytest.raises(DomainValidationError):
         fixture_ops.of_files([("duplicate.txt", "one"), ("duplicate.txt", "two")])
     with pytest.raises(TypeError):
         cast(Callable[..., Experiment], experiment_ops.resolve)(epochs="wrong type")

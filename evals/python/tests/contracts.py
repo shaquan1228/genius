@@ -19,7 +19,8 @@ from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.declarations import _reference_text
 from evals.python.tests.projections import reference, verifier
 from evals.python.tests.support import choice_case as _choice_case
-from kernel import Case, Experiment, InvalidArgument, Verification
+from kernel import Case, Experiment, Verification
+from kernel import ValidationError as DomainValidationError
 from kernel._operations import fixture as fixture_ops
 from kernel._operations import grader as grader_ops
 from kernel._operations import projection as projection_ops
@@ -138,7 +139,7 @@ def run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
 @pytest.mark.parametrize("value", [0, -1])
 def kernel_rejects_invalid_run_overrides(field: str, *, value: int) -> None:
     operation = cast(Callable[..., Experiment], resolve_settings)
-    with pytest.raises(InvalidArgument):
+    with pytest.raises(DomainValidationError):
         operation(**{field: value})
 
 

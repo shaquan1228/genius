@@ -10,7 +10,7 @@ type fixture = Fixture_store.t
    https://huggingface.co/docs/lighteval/main/en/package_reference/models_outputs
    https://developers.openai.com/api/docs/guides/evals *)
 type response_value = String of string | Bool of bool
-type response = (string * response_value) list
+type response = { fields : (string * response_value) list }
 type content = Inline of string | Resource of string
 
 type verifier = {
@@ -99,3 +99,269 @@ type experiment = {
   time_limit : int;
   cache : bool;
 }
+
+type validation_code =
+  | Invalid_identity
+  | Invalid_path
+  | Duplicate_path
+  | Empty_inputs
+  | Overlapping_paths
+  | Invalid_command
+  | Nonpositive_timeout
+  | Invalid_response_field
+  | Invalid_text_rule
+  | Overlapping_text_field
+  | Empty_answer
+  | Missing_fixture_inputs
+  | Artifact_overlap
+  | Reference_outside_scope
+  | Invalid_experiment_setting
+  | Missing_resource
+
+type validation_issue = {
+  code : validation_code;
+  field : string;
+  message : string;
+  values : string list;
+}
+
+type validation_failure = { case_id : string option; issues : validation_issue list }
+type grading_failure = Verification_harness_error of string
+
+let ( let* ) = Result.bind
+let issue code field message values = { code; field; message; values }
+
+let checked ?case_id issues value =
+  match issues with [] -> Ok value | _ -> Error { case_id; issues }
+
+let when_invalid condition problem = if condition then [] else [ problem ]
+
+let valid_name name =
+  name <> ""
+  && (match name.[0] with 'a' .. 'z' -> true | _ -> false)
+  && String.for_all (function 'a' .. 'z' | '0' .. '9' | '-' -> true | _ -> false) name
+
+let valid_path name =
+  name <> ""
+  && (match name.[0] with 'a' .. 'z' | 'A' .. 'Z' | '_' -> true | _ -> false)
+  && String.for_all
+       (function 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-' | '.' -> true | _ -> false)
+       name
+
+let path_issues field paths =
+  List.filter_map
+    (fun path ->
+      if valid_path path then None
+      else Some (issue Invalid_path field ("Invalid path: " ^ path) [ path ]))
+    paths
+
+let empty_fixture = Fixture_store.empty
+let fixture_files = Fixture_store.files
+
+let add_fixture ~path ~contents fixture =
+  let problems =
+    path_issues "fixture" [ path ]
+    @ when_invalid
+        (not (Fixture_store.mem path fixture))
+        (issue Duplicate_path "fixture" ("Duplicate fixture path: " ^ path) [ path ])
+  in
+  checked problems (Fixture_store.add path contents fixture)
+
+let make_fixture files =
+  List.fold_left
+    (fun result (path, contents) ->
+      let* fixture = result in
+      add_fixture ~path ~contents fixture)
+    (Ok empty_fixture)
+    files
+
+let overlay_fixture = Fixture_store.overlay
+let empty_response = { fields = [] }
+
+let make_response fields =
+  let rec collect seen = function
+    | [] -> []
+    | (name, _) :: rest ->
+        when_invalid
+          (name <> "" && not (List.mem name seen))
+          (issue
+             Invalid_response_field
+             "response"
+             "Response fields need unique nonempty names"
+             [ name ])
+        @ collect (name :: seen) rest
+  in
+  checked (collect [] fields) { fields }
+
+let make_instruction ~skill ~prompt =
+  checked
+    (when_invalid
+       (valid_name skill)
+       (issue Invalid_identity "instruction.skill" "Invalid instruction skill" [ skill ]))
+    { skill; prompt }
+
+let make_text_rule ~field ~min_words ~max_words =
+  checked
+    (when_invalid
+       (field <> "" && min_words >= 0 && max_words >= min_words)
+       (issue Invalid_text_rule "text_rule" "Invalid text rule" [ field ]))
+    { field; min_words; max_words }
+
+let make_rubric ~(expected : response) ~(text_rule : text_rule option) =
+  let problems =
+    when_invalid
+      (expected.fields <> [] || text_rule <> None)
+      (issue Empty_answer "criterion" "Answer criterion cannot be empty" [])
+    @
+    match text_rule with
+    | None -> []
+    | Some rule ->
+        when_invalid
+          (not (List.mem_assoc rule.field expected.fields))
+          (issue
+             Overlapping_text_field
+             "text_rule.field"
+             "Text rule overlaps expected fields"
+             [ rule.field ])
+  in
+  checked problems { expected; text_rule }
+
+let make_verifier ~inputs ~files ~tools ~command ~stdin ~timeout_seconds =
+  let names = inputs @ List.map fst files @ List.map fst tools in
+  let problems =
+    path_issues "verifier" names
+    @ when_invalid
+        (inputs <> [])
+        (issue Empty_inputs "verifier.inputs" "Verifier inputs cannot be empty" [])
+    @ when_invalid
+        (List.length names = List.length (List.sort_uniq compare names))
+        (issue Overlapping_paths "verifier" "Overlapping verifier paths" names)
+    @ when_invalid
+        (command <> [] && not (List.exists (( = ) "") command))
+        (issue Invalid_command "verifier.command" "Invalid verifier command" command)
+    @ when_invalid
+        (timeout_seconds > 0)
+        (issue
+           Nonpositive_timeout
+           "verifier.timeout_seconds"
+           "Verifier timeout must be positive"
+           [])
+  in
+  checked problems { inputs; files; tools; command; stdin; timeout_seconds }
+
+let make_task ~id ~fixture ~(instruction : instruction) ~criterion ~allowed_files
+    ~(reference : reference) =
+  let paths fixture = List.map fst (fixture_files fixture) in
+  let require code field problem ~within names =
+    let missing = List.filter (fun name -> not (List.mem name within)) names in
+    when_invalid
+      (missing = [])
+      (issue
+         code
+         field
+         (Printf.sprintf "Case %s: %s: %s" id problem (String.concat ", " missing))
+         missing)
+  in
+  let problems =
+    when_invalid (valid_name id) (issue Invalid_identity "id" "Invalid case identity" [ id ])
+    @ path_issues "allowed_files" allowed_files
+    @ require
+        Reference_outside_scope
+        "reference.edits"
+        "reference edits files outside allowed_files"
+        ~within:allowed_files
+        (paths reference.edits)
+    @
+    match criterion with
+    | Answer _ -> []
+    | Code verifier ->
+        require
+          Missing_fixture_inputs
+          "verifier.inputs"
+          "criteria read files missing from the fixture"
+          ~within:(paths fixture)
+          verifier.inputs
+        @ when_invalid
+            (not
+               (List.exists
+                  (fun (name, _) -> List.mem name (paths fixture))
+                  (verifier.files @ verifier.tools)))
+            (issue
+               Artifact_overlap
+               "verifier"
+               ("Case " ^ id ^ ": verifier artifacts overlap fixture")
+               [])
+  in
+  checked ~case_id:id problems { id; fixture; instruction; criterion; allowed_files; reference }
+
+let default_experiment =
+  {
+    profiles =
+      [
+        { name = "baseline"; preamble = ""; instructions = [] };
+        {
+          name = "genius";
+          preamble =
+            "Read ../instructions/skills/{skill}/SKILL.md and its referenced files. Apply that \
+             skill to this task.\n\n";
+          instructions = [ "docs"; "skills" ];
+        };
+      ];
+    epochs = 5;
+    message_limit = None;
+    cost_limit = 0.25;
+    time_limit = 300;
+    cache = false;
+  }
+
+let make_experiment ?(profiles = default_experiment.profiles) ?(epochs = default_experiment.epochs)
+    ?message_limit ?(cost_limit = default_experiment.cost_limit)
+    ?(time_limit = default_experiment.time_limit) ?(cache = default_experiment.cache) () =
+  let positive field value =
+    when_invalid
+      (value > 0)
+      (issue Invalid_experiment_setting field ("Experiment " ^ field ^ " must be positive") [])
+  in
+  let problems =
+    positive "epochs" epochs @ positive "time_limit" time_limit
+    @ (match message_limit with None -> [] | Some value -> positive "message_limit" value)
+    @ when_invalid
+        (Float.is_finite cost_limit && cost_limit > 0.)
+        (issue
+           Invalid_experiment_setting
+           "cost_limit"
+           "Experiment cost_limit must be finite and positive"
+           [])
+  in
+  checked problems { profiles; epochs; message_limit; cost_limit; time_limit; cache }
+
+let resolve_resources (task : task) ~resources =
+  let resolve (path, content) =
+    match content with
+    | Inline _ -> Ok (path, content)
+    | Resource key -> (
+        match List.assoc_opt key resources with
+        | Some contents -> Ok (path, Inline contents)
+        | None ->
+            Error
+              {
+                case_id = Some task.id;
+                issues = [ issue Missing_resource path ("Missing resource: " ^ key) [ key ] ];
+              })
+  in
+  let resolve_all values =
+    let rec loop = function
+      | [] -> Ok []
+      | value :: rest ->
+          let* value = resolve value in
+          let* rest = loop rest in
+          Ok (value :: rest)
+    in
+    loop values
+  in
+  match task.criterion with
+  | Answer _ -> Ok task
+  | Code verifier ->
+      let* files = resolve_all verifier.files in
+      let* tools = resolve_all verifier.tools in
+      Ok { task with criterion = Code { verifier with files; tools } }

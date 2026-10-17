@@ -77,19 +77,21 @@ let answer (criterion : Ast.rubric) response =
       text_valid && List.sort compare exact = List.sort compare (Response.fields criterion.expected)
 
 let grade (case : Ast.task) ~response ~(outcome : Ast.outcome) =
-  let case = Case.validate case in
   let correctness =
     match case.criterion with
     | Ast.Code _ -> (
         match outcome.verification with
-        | Ast.Harness_error detail -> invalid_arg ("Verification harness error: " ^ detail)
-        | Ast.Passed -> true
-        | _ -> false)
-    | Ast.Answer criterion -> answer criterion response
+        | Ast.Harness_error detail -> Error (Ast.Verification_harness_error detail)
+        | Ast.Passed -> Ok true
+        | Ast.Unchecked | Ast.Failed | Ast.Invalid_submission | Ast.Timed_out -> Ok false)
+    | Ast.Answer criterion -> Ok (answer criterion response)
   in
-  let allowed = List.map (fun path -> "workspace/" ^ path) case.allowed_files in
-  let scope = List.for_all (fun path -> List.mem path allowed) outcome.changed_files in
-  List.map
-    (fun (name, criterion) ->
-      (name, match criterion with `Correctness -> correctness | `Scope -> scope))
-    definitions
+  Result.map
+    (fun correctness ->
+      let allowed = List.map (fun path -> "workspace/" ^ path) case.allowed_files in
+      let scope = List.for_all (fun path -> List.mem path allowed) outcome.changed_files in
+      List.map
+        (fun (name, criterion) ->
+          (name, match criterion with `Correctness -> correctness | `Scope -> scope))
+        definitions)
+    correctness

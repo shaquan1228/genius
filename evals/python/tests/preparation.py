@@ -110,7 +110,7 @@ def evaluation_prepares_once_for_all_tasks(
 def private_tasks() -> list[Task]:
     definition = _copy_case(
         _declaration(code=False),
-        instruction=Instruction(
+        instruction=Instruction.create(
             skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
         ),
         reference=Reference(
@@ -124,12 +124,12 @@ def private_tasks() -> list[Task]:
                 _copy_case(
                     definition,
                     criterion=Criterion.Answer(
-                        Rubric(
+                        Rubric.create(
                             expected=[
                                 ("choice", ResponseValue.String(choice)),
                                 ("safe", ResponseValue.Bool(True)),
                             ],
-                            text_rule=TextRule(field="reason", min_words=1, max_words=5),
+                            text_rule=TextRule.create(field="reason", min_words=1, max_words=5),
                         )
                     ),
                 ),

@@ -17,14 +17,17 @@ from kernel import (
     Criterion,
     Fixture,
     Instruction,
-    InvalidArgument,
     Reference,
+    Response,
     ResponseValue,
     Rubric,
     Task,
     TextRule,
     Verification,
     Verifier,
+)
+from kernel import (
+    ValidationError as DomainValidationError,
 )
 from kernel._operations import fixture as fixture_ops
 
@@ -43,7 +46,7 @@ def _copy_case(  # noqa: PLR0913 - Reconstruct the actual native record fields.
     allowed_files: Sequence[str] | None = None,
     reference: Reference | None = None,
 ) -> Task:
-    return Task(
+    return Task.create(
         id=_override(id, original=value.id),
         fixture=_override(fixture, original=value.fixture),
         instruction=_override(instruction, original=value.instruction),
@@ -63,7 +66,7 @@ def _copy_verifier(  # noqa: PLR0913 - Reconstruct the actual native record fiel
     stdin: str | None = None,
     timeout_seconds: int | None = None,
 ) -> Verifier:
-    return Verifier(
+    return Verifier.create(
         inputs=_override(inputs, original=value.inputs),
         files=_override(files, original=value.files),
         tools=_override(tools, original=value.tools),
@@ -85,7 +88,7 @@ def _declaration(*, code: bool = True) -> Task:
     criterion: Criterion.Value
     if code:
         criterion = Criterion.Code(
-            Verifier(
+            Verifier.create(
                 inputs=("main.py",),
                 files=[("verify.py", Content.Inline("private assertions"))],
                 tools=[("check.sh", Content.Inline("visible helper"))],
@@ -96,18 +99,18 @@ def _declaration(*, code: bool = True) -> Task:
         )
     else:
         criterion = Criterion.Answer(
-            Rubric(
+            Rubric.create(
                 expected=[
                     ("choice", ResponseValue.String("B")),
                     ("safe", ResponseValue.Bool(True)),
                 ],
-                text_rule=TextRule(field="reason", min_words=1, max_words=5),
+                text_rule=TextRule.create(field="reason", min_words=1, max_words=5),
             )
         )
-    return Task(
+    return Task.create(
         id="external",
         fixture=fixture_ops.of_files([("main.py", "broken")]),
-        instruction=Instruction(skill="reasoning", prompt="Fix it: é"),
+        instruction=Instruction.create(skill="reasoning", prompt="Fix it: é"),
         criterion=criterion,
         allowed_files=("main.py",),
         reference=Reference(
@@ -115,7 +118,9 @@ def _declaration(*, code: bool = True) -> Task:
             completion=Completion.Plain("done")
             if code
             else Completion.Structured(
-                [("choice", ResponseValue.String("B")), ("safe", ResponseValue.Bool(True))]
+                Response.create(
+                    [("choice", ResponseValue.String("B")), ("safe", ResponseValue.Bool(True))]
+                )
             ),
         ),
     )
@@ -149,7 +154,7 @@ def missing_private_resource_fails_at_resolution() -> None:
         definition.criterion[0], files=[("verify.py", Content.Resource("missing.py"))]
     )
     definition = _copy_case(definition, criterion=Criterion.Code(checks))
-    with pytest.raises(KeyError, match=r"missing\.py"):
+    with pytest.raises(DomainValidationError, match=r"missing\.py"):
         datasets.compile_dataset(cases=(definition,))
 
 
@@ -171,7 +176,7 @@ def answer_declarations_preserve_typed_completion_fields() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
     completion = private_reference("external", selection=dataset).completion
     assert isinstance(completion, Completion.Structured)
-    fields = dict(completion[0])
+    fields = dict(completion[0].fields)
     assert (isinstance(fields["choice"], ResponseValue.String), fields["choice"][0]) == (True, "B")
     assert (isinstance(fields["safe"], ResponseValue.Bool), fields["safe"][0]) == (True, True)
 
@@ -202,13 +207,15 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
     [
         lambda c: _copy_case(c, allowed_files=()),
         lambda c: _copy_case(c, fixture=fixture_ops.empty),
-        lambda c: _copy_case(c, criterion=Criterion.Answer(Rubric(expected=[], text_rule=None))),
+        lambda c: _copy_case(
+            c, criterion=Criterion.Answer(Rubric.create(expected=[], text_rule=None))
+        ),
         lambda c: _copy_case(
             c,
             criterion=Criterion.Answer(
-                Rubric(
+                Rubric.create(
                     expected=[("choice", ResponseValue.String("B"))],
-                    text_rule=TextRule(field="choice", min_words=0, max_words=2),
+                    text_rule=TextRule.create(field="choice", min_words=0, max_words=2),
                 )
             ),
         ),
@@ -224,7 +231,7 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
 def kernel_constructors_validate_raw_declarations(
     invalid: Callable[[Task], Task],
 ) -> None:
-    with pytest.raises(InvalidArgument):
+    with pytest.raises(DomainValidationError):
         datasets.compile_dataset(cases=(invalid(_declaration()),))
 
 
@@ -248,30 +255,23 @@ def nested_constructor_rules_fail_closed(field: str, *, value: object) -> None:
         for name in ("inputs", "files", "tools", "command", "stdin", "timeout_seconds")
     }
     fields[field] = value
-    checks = Verifier(**fields)
-    with pytest.raises(InvalidArgument):
-        datasets.compile_dataset(cases=(_copy_case(definition, criterion=Criterion.Code(checks)),))
+    with pytest.raises(DomainValidationError):
+        _copy_case(definition, criterion=Criterion.Code(Verifier.create(**fields)))
 
 
 @pytest.mark.parametrize(("minimum", "maximum"), [(-1, 2), (3, 2)])
 def answer_constructor_rules_fail_closed(minimum: int, *, maximum: int) -> None:
-    criterion = Criterion.Answer(
-        Rubric(
-            expected=[],
-            text_rule=TextRule(field="reason", min_words=minimum, max_words=maximum),
-        )
-    )
-    with pytest.raises(InvalidArgument):
-        datasets.compile_dataset(cases=(_copy_case(_declaration(code=False), criterion=criterion),))
+    with pytest.raises(DomainValidationError):
+        TextRule.create(field="reason", min_words=minimum, max_words=maximum)
 
 
 def native_fields_retain_immutable_snapshots() -> None:
     fields = [("choice", ResponseValue.String("B"))]
-    answer = Rubric(expected=fields, text_rule=None)
+    answer = Rubric.create(expected=fields, text_rule=None)
     fields.clear()
-    assert len(answer.expected) == 1
+    assert len(answer.expected.fields) == 1
     with pytest.raises((AttributeError, TypeError)):
-        answer.expected = []  # type: ignore[misc]
+        answer.expected = []  # type: ignore[misc, assignment]
     initial = [("main.py", "broken")]
     fixture = fixture_ops.of_files(initial)
     initial[0] = ("main.py", "changed")
@@ -287,9 +287,13 @@ def native_fields_retain_immutable_snapshots() -> None:
 @pytest.mark.parametrize(
     "criterion",
     [
-        Criterion.Answer(Rubric(expected=[("choice", ResponseValue.String("B"))], text_rule=None)),
         Criterion.Answer(
-            Rubric(expected=[], text_rule=TextRule(field="reason", min_words=1, max_words=5))
+            Rubric.create(expected=[("choice", ResponseValue.String("B"))], text_rule=None)
+        ),
+        Criterion.Answer(
+            Rubric.create(
+                expected=[], text_rule=TextRule.create(field="reason", min_words=1, max_words=5)
+            )
         ),
     ],
 )
@@ -309,7 +313,7 @@ def _reference_text(value: Reference) -> str:
     if isinstance(completion, Completion.Plain):
         return completion[0]
     assert isinstance(completion, Completion.Structured)
-    return json.dumps({name: scalar[0] for name, scalar in completion[0]})
+    return json.dumps({name: scalar[0] for name, scalar in completion[0].fields})
 
 
 def _public_snapshot(

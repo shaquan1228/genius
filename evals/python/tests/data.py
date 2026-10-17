@@ -2,7 +2,6 @@
 
 import json
 from collections.abc import Callable
-from functools import partial
 from pathlib import Path
 from typing import cast
 from unittest.mock import patch
@@ -37,16 +36,16 @@ from kernel import (
     Criterion,
     Experiment,
     Instruction,
-    InvalidArgument,
-    Outcome,
     Profile,
     Reference,
     Task,
     Verification,
     Verifier,
 )
+from kernel import (
+    ValidationError as DomainValidationError,
+)
 from kernel._operations import fixture as fixture_ops
-from kernel._operations import grader as grader_ops
 
 
 def public_projection_uses_native_types() -> None:
@@ -64,9 +63,8 @@ def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
 @pytest.mark.parametrize("path", ["../outside.ml", "/outside.ml"])
 def generated_paths_are_validated(path: str) -> None:
     declaration = _choice_case(case_id="paths", a=1, b=2)
-    invalid = _copy_case(declaration, fixture=fixture_ops.of_files([(path, "bad")]))
-    with pytest.raises(InvalidArgument):
-        datasets.compile_dataset(cases=(invalid,))
+    with pytest.raises(DomainValidationError):
+        _copy_case(declaration, fixture=fixture_ops.of_files([(path, "bad")]))
 
 
 def _grade(case_id: str, *, text: str) -> bool:
@@ -199,7 +197,7 @@ def native_projection_preserves_strings() -> None:
     text = 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
     definition = _copy_case(
         _choice_case(case_id="escaped", a=10, b=8),
-        instruction=Instruction(skill="reasoning", prompt=text),
+        instruction=Instruction.create(skill="reasoning", prompt=text),
     )
     dataset = datasets.compile_dataset(cases=(definition,))
     assert datasets.list_cases(selection=dataset)[0].prompt == text
@@ -236,12 +234,12 @@ def compilation_cache_invalidates_when_declarations_change() -> None:
 
 
 def generic_python_case_exports_without_language_restriction() -> None:
-    definition = Task(
+    definition = Task.create(
         id="python-case",
         fixture=fixture_ops.of_files([("solution.py", "print(42)")]),
-        instruction=Instruction(skill="reasoning", prompt="Return 42"),
+        instruction=Instruction.create(skill="reasoning", prompt="Return 42"),
         criterion=Criterion.Code(
-            Verifier(
+            Verifier.create(
                 inputs=("solution.py",),
                 files=[("grader.py", Content.Inline("trusted"))],
                 tools=[],
@@ -268,7 +266,7 @@ def generic_python_case_exports_without_language_restriction() -> None:
 
 def experiment_configuration_reaches_tasks_and_profiles() -> None:
     before = evaluation.resolve_settings()
-    spec = Experiment(
+    spec = Experiment.create(
         profiles=[
             Profile(
                 name=item.name,
@@ -300,23 +298,10 @@ def experiment_configuration_reaches_tasks_and_profiles() -> None:
     assert evaluation.resolve_settings().epochs == before.epochs
 
 
-@pytest.mark.parametrize("grade_only", [False, True])
-def record_updates_cannot_bypass_kernel_validation(*, grade_only: bool) -> None:
+def record_updates_cannot_bypass_kernel_validation() -> None:
     definition = _timeout_case(case_id="updated", initial=15, requested=30)
-    invalid = _copy_case(definition, fixture=fixture_ops.empty)
-    records = (invalid,)
-    operation: Callable[[], object]
-    if grade_only:
-        operation = partial(
-            grader_ops.grade,
-            records[0],
-            response=None,
-            outcome=Outcome(changed_files=(), verification=Verification.Unchecked()),
-        )
-    else:
-        operation = partial(datasets.compile_dataset, cases=records)
-    with pytest.raises(InvalidArgument, match="criteria read files missing from the fixture"):
-        operation()
+    with pytest.raises(DomainValidationError, match="criteria read files missing from the fixture"):
+        _copy_case(definition, fixture=fixture_ops.empty)
 
 
 @pytest.mark.parametrize("delivery", ["manifest", "inline"])

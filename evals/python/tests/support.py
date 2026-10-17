@@ -22,6 +22,7 @@ from kernel import (
     Criterion,
     Instruction,
     Reference,
+    Response,
     ResponseValue,
     Rubric,
     Task,
@@ -86,24 +87,26 @@ def timeout_case(*, case_id: str, initial: int, requested: int) -> Task:
 
 def choice_case(*, case_id: str, a: int, b: int) -> Task:
     choice = "A" if a < b else "B"
-    return Task(
+    return Task.create(
         id=case_id,
         fixture=fixture_ops.empty,
-        instruction=Instruction(skill="reasoning", prompt="Choose A or B with a reason"),
+        instruction=Instruction.create(skill="reasoning", prompt="Choose A or B with a reason"),
         criterion=Criterion.Answer(
-            Rubric(
+            Rubric.create(
                 expected=[("choice", ResponseValue.String(choice))],
-                text_rule=TextRule(field="reason", min_words=1, max_words=40),
+                text_rule=TextRule.create(field="reason", min_words=1, max_words=40),
             )
         ),
         allowed_files=(),
         reference=Reference(
             edits=fixture_ops.empty,
             completion=Completion.Structured(
-                [
-                    ("choice", ResponseValue.String(choice)),
-                    ("reason", ResponseValue.String("The cost is lower.")),
-                ]
+                Response.create(
+                    [
+                        ("choice", ResponseValue.String(choice)),
+                        ("reason", ResponseValue.String("The cost is lower.")),
+                    ]
+                )
             ),
         ),
     )

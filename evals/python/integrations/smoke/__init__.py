@@ -7,7 +7,7 @@ from kernel import Content, Criterion, Verifier
 
 def checks(*, inputs: tuple[str, ...], program: str) -> Criterion.Value:
     return Criterion.Code(
-        Verifier(
+        Verifier.create(
             inputs=inputs,
             files=(
                 (

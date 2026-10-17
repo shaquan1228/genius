@@ -27,11 +27,14 @@ from kernel import (
     Completion,
     Content,
     Criterion,
-    InvalidArgument,
+    GradingError,
     Reference,
     Task,
     Verification,
     Verifier,
+)
+from kernel import (
+    ValidationError as DomainValidationError,
 )
 from kernel._operations import fixture as fixture_ops
 
@@ -53,7 +56,7 @@ def _checks(**updates: object) -> Verifier:
         "timeout_seconds": 30,
         **updates,
     }
-    constructor = cast(Callable[..., Verifier], Verifier)
+    constructor = cast(Callable[..., Verifier], Verifier.create)
     return constructor(**values)
 
 
@@ -324,7 +327,7 @@ def cleanup_finishes_after_repeated_cancellation() -> None:
 )
 def invalid_executable_contract_is_rejected(updates: dict[str, object]) -> None:
     case = _declaration()
-    with pytest.raises(InvalidArgument):
+    with pytest.raises(DomainValidationError):
         datasets.compile_dataset(
             cases=(
                 _copy_case(
@@ -359,7 +362,7 @@ def typed_status_reaches_kernel(status: Verification.Value) -> None:
 
 
 def kernel_refuses_harness_error() -> None:
-    with pytest.raises(InvalidArgument):
+    with pytest.raises(GradingError):
         score_case(
             case_id="clear-task",
             response="",

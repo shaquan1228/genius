@@ -15,7 +15,7 @@ def response(completion: Completion.Value) -> str:
         case Completion.Plain():
             return completion[0]
         case Completion.Structured():
-            return json.dumps({name: value[0] for name, value in completion[0]})
+            return json.dumps({name: value[0] for name, value in completion[0].fields})
         case _ as unreachable:
             assert_never(unreachable)
 

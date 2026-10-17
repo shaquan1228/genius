@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 HEADER = "# Generated from compiled OCaml interfaces; do not edit.\n"
-PREAMBLE = "from collections.abc import Sequence\n\n"
+PREAMBLE = "from collections.abc import Sequence\nfrom typing import Never\n\n"
 PRIMITIVES = {"string": "str", "bool": "bool", "int": "int", "float": "float", "unit": "None"}
 type Node = dict[str, Any]
 
@@ -61,14 +61,18 @@ def type_name(value: Node, *, qualify: bool = False, variants: frozenset[str] = 
             raise ValueError(f"Unsupported type node: {value['kind']}")
 
 
-def record(value: Node, *, variants: frozenset[str]) -> str:
+def record(value: Node, *, variants: frozenset[str], factory: Node | None = None) -> str:
     fields = [
         (identifier(field["name"]), type_name(field["type"], variants=variants))
         for field in value["fields"]
     ]
     parameters = ", ".join(f"{name}: {annotation}" for name, annotation in fields)
     name = public_name(value["name"])
-    result = f"class {name}:\n    def __init__(self, *, {parameters}) -> None: ...\n"
+    constructor = "_token: Never, /" if value.get("private", False) else "*, " + parameters
+    result = f"class {name}:\n    def __init__(self, {constructor}) -> None: ...\n"
+    if factory is not None:
+        signature = operation({**factory, "name": "create"}, variants=variants)
+        result += "    @staticmethod\n    " + signature
     for name, annotation in fields:
         result += f"    @property\n    def {name}(self) -> {annotation}: ...\n"
     return result
@@ -108,15 +112,23 @@ def variant_bindings(value: Node, *, variants: frozenset[str]) -> str:
     return result + f"    type Value = {' | '.join(alternatives)}\n\n"
 
 
-def ast_bindings(items: list[Node]) -> str:
+def ast_bindings(items: list[Node], *, factories: dict[str, Node] | None = None) -> str:
     variants = frozenset(str(item["name"]) for item in items if item["kind"] == "variant")
     result = HEADER + PREAMBLE + "import kernel as _types\n\n"
     for value in items:
         name, kind = public_name(value["name"]), value["kind"]
         if kind == "abstract":
-            result += f"class {name}: ...\n\n"
+            factory = (factories or {}).get(str(value["name"]))
+            if factory is None:
+                result += f"class {name}: ...\n\n"
+            else:
+                signature = operation({**factory, "name": "create"}, variants=variants)
+                result += f"class {name}:\n    @staticmethod\n    " + signature + "\n"
         elif kind == "record":
-            result += record(value, variants=variants) + "\n"
+            result += (
+                record(value, variants=variants, factory=(factories or {}).get(str(value["name"])))
+                + "\n"
+            )
         elif kind == "variant":
             result += variant_bindings(value, variants=variants)
         elif kind == "alias":
@@ -129,14 +141,17 @@ def ast_bindings(items: list[Node]) -> str:
 def type_exports(items: list[Node]) -> list[tuple[str, str]]:
     names = [str(item["name"]) for item in items]
     exports = [(public_name(name), name) for name in names]
-    if len({"InvalidArgument", *(name for name, _ in exports)}) != len(exports) + 1:
+    if (
+        len({"InvalidArgument", "ValidationError", "GradingError", *(name for name, _ in exports)})
+        != len(exports) + 3
+    ):
         raise ValueError("Public Python type and constructor names collide")
     return sorted(exports)
 
 
-def runtime_types(items: list[Node]) -> str:
+def runtime_types(items: list[Node], *, factories: dict[str, Node] | None = None) -> str:
     exports = type_exports(items)
-    names = ["InvalidArgument", *(name for name, _ in exports)]
+    names = ["InvalidArgument", "ValidationError", "GradingError", *(name for name, _ in exports)]
     alternatives = []
     for item in items:
         if item["kind"] != "variant":
@@ -149,27 +164,83 @@ def runtime_types(items: list[Node]) -> str:
     return (
         HEADER
         + '"""Native domain types, with alternatives attached to their owners."""\n\n'
+        + "from ._bridge import GradingError as GradingError\n"
+        + "from ._bridge import ValidationError as ValidationError\n"
         + "from ._bridge import InvalidArgument as InvalidArgument\n"
-        + "from ._bridge import native as _native\n\n"
+        + "from ._bridge import native as _native\nfrom ._operations import _factories\n\n"
         + "\n".join(f"{name} = _native.{original}" for name, original in exports)
         + "\n\n"
         + "\n".join(alternatives)
+        + "\n\n"
+        + "\n".join(
+            f"{public_name(name)}.create = staticmethod(_factories[{name!r}])"
+            for name in (factories or {})
+        )
         + "\n\n__all__ = "
         + repr(sorted(names))
         + "\n"
     )
 
 
-def runtime_operations(modules: list[str]) -> str:
-    return (
+def result_payload(value: Node) -> tuple[Node, Node] | None:
+    if (
+        value["kind"] == "name"
+        and value["name"] in ("result", "Stdlib.result")
+        and len(value["args"]) == 2
+    ):
+        return value["args"][0], value["args"][1]
+    return None
+
+
+def factory_operations(items: list[Node]) -> dict[str, Node]:
+    factories: dict[str, Node] = {}
+    for module in items:
+        if module["kind"] != "module":
+            continue
+        for value in module["items"]:
+            _, returned = arrows(value["type"])
+            payload = result_payload(returned)
+            if payload is None:
+                continue
+            success, failure = payload
+            if failure["name"] != "validation_failure" or success["kind"] != "name":
+                continue
+            name = str(success["name"])
+            if value["name"] in ("make", "of_fields", "of_files", "resolve", name):
+                factories.setdefault(name, {**value, "module": module["name"]})
+    return factories
+
+
+def runtime_operations(modules: list[Node], *, factories: dict[str, Node]) -> str:
+    result = (
         HEADER
-        + '"""Private native operations used by the Python implementation."""\n\n'
-        + "from functools import cache\n\nfrom ._bridge import native as _native\n\n"
-        + "\n".join(f"{name.lower()} = _native.{name}" for name in modules)
-        + "\n\n@cache\ndef sources() -> tuple[tuple[str, str], ...]:\n"
-        + "    return tuple((str(name), str(contents)) for name, contents in _native.sources)\n"
+        + "from functools import cache\nfrom types import SimpleNamespace\n\n"
+        + "from ._bridge import native as _native, checked as _checked\n\n"
+    )
+    for module in modules:
+        entries = []
+        for value in module["items"]:
+            _, returned = arrows(value["type"])
+            native = f"_native.{module['name']}.{value['name']}"
+            payload = result_payload(returned)
+            if payload is not None:
+                native = f"_checked({native}, failure={str(payload[1]['name'])!r})"
+            entries.append(f"    {value['name']}={native},")
+        result += f"{module['name'].lower()} = SimpleNamespace(\n" + "\n".join(entries) + "\n)\n\n"
+    result += (
+        "_factories = {\n"
+        + "\n".join(
+            f"    {name!r}: {value['module'].lower()}.{value['name']},"
+            for name, value in factories.items()
+        )
+        + "\n}\n\n"
+    )
+    result += "@cache\ndef sources() -> tuple[tuple[str, str], ...]:\n"
+    result += "    return tuple((str(name), str(contents)) for name, contents in _native.sources)\n"
+    return (
+        result
         + "\n__all__ = "
-        + repr(sorted([*(name.lower() for name in modules), "sources"]))
+        + repr(sorted([*(str(m["name"]).lower() for m in modules), "sources"]))
         + "\n"
     )
 
@@ -198,7 +269,10 @@ def operation(value: Node, *, variants: frozenset[str] = frozenset()) -> str:
         elif annotation != "None":
             positional.append(f"value{index or ''}: {annotation}")
     parameters = positional + (["/"] if positional else []) + (["*", *keywords] if keywords else [])
-    result_type = type_name(result, qualify=True, variants=variants)
+    payload = result_payload(result)
+    result_type = type_name(
+        result if payload is None else payload[0], qualify=True, variants=variants
+    )
     return f"def {name}({', '.join(parameters)}) -> {result_type}: ...\n"
 
 
@@ -224,9 +298,12 @@ def render(modules: list[Node]) -> dict[str, str]:
         raise ValueError("Expected one compiled public kernel interface")
     items = modules[0]["items"]
     ast = [item for item in items if item["kind"] not in ("module", "value")]
+    factories = factory_operations(items)
     outputs = {
-        "__init__.py": runtime_types(ast),
-        "__init__.pyi": ast_bindings(ast) + "class InvalidArgument(Exception): ...\n",
+        "__init__.py": runtime_types(ast, factories=factories),
+        "__init__.pyi": ast_bindings(ast, factories=factories)
+        + "from ._bridge import ValidationError as ValidationError, GradingError as GradingError\n"
+        + "class InvalidArgument(Exception): ...\n",
     }
     variants = frozenset(str(item["name"]) for item in ast if item["kind"] == "variant")
     exports = []
@@ -246,7 +323,9 @@ def render(modules: list[Node]) -> dict[str, str]:
         )
     if any(item["kind"] == "value" and item["name"] != "sources" for item in items):
         raise ValueError("Unexpected public root value")
-    outputs["_operations.py"] = runtime_operations(exports)
+    outputs["_operations.py"] = runtime_operations(
+        [item for item in items if item["kind"] == "module"], factories=factories
+    )
     outputs["_operations.pyi"] = (
         HEADER
         + "\n"

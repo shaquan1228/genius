@@ -3,6 +3,7 @@ include Ast
 
 module Case = Case
 module Criterion = Criterion
+module Construct = Construct
 module Experiment = Experiment
 module Fixture = Fixture
 module Grader = Grader

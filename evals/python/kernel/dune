@@ -8,7 +8,7 @@
 
 (subdir generated
  (rule
-  (targets __init__.py __init__.pyi _operations.py _operations.pyi _case.pyi _criterion.pyi _experiment.pyi _fixture.pyi _grader.pyi _projection.pyi _reference.pyi _response.pyi _verifier.pyi)
+  (targets __init__.py __init__.pyi _operations.py _operations.pyi _case.pyi _criterion.pyi _construct.pyi _experiment.pyi _fixture.pyi _grader.pyi _projection.pyi _reference.pyi _response.pyi _verifier.pyi)
   (deps ../generate.py ../schema.json ../../../pyproject.toml)
   (action
    (progn

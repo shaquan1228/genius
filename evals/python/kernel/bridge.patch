@@ -13,3 +13,49 @@
        let transl_implementation =
          if Config.flambda then
            Translmod.transl_implementation_flambda
+@@ -549,10 +552,10 @@
+       index
+ 
+     let bind (vars : t) (ty : Types.type_expr) ty' =
+-      Ocaml_in_python_api.IntHashtbl.add vars.table (Metapp.Types.get_id ty) ty'
++      Ocaml_in_python_api.IntHashtbl.add vars.table (Types.get_id ty) ty'
+ 
+     let find (vars : t) (ty : Types.type_expr) =
+-      let id = Metapp.Types.get_id ty in
++      let id = Types.get_id ty in
+       try
+         Ocaml_in_python_api.IntHashtbl.find vars.table id
+       with Not_found ->
+@@ -1599,7 +1602,7 @@
+                        (List.map Ocaml_in_python_api.Type.to_core_type params)))]
+                   given))] in
+             match type_info.kind with
+-            | Record labels -> [%expr
++            | Record labels when type_info.type_declaration.type_private = Public -> [%expr
+                 if Py.Type.get v = Dict then [%e
+                   let vars = Type.Vars.create () in
+                   List.iter2 (Type.Vars.bind vars)
+@@ -1621,11 +1624,12 @@
+       let ocaml_of_python = get_variable_ident ocaml_of_python converter_index in
+       Metapp.Exp.ident ocaml_of_python)}
+ 
+-let add_type_converter (type_info : type_info) =
++let add_type_converter ocaml_env expansions (type_info : type_info) =
+   let class_ = get_variable_expression type_info.class_var in
+   Types.Uid.Tbl.add type_constr_converter_tbl
+     type_info.type_declaration.type_uid {
+-      converter = make_type_converter type_info;
++      converter = (fun _caller_env _caller_expansions params ->
++        make_type_converter type_info ocaml_env expansions params);
+       class_;
+     }
+ 
+@@ -2550,7 +2554,7 @@
+               | Some manifest -> Right (ident, decl, manifest)) type_declarations in
+           let type_infos =
+             List.map (add_class_prototype longident) type_declarations in
+-          List.iter add_type_converter type_infos;
++          List.iter (add_type_converter ocaml_env expansions) type_infos;
+           List.iter (add_type_info ~target_top_module ocaml_env expansions python_module) type_infos;
+           List.iter (add_type_manifest ~target_top_module ocaml_env expansions python_module) type_manifests;
+       end;

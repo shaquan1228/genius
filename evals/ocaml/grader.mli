@@ -4,7 +4,12 @@
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
 (* Ordered mandatory boolean scores, derived from the grading definitions. *)
 val required_names : string list
-val grade : Ast.task -> response:Ast.response option -> outcome:Ast.outcome -> Ast.score
+
+val grade :
+  Ast.task ->
+  response:Ast.response option ->
+  outcome:Ast.outcome ->
+  (Ast.score, Ast.grading_failure) result
 
 (* Whitespace follows Python's Unicode str.split and str.strip. *)
 val word_count : string -> int

@@ -6,6 +6,7 @@ from kernel import (
     Criterion,
     Instruction,
     Reference,
+    Response,
     ResponseValue,
     Rubric,
     Task,
@@ -17,7 +18,7 @@ info = None
 
 
 def receipt(*, term: str = "price") -> Task:
-    return Task(
+    return Task.create(
         id="clear-task",
         fixture=fixture_ops.of_files(
             [
@@ -36,7 +37,7 @@ assert total([(3.0, 1), (4.0, 1)]) == 7.0
                 ),
             ]
         ),
-        instruction=Instruction(
+        instruction=Instruction.create(
             skill="reasoning",
             prompt=(
                 "Fix total in receipt.py so each item's quantity contributes to the total. "
@@ -88,7 +89,7 @@ def timeout(value=None):
 def timeout(*, initial: int = 15, requested: int = 30) -> Task:
     if initial <= 0 or requested <= 0 or initial == requested:
         raise ValueError("Timeout changes need distinct positive initial and requested values")
-    return Task(
+    return Task.create(
         id="known-preflight",
         fixture=fixture_ops.of_files(
             [
@@ -112,7 +113,7 @@ else:
                 ),
             ]
         ),
-        instruction=Instruction(
+        instruction=Instruction.create(
             skill="preflight",
             prompt=(
                 f"On branch eval, change the default timeout from {initial} to {requested} seconds "
@@ -158,10 +159,10 @@ def cases() -> tuple[Task, ...]:
     return (
         receipt(),
         timeout(),
-        Task(
+        Task.create(
             id="small-decision",
             fixture=fixture_ops.empty,
-            instruction=Instruction(
+            instruction=Instruction.create(
                 skill="bayesian",
                 prompt=(
                     "Choose a service for a one-month trial. A costs $10 total; B costs $8 total. "
@@ -171,9 +172,9 @@ def cases() -> tuple[Task, ...]:
                 ),
             ),
             criterion=Criterion.Answer(
-                Rubric(
+                Rubric.create(
                     expected=[("choice", ResponseValue.String("B"))],
-                    text_rule=TextRule(
+                    text_rule=TextRule.create(
                         field="reason",
                         min_words=1,
                         max_words=40,
@@ -184,17 +185,19 @@ def cases() -> tuple[Task, ...]:
             reference=Reference(
                 edits=fixture_ops.empty,
                 completion=Completion.Structured(
-                    [
-                        ("choice", ResponseValue.String("B")),
-                        ("reason", ResponseValue.String("B costs less for identical service.")),
-                    ]
+                    Response.create(
+                        [
+                            ("choice", ResponseValue.String("B")),
+                            ("reason", ResponseValue.String("B costs less for identical service.")),
+                        ]
+                    )
                 ),
             ),
         ),
-        Task(
+        Task.create(
             id="decision-review",
             fixture=fixture_ops.empty,
-            instruction=Instruction(
+            instruction=Instruction.create(
                 skill="bayesian",
                 prompt=(
                     "I took a one-time $1 bet with a known 80% chance of winning $1 profit "
@@ -206,23 +209,28 @@ def cases() -> tuple[Task, ...]:
                 ),
             ),
             criterion=Criterion.Answer(
-                Rubric(
+                Rubric.create(
                     expected=[
                         ("decision_was_supported", ResponseValue.Bool(True)),  # noqa: FBT003
                         ("change_rule", ResponseValue.Bool(False)),  # noqa: FBT003
                     ],
-                    text_rule=TextRule(field="reason", min_words=1, max_words=40),
+                    text_rule=TextRule.create(field="reason", min_words=1, max_words=40),
                 )
             ),
             allowed_files=(),
             reference=Reference(
                 edits=fixture_ops.empty,
                 completion=Completion.Structured(
-                    [
-                        ("decision_was_supported", ResponseValue.Bool(True)),  # noqa: FBT003
-                        ("change_rule", ResponseValue.Bool(False)),  # noqa: FBT003
-                        ("reason", ResponseValue.String("One loss did not change the known odds.")),
-                    ]
+                    Response.create(
+                        [
+                            ("decision_was_supported", ResponseValue.Bool(True)),  # noqa: FBT003
+                            ("change_rule", ResponseValue.Bool(False)),  # noqa: FBT003
+                            (
+                                "reason",
+                                ResponseValue.String("One loss did not change the known odds."),
+                            ),
+                        ]
+                    )
                 ),
             ),
         ),

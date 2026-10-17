@@ -94,6 +94,8 @@ def _build_bindings(workspace: Path, *, check: bool = True) -> subprocess.Comple
 def _add_probe(workspace: Path) -> subprocess.CompletedProcess[str]:
     source = workspace / "ocaml/ast.ml"
     source.write_text(source.read_text() + "\ntype dune_probe = { payload : int }\n")
+    interface = workspace / "ocaml/ast.mli"
+    interface.write_text(interface.read_text() + "\ntype dune_probe = { payload : int }\n")
     return _build_bindings(workspace, check=False)
 
 
@@ -143,6 +145,8 @@ def dune_rebuilds_stubs_after_compiled_types_change(binding_workspace: Path) -> 
     _promote_bindings(binding_workspace)
     source = binding_workspace / "ocaml/ast.ml"
     source.write_text(source.read_text().replace("payload : int", "payload : string"))
+    interface = binding_workspace / "ocaml/ast.mli"
+    interface.write_text(interface.read_text().replace("payload : int", "payload : string"))
     _build_bindings(binding_workspace)
     assert (
         "def payload(self) -> str:"
@@ -159,7 +163,7 @@ def dune_clean_removes_stubs_and_preserves_runtime_sources(binding_workspace: Pa
 def installed_kernel_keeps_policy_and_provenance_together(tmp_path: Path) -> None:
     shutil.copytree(EVALS / "ocaml", tmp_path / "ocaml", ignore=shutil.ignore_patterns("tests"))
     shutil.copyfile(EVALS / "dune-project", tmp_path / "dune-project")
-    source = tmp_path / "ocaml/experiment.ml"
+    source = tmp_path / "ocaml/ast.ml"
     source.write_text(source.read_text().replace("epochs = 5", "epochs = 7"))
     subprocess.run(["dune", "build", "--root", str(tmp_path), "@install"], check=True)
     prefix = tmp_path / "install"
@@ -175,8 +179,8 @@ with patch('subprocess.run', side_effect=AssertionError('Import compiled the ker
     spec = experiment_ops.resolve()
     assert isinstance(fixture_ops.empty, Fixture)
     assert not hasattr(fixture_ops.empty, 'add')
-    assert dict(sources())['experiment.ml'].find('epochs = 7') >= 0
-    assert dict(sources())['experiment.ml'].find('epochs = 9') == -1
+    assert dict(sources())['ast.ml'].find('epochs = 7') >= 0
+    assert dict(sources())['ast.ml'].find('epochs = 9') == -1
     print(json.dumps({'epochs': spec.epochs}))
 """
     result = subprocess.run(
@@ -231,3 +235,25 @@ def alternative_names_cannot_silently_collide(tmp_path: Path, *, text: str) -> N
     items = _schema((path,))[0]["items"]
     with pytest.raises(ValueError, match="alternative names collide"):
         generate.runtime_types(items)
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        'let forge (task : Genius_evals_kernel.task) = { task with id = "" }',
+        "let forge (value : Genius_evals_kernel.verifier) = { value with inputs = [] }",
+        "let forge : Genius_evals_kernel.response = { fields = [] }",
+    ],
+)
+def ocaml_clients_cannot_construct_unvalidated_values(tmp_path: Path, *, expression: str) -> None:
+    source = tmp_path / "forge.ml"
+    source.write_text(expression)
+    result = subprocess.run(
+        ["ocamlfind", "ocamlc", "-package", "genius_evals_kernel", "-c", str(source)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "private type" in result.stderr

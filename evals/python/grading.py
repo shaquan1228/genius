@@ -10,7 +10,7 @@ from pydantic import validate_call
 from evals.python import datasets
 from evals.python.datasets import Selection
 from evals.python.schema import FROZEN
-from kernel import InvalidArgument, Outcome, Response, ResponseValue, Task, Verification
+from kernel import Outcome, Response, ResponseValue, Task, Verification
 from kernel._operations import grader as grader_ops
 from kernel._operations import response as response_ops
 
@@ -40,7 +40,7 @@ def _candidate(text: str) -> Response | None:
         text = text[8:-4]
     try:
         return _response(json.loads(text))
-    except (ValueError, RecursionError, InvalidArgument):
+    except (ValueError, RecursionError):
         return None
 
 

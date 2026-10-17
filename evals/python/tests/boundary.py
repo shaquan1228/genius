@@ -173,14 +173,14 @@ def shared_domain_types_live_in_ast() -> None:
     )
     bodies = [(OCAML_ROOT / f"{name}.ml").read_text() for name in operations]
     assert not any(re.search(r"^type ", body, re.M) for body in bodies)
-    assert not re.search(r"^let |^module ", (OCAML_ROOT / "ast.ml").read_text(), re.M)
+    assert "type task = private {" in (OCAML_ROOT / "ast.mli").read_text()
 
 
 def public_interfaces_only_declare_operations() -> None:
     assert not any(
         re.search(r"^type ", path.read_text(), re.M)
         for path in OCAML_ROOT.glob("*.mli")
-        if path.name != "fixture_store.mli"
+        if path.name not in {"fixture_store.mli", "ast.mli"}
     )
 
 

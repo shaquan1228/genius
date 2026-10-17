@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from unittest.mock import PropertyMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -164,11 +164,13 @@ def reference_channels_export_independently_and_escape() -> None:
     )
     dataset = datasets.compile_dataset(
         cases=(
-            Task(
+            Task.create(
                 id="reference",
                 fixture=fixture_ops.empty,
-                instruction=Instruction(skill="reasoning", prompt="fields"),
-                criterion=Criterion.Answer(Rubric(expected=expected_fields, text_rule=None)),
+                instruction=Instruction.create(skill="reasoning", prompt="fields"),
+                criterion=Criterion.Answer(
+                    Rubric.create(expected=expected_fields.fields, text_rule=None)
+                ),
                 allowed_files=("result.txt",),
                 reference=Reference(
                     edits=fixture_ops.of_files([("result.txt", "result")]),
@@ -223,10 +225,9 @@ def malformed_native_scores_are_rejected(pairs: list[tuple[str, object]]) -> Non
 def required_scores_follow_native_declaration() -> None:
     with (
         patch.object(
-            type(grader_ops),
+            grader_ops,
             "required_names",
-            new_callable=PropertyMock,
-            return_value=["correctness", "scope", "extension"],
+            ["correctness", "scope", "extension"],
         ),
         pytest.raises(ValueError, match="score names"),
     ):

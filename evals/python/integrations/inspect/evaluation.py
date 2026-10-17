@@ -80,7 +80,7 @@ def diagnostic_tasks(
     spec: Experiment, *, request: EvaluationSettings, build: partial[Task]
 ) -> list[Task]:
     modes = request.deliveries or ()
-    single = Experiment(
+    single = Experiment.create(
         profiles=spec.profiles,
         epochs=1,
         message_limit=spec.message_limit,
