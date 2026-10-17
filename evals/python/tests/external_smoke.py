@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from evals.python import commands, queries
+from evals.python import commands, datasets, queries, verification
 from evals.python.datasets import smoke as declarations
 from evals.python.integrations.smoke import __main__ as cli
 from evals.python.tests.declarations import _files, _reference_files
@@ -54,11 +54,11 @@ def python_smoke_keeps_checks_and_references_private() -> None:
 
 
 async def _assess_code(
-    *, dataset: queries.Dataset, agent: commands.Environment
-) -> tuple[commands.Assessment, ...]:
+    *, dataset: datasets.Dataset, agent: verification.Environment
+) -> tuple[verification.Assessment, ...]:
     runtime = commands.create_runtime()
 
-    async def assess(changed_files: tuple[str, ...]) -> commands.Assessment:
+    async def assess(changed_files: tuple[str, ...]) -> verification.Assessment:
         return await commands.assess(
             case_id="clear-task",
             selection=dataset,
@@ -82,10 +82,10 @@ def external_seed_fails_reference_passes_and_scope_is_enforced() -> None:
     dataset = queries.compile_dataset(cases=declarations.cases())
     runtime = commands.create_runtime()
 
-    async def execute() -> tuple[commands.Assessment, ...]:
+    async def execute() -> tuple[verification.Assessment, ...]:
         agent = await runtime.create()
         try:
-            await agent.execute(commands.Execution(command=("mkdir", "workspace")))
+            await agent.execute(verification.Execution(command=("mkdir", "workspace")))
             for name, content in _files(queries.list_cases(selection=dataset)[0].files).items():
                 await agent.write_bytes(f"workspace/{name}", content.encode())
             return await _assess_code(dataset=dataset, agent=agent)
@@ -104,12 +104,12 @@ def external_seed_fails_reference_passes_and_scope_is_enforced() -> None:
 
 def external_answer_uses_kernel_rules_without_allocating() -> None:
     dataset = queries.compile_dataset(cases=declarations.cases())
-    agent = commands.Environment(
+    agent = verification.Environment(
         execute=AsyncMock(), read_bytes=AsyncMock(), write_bytes=AsyncMock()
     )
-    runtime = commands.Runtime(create=AsyncMock(), cleanup=AsyncMock())
+    runtime = verification.Runtime(create=AsyncMock(), cleanup=AsyncMock())
 
-    async def assess(response: str) -> commands.Assessment:
+    async def assess(response: str) -> verification.Assessment:
         return await commands.assess(
             case_id="decision-review",
             selection=dataset,
@@ -167,7 +167,7 @@ def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixtur
 def offline_cli_reports_harness_failure_without_success(
     *, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    result = commands.VerificationResult(
+    result = verification.VerificationResult(
         verification=Verification.HarnessError("private diagnostic")
     )
     with patch.object(commands, "validate_reference", new=AsyncMock(return_value=result)):

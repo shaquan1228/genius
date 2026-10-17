@@ -22,12 +22,14 @@ from inspect_ai.solver import generate, use_tools
 from inspect_ai.tool import Tool, ToolCall, tool
 from pydantic import ValidationError
 
-from evals.python import commands
+from evals.python import evaluation_settings
 from evals.python.integrations.inspect import pricing
 
 
-def _rates() -> commands.ModelPricing:
-    return commands.ModelPricing(input=2.0, output=8.0, input_cache_write=3.0, input_cache_read=0.2)
+def _rates() -> evaluation_settings.ModelPricing:
+    return evaluation_settings.ModelPricing(
+        input=2.0, output=8.0, input_cache_write=3.0, input_cache_read=0.2
+    )
 
 
 @pytest.mark.parametrize(
@@ -37,7 +39,7 @@ def explicit_prices_preserve_model_metadata_and_price_every_usage_class(
     info: ModelInfo | None, *, context: int | None
 ) -> None:
     model = get_model("mockllm/pricing-explicit")
-    request = commands.EvaluationSettings(model=str(model), model_cost=_rates())
+    request = evaluation_settings.EvaluationSettings(model=str(model), model_cost=_rates())
     with patch.object(pricing, "get_model_info", return_value=info):
         assert pricing.configure(model, request=request) == _rates().model_dump()
     actual = get_model_info(model)
@@ -58,7 +60,9 @@ def builtin_prices_are_validated_and_registered() -> None:
     cost = ModelCost(**_rates().model_dump())
     with patch.object(pricing, "get_model_info", return_value=ModelInfo(cost=cost)):
         assert (
-            pricing.configure(model, request=commands.EvaluationSettings(model=str(model)))
+            pricing.configure(
+                model, request=evaluation_settings.EvaluationSettings(model=str(model))
+            )
             == _rates().model_dump()
         )
     actual = get_model_info(model)
@@ -85,7 +89,7 @@ def missing_or_routed_prices_fail_before_registration(name: str, *, info: ModelI
         patch.object(pricing, "set_model_info") as register,
         pytest.raises(ValueError, match="EVAL_MODEL_COST"),
     ):
-        pricing.configure(model, request=commands.EvaluationSettings(model=name))
+        pricing.configure(model, request=evaluation_settings.EvaluationSettings(model=name))
     register.assert_not_called()
 
 
@@ -97,12 +101,12 @@ def invalid_builtin_prices_fail_validation(invalid: float) -> None:
         patch.object(pricing, "get_model_info", return_value=ModelInfo(cost=cost)),
         pytest.raises(ValidationError),
     ):
-        pricing.configure(model, request=commands.EvaluationSettings(model=str(model)))
+        pricing.configure(model, request=evaluation_settings.EvaluationSettings(model=str(model)))
 
 
 def explicit_routed_prices_override_vendor_defaults() -> None:
     model = get_model("mockllm/pricing-routed")
-    request = commands.EvaluationSettings(
+    request = evaluation_settings.EvaluationSettings(
         model="hf-inference-providers/vendor/model:route", model_cost=_rates()
     )
     with patch.object(pricing, "get_model_info", return_value=ModelInfo()):
@@ -145,7 +149,7 @@ def native_cost_limit_records_usage_and_blocks_next_tool(limit: float, *, tmp_pa
     done.usage = ModelUsage()
     model = get_model("mockllm/pricing-limit", custom_outputs=[output, done])
     pricing.configure(
-        model, request=commands.EvaluationSettings(model=str(model), model_cost=_rates())
+        model, request=evaluation_settings.EvaluationSettings(model=str(model), model_cost=_rates())
     )
     task = Task(
         name="dollar-limit",

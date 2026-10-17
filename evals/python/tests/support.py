@@ -8,7 +8,7 @@ from inspect_ai import eval
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import ModelCost, ModelInfo, get_model, set_model_info
 
-from evals.python import queries
+from evals.python import datasets, queries
 from evals.python.datasets import humanevalplus, smoke
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.declarations import _copy_case
@@ -109,7 +109,7 @@ def choice_case(*, case_id: str, a: int, b: int) -> Task:
     )
 
 
-def import_dataset(records: tuple[str, ...]) -> queries.Dataset:
+def import_dataset(records: tuple[str, ...]) -> datasets.Dataset:
     return queries.compile_dataset(cases=humanevalplus.declarations(records))
 
 

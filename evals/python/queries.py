@@ -1,66 +1,19 @@
 """Typed public queries adapt the native kernel through immutable dataset snapshots."""
 
-import json
-from collections.abc import Mapping
-from dataclasses import dataclass
-from types import MappingProxyType
 from typing import TYPE_CHECKING, cast
 
 from pydantic import validate_call
 
-from evals.python import datasets
-from evals.python.datasets import Dataset, Selection
-from evals.python.schema import FROZEN, DatasetInfo, Files
-from kernel import (
-    Case,
-    Experiment,
-    InvalidArgument,
-    Outcome,
-    Reference,
-    Response,
-    ResponseValue,
-    Task,
-    Verification,
-)
+import kernel
+from evals.python import datasets, grading, schema
 from kernel._operations import experiment as experiment_ops
-from kernel._operations import grader as grader_ops
 from kernel._operations import projection as projection_ops
-from kernel._operations import response as response_ops
 
 if TYPE_CHECKING:
     from kernel._experiment import ResolveArgs
 
 
-def _scalar(value: object) -> ResponseValue.Value:
-    if isinstance(value, bool):
-        return ResponseValue.Bool(value)
-    if isinstance(value, str):
-        return ResponseValue.String(value)
-    raise ValueError("Response fields must be strings or booleans")
-
-
-def _response(fields: object) -> Response:
-    if not isinstance(fields, dict):
-        raise ValueError("Expected response object")
-    return response_ops.of_fields([(name, _scalar(value)) for name, value in fields.items()])
-
-
-def _candidate(text: str) -> Response | None:
-    text = grader_ops.trim(text)
-    if text.startswith("```json\n") and text.endswith("\n```"):
-        text = text[8:-4]
-    try:
-        return _response(json.loads(text))
-    except (ValueError, RecursionError, InvalidArgument):
-        return None
-
-
 __all__ = [
-    "Dataset",
-    "DatasetInfo",
-    "DatasetProvenance",
-    "Scores",
-    "Selection",
     "compile_dataset",
     "describe_dataset",
     "get_provenance",
@@ -71,45 +24,35 @@ __all__ = [
     "score_case",
 ]
 
-type Scores = Mapping[str, bool]
-_UNCHECKED = Verification.Unchecked()
 
-
-@dataclass(frozen=True, kw_only=True)
-class DatasetProvenance:
-    info: DatasetInfo | None
-    source_hash: str
-    cases_hash: str
-
-
-@validate_call(config=FROZEN)
+@validate_call(config=schema.FROZEN)
 def compile_dataset(
     *,
-    cases: tuple[Task, ...],
-    info: DatasetInfo | None = None,
-    resources: Files | None = None,
-) -> Dataset:
+    cases: tuple[kernel.Task, ...],
+    info: schema.DatasetInfo | None = None,
+    resources: schema.Files | None = None,
+) -> datasets.Dataset:
     return datasets.compile_declarations(
         cases, info=info, resources={} if resources is None else resources
     )
 
 
-@validate_call(config=FROZEN)
-def load_dataset(*, selection: Selection = "smoke") -> Dataset:
+@validate_call(config=schema.FROZEN)
+def load_dataset(*, selection: datasets.Selection = "smoke") -> datasets.Dataset:
     return datasets.load_dataset(selection)
 
 
-@validate_call(config=FROZEN)
-def list_cases(*, selection: Selection = "smoke") -> tuple[Case, ...]:
+@validate_call(config=schema.FROZEN)
+def list_cases(*, selection: datasets.Selection = "smoke") -> tuple[kernel.Case, ...]:
     return tuple(datasets.load_dataset(selection).cases.values())
 
 
-@validate_call(config=FROZEN)
-def get_reference(*, case_id: str, selection: Selection = "smoke") -> Reference:
+@validate_call(config=schema.FROZEN)
+def get_reference(*, case_id: str, selection: datasets.Selection = "smoke") -> kernel.Reference:
     return projection_ops.reference(datasets.record(case_id, selection=selection))
 
 
-@validate_call(config=FROZEN)
+@validate_call(config=schema.FROZEN)
 def resolve_settings(
     *,
     epochs: int | None = None,
@@ -117,7 +60,7 @@ def resolve_settings(
     cost_limit: float | None = None,
     time_limit: int | None = None,
     cache: bool | None = None,
-) -> Experiment:
+) -> kernel.Experiment:
     options = {
         "epochs": epochs,
         "message_limit": message_limit,
@@ -130,37 +73,33 @@ def resolve_settings(
     )
 
 
-@validate_call(config=FROZEN)
-def describe_dataset(*, selection: Selection = "smoke") -> DatasetInfo | None:
+@validate_call(config=schema.FROZEN)
+def describe_dataset(*, selection: datasets.Selection = "smoke") -> schema.DatasetInfo | None:
     return datasets.dataset_info(selection)
 
 
-@validate_call(config=FROZEN)
-def get_provenance(*, selection: Selection = "smoke") -> DatasetProvenance:
+@validate_call(config=schema.FROZEN)
+def get_provenance(*, selection: datasets.Selection = "smoke") -> datasets.DatasetProvenance:
     dataset = datasets.load_dataset(selection)
-    return DatasetProvenance(
+    return datasets.DatasetProvenance(
         info=dataset.info,
         source_hash=datasets.fingerprint(dataset.sources),
         cases_hash=datasets.cases_hash(dataset),
     )
 
 
-@validate_call(config=FROZEN)
+@validate_call(config=schema.FROZEN)
 def score_case(
     *,
     case_id: str,
     response: str,
     changed_files: tuple[str, ...],
-    verification: Verification.Value = _UNCHECKED,
-    selection: Selection = "smoke",
-) -> Scores:
-    scores = dict(
-        grader_ops.grade(
-            datasets.record(case_id, selection=selection),
-            response=_candidate(response),
-            outcome=Outcome(changed_files=changed_files, verification=verification),
-        )
+    verification: kernel.Verification.Value = grading.UNCHECKED,
+    selection: datasets.Selection = "smoke",
+) -> grading.Scores:
+    return grading.score(
+        datasets.record(case_id, selection=selection),
+        response=response,
+        changed_files=changed_files,
+        verification=verification,
     )
-    if not {"correctness", "scope"} <= scores.keys():
-        raise ValueError("Kernel omitted required score names")
-    return MappingProxyType(scores)

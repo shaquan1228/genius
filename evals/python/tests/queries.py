@@ -7,13 +7,13 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import commands, datasets, queries
+from evals.python import commands, datasets, grading, queries, schema
 from kernel import Case, Experiment, Verification
 from kernel._operations import projection as projection_ops
 
 
 def public_queries_preserve_canonical_objects() -> None:
-    dataset = assert_type(queries.load_dataset(), queries.Dataset)
+    dataset = assert_type(queries.load_dataset(), datasets.Dataset)
     assert queries.load_dataset(selection=dataset) is dataset
     cases = assert_type(queries.list_cases(), tuple[Case, ...])
     assert cases[0] is dataset.cases[cases[0].id]
@@ -22,10 +22,10 @@ def public_queries_preserve_canonical_objects() -> None:
 
 def public_queries_select_canonical_projections() -> None:
     assert queries.list_cases(selection=queries.compile_dataset(cases=())) == ()
-    assert assert_type(queries.describe_dataset(), queries.DatasetInfo | None) is None
+    assert assert_type(queries.describe_dataset(), schema.DatasetInfo | None) is None
     with patch("evals.python.datasets.humanevalplus.download") as download:
         info = queries.describe_dataset(selection="humanevalplus")
-    assert isinstance(info, queries.DatasetInfo)
+    assert isinstance(info, schema.DatasetInfo)
     download.assert_not_called()
 
 
@@ -35,7 +35,7 @@ def public_experiment_resolves_canonical_overrides() -> None:
 
 
 def public_hashes_match_existing_provenance() -> None:
-    provenance = assert_type(queries.get_provenance(), queries.DatasetProvenance)
+    provenance = assert_type(queries.get_provenance(), datasets.DatasetProvenance)
     assert provenance.info is None
     assert provenance.source_hash == datasets.fingerprint(queries.load_dataset().sources)
     assert provenance.cases_hash == datasets.cases_hash(queries.load_dataset())
@@ -53,7 +53,7 @@ def public_grade_preserves_input_and_result() -> None:
                 changed_files=("receipt.py",),
                 verification=verification,
             ),
-            queries.Scores,
+            grading.Scores,
         )
     assert grade.call_args.args[0] is queries.load_dataset().records["clear-task"]
     assert isinstance(grade.call_args.kwargs["outcome"].verification, Verification.Passed)

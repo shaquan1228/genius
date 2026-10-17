@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -52,7 +53,13 @@ def only_standalone_drivers_use_subprocess() -> None:
 def core_cannot_import_integrations_or_sdks() -> None:
     dependencies = {
         name
-        for file in ("schema.py", "datasets/__init__.py")
+        for file in (
+            "schema.py",
+            "datasets/__init__.py",
+            "grading.py",
+            "evaluation_settings.py",
+            "verification.py",
+        )
         for name in _imported(PYTHON_ROOT / file)
     }
     assert not any(
@@ -188,22 +195,112 @@ def integrations_use_typed_public_operations_without_legacy_facades() -> None:
         "integrations/inspect/benchmarks.py",
     )
     assert not [name for name in obsolete if (PYTHON_ROOT / name).exists()]
-    imports = {
-        name for path in (PYTHON_ROOT / "integrations").rglob("*.py") for name in _imported(path)
+
+
+OWNER_TYPES = {
+    "schema": {"DatasetInfo", "FileName", "Files", "Attributes"},
+    "datasets": {"Dataset", "Selection", "DatasetProvenance"},
+    "grading": {"Scores"},
+    "evaluation_settings": {"EvaluationSettings", "ModelPricing", "InstructionDelivery"},
+    "verification": {
+        "Execution",
+        "Completion",
+        "Environment",
+        "Runtime",
+        "Cleanup",
+        "Diagnostic",
+        "Assessment",
+        "VerificationResult",
+    },
+}
+
+
+@pytest.mark.parametrize("path", sorted((PYTHON_ROOT / "integrations").rglob("*.py")))
+@pytest.mark.parametrize("owner", OWNER_TYPES)
+def integrations_import_only_types_from_owners(path: Path, *, owner: str) -> None:
+    allowed = {f"evals.python.{owner}.{name}" for name in OWNER_TYPES[owner]}
+    owned = {name for name in _imported(path) if name.startswith(f"evals.python.{owner}.")}
+    assert owned <= allowed
+
+
+@pytest.mark.parametrize("path", sorted((PYTHON_ROOT / "integrations").rglob("*.py")))
+def integrations_use_supported_owner_import_style(path: Path) -> None:
+    plain = {alias.name for node in _nodes(path, kind=ast.Import) for alias in node.names}
+    assert plain.isdisjoint(f"evals.python.{owner}" for owner in OWNER_TYPES)
+
+
+def _owner_aliases(path: Path) -> dict[str, str]:
+    return {
+        alias.asname or alias.name: alias.name
+        for node in _nodes(path, kind=ast.ImportFrom)
+        if node.module == "evals.python"
+        for alias in node.names
     }
-    assert not any(name.startswith("evals.python.verification") for name in imports)
 
 
-def integrations_cannot_bypass_the_public_operation_contract() -> None:
-    private = (
-        "evals.python.schema",
-        "evals.python.datasets",
-        "evals.python.verification",
+@pytest.mark.parametrize("path", sorted((PYTHON_ROOT / "integrations").rglob("*.py")))
+def integrations_do_not_call_owner_implementations(path: Path) -> None:
+    aliases = _owner_aliases(path)
+    for node in _nodes(path, kind=ast.Attribute):
+        if isinstance(node.value, ast.Name) and aliases.get(node.value.id) in OWNER_TYPES:
+            assert node.attr in OWNER_TYPES[aliases[node.value.id]]
+
+
+def _check_owner_access(path: Path) -> None:
+    integrations_use_supported_owner_import_style(path)
+    integrations_do_not_call_owner_implementations(path)
+
+
+@pytest.mark.parametrize(
+    ("source", "accepted"),
+    [
+        ("import evals.python.verification as v\nv.verify()", False),
+        ("from evals.python import verification as v\nv.verify()", False),
+        ("from evals.python import verification as v\nv.Runtime()", True),
+        ("from evals.python.verification import Runtime", True),
+    ],
+)
+def owner_import_rules_reject_bypasses_and_allow_types(
+    tmp_path: Path, *, source: str, accepted: bool
+) -> None:
+    path = tmp_path / "adapter.py"
+    path.write_text(source)
+    if accepted:
+        _check_owner_access(path)
+        return
+    with pytest.raises(AssertionError):
+        _check_owner_access(path)
+
+
+@pytest.mark.parametrize("module", [commands, queries])
+def public_modules_define_only_exported_operations(module: types.ModuleType) -> None:
+    path = Path(str(module.__file__))
+    definitions = _nodes(path, kind=ast.FunctionDef) + _nodes(path, kind=ast.AsyncFunctionDef)
+    assert {node.name for node in definitions} == set(module.__all__)
+
+
+@pytest.mark.parametrize("filename", ["commands.py", "queries.py"])
+def public_modules_define_no_models_or_aliases(filename: str) -> None:
+    path = PYTHON_ROOT / filename
+    assert not _nodes(path, kind=ast.ClassDef)
+    assert not _nodes(path, kind=ast.TypeAlias)
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "schema.py",
+        "datasets/__init__.py",
+        "grading.py",
+        "evaluation_settings.py",
+        "verification.py",
+    ],
+)
+def type_owners_do_not_import_public_operations(filename: str) -> None:
+    imports = _imported(PYTHON_ROOT / filename)
+    assert not any(
+        name.startswith(("evals.python.commands", "evals.python.queries")) for name in imports
     )
-    imports = {
-        name for path in (PYTHON_ROOT / "integrations").rglob("*.py") for name in _imported(path)
-    }
-    assert not any(name.startswith(private) for name in imports)
 
 
 def public_commands_and_verification_have_no_sdk_imports() -> None:
@@ -235,7 +332,16 @@ def integrations_import_public_namespaces_or_single_values(path: Path) -> None:
         len(node.names) == 1
         or (
             node.module == "evals.python"
-            and {name.name for name in node.names} <= {"commands", "queries"}
+            and {name.name for name in node.names}
+            <= {
+                "commands",
+                "queries",
+                "schema",
+                "datasets",
+                "grading",
+                "evaluation_settings",
+                "verification",
+            }
         )
         for node in imports
     )

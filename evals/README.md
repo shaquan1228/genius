@@ -34,7 +34,9 @@ flowchart LR
 | `python/integrations/smoke/` | Reusable private Python assertion driver and reference-validation CLI |
 | `python/integrations/inspect/` | SDK task/sample/score adaptation, agents, and sandbox capability adaptation |
 | `python/queries.py` | Typed public queries returning canonical values directly |
-| `python/commands.py` | Execution commands, validated launch settings and runtime composition |
+| `python/commands.py` | Execution commands and runtime composition |
+| `python/evaluation_settings.py` | Validated launch settings, model pricing, and instruction delivery types |
+| `python/grading.py` | Candidate response parsing and native score adaptation |
 | `python/verification.py` | SDK-free execution capabilities, immutable results and verification lifecycle |
 | `python/integrations/hugging_face/` | Hosted Job entry point and HF SDK operations for VM lifecycle, command execution and file IO |
 | `python/integrations/evalplus/` | Benchmark reference-validation CLI, EvalPlus manifest adaptation and trusted EvalPlus driver |
@@ -43,6 +45,14 @@ flowchart LR
 Public `Case` values contain only ID, skill, prompt, and public files, including visible helper tools.
 Reference solutions, expected answers, private verifier programs and private inputs use separate projections.
 Only the trusted host or fresh grading sandbox receives those projections; agent samples and metadata receive public inputs and identifiers.
+Commands and queries export operations only. Import shared types from their owners:
+`evaluation_settings` owns `EvaluationSettings`, `ModelPricing`, and `InstructionDelivery`;
+`verification` owns execution capabilities and verification/assessment results;
+`datasets` owns `Dataset`, `Selection`, and `DatasetProvenance`;
+`schema` owns `DatasetInfo`; `grading` owns `Scores`. Native domain types remain in `kernel`.
+For example, `from evals.python import evaluation_settings` supplies
+`evaluation_settings.ModelPricing(...)`; former command/query type import paths are removed.
+
 Commands and queries accept and return the OCaml-backed types directly; validation and grading policy remain in OCaml.
 
 The public command and query operations remain. Their signatures use native
@@ -629,7 +639,7 @@ rates; a zero cache rate is valid only if that usage is actually free. No model
 vendor price is inferred for an HF provider route. Other providers may use Inspect's
 built-in prices, or the same explicit override. Missing pricing fails before
 sample VMs are allocated. The public command accepts `cost_limit=0.25` and a
-`commands.ModelPricing(...)` value as `model_cost`.
+`evaluation_settings.ModelPricing(...)` value as `model_cost`.
 
 The parent logs the resolved cap and prices; native Inspect logs retain usage,
 costs and cost-limit cutoffs. Cost is checked after each model response, so the

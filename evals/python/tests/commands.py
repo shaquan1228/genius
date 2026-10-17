@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import commands
+from evals.python import commands, evaluation_settings, verification
 from evals.python.paths import EVALS_ROOT
 
 
@@ -71,7 +71,7 @@ def public_evaluation_preserves_validated_settings_at_the_sdk_edge() -> None:
         assert asyncio.run(execute()) == 3
     assert evaluate.await_args is not None
     settings = evaluate.await_args.args[0]
-    assert isinstance(settings, commands.EvaluationSettings)
+    assert isinstance(settings, evaluation_settings.EvaluationSettings)
     assert (settings.model, settings.sample_ids) == ("openai/test", ("clear-task",))
     with pytest.raises(ValidationError):
         settings.model = "changed"
@@ -110,8 +110,8 @@ def public_surface_has_no_legacy_function_aliases() -> None:
 
 @pytest.mark.parametrize("provider", ["hf", "local"])
 def runtime_factory_returns_canonical_capability(provider: str) -> None:
-    runtime_factory: Callable[..., commands.Runtime] = commands.create_runtime
-    runtime = assert_type(runtime_factory(provider=provider), commands.Runtime)
-    assert isinstance(runtime, commands.Runtime)
+    runtime_factory: Callable[..., verification.Runtime] = commands.create_runtime
+    runtime = assert_type(runtime_factory(provider=provider), verification.Runtime)
+    assert isinstance(runtime, verification.Runtime)
     with pytest.raises(ValidationError):
         runtime_factory(provider="unknown")

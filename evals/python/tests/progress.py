@@ -11,7 +11,7 @@ from inspect_ai.dataset import Sample
 from inspect_ai.scorer import Score, Scorer, Target, scorer
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 
-from evals.python import commands
+from evals.python import commands, evaluation_settings
 from evals.python.integrations.hugging_face.job import configuration
 from evals.python.integrations.inspect import completeness, evaluation, progress
 
@@ -117,9 +117,9 @@ def evaluation_stops_heartbeat(outcome: str, *, capsys: pytest.CaptureFixture[st
             pytest.raises(RuntimeError if outcome == "error" else asyncio.CancelledError),
         ):
             await evaluation.evaluate_async(
-                commands.EvaluationSettings(
+                evaluation_settings.EvaluationSettings(
                     model="mockllm/model",
-                    model_cost=commands.ModelPricing(
+                    model_cost=evaluation_settings.ModelPricing(
                         input=0.0, output=0.0, input_cache_write=0.0, input_cache_read=0.0
                     ),
                 )
@@ -145,9 +145,9 @@ def native_evaluation_success(*, tmp_path: Path, capsys: pytest.CaptureFixture[s
     with patch.object(evaluation, "evaluation_tasks", return_value=[task]):
         result = asyncio.run(
             evaluation.evaluate_async(
-                commands.EvaluationSettings(
+                evaluation_settings.EvaluationSettings(
                     model="mockllm/model",
-                    model_cost=commands.ModelPricing(
+                    model_cost=evaluation_settings.ModelPricing(
                         input=0.0, output=0.0, input_cache_write=0.0, input_cache_read=0.0
                     ),
                     epochs=1,

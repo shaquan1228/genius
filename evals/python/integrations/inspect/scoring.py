@@ -9,7 +9,7 @@ from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import commands, queries
+from evals.python import commands, datasets, verification
 from kernel import Verification
 
 
@@ -23,7 +23,7 @@ def with_failure(explanation: str, *, failure: str | None) -> str:
     return f"Agent process crashed: {failure}\n\n{explanation}"
 
 
-def diagnostic(value: commands.Diagnostic) -> JsonValue:
+def diagnostic(value: verification.Diagnostic) -> JsonValue:
     if isinstance(value, Mapping):
         return {key: diagnostic(item) for key, item in value.items()}
     if isinstance(value, tuple):
@@ -32,7 +32,7 @@ def diagnostic(value: commands.Diagnostic) -> JsonValue:
 
 
 async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
-    state: TaskState, target: Target, *, dataset: queries.Dataset | None = None
+    state: TaskState, target: Target, *, dataset: datasets.Dataset | None = None
 ) -> Score:
     failure = state.metadata.get("agent_failure")
     completion = state.output.completion
@@ -71,6 +71,6 @@ def evaluation() -> Scorer:
     return score_sample
 
 
-def bound_evaluation(*, dataset: queries.Dataset) -> Scorer:
+def bound_evaluation(*, dataset: datasets.Dataset) -> Scorer:
     # Copy only the public registration; private inputs stay in the bound callback.
     return wraps(evaluation())(partial(score_sample, dataset=dataset))

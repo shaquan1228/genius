@@ -15,7 +15,7 @@ from inspect_ai.model import GenerateConfig, get_model
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 from inspect_ai.scorer import Score
 
-from evals.python import commands, queries
+from evals.python import commands, evaluation_settings, queries
 from evals.python.integrations.hugging_face.job import configuration, run
 from evals.python.integrations.inspect.evaluation import HfChatAPI
 from evals.python.paths import REPO_ROOT
@@ -31,7 +31,7 @@ def explicit_test_prices(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _configured_request() -> commands.EvaluationSettings:
+def _configured_request() -> evaluation_settings.EvaluationSettings:
     environment = {"EVAL_MODEL": "openai/test-model", **os.environ}
     return configuration(environment)
 
@@ -45,8 +45,8 @@ def hf_job_calls_evaluation_with_validated_settings(monkeypatch: pytest.MonkeyPa
     before = dict(os.environ)
     with patch.object(commands, "evaluate", new_callable=AsyncMock, return_value=7) as execute:
         assert run() == 7
-    request = commands.EvaluationSettings.model_validate(execute.call_args.kwargs)
-    assert isinstance(request, commands.EvaluationSettings)
+    request = evaluation_settings.EvaluationSettings.model_validate(execute.call_args.kwargs)
+    assert isinstance(request, evaluation_settings.EvaluationSettings)
     assert (request.sample_ids, request.deliveries, request.epochs, request.cost_limit) == (
         ("clear-task",),
         ("files", "manifest"),
@@ -63,9 +63,11 @@ def hf_job_calls_evaluation_with_validated_settings(monkeypatch: pytest.MonkeyPa
 def inspect_evaluation_uses_request_without_reading_job_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    request = commands.EvaluationSettings(
+    request = evaluation_settings.EvaluationSettings(
         model="openai/explicit",
-        model_cost=commands.ModelPricing.model_validate_json(os.environ["EVAL_MODEL_COST"]),
+        model_cost=evaluation_settings.ModelPricing.model_validate_json(
+            os.environ["EVAL_MODEL_COST"]
+        ),
     )
     monkeypatch.setenv("EVAL_MODEL", "invalid-environment-model")
     monkeypatch.setenv("EVAL_AGENT", "invalid-environment-agent")
