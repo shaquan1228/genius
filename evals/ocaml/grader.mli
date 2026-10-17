@@ -2,6 +2,8 @@
    IO, execution, and presentation remain harness responsibilities.
    https://developers.openai.com/api/docs/guides/graders
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
+(* Ordered mandatory boolean scores, derived from the grading definitions. *)
+val required_names : string list
 val grade : Ast.task -> response:Ast.response option -> outcome:Ast.outcome -> Ast.score
 
 (* Whitespace follows Python's Unicode str.split and str.strip. *)

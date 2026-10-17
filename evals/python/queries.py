@@ -10,6 +10,7 @@ from evals.python.grading import UNCHECKED, Scores
 from evals.python.schema import FROZEN, DatasetInfo, Files
 from kernel import Case, Experiment, Reference, Task, Verification
 from kernel._operations import experiment as experiment_ops
+from kernel._operations import grader as grader_ops
 from kernel._operations import projection as projection_ops
 
 if TYPE_CHECKING:
@@ -23,6 +24,7 @@ __all__ = [
     "get_reference",
     "list_cases",
     "load_dataset",
+    "required_score_names",
     "resolve_settings",
     "score_case",
 ]
@@ -106,3 +108,9 @@ def score_case(
         changed_files=changed_files,
         verification=verification,
     )
+
+
+@validate_call(config=FROZEN)
+def required_score_names() -> tuple[str, ...]:
+    """Return the native grader's ordered mandatory boolean score names."""
+    return tuple(grader_ops.required_names)

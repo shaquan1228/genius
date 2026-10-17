@@ -9,7 +9,7 @@ from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import commands, datasets, verification
+from evals.python import commands, datasets, queries, verification
 from kernel import Verification
 
 
@@ -66,7 +66,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
     )
 
 
-@scorer(metrics={name: [accuracy(), stderr()] for name in ("correctness", "scope")})
+@scorer(metrics={name: [accuracy(), stderr()] for name in queries.required_score_names()})
 def evaluation() -> Scorer:
     return score_sample
 

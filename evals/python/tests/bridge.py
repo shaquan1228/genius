@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import pytest
 
@@ -201,3 +201,32 @@ def reference_channels_export_independently_and_escape() -> None:
 )
 def nonstandard_json_is_an_incorrect_candidate(response: str) -> None:
     assert not _judgment(response=response)
+
+
+@pytest.mark.parametrize(
+    "pairs",
+    [
+        [("correctness", True)],
+        [("correctness", True), ("scope", True), ("scope", False)],
+        [("correctness", 1), ("scope", True)],
+        [("correctness", True), ("scope", True), ("extra", "yes")],
+    ],
+)
+def malformed_native_scores_are_rejected(pairs: list[tuple[str, object]]) -> None:
+    with (
+        patch.object(grader_ops, "grade", return_value=pairs),
+        pytest.raises(ValueError, match="score"),
+    ):
+        _judgment(response="{}")
+
+
+def required_scores_follow_native_declaration() -> None:
+    with patch.object(
+        type(grader_ops),
+        "required_names",
+        new_callable=PropertyMock,
+        return_value=["correctness", "scope", "extension"],
+    ):
+        assert queries.required_score_names() == ("correctness", "scope", "extension")
+        with pytest.raises(ValueError, match="score names"):
+            _judgment(response="{}")

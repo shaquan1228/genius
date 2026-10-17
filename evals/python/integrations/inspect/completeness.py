@@ -5,8 +5,9 @@ from collections.abc import Sequence
 
 from inspect_ai import Task
 from inspect_ai.log import EvalLog, EvalSample
+from inspect_ai.scorer import CORRECT, INCORRECT
 
-from evals.python import evaluation_settings
+from evals.python import evaluation_settings, queries
 
 Pair = tuple[str, str, int]
 
@@ -46,7 +47,9 @@ def scored(sample: EvalSample) -> bool:
 
 
 def complete_value(value: object) -> bool:
-    return isinstance(value, dict) and {"correctness", "scope"} <= value.keys()
+    return isinstance(value, dict) and all(
+        value.get(name) in (CORRECT, INCORRECT) for name in queries.required_score_names()
+    )
 
 
 def counts(records: list[tuple[str, EvalSample]]) -> dict[str, object]:

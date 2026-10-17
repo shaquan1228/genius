@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from inspect_ai import Task, eval_async
 from inspect_ai.dataset import Sample
-from inspect_ai.scorer import Score, Scorer, Target, scorer
+from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, scorer
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 
 from evals.python import commands, evaluation_settings
@@ -19,7 +19,7 @@ from evals.python.integrations.inspect import completeness, evaluation, progress
 @scorer(metrics=[])
 def _complete_score() -> Scorer:
     async def score(state: TaskState, target: Target) -> Score:  # noqa: PLR0917
-        return Score(value={"correctness": 1, "scope": 1})
+        return Score(value={"correctness": CORRECT, "scope": CORRECT})
 
     return score
 
@@ -197,7 +197,8 @@ def incomplete_native_records_fail() -> None:
         epoch=1,
         scores={
             "score": Score(
-                value={"correctness": 0, "scope": 0}, metadata={"agent_failure": "crash"}
+                value={"correctness": INCORRECT, "scope": INCORRECT},
+                metadata={"agent_failure": "crash"},
             )
         },
         error="infrastructure failure",
@@ -257,3 +258,19 @@ def telemetry_writes_one_complete_line(source: str) -> None:
     assert line.endswith("\n")
     assert len(line.splitlines()) == 1
     assert json.loads(line)["event"] == ("sample_start" if source == "parent" else "vm_ready")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (None, False),
+        ({"correctness": "C"}, False),
+        ({"correctness": "C", "scope": "I"}, True),
+        ({"correctness": "C", "scope": "I", "extra": "C"}, True),
+        ({"correctness": True, "scope": "C"}, False),
+        ({"correctness": "C", "scope": 1}, False),
+        ({"correctness": "C", "scope": []}, False),
+    ],
+)
+def completeness_requires_encoded_boolean_scores(value: object, *, expected: bool) -> None:
+    assert completeness.complete_value(value) is expected
