@@ -37,7 +37,7 @@ on:
         default: 4h
       max_samples:
         description: Concurrent samples per HF job (1 to 16)
-        default: "1"
+        default: "10"
         type: string
       cost_limit:
         description: Maximum model USD per sample (checked after each response)
