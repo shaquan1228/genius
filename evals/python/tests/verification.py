@@ -5,12 +5,14 @@ import json
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 from pathlib import Path
+from types import SimpleNamespace
 from typing import assert_type, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from inspect_ai.util import ExecResult
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
+from pydantic import ValidationError
 
 from evals.python import commands, queries, verification
 from evals.python.integrations.inspect.environments import environment, runtime
@@ -32,6 +34,7 @@ from kernel import (
     Criterion,
     InvalidArgument,
     Reference,
+    Task,
     Verification,
     Verifier,
 )
@@ -691,3 +694,125 @@ def unresolved_verifier_resource_is_a_harness_error() -> None:
     assert result.detail == "Verifier resources must be resolved before execution"
     cast(AsyncMock, grader.write_bytes).assert_not_awaited()
     cast(AsyncMock, ports.cleanup).assert_awaited_once_with(grader, interrupted=False)
+
+
+def assessment_pins_named_dataset_until_grading_and_next_operation_reloads() -> None:
+    async def execute() -> None:
+        current = _declaration()
+        agent, grader = _agent_port(), _grader_port()
+
+        def cases() -> tuple[Task, ...]:
+            return (current,)
+
+        async def create() -> Environment:
+            nonlocal current
+            current = _declaration(code=False)
+            return grader
+
+        ports = Runtime(create=create, cleanup=AsyncMock())
+        with (
+            patch(
+                "evals.python.datasets._module",
+                return_value=SimpleNamespace(info=None, cases=cases),
+            ),
+            patch("evals.python.verification.token_hex", return_value="secret"),
+        ):
+            first = await commands.assess(
+                case_id="external",
+                selection="changing",
+                response="done",
+                changed_files=(),
+                agent=agent,
+                runtime=ports,
+            )
+            second = await commands.assess(
+                case_id="external",
+                selection="changing",
+                response="done",
+                changed_files=(),
+                agent=agent,
+                runtime=ports,
+            )
+        assert isinstance(first.verification, Verification.Passed)
+        assert first.scores["correctness"]
+        assert isinstance(second.verification, Verification.Unchecked)
+        assert not second.scores["correctness"]
+        cast(AsyncMock, ports.cleanup).assert_awaited_once_with(grader, interrupted=False)
+
+    asyncio.run(execute())
+
+
+def reference_pins_named_dataset_before_awaiting_allocation() -> None:
+    async def execute() -> None:
+        current = _declaration()
+        agent, grader = _agent_port(), _grader_port()
+        allocated = 0
+
+        def cases() -> tuple[Task, ...]:
+            return (current,)
+
+        async def create() -> Environment:
+            nonlocal allocated, current
+            await asyncio.sleep(0)
+            allocated += 1
+            current = _copy_case(
+                _declaration(code=False),
+                reference=Reference(
+                    edits=fixture_ops.of_files([("main.py", "changed")]),
+                    completion=Completion.Plain("changed"),
+                ),
+            )
+            return agent if allocated == 1 else grader
+
+        ports = Runtime(create=create, cleanup=AsyncMock())
+        with (
+            patch(
+                "evals.python.datasets._module",
+                return_value=SimpleNamespace(info=None, cases=cases),
+            ),
+            patch("evals.python.verification.token_hex", return_value="secret"),
+        ):
+            result = await commands.validate_reference(
+                case_id="external", selection="changing", runtime=ports
+            )
+        assert isinstance(result.verification, Verification.Passed)
+        cast(AsyncMock, agent.write_bytes).assert_awaited_once_with("workspace/main.py", b"fixed")
+        assert cast(AsyncMock, ports.cleanup).await_count == 2
+
+    asyncio.run(execute())
+
+
+@pytest.mark.parametrize("reference", [False, True])
+@pytest.mark.parametrize(
+    ("selection", "case_id", "error"),
+    [
+        ("../outside", "external", ValidationError),
+        ("does-not-exist", "external", ModuleNotFoundError),
+        ("smoke", "missing", KeyError),
+    ],
+)
+def compound_operations_reject_invalid_selection_before_execution(
+    *, reference: bool, selection: str, case_id: str, error: type[Exception]
+) -> None:
+    async def execute() -> None:
+        agent = _agent_port()
+        ports = _runtime_port(_grader_port())
+        operation = (
+            commands.validate_reference(case_id=case_id, selection=selection, runtime=ports)
+            if reference
+            else commands.assess(
+                case_id=case_id,
+                selection=selection,
+                response="",
+                changed_files=(),
+                agent=agent,
+                runtime=ports,
+            )
+        )
+        with pytest.raises(error):
+            await operation
+        cast(AsyncMock, agent.execute).assert_not_awaited()
+        cast(AsyncMock, ports.create).assert_not_awaited()
+        cast(AsyncMock, ports.cleanup).assert_not_awaited()
+
+    asyncio.run(execute())

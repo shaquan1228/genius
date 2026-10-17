@@ -57,6 +57,7 @@ async def assess(
     agent: InstanceOf[Environment],
     runtime: InstanceOf[Runtime],
 ) -> Assessment:
+    selection = datasets.load_dataset(selection)
     result = await verify(case_id=case_id, selection=selection, agent=agent, runtime=runtime)
     if isinstance(result.verification, Verification.HarnessError):
         raise RuntimeError(f"Verification harness error: {result.verification[0]}")
@@ -81,19 +82,15 @@ async def validate_reference(
     selection: Selection = "smoke",
     runtime: InstanceOf[Runtime] | None = None,
 ) -> VerificationResult:
-    if projection_ops.verifier(datasets.record(case_id, selection=selection)) is None:
+    selection = datasets.load_dataset(selection)
+    record = datasets.record(case_id, selection=selection)
+    if projection_ops.verifier(record) is None:
         return VerificationResult(verification=Verification.Unchecked())
     runtime = runtime or create_runtime()
     try:
         async with _verification.allocated(runtime) as agent:
             await _verification.stage_reference(
-                dict(
-                    fixture_ops.files(
-                        projection_ops.reference(
-                            datasets.record(case_id, selection=selection)
-                        ).edits
-                    )
-                ),
+                dict(fixture_ops.files(projection_ops.reference(record).edits)),
                 agent=agent,
             )
             return await verify(case_id=case_id, selection=selection, agent=agent, runtime=runtime)

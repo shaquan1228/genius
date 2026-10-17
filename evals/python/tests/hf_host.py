@@ -411,7 +411,7 @@ def counterbalanced_delivery_comparison_keeps_limits_and_exact_cohort(
     monkeypatch.setenv("EVAL_COST_LIMIT", "0.25")
     monkeypatch.setenv("EVAL_MODEL", "openai/test-model")
     catalog = queries.load_dataset()
-    cohort = replace(catalog, cases={"clear-task": catalog.cases["clear-task"]})
+    cohort = replace(catalog, records={"clear-task": catalog.records["clear-task"]})
     with (
         patch(
             "evals.python.integrations.inspect.evaluation.get_model",

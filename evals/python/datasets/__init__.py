@@ -30,6 +30,10 @@ class Sources:
     modules: tuple[tuple[str, str], ...]
     resources: tuple[tuple[str, str], ...]
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "modules", tuple((name, text) for name, text in self.modules))
+        object.__setattr__(self, "resources", tuple((name, text) for name, text in self.resources))
+
 
 _MODULES = sources()
 
@@ -57,13 +61,24 @@ def value_fingerprint(value: Task) -> str:
 @dataclass(frozen=True, kw_only=True)
 class Dataset:
     sources: Sources
-    cases: Mapping[str, Case]
+    cases: Mapping[str, Case] = field(init=False)
     records: Mapping[str, Task]
     info: DatasetInfo | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "cases", MappingProxyType(dict(self.cases)))
-        object.__setattr__(self, "records", MappingProxyType(dict(self.records)))
+        records = dict(self.records)
+        _validate_snapshot(self.sources, count=len(records), info=self.info)
+        normalized = _resolve_records(records, sources=self.sources)
+        public = {name: projection_ops.case(record) for name, record in normalized.items()}
+        object.__setattr__(self, "cases", MappingProxyType(public))
+        object.__setattr__(self, "records", MappingProxyType(normalized))
+
+
+def _validate_snapshot(sources: Sources, *, count: int, info: DatasetInfo | None) -> None:
+    if sources.modules != _MODULES:
+        raise ValueError("Kernel sources differ from the loaded native types; restart the process")
+    if info is not None and count != info.count:
+        raise ValueError("Dataset count mismatch")
 
 
 class DatasetModule(Protocol):
@@ -100,8 +115,6 @@ def _artifacts(
 
 def _resolve(case: Task, *, sources: Sources) -> Task:
     case_ops.validate(case)
-    if sources.modules != _MODULES:
-        raise ValueError("Kernel sources differ from the loaded native types; restart the process")
     if isinstance(case.criterion, Criterion.Answer):
         return case
     checks = case.criterion[0]
@@ -124,31 +137,33 @@ def _resolve(case: Task, *, sources: Sources) -> Task:
     )
 
 
+def _resolve_records(records: Mapping[str, Task], *, sources: Sources) -> dict[str, Task]:
+    normalized = {}
+    for name, record in records.items():
+        if name != record.id:
+            raise ValueError(f"Dataset record ID differs from its key: {name}")
+        normalized[name] = _resolve(record, sources=sources)
+    return normalized
+
+
 @lru_cache(maxsize=8)
 def _compile(
     *, sources: Sources, records: tuple[_CaseKey, ...], info: DatasetInfo | None
 ) -> Dataset:
-    public = {}
     private = {}
     for record in records:
-        case = projection_ops.case(record.value)
-        if case.id in public:
+        if record.value.id in private:
             raise ValueError("Dataset task IDs must be unique")
-        public[case.id] = case
-        private[case.id] = record.value
-    return Dataset(
-        sources=sources,
-        cases=public,
-        records=private,
-        info=info,
-    )
+        private[record.value.id] = record.value
+    return Dataset(sources=sources, records=private, info=info)
 
 
 def compile_records(
     *, sources: Sources, records: tuple[Task, ...], info: DatasetInfo | None = None
 ) -> Dataset:
-    normalized = tuple(_CaseKey(_resolve(record, sources=sources)) for record in records)
-    return _compile(sources=sources, records=normalized, info=info)
+    return _compile(
+        sources=sources, records=tuple(_CaseKey(record) for record in records), info=info
+    )
 
 
 def compile_declarations(
@@ -157,8 +172,6 @@ def compile_declarations(
     info: DatasetInfo | None = None,
     resources: Mapping[str, str] = MappingProxyType({}),
 ) -> Dataset:
-    if info is not None and len(definitions) != info.count:
-        raise ValueError("Dataset count mismatch")
     return compile_records(
         sources=kernel_sources(resources=resources), records=definitions, info=info
     )
@@ -178,10 +191,7 @@ def load_dataset(selection: Selection) -> Dataset:
 
 
 def record(case_id: str, *, selection: Selection) -> Task:
-    value = load_dataset(selection).records[case_id]
-    if value.id != case_id:
-        raise ValueError(f"Unknown case: {case_id}")
-    return value
+    return load_dataset(selection).records[case_id]
 
 
 def dataset_info(selection: Selection) -> DatasetInfo | None:

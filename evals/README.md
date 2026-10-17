@@ -364,8 +364,21 @@ The library embeds its exact trusted build sources. Dataset provenance uses this
 installed snapshot, so editing source after setup cannot attribute new source to old
 loaded policy. Rebuild and restart to use changed policy; native type identities stay
 fixed for each process. There is no content-addressed runtime plugin cache.
-Dataset snapshots retain typed declarations and explicit resources. Resource
-changes invalidate consumer projections without rebuilding native code.
+Dataset snapshots retain typed declarations and explicit resources. Construction
+validates private record IDs, native source compatibility, resource resolution,
+and metadata count, then derives public cases from the normalized records.
+The supported authoring entry point is `queries.compile_dataset`; direct
+`datasets.Dataset` construction accepts private `records`, `sources`, and optional
+`info`, with no independently supplied public cases. Both paths copy and freeze
+their collections. Resource changes invalidate subsequent compiled snapshots
+without rebuilding native code; existing snapshots and provenance remain stable.
+
+`commands.assess` and `commands.validate_reference` acquire one dataset snapshot
+before execution and retain it across verification, reference staging, and grading.
+Passing an existing snapshot reuses its identity without loading the named dataset
+again. A later operation with a dataset name can acquire changed declarations;
+there is no global cache by name. Metadata-only `queries.describe_dataset` remains
+lazy and does not compile cases or download benchmark data.
 
 Queries and commands call the native OCaml operations directly. Dataset loading,
 private snapshots and resource resolution live in `python/datasets/__init__.py`.

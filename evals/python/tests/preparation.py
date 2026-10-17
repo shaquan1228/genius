@@ -84,7 +84,7 @@ def evaluation_prepares_once_for_all_tasks(
 ) -> None:
     spec = queries.resolve_settings(epochs=2)
     original = queries.load_dataset()
-    cohort = replace(original, cases={"clear-task": original.cases["clear-task"]})
+    cohort = replace(original, records={"clear-task": original.records["clear-task"]})
     request = evaluation_settings.EvaluationSettings(model="mockllm/model", deliveries=deliveries)
     with (
         patch.object(queries, "load_dataset", return_value=cohort) as load,
