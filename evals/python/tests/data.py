@@ -10,7 +10,9 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import datasets, evaluation, evaluation_settings
+from evals.python import datasets, evaluation
+from evals.python.datasets import Dataset
+from evals.python.evaluation import InstructionDelivery
 from evals.python.grading import score_case
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import (
@@ -54,7 +56,7 @@ def public_projection_uses_native_types() -> None:
 def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
     path = tmp_path / "suite.ml"
     path.write_text("let cases = []")
-    operation = cast(Callable[..., datasets.Dataset], datasets.load_dataset)
+    operation = cast(Callable[..., Dataset], datasets.load_dataset)
     with pytest.raises(ValidationError):
         operation(selection=path)
 
@@ -320,7 +322,7 @@ def record_updates_cannot_bypass_kernel_validation(*, grade_only: bool) -> None:
 @pytest.mark.parametrize("delivery", ["manifest", "inline"])
 @pytest.mark.parametrize("name", REASONING_DOCUMENTS)
 def delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, name: str) -> None:
-    mode = cast(evaluation_settings.InstructionDelivery, delivery)
+    mode = cast(InstructionDelivery, delivery)
     case = datasets.list_cases()[0]
     root = "/eval/instructions"
     profile = load_profile(name="genius", spec=evaluation.resolve_settings())

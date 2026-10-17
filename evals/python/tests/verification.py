@@ -15,6 +15,7 @@ from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 from pydantic import ValidationError
 
 from evals.python import assessment, datasets, verification
+from evals.python.assessment import Assessment
 from evals.python.execution import Completion as ProcessCompletion
 from evals.python.execution import Environment, Execution, Runtime
 from evals.python.grading import score_case
@@ -92,7 +93,7 @@ async def _run(agent: Environment, *, runtime: Runtime) -> VerificationResult:
     ):
         return assert_type(
             await verification.verify_case(case_id="clear-task", agent=agent, runtime=runtime),
-            verification.VerificationResult,
+            VerificationResult,
         )
 
 
@@ -402,7 +403,7 @@ def assessment_grades_canonical_observation_and_freezes_scores() -> None:
                     agent=_agent_port(),
                     runtime=_runtime_port(_grader_port()),
                 ),
-                assessment.Assessment,
+                Assessment,
             )
         assert isinstance(result.verification, Verification.Unchecked)
         assert result.scores == expected
@@ -462,10 +463,10 @@ def execution_environment_is_immutable_snapshot() -> None:
 
 
 def reference_uses_default_local_adapter_and_real_ocaml() -> None:
-    async def execute() -> verification.VerificationResult:
+    async def execute() -> VerificationResult:
         return assert_type(
             await verification.validate_reference(case_id="clear-task"),
-            verification.VerificationResult,
+            VerificationResult,
         )
 
     result = asyncio.run(execute())

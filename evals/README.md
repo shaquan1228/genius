@@ -33,10 +33,9 @@ flowchart LR
 | `python/integrations/datasets/` | Pinned download effects |
 | `python/integrations/smoke/` | Reusable private Python assertion driver and reference-validation CLI |
 | `python/integrations/inspect/` | SDK task/sample/score adaptation, agents, and sandbox capability adaptation |
-| `python/evaluation.py` | Public evaluation launch and experiment settings resolution |
+| `python/evaluation.py` | Evaluation launch, experiment settings resolution, and validated launch types |
 | `python/execution.py` | Execution capabilities and provider runtime composition |
 | `python/assessment.py` | Public assessment workflow and immutable assessment results |
-| `python/evaluation_settings.py` | Validated launch settings, model pricing, and instruction delivery types |
 | `python/grading.py` | Public case scoring, candidate response parsing and native score adaptation |
 | `python/verification.py` | Public case/reference verification, immutable results and verification lifecycle |
 | `python/integrations/hugging_face/` | Hosted Job entry point and HF SDK operations for VM lifecycle, command execution and file IO |
@@ -49,14 +48,15 @@ Only the trusted host or fresh grading sandbox receives those projections; agent
 Each concern exports its public operations and owned types. Integrations call
 `datasets.load_dataset`, `grading.score_case`, `verification.verify_case`,
 `assessment.assess`, `execution.create_runtime`, and `evaluation.evaluate` directly.
-Import shared types from their owners:
-`evaluation_settings` owns `EvaluationSettings`, `ModelPricing`, and `InstructionDelivery`;
+Import shared types directly from their owners:
+`evaluation` owns `EvaluationSettings`, `ModelPricing`, and `InstructionDelivery`;
 `execution` owns execution capabilities; `verification` owns verification results
 and diagnostics; `assessment` owns `Assessment`;
 `datasets` owns `Dataset`, `Selection`, and `DatasetProvenance`;
 `schema` owns `DatasetInfo`; `grading` owns `Scores`. Native domain types remain in `kernel`.
-For example, `from evals.python import evaluation_settings` supplies
-`evaluation_settings.ModelPricing(...)`; former command/query type import paths are removed.
+For example, `from evals.python.evaluation import ModelPricing` supplies
+`ModelPricing(...)`. Operation calls name their concern, while signatures and
+constructors use directly imported types such as `Execution` and `Completion`.
 
 Commands and queries accept and return the OCaml-backed types directly; validation and grading policy remain in OCaml.
 
@@ -372,7 +372,7 @@ Dataset snapshots retain typed declarations and explicit resources. Construction
 validates private record IDs, native source compatibility, resource resolution,
 and metadata count, then derives public cases from the normalized records.
 The supported authoring entry point is `datasets.compile_dataset`; direct
-`datasets.Dataset` construction accepts private `records`, `sources`, and optional
+`Dataset` construction accepts private `records`, `sources`, and optional
 `info`, with no independently supplied public cases. Both paths copy and freeze
 their collections. Resource changes invalidate subsequent compiled snapshots
 without rebuilding native code; existing snapshots and provenance remain stable.
@@ -665,7 +665,7 @@ rates; a zero cache rate is valid only if that usage is actually free. No model
 vendor price is inferred for an HF provider route. Other providers may use Inspect's
 built-in prices, or the same explicit override. Missing pricing fails before
 sample VMs are allocated. The public command accepts `cost_limit=0.25` and a
-`evaluation_settings.ModelPricing(...)` value as `model_cost`.
+`ModelPricing(...)` value imported from `evals.python.evaluation` as `model_cost`.
 
 The parent logs the resolved cap and prices; native Inspect logs retain usage,
 costs and cost-limit cutoffs. Cost is checked after each model response, so the

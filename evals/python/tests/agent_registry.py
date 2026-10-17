@@ -11,7 +11,8 @@ from inspect_ai.model import ModelName
 from inspect_ai.solver import TaskState
 from inspect_swe import claude_code, codex_cli
 
-from evals.python import datasets, evaluation, evaluation_settings
+from evals.python import datasets, evaluation
+from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.agents import (
     AGENT_REGISTRY,
@@ -178,7 +179,7 @@ def custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
     monkeypatch.setitem(
         AGENT_REGISTRY, "other", replace(AGENT_REGISTRY["codex"], default_version="custom-version")
     )
-    request = evaluation_settings.EvaluationSettings(model="mockllm/model", agent="other")
+    request = EvaluationSettings(model="mockllm/model", agent="other")
     spec = evaluation.resolve_settings()
     task = build_task(
         profile=profiles.load_profile("baseline", spec=spec),

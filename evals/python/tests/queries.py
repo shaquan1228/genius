@@ -7,13 +7,16 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import datasets, evaluation, grading, schema
+from evals.python import datasets, evaluation, grading
+from evals.python.datasets import Dataset, DatasetProvenance
+from evals.python.grading import Scores
+from evals.python.schema import DatasetInfo
 from kernel import Case, Experiment, Verification
 from kernel._operations import projection as projection_ops
 
 
 def public_queries_preserve_canonical_objects() -> None:
-    dataset = assert_type(datasets.load_dataset(), datasets.Dataset)
+    dataset = assert_type(datasets.load_dataset(), Dataset)
     assert datasets.load_dataset(selection=dataset) is dataset
     cases = assert_type(datasets.list_cases(), tuple[Case, ...])
     assert cases[0] is dataset.cases[cases[0].id]
@@ -22,10 +25,10 @@ def public_queries_preserve_canonical_objects() -> None:
 
 def public_queries_select_canonical_projections() -> None:
     assert datasets.list_cases(selection=datasets.compile_dataset(cases=())) == ()
-    assert assert_type(datasets.describe_dataset(), schema.DatasetInfo | None) is None
+    assert assert_type(datasets.describe_dataset(), DatasetInfo | None) is None
     with patch("evals.python.datasets.humanevalplus.download") as download:
         info = datasets.describe_dataset(selection="humanevalplus")
-    assert isinstance(info, schema.DatasetInfo)
+    assert isinstance(info, DatasetInfo)
     download.assert_not_called()
 
 
@@ -35,7 +38,7 @@ def public_experiment_resolves_canonical_overrides() -> None:
 
 
 def public_hashes_match_existing_provenance() -> None:
-    provenance = assert_type(datasets.get_provenance(), datasets.DatasetProvenance)
+    provenance = assert_type(datasets.get_provenance(), DatasetProvenance)
     assert provenance.info is None
     assert provenance.source_hash == datasets.fingerprint(datasets.load_dataset().sources)
     assert provenance.cases_hash == datasets.cases_hash(datasets.load_dataset())
@@ -53,7 +56,7 @@ def public_grade_preserves_input_and_result() -> None:
                 changed_files=("receipt.py",),
                 verification=verification,
             ),
-            grading.Scores,
+            Scores,
         )
     assert grade.call_args.args[0] is datasets.load_dataset().records["clear-task"]
     assert isinstance(grade.call_args.kwargs["outcome"].verification, Verification.Passed)
@@ -80,7 +83,13 @@ def query_arguments_are_strict(
 def query_concerns_expose_only_their_own_operations() -> None:
     assert not {"create_runtime", "assess", "verify_case", "evaluate"} & set(datasets.__all__)
     assert grading.__all__ == ["Scores", "score_case"]
-    assert evaluation.__all__ == ["evaluate", "resolve_settings"]
+    assert set(evaluation.__all__) == {
+        "EvaluationSettings",
+        "InstructionDelivery",
+        "ModelPricing",
+        "evaluate",
+        "resolve_settings",
+    }
 
 
 @pytest.mark.parametrize("response", ['{"":"x"}', '{"answer": 1}', "not json"])

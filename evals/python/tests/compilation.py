@@ -10,7 +10,12 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import assessment as assessment_api
-from evals.python import datasets, execution, grading, schema, verification
+from evals.python import datasets, grading, verification
+from evals.python.assessment import Assessment
+from evals.python.datasets import Dataset, Sources
+from evals.python.execution import Environment, Runtime
+from evals.python.grading import Scores
+from evals.python.schema import DatasetInfo
 from evals.python.tests.declarations import (
     _copy_case,
     _copy_verifier,
@@ -20,6 +25,7 @@ from evals.python.tests.declarations import (
     _reference_files,
 )
 from evals.python.tests.projections import reference, verifier
+from evals.python.verification import VerificationResult
 from kernel import (
     Case,
     Completion,
@@ -36,8 +42,8 @@ from kernel._operations import fixture as fixture_ops
 
 def compile_dataset_exposes_canonical_public_cases() -> None:
     definition = _declaration()
-    dataset = assert_type(datasets.compile_dataset(cases=(definition,)), datasets.Dataset)
-    assert isinstance(dataset, datasets.Dataset)
+    dataset = assert_type(datasets.compile_dataset(cases=(definition,)), Dataset)
+    assert isinstance(dataset, Dataset)
     cases = assert_type(datasets.list_cases(selection=dataset), tuple[Case, ...])
     assert cases[0] is dataset.cases[definition.id]
 
@@ -65,7 +71,7 @@ def compile_query_forwards_canonical_values_and_results() -> None:
     assert datasets.list_cases(selection=dataset) == tuple(dataset.cases.values())
 
 
-def _independent_datasets() -> tuple[datasets.Dataset, datasets.Dataset]:
+def _independent_datasets() -> tuple[Dataset, Dataset]:
     first = _declaration()
     assert isinstance(first.criterion, Criterion.Code)
     checks = _copy_verifier(first.criterion[0], stdin="different private stdin")
@@ -113,7 +119,7 @@ def compiled_metadata_queries_do_not_download() -> None:
 
 def compiled_provenance_retains_python_metadata() -> None:
     definition = _declaration()
-    info = schema.DatasetInfo(
+    info = DatasetInfo(
         source="python://external", revision="one", sha256="digest", count=1, attributes={}
     )
     original = datasets.compile_dataset(cases=(definition,), info=info)
@@ -180,7 +186,7 @@ def compilation_hashes_include_trusted_source_changes() -> None:
     assert original.cases_hash != updated.cases_hash
 
 
-def _grade(*, dataset: datasets.Dataset, verification: Verification.Value) -> grading.Scores:
+def _grade(*, dataset: Dataset, verification: Verification.Value) -> Scores:
     return grading.score_case(
         case_id="external",
         response="done",
@@ -234,7 +240,7 @@ def empty_and_duplicate_compilation() -> None:
 
 
 def compile_query_validates_its_boundary_without_bypassing_kernel() -> None:
-    compile_dataset: Callable[..., datasets.Dataset] = datasets.compile_dataset
+    compile_dataset: Callable[..., Dataset] = datasets.compile_dataset
     with pytest.raises(ValidationError):
         compile_dataset(cases=[_declaration()])
     public_case = Case(id="public", skill="reasoning", prompt="", files=[])
@@ -255,17 +261,15 @@ def unknown_case_in_compiled_dataset_fails_closed() -> None:
 
 def compiled_selection_flows_through_all_verification_commands() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
-    agent = execution.Environment(
-        execute=AsyncMock(), read_bytes=AsyncMock(), write_bytes=AsyncMock()
-    )
-    runtime = execution.Runtime(create=AsyncMock(), cleanup=AsyncMock())
+    agent = Environment(execute=AsyncMock(), read_bytes=AsyncMock(), write_bytes=AsyncMock())
+    runtime = Runtime(create=AsyncMock(), cleanup=AsyncMock())
 
     async def execute() -> None:
         result = assert_type(
             await verification.verify_case(
                 case_id="external", selection=dataset, agent=agent, runtime=runtime
             ),
-            verification.VerificationResult,
+            VerificationResult,
         )
         assert isinstance(result.verification, Verification.Unchecked)
         assessment = assert_type(
@@ -277,14 +281,14 @@ def compiled_selection_flows_through_all_verification_commands() -> None:
                 agent=agent,
                 runtime=runtime,
             ),
-            assessment_api.Assessment,
+            Assessment,
         )
         assert assessment.scores == {"correctness": True, "scope": True}
         reference = assert_type(
             await verification.validate_reference(
                 case_id="external", selection=dataset, runtime=runtime
             ),
-            verification.VerificationResult,
+            VerificationResult,
         )
         assert isinstance(reference.verification, Verification.Unchecked)
 
@@ -311,7 +315,7 @@ def mismatched_record_identity_is_rejected() -> None:
 def direct_dataset_construction_derives_public_cases_and_copies_records() -> None:
     definition = _declaration()
     records = {definition.id: definition}
-    dataset = datasets.Dataset(sources=datasets.kernel_sources(), records=records)
+    dataset = Dataset(sources=datasets.kernel_sources(), records=records)
     before = datasets.get_provenance(selection=dataset)
     records.clear()
     assert datasets.list_cases(selection=dataset)[0].prompt == definition.instruction.prompt
@@ -325,21 +329,21 @@ def direct_dataset_construction_derives_public_cases_and_copies_records() -> Non
 
 def direct_dataset_construction_rejects_foreign_sources_even_when_empty() -> None:
     with pytest.raises(ValueError, match="Kernel sources differ"):
-        datasets.Dataset(sources=replace(datasets.kernel_sources(), modules=()), records={})
+        Dataset(sources=replace(datasets.kernel_sources(), modules=()), records={})
 
 
 def direct_dataset_construction_validates_metadata_count() -> None:
-    info = schema.DatasetInfo(
+    info = DatasetInfo(
         source="python://external", revision="one", sha256="digest", count=1, attributes={}
     )
     with pytest.raises(ValueError, match="count"):
-        datasets.Dataset(sources=datasets.kernel_sources(), records={}, info=info)
+        Dataset(sources=datasets.kernel_sources(), records={}, info=info)
 
 
 def direct_dataset_construction_validates_native_records() -> None:
     invalid = _copy_case(_declaration(), allowed_files=())
     with pytest.raises(InvalidArgument, match="outside allowed_files"):
-        datasets.Dataset(sources=datasets.kernel_sources(), records={invalid.id: invalid})
+        Dataset(sources=datasets.kernel_sources(), records={invalid.id: invalid})
 
 
 def direct_dataset_construction_resolves_resources() -> None:
@@ -350,9 +354,9 @@ def direct_dataset_construction_resolves_resources() -> None:
     )
     definition = _copy_case(definition, criterion=Criterion.Code(checks))
     with pytest.raises(KeyError, match="checker"):
-        datasets.Dataset(sources=datasets.kernel_sources(), records={definition.id: definition})
+        Dataset(sources=datasets.kernel_sources(), records={definition.id: definition})
     resources = {"checker": "private checker"}
-    dataset = datasets.Dataset(
+    dataset = Dataset(
         sources=datasets.kernel_sources(resources=resources), records={definition.id: definition}
     )
     resources.clear()
@@ -366,11 +370,11 @@ def direct_sources_retain_owned_immutable_collections() -> None:
     installed = datasets.kernel_sources()
     modules = [list(pair) for pair in installed.modules]
     resources = [["extra", "original"]]
-    sources = datasets.Sources(
+    sources = Sources(
         modules=cast(tuple[tuple[str, str], ...], modules),
         resources=cast(tuple[tuple[str, str], ...], resources),
     )
-    dataset = datasets.Dataset(sources=sources, records={})
+    dataset = Dataset(sources=sources, records={})
     before = datasets.get_provenance(selection=dataset)
     modules[0][1] = "edited"
     resources[0][1] = "edited"

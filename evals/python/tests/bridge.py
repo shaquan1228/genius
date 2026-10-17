@@ -7,7 +7,7 @@ from unittest.mock import PropertyMock, patch
 import pytest
 
 from evals.python import datasets, evaluation, grading
-from evals.python.datasets import Selection
+from evals.python.datasets import Selection, Sources
 from evals.python.grading import score_case
 from evals.python.tests.declarations import _declaration, _reference_files, _reference_text
 from evals.python.tests.projections import reference, verifier
@@ -109,7 +109,7 @@ def grading_does_not_recompile_or_cache_results() -> None:
 @pytest.mark.parametrize("source", [name for name, _ in sources()])
 def kernel_fingerprint_tracks_every_trusted_source(source: str) -> None:
     original = datasets.kernel_sources()
-    changed = datasets.Sources(
+    changed = Sources(
         modules=tuple(
             (name, contents + "\n" if name == source else contents)
             for name, contents in original.modules

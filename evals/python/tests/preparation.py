@@ -16,8 +16,9 @@ from inspect_ai.scorer import CORRECT, INCORRECT
 from inspect_ai.scorer._scorer import scorer_create
 from inspect_ai.solver import generate
 
-from evals.python import datasets, evaluation_settings
+from evals.python import datasets
 from evals.python import evaluation as evaluation_api
+from evals.python.evaluation import EvaluationSettings, InstructionDelivery
 from evals.python.integrations.inspect import evaluation, profiles, scoring
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.declarations import _copy_case, _declaration
@@ -81,12 +82,12 @@ def composition_uses_supplied_bytes_without_filesystem_access() -> None:
 
 @pytest.mark.parametrize("deliveries", [None, ("files", "manifest")])
 def evaluation_prepares_once_for_all_tasks(
-    deliveries: tuple[evaluation_settings.InstructionDelivery, ...] | None,
+    deliveries: tuple[InstructionDelivery, ...] | None,
 ) -> None:
     spec = evaluation_api.resolve_settings(epochs=2)
     original = datasets.load_dataset()
     cohort = replace(original, records={"clear-task": original.records["clear-task"]})
-    request = evaluation_settings.EvaluationSettings(model="mockllm/model", deliveries=deliveries)
+    request = EvaluationSettings(model="mockllm/model", deliveries=deliveries)
     with (
         patch(
             "evals.python.datasets.smoke.cases", return_value=tuple(cohort.records.values())

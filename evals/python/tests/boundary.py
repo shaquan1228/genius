@@ -40,11 +40,10 @@ OWNER_TYPES = {
     "schema": {"DatasetInfo", "FileName", "Files", "Attributes"},
     "datasets": {"Dataset", "Selection", "DatasetProvenance"},
     "grading": {"Scores"},
-    "evaluation_settings": {"EvaluationSettings", "ModelPricing", "InstructionDelivery"},
     "verification": {"Diagnostic", "VerificationResult"},
     "assessment": {"Assessment"},
     "execution": {"Execution", "Completion", "Environment", "Runtime", "Cleanup"},
-    "evaluation": set(),
+    "evaluation": {"EvaluationSettings", "ModelPricing", "InstructionDelivery"},
 }
 PUBLIC_NAMES = {
     owner: names | PUBLIC_OPERATIONS.get(owner, set()) for owner, names in OWNER_TYPES.items()
@@ -88,7 +87,6 @@ def core_cannot_import_integrations_or_sdks() -> None:
             "schema.py",
             "datasets/__init__.py",
             "grading.py",
-            "evaluation_settings.py",
             "verification.py",
             "assessment.py",
         )
@@ -223,6 +221,7 @@ def integrations_use_typed_public_operations_without_legacy_facades() -> None:
         "command.py",
         "commands.py",
         "queries.py",
+        "evaluation_settings.py",
         "catalog.py",
         "transport.py",
         "_kernel.py",
@@ -261,16 +260,16 @@ def _owner_aliases(path: Path) -> dict[str, str]:
 
 
 @pytest.mark.parametrize("path", sorted((PYTHON_ROOT / "integrations").rglob("*.py")))
-def integrations_do_not_call_owner_implementations(path: Path) -> None:
+def integrations_qualify_only_public_operations(path: Path) -> None:
     aliases = _owner_aliases(path)
     for node in _nodes(path, kind=ast.Attribute):
         if isinstance(node.value, ast.Name) and aliases.get(node.value.id) in PUBLIC_NAMES:
-            assert node.attr in PUBLIC_NAMES[aliases[node.value.id]]
+            assert node.attr in PUBLIC_OPERATIONS.get(aliases[node.value.id], set())
 
 
 def _check_owner_access(path: Path) -> None:
     integrations_use_supported_owner_import_style(path)
-    integrations_do_not_call_owner_implementations(path)
+    integrations_qualify_only_public_operations(path)
 
 
 @pytest.mark.parametrize(
@@ -279,7 +278,7 @@ def _check_owner_access(path: Path) -> None:
         ("import evals.python.verification as v\nv.verify_case()", False),
         ("from evals.python import verification as v\nv.verify()", False),
         ("from evals.python import verification as v\nv.verify_case()", True),
-        ("from evals.python import execution as e\ne.Runtime()", True),
+        ("from evals.python import execution as e\ne.Runtime()", False),
         ("from evals.python.execution import Runtime", True),
         ("from evals.python import grading as g\ng.score()", False),
         ("from evals.python import grading as g\ng.score_case()", True),
@@ -312,9 +311,7 @@ def public_concerns_export_only_their_operations_and_types(owner: str) -> None:
     assert set(module.__all__) == PUBLIC_NAMES[owner]
 
 
-@pytest.mark.parametrize(
-    "filename", ["schema.py", "datasets/__init__.py", "grading.py", "evaluation_settings.py"]
-)
+@pytest.mark.parametrize("filename", ["schema.py", "datasets/__init__.py", "grading.py"])
 def query_concerns_do_not_import_execution_workflows(filename: str) -> None:
     imports = _imported(PYTHON_ROOT / filename)
     assert not any(
@@ -324,7 +321,6 @@ def query_concerns_do_not_import_execution_workflows(filename: str) -> None:
                 for owner in ("assessment", "execution", "evaluation", "verification")
             )
         )
-        and not name.startswith("evals.python.evaluation_settings")
         for name in imports
     )
 
@@ -351,18 +347,17 @@ def query_concerns_do_not_compose_execution_adapters() -> None:
 
 
 @pytest.mark.parametrize("path", sorted((PYTHON_ROOT / "integrations").rglob("*.py")))
-def integrations_import_public_namespaces_or_single_values(path: Path) -> None:
+def integrations_import_public_namespaces_or_owned_types(path: Path) -> None:
     imports = [
         node
         for node in _nodes(path, kind=ast.ImportFrom)
         if str(node.module).startswith("evals.python")
     ]
+    allowed = {f"evals.python.{owner}": names for owner, names in OWNER_TYPES.items()}
+    allowed["evals.python"] = set(PUBLIC_NAMES)
     assert all(
         len(node.names) == 1
-        or (
-            node.module == "evals.python"
-            and {name.name for name in node.names} <= PUBLIC_NAMES.keys()
-        )
+        or {name.name for name in node.names} <= allowed.get(str(node.module), set())
         for node in imports
     )
 

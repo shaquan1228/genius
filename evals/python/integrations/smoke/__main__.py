@@ -4,6 +4,8 @@ import sys
 from typing import assert_never
 
 from evals.python import datasets, grading, verification
+from evals.python.datasets import Dataset
+from evals.python.grading import Scores
 from kernel import Case, Completion, Verification
 from kernel._operations import fixture as fixture_ops
 
@@ -18,10 +20,10 @@ def response(completion: Completion.Value) -> str:
             assert_never(unreachable)
 
 
-async def validate(case: Case, *, dataset: datasets.Dataset) -> bool:
+async def validate(case: Case, *, dataset: Dataset) -> bool:
     reference = datasets.get_reference(case_id=case.id, selection=dataset)
     result = await verification.validate_reference(case_id=case.id, selection=dataset)
-    scores: grading.Scores = {}
+    scores: Scores = {}
     if not isinstance(result.verification, Verification.HarnessError):
         scores = grading.score_case(
             case_id=case.id,

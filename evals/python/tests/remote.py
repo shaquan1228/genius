@@ -14,6 +14,7 @@ from inspect_ai.util import SandboxUserUnsupportedError
 from inspect_ai.util._sandbox.events import SandboxEnvironmentProxy
 
 from evals.python import execution
+from evals.python.execution import Execution
 from evals.python.integrations.hugging_face import sandbox as backend
 from evals.python.integrations.inspect import environments
 from evals.python.integrations.inspect.remote import HfSandboxEnvironment
@@ -181,9 +182,7 @@ def creation_cancellation_cleans_eventual_sandbox(client: Mock) -> None:
 @pytest.mark.parametrize("stdin", [None, "", b""])
 def stdin_preserves_absent_text_and_binary(stdin: str | bytes | None, *, client: Mock) -> None:
     async def execute() -> None:
-        await backend.environment("sandbox-id").execute(
-            execution.Execution(command=("cat",), input=stdin)
-        )
+        await backend.environment("sandbox-id").execute(Execution(command=("cat",), input=stdin))
 
     asyncio.run(execute())
     assert client.files.write.called == isinstance(stdin, bytes)
@@ -255,7 +254,7 @@ def persistent_runtime_reuses_client(client: Mock) -> None:
     async def exercise() -> None:
         runtime = backend.runtime()
         target = await runtime.create()
-        await target.execute(execution.Execution(command=("true",)))
+        await target.execute(Execution(command=("true",)))
         await target.write_bytes("file", b"data")
         client.files.read.return_value = b"data"
         assert await target.read_bytes("file") == b"data"

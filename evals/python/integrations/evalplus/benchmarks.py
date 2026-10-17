@@ -11,6 +11,8 @@ from typing import Literal, assert_never
 from pydantic import BaseModel, ConfigDict
 
 from evals.python import datasets, verification
+from evals.python.datasets import Dataset
+from evals.python.verification import Diagnostic
 from kernel import Case
 
 
@@ -34,7 +36,7 @@ def benchmark_info() -> BenchmarkInfo:
     )
 
 
-async def validate_case(case: Case, *, dataset: datasets.Dataset) -> dict[str, object]:
+async def validate_case(case: Case, *, dataset: Dataset) -> dict[str, object]:
     result = await verification.validate_reference(case_id=case.id, selection=dataset)
     return {
         "case_id": case.id,
@@ -44,7 +46,7 @@ async def validate_case(case: Case, *, dataset: datasets.Dataset) -> dict[str, o
     }
 
 
-def diagnostic(value: verification.Diagnostic) -> object:
+def diagnostic(value: Diagnostic) -> object:
     if isinstance(value, Mapping):
         return {key: diagnostic(item) for key, item in value.items()}
     if isinstance(value, tuple):
