@@ -3,7 +3,8 @@ import json
 import os
 from collections.abc import Mapping
 
-from evals.python import commands, evaluation_settings
+from evals.python import evaluation
+from evals.python.evaluation import EvaluationSettings
 
 
 def optional_int(value: str | None) -> int | None:
@@ -27,8 +28,8 @@ def optional_json(value: str | None) -> tuple[object, ...] | None:
     return tuple(parsed)
 
 
-def configuration(environment: Mapping[str, str]) -> evaluation_settings.EvaluationSettings:
-    return evaluation_settings.EvaluationSettings.model_validate(
+def configuration(environment: Mapping[str, str]) -> EvaluationSettings:
+    return EvaluationSettings.model_validate(
         {
             "model": environment["EVAL_MODEL"],
             "run_id": environment.get("EVAL_RUN_ID") or None,
@@ -52,7 +53,7 @@ def configuration(environment: Mapping[str, str]) -> evaluation_settings.Evaluat
 
 def run() -> int:
     operation = configuration(dict(os.environ))
-    return asyncio.run(commands.evaluate(**operation.model_dump()))
+    return asyncio.run(evaluation.evaluate(**operation.model_dump()))
 
 
 if __name__ == "__main__":

@@ -1,17 +1,24 @@
 """Runner-independent verification policy over immutable execution capabilities."""
 
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from secrets import token_hex
 from types import MappingProxyType
-from typing import Literal, Protocol, cast, runtime_checkable
+from typing import Literal, cast
 
-from pydantic import BaseModel, JsonValue, ValidationError
+from pydantic import BaseModel, InstanceOf, JsonValue, ValidationError, validate_call
 
+from evals.python import datasets, execution
+from evals.python.datasets import Selection
+from evals.python.execution import Completion, Environment, Execution, Runtime
 from evals.python.schema import FROZEN
 from kernel import Content, Verification, Verifier
+from kernel._operations import fixture as fixture_ops
+from kernel._operations import projection as projection_ops
+
+__all__ = ["Diagnostic", "VerificationResult", "validate_reference", "verify_case"]
 
 VerificationStatus = Literal[
     "unchecked", "passed", "failed", "invalid_submission", "timed_out", "harness_error"
@@ -31,43 +38,6 @@ def _freeze(value: Diagnostic | JsonValue) -> Diagnostic:
 
 
 @dataclass(frozen=True, kw_only=True)
-class Execution:
-    command: tuple[str, ...]
-    input: str | bytes | None = None
-    cwd: str | None = None
-    env: Mapping[str, str] = field(default_factory=dict)
-    timeout: int | None = None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "env", MappingProxyType(dict(self.env)))
-
-
-@dataclass(frozen=True, kw_only=True)
-class Completion:
-    returncode: int
-    stdout: str
-    stderr: str = ""
-
-
-@dataclass(frozen=True, kw_only=True, eq=False)
-class Environment:
-    execute: Callable[[Execution], Awaitable[Completion]]
-    read_bytes: Callable[[str], Awaitable[bytes]]
-    write_bytes: Callable[[str, bytes], Awaitable[None]]
-
-
-@runtime_checkable
-class Cleanup(Protocol):
-    async def __call__(self, environment: Environment, /, *, interrupted: bool) -> None: ...
-
-
-@dataclass(frozen=True, kw_only=True)
-class Runtime:
-    create: Callable[[], Awaitable[Environment]]
-    cleanup: Cleanup
-
-
-@dataclass(frozen=True, kw_only=True)
 class VerificationResult:
     verification: Verification.Value
     detail: str = ""
@@ -81,15 +51,6 @@ class VerificationResult:
             "metadata",
             MappingProxyType({key: _freeze(value) for key, value in self.metadata.items()}),
         )
-
-
-@dataclass(frozen=True, kw_only=True)
-class Assessment(VerificationResult):
-    scores: Mapping[str, bool]
-
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        object.__setattr__(self, "scores", MappingProxyType(dict(self.scores)))
 
 
 class _Evidence(BaseModel):
@@ -250,3 +211,42 @@ async def stage_reference(files: Mapping[str, str], *, agent: Environment) -> No
         raise RuntimeError(f"Could not create reference workspace: {result.stderr}")
     for name, contents in files.items():
         await agent.write_bytes(f"workspace/{name}", contents.encode())
+
+
+@validate_call(config=FROZEN)
+async def verify_case(
+    *,
+    case_id: str,
+    selection: Selection = "smoke",
+    agent: InstanceOf[Environment],
+    runtime: InstanceOf[Runtime],
+) -> VerificationResult:
+    checks = projection_ops.verifier(datasets.record(case_id, selection=selection))
+    if checks is None:
+        return VerificationResult(verification=Verification.Unchecked())
+    return await verify(checks, agent=agent, runtime=runtime)
+
+
+@validate_call(config=FROZEN)
+async def validate_reference(
+    *,
+    case_id: str,
+    selection: Selection = "smoke",
+    runtime: InstanceOf[Runtime] | None = None,
+) -> VerificationResult:
+    selection = datasets.load_dataset(selection=selection)
+    record = datasets.record(case_id, selection=selection)
+    if projection_ops.verifier(record) is None:
+        return VerificationResult(verification=Verification.Unchecked())
+    runtime = runtime or execution.create_runtime()
+    try:
+        async with allocated(runtime) as agent:
+            await stage_reference(
+                dict(fixture_ops.files(projection_ops.reference(record).edits)),
+                agent=agent,
+            )
+            return await verify_case(
+                case_id=case_id, selection=selection, agent=agent, runtime=runtime
+            )
+    except Exception as error:
+        return VerificationResult(verification=Verification.HarnessError(str(error)))

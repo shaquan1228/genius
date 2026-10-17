@@ -10,7 +10,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import commands, evaluation_settings, verification
+from evals.python import assessment, evaluation, execution, verification
+from evals.python.evaluation import EvaluationSettings
+from evals.python.execution import Runtime
 from evals.python.paths import EVALS_ROOT
 
 
@@ -32,9 +34,9 @@ def runner_entrypoint_validates_before_allocating_sandboxes(
 @pytest.mark.parametrize(
     ("operation", "arguments"),
     [
-        (commands.verify, {"case_id": "case", "agent": object(), "runtime": object()}),
+        (verification.verify_case, {"case_id": "case", "agent": object(), "runtime": object()}),
         (
-            commands.assess,
+            assessment.assess,
             {
                 "case_id": "case",
                 "response": "",
@@ -43,7 +45,7 @@ def runner_entrypoint_validates_before_allocating_sandboxes(
                 "runtime": object(),
             },
         ),
-        (commands.validate_reference, {"case_id": "case", "runtime": object()}),
+        (verification.validate_reference, {"case_id": "case", "runtime": object()}),
     ],
 )
 def capability_commands_reject_non_capabilities(
@@ -65,13 +67,13 @@ def public_evaluation_preserves_validated_settings_at_the_sdk_edge() -> None:
 
         async def execute() -> int:
             return assert_type(
-                await commands.evaluate(model="openai/test", sample_ids=("clear-task",)), int
+                await evaluation.evaluate(model="openai/test", sample_ids=("clear-task",)), int
             )
 
         assert asyncio.run(execute()) == 3
     assert evaluate.await_args is not None
     settings = evaluate.await_args.args[0]
-    assert isinstance(settings, evaluation_settings.EvaluationSettings)
+    assert isinstance(settings, EvaluationSettings)
     assert (settings.model, settings.sample_ids) == ("openai/test", ("clear-task",))
     with pytest.raises(ValidationError):
         settings.model = "changed"
@@ -81,7 +83,7 @@ def public_evaluation_preserves_validated_settings_at_the_sdk_edge() -> None:
     "arguments", [{"limit": 0}, {"sample_ids": ()}, {"deliveries": ("files", "files")}]
 )
 def direct_evaluation_validates_before_sdk_execution(arguments: dict[str, object]) -> None:
-    operation: Callable[..., Awaitable[int]] = commands.evaluate
+    operation: Callable[..., Awaitable[int]] = evaluation.evaluate
 
     async def execute() -> None:
         await operation(model="openai/test", **arguments)
@@ -105,13 +107,15 @@ def public_surface_has_no_legacy_function_aliases() -> None:
         "ValidateReference",
         "Evaluate",
     ):
-        assert not hasattr(commands, name)
+        assert not any(
+            hasattr(module, name) for module in (assessment, evaluation, execution, verification)
+        )
 
 
 @pytest.mark.parametrize("provider", ["hf", "local"])
 def runtime_factory_returns_canonical_capability(provider: str) -> None:
-    runtime_factory: Callable[..., verification.Runtime] = commands.create_runtime
-    runtime = assert_type(runtime_factory(provider=provider), verification.Runtime)
-    assert isinstance(runtime, verification.Runtime)
+    runtime_factory: Callable[..., Runtime] = execution.create_runtime
+    runtime = assert_type(runtime_factory(provider=provider), Runtime)
+    assert isinstance(runtime, Runtime)
     with pytest.raises(ValidationError):
         runtime_factory(provider="unknown")

@@ -13,7 +13,8 @@ from huggingface_hub import Sandbox, SandboxCommandResult
 from inspect_ai.util import SandboxUserUnsupportedError
 from inspect_ai.util._sandbox.events import SandboxEnvironmentProxy
 
-from evals.python import commands, verification
+from evals.python import execution
+from evals.python.execution import Execution
 from evals.python.integrations.hugging_face import sandbox as backend
 from evals.python.integrations.inspect import environments
 from evals.python.integrations.inspect.remote import HfSandboxEnvironment
@@ -181,9 +182,7 @@ def creation_cancellation_cleans_eventual_sandbox(client: Mock) -> None:
 @pytest.mark.parametrize("stdin", [None, "", b""])
 def stdin_preserves_absent_text_and_binary(stdin: str | bytes | None, *, client: Mock) -> None:
     async def execute() -> None:
-        await backend.environment("sandbox-id").execute(
-            verification.Execution(command=("cat",), input=stdin)
-        )
+        await backend.environment("sandbox-id").execute(Execution(command=("cat",), input=stdin))
 
     asyncio.run(execute())
     assert client.files.write.called == isinstance(stdin, bytes)
@@ -204,7 +203,7 @@ def backend_allocation_owns_eventual_handle_after_repeated_cancellation(
         return client
 
     async def cancel() -> None:
-        runtime = commands.create_runtime(provider="hf")
+        runtime = execution.create_runtime(provider="hf")
         task = asyncio.ensure_future(runtime.create())
         assert await asyncio.to_thread(started.wait, 5)
         task.cancel()
@@ -227,7 +226,7 @@ def cleanup_waits_for_eventual_kill_after_repeated_cancellation(client: Mock) ->
         assert release.wait(timeout=5)
 
     async def cancel() -> None:
-        runtime = commands.create_runtime(provider="hf")
+        runtime = execution.create_runtime(provider="hf")
         environment = await runtime.create()
         task = asyncio.create_task(runtime.cleanup(environment, interrupted=False))
         assert await asyncio.to_thread(started.wait, 5)
@@ -255,7 +254,7 @@ def persistent_runtime_reuses_client(client: Mock) -> None:
     async def exercise() -> None:
         runtime = backend.runtime()
         target = await runtime.create()
-        await target.execute(verification.Execution(command=("true",)))
+        await target.execute(Execution(command=("true",)))
         await target.write_bytes("file", b"data")
         client.files.read.return_value = b"data"
         assert await target.read_bytes("file") == b"data"

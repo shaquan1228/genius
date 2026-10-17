@@ -8,8 +8,8 @@ from inspect_ai import eval
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import ModelCost, ModelInfo, get_model, set_model_info
 
-from evals.python import datasets, queries
-from evals.python.datasets import humanevalplus, smoke
+from evals.python import datasets
+from evals.python.datasets import Dataset, humanevalplus, smoke
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.declarations import _copy_case
 from evals.python.tests.projections import reference, verifier
@@ -109,12 +109,12 @@ def choice_case(*, case_id: str, a: int, b: int) -> Task:
     )
 
 
-def import_dataset(records: tuple[str, ...]) -> datasets.Dataset:
-    return queries.compile_dataset(cases=humanevalplus.declarations(records))
+def import_dataset(records: tuple[str, ...]) -> Dataset:
+    return datasets.compile_dataset(cases=humanevalplus.declarations(records))
 
 
 def import_records(records: tuple[str, ...]) -> tuple[Case, ...]:
-    return queries.list_cases(selection=import_dataset(records))
+    return datasets.list_cases(selection=import_dataset(records))
 
 
 def imported_verifier(raw: str) -> Verifier | None:

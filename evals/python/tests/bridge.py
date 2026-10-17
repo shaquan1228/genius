@@ -6,9 +6,9 @@ from unittest.mock import PropertyMock, patch
 
 import pytest
 
-from evals.python import datasets, queries
-from evals.python.datasets import Selection
-from evals.python.queries import score_case
+from evals.python import datasets, evaluation, grading
+from evals.python.datasets import Selection, Sources
+from evals.python.grading import score_case
 from evals.python.tests.declarations import _declaration, _reference_files, _reference_text
 from evals.python.tests.projections import reference, verifier
 from kernel import (
@@ -28,11 +28,11 @@ from kernel._operations import sources
 
 
 def commands_and_queries_use_in_process_kernel_calls() -> None:
-    dataset = queries.compile_dataset(cases=(_declaration(code=False),))
+    dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
     with patch("subprocess.run", side_effect=AssertionError("Kernel calls must stay in process")):
-        assert queries.resolve_settings(epochs=2).epochs == 2
-        assert queries.list_cases(selection=dataset)[0].id == "external"
-        assert queries.score_case(
+        assert evaluation.resolve_settings(epochs=2).epochs == 2
+        assert datasets.list_cases(selection=dataset)[0].id == "external"
+        assert grading.score_case(
             case_id="external",
             selection=dataset,
             response='{"choice":"B","safe":true,"reason":"clear"}',
@@ -109,7 +109,7 @@ def grading_does_not_recompile_or_cache_results() -> None:
 @pytest.mark.parametrize("source", [name for name, _ in sources()])
 def kernel_fingerprint_tracks_every_trusted_source(source: str) -> None:
     original = datasets.kernel_sources()
-    changed = datasets.Sources(
+    changed = Sources(
         modules=tuple(
             (name, contents + "\n" if name == source else contents)
             for name, contents in original.modules
@@ -162,7 +162,7 @@ def reference_channels_export_independently_and_escape() -> None:
     expected_fields = response_ops.of_fields(
         [("state", ResponseValue.String(state)), ("safe", ResponseValue.Bool(safe))]
     )
-    dataset = queries.compile_dataset(
+    dataset = datasets.compile_dataset(
         cases=(
             Task(
                 id="reference",
@@ -177,7 +177,7 @@ def reference_channels_export_independently_and_escape() -> None:
             ),
         )
     )
-    case = queries.list_cases(selection=dataset)[0]
+    case = datasets.list_cases(selection=dataset)[0]
     expected = reference(case.id, selection=dataset)
     assert verifier(case.id, selection=dataset) is None
     assert dict(_reference_files(expected)) == {"result.txt": "result"}

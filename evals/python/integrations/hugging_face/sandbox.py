@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from huggingface_hub import Sandbox, SandboxCommandResult
 
-from evals.python import verification
+from evals.python.execution import Completion, Environment, Execution, Runtime
 
 IMAGE = "python:3.12-slim-bookworm"
 WORKDIR = PurePosixPath("/eval")
@@ -70,7 +70,7 @@ def destroy(client: Sandbox) -> None:
         client.close()
 
 
-def run(client: Sandbox, *, request: verification.Execution) -> verification.Completion:
+def run(client: Sandbox, *, request: Execution) -> Completion:
     cmd, stdin = list(request.command), request.input
     stdin_path: str | None = None
     try:
@@ -94,12 +94,10 @@ def run(client: Sandbox, *, request: verification.Execution) -> verification.Com
             client.files.delete(stdin_path)
 
 
-def completion(
-    result: SandboxCommandResult, *, command: tuple[str, ...]
-) -> verification.Completion:
+def completion(result: SandboxCommandResult, *, command: tuple[str, ...]) -> Completion:
     if result.timed_out:
         raise TimeoutError(f"Sandbox command timed out: {command[0]}")
-    return verification.Completion(
+    return Completion(
         returncode=result.exit_code if result.exit_code is not None else 1,
         stdout=result.stdout,
         stderr=result.stderr,
@@ -126,7 +124,7 @@ async def effect[T](
 
 def environment(
     handle: str, *, client: Sandbox | None = None, active: set[asyncio.Task[object]] | None = None
-) -> verification.Environment:
+) -> Environment:
     async def invoke[T](operation: Callable[[Sandbox], T]) -> T:
         def connected() -> T:
             current = client if client is not None else Sandbox.connect(handle)
@@ -138,7 +136,7 @@ def environment(
 
         return await effect(connected, active=active)
 
-    async def execute(request: verification.Execution) -> verification.Completion:
+    async def execute(request: Execution) -> Completion:
         return await invoke(lambda current: run(current, request=request))
 
     async def read(file: str) -> bytes:
@@ -147,7 +145,7 @@ def environment(
     async def write(file: str, contents: bytes) -> None:  # noqa: PLR0917 - capability write port
         await invoke(lambda current: current.files.write(str(WORKDIR / file), contents))
 
-    return verification.Environment(execute=execute, read_bytes=read, write_bytes=write)
+    return Environment(execute=execute, read_bytes=read, write_bytes=write)
 
 
 async def _settle[T](task: asyncio.Task[T]) -> T:
@@ -163,10 +161,10 @@ async def _kill(client: Sandbox) -> None:
     await effect(lambda: destroy(client))
 
 
-def runtime() -> verification.Runtime:
-    owned: dict[verification.Environment, tuple[Sandbox, set[asyncio.Task[object]]]] = {}
+def runtime() -> Runtime:
+    owned: dict[Environment, tuple[Sandbox, set[asyncio.Task[object]]]] = {}
 
-    async def allocate() -> verification.Environment:
+    async def allocate() -> Environment:
         pending = asyncio.create_task(asyncio.to_thread(create))
         try:
             client = await asyncio.shield(pending)
@@ -180,7 +178,7 @@ def runtime() -> verification.Runtime:
         owned[result] = client, active
         return result
 
-    async def cleanup(target: verification.Environment, *, interrupted: bool) -> None:
+    async def cleanup(target: Environment, *, interrupted: bool) -> None:
         client, active = owned.pop(target)
 
         async def finish() -> None:
@@ -197,4 +195,4 @@ def runtime() -> verification.Runtime:
                 await _settle(pending)
             raise
 
-    return verification.Runtime(create=allocate, cleanup=cleanup)
+    return Runtime(create=allocate, cleanup=cleanup)

@@ -8,7 +8,9 @@ import evals.python.integrations.inspect.agents as agent_adapter
 import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.scoring as scoring_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import datasets, evaluation_settings, queries
+from evals.python import datasets, evaluation
+from evals.python.datasets import Dataset, DatasetProvenance
+from evals.python.evaluation import InstructionDelivery
 from kernel import Experiment, Profile
 
 
@@ -16,14 +18,14 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
     *,
     profile: Profile,
     spec: Experiment,
-    catalog: datasets.Dataset,
+    catalog: Dataset,
     instructions: Mapping[str, bytes],
-    provenance: datasets.DatasetProvenance,
+    provenance: DatasetProvenance,
     agent: str,
     version: str = "",
     dataset: str = "smoke",
     sandbox: str = "local",
-    instruction_delivery: evaluation_settings.InstructionDelivery = "files",
+    instruction_delivery: InstructionDelivery = "files",
     instruction_root: str = "../instructions",
     task_name: str | None = None,
     diagnostic_epoch: int | None = None,
@@ -73,14 +75,14 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
 
 @task
 def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
-    spec = queries.resolve_settings()
-    catalog = queries.load_dataset(selection=dataset)
+    spec = evaluation.resolve_settings()
+    catalog = datasets.load_dataset(selection=dataset)
     return build_task(
         profile=profile_adapter.load_profile("baseline", spec=spec),
         spec=spec,
         catalog=catalog,
         instructions=profile_adapter.load_instructions(spec),
-        provenance=queries.get_provenance(selection=catalog),
+        provenance=datasets.get_provenance(selection=catalog),
         agent=agent,
         version=version,
         dataset=dataset,
@@ -89,14 +91,14 @@ def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke"
 
 @task
 def genius(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
-    spec = queries.resolve_settings()
-    catalog = queries.load_dataset(selection=dataset)
+    spec = evaluation.resolve_settings()
+    catalog = datasets.load_dataset(selection=dataset)
     return build_task(
         profile=profile_adapter.load_profile("genius", spec=spec),
         spec=spec,
         catalog=catalog,
         instructions=profile_adapter.load_instructions(spec),
-        provenance=queries.get_provenance(selection=catalog),
+        provenance=datasets.get_provenance(selection=catalog),
         agent=agent,
         version=version,
         dataset=dataset,

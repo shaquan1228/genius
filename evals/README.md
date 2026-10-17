@@ -33,11 +33,11 @@ flowchart LR
 | `python/integrations/datasets/` | Pinned download effects |
 | `python/integrations/smoke/` | Reusable private Python assertion driver and reference-validation CLI |
 | `python/integrations/inspect/` | SDK task/sample/score adaptation, agents, and sandbox capability adaptation |
-| `python/queries.py` | Typed public queries returning canonical values directly |
-| `python/commands.py` | Execution commands and runtime composition |
-| `python/evaluation_settings.py` | Validated launch settings, model pricing, and instruction delivery types |
-| `python/grading.py` | Candidate response parsing and native score adaptation |
-| `python/verification.py` | SDK-free execution capabilities, immutable results and verification lifecycle |
+| `python/evaluation.py` | Evaluation launch, experiment settings resolution, and validated launch types |
+| `python/execution.py` | Execution capabilities and provider runtime composition |
+| `python/assessment.py` | Public assessment workflow and immutable assessment results |
+| `python/grading.py` | Public case scoring, candidate response parsing and native score adaptation |
+| `python/verification.py` | Public case/reference verification, immutable results and verification lifecycle |
 | `python/integrations/hugging_face/` | Hosted Job entry point and HF SDK operations for VM lifecycle, command execution and file IO |
 | `python/integrations/evalplus/` | Benchmark reference-validation CLI, EvalPlus manifest adaptation and trusted EvalPlus driver |
 | `bin/` | Local launch and hosted bootstrap scripts |
@@ -45,13 +45,18 @@ flowchart LR
 Public `Case` values contain only ID, skill, prompt, and public files, including visible helper tools.
 Reference solutions, expected answers, private verifier programs and private inputs use separate projections.
 Only the trusted host or fresh grading sandbox receives those projections; agent samples and metadata receive public inputs and identifiers.
-Commands and queries export operations only. Import shared types from their owners:
-`evaluation_settings` owns `EvaluationSettings`, `ModelPricing`, and `InstructionDelivery`;
-`verification` owns execution capabilities and verification/assessment results;
+Each concern exports its public operations and owned types. Integrations call
+`datasets.load_dataset`, `grading.score_case`, `verification.verify_case`,
+`assessment.assess`, `execution.create_runtime`, and `evaluation.evaluate` directly.
+Import shared types directly from their owners:
+`evaluation` owns `EvaluationSettings`, `ModelPricing`, and `InstructionDelivery`;
+`execution` owns execution capabilities; `verification` owns verification results
+and diagnostics; `assessment` owns `Assessment`;
 `datasets` owns `Dataset`, `Selection`, and `DatasetProvenance`;
 `schema` owns `DatasetInfo`; `grading` owns `Scores`. Native domain types remain in `kernel`.
-For example, `from evals.python import evaluation_settings` supplies
-`evaluation_settings.ModelPricing(...)`; former command/query type import paths are removed.
+For example, `from evals.python.evaluation import ModelPricing` supplies
+`ModelPricing(...)`. Operation calls name their concern, while signatures and
+constructors use directly imported types such as `Execution` and `Completion`.
 
 Commands and queries accept and return the OCaml-backed types directly; validation and grading policy remain in OCaml.
 
@@ -92,8 +97,8 @@ Dataset-record types remain private to their Python implementations.
 Raw Ast records are validated at case projection and grading boundaries, including nested criteria, verifier contracts and reference fields.
 
 Public operations carry dataset selection as context. `list_cases` returns public inputs;
-`verify` and `assess` resolve private checks internally. Selection stays out of
-the kernel grading observation; scoring supplies the case ID it already has.
+`verification.verify_case` and `assessment.assess` resolve private checks internally.
+Selection stays out of the kernel grading observation; scoring supplies the case ID it already has.
 
 Primitive modules have no SDK dependencies. Setup builds and installs the kernel with Dune;
 ordinary imports load the findlib package with `ocaml.require`, and command/query calls invoke its bound operations directly. The default smoke driver executes Python candidates and private assertions in its isolated grading workspace.
@@ -254,7 +259,7 @@ Each session has a model dollar limit and a 300-second time limit. There is no
 cumulative token or message cutoff by default. Required instruction reads and
 tool replies count toward Inspect message limits, so a small message cap gives
 the two profiles unequal room for task work. Explicit positive message overrides
-remain available through `queries.resolve_settings(message_limit=...)`.
+remain available through `evaluation.resolve_settings(message_limit=...)`.
 Task metadata records agent versions and hashes of instructions, fixtures, and the manifest.
 Inspect logs record model usage, sample events, answers, errors, and scores.
 
@@ -280,24 +285,23 @@ excludes private checks and reference solutions.
 Python-only metadata and SDK execution capabilities remain Python-owned.
 
 ```python
-from evals.python import commands
-from evals.python import queries
+from evals.python import datasets, grading, verification
 from evals.python.datasets import smoke as declarations
 
 definitions = declarations.cases()
-dataset = queries.compile_dataset(cases=definitions)
-public_cases = queries.list_cases(selection=dataset)
+dataset = datasets.compile_dataset(cases=definitions)
+public_cases = datasets.list_cases(selection=dataset)
 
 # In an async caller, validate the first case's known reference offline.
-verification = await commands.validate_reference(
+result = await verification.validate_reference(
     case_id=public_cases[0].id, selection=dataset
 )
-scores = queries.score_case(
+scores = grading.score_case(
     case_id=public_cases[0].id,
     selection=dataset,
     response="Each quantity now contributes to the total.",
     changed_files=("workspace/receipt.py",),
-    verification=verification.verification,
+    verification=result.verification,
 )
 ```
 
@@ -367,17 +371,17 @@ fixed for each process. There is no content-addressed runtime plugin cache.
 Dataset snapshots retain typed declarations and explicit resources. Construction
 validates private record IDs, native source compatibility, resource resolution,
 and metadata count, then derives public cases from the normalized records.
-The supported authoring entry point is `queries.compile_dataset`; direct
-`datasets.Dataset` construction accepts private `records`, `sources`, and optional
+The supported authoring entry point is `datasets.compile_dataset`; direct
+`Dataset` construction accepts private `records`, `sources`, and optional
 `info`, with no independently supplied public cases. Both paths copy and freeze
 their collections. Resource changes invalidate subsequent compiled snapshots
 without rebuilding native code; existing snapshots and provenance remain stable.
 
-`commands.assess` and `commands.validate_reference` acquire one dataset snapshot
+`assessment.assess` and `verification.validate_reference` acquire one dataset snapshot
 before execution and retain it across verification, reference staging, and grading.
 Passing an existing snapshot reuses its identity without loading the named dataset
 again. A later operation with a dataset name can acquire changed declarations;
-there is no global cache by name. Metadata-only `queries.describe_dataset` remains
+there is no global cache by name. Metadata-only `datasets.describe_dataset` remains
 lazy and does not compile cases or download benchmark data.
 
 Queries and commands call the native OCaml operations directly. Dataset loading,
@@ -393,7 +397,7 @@ sample metadata or the agent workspace. Reference validation stages reference
 edits in a separate temporary candidate environment; scripted test agents also
 use them for offline checks.
 
-Inspect prepares one `queries.load_dataset` snapshot, provenance, and instruction byte
+Inspect prepares one `datasets.load_dataset` snapshot, provenance, and instruction byte
 snapshot before constructing an evaluation's tasks. Profile selection, prompts,
 sample files, and instruction hashes consume those supplied values. Instruction
 mounts use data URIs from the snapshot, so later source edits cannot change the
@@ -572,15 +576,14 @@ case hash, and each sample's verifier evidence.
 Integrations call typed public queries and commands directly:
 
 ```python
-from evals.python import commands
-from evals.python import queries
+from evals.python import assessment, datasets, evaluation
 
-dataset = queries.load_dataset(selection="humanevalplus")
-cases = queries.list_cases(selection=dataset)
-settings = queries.resolve_settings(epochs=2, cost_limit=0.25)
+dataset = datasets.load_dataset(selection="humanevalplus")
+cases = datasets.list_cases(selection=dataset)
+settings = evaluation.resolve_settings(epochs=2, cost_limit=0.25)
 
 # At the Inspect scoring interface, after capturing public observations:
-assessment = await commands.assess(
+result = await assessment.assess(
     case_id=case_id,
     selection="humanevalplus",
     response=completion,
@@ -589,16 +592,17 @@ assessment = await commands.assess(
     runtime=runtime,
 )
 
-exit_code = await commands.evaluate(model="openai/your-model", dataset="humanevalplus")
+exit_code = await evaluation.evaluate(model="openai/your-model", dataset="humanevalplus")
 ```
 
 Each callable validates its arguments and returns its declared result directly.
 `load_dataset`, `list_cases`, `resolve_settings`, `compile_dataset`, `describe_dataset`, `get_provenance`,
 `get_reference` and `score_case` are queries. They load or derive dataset values
 and experiment settings.
-`commands.create_runtime` synchronously assembles provider execution capabilities.
-`verify`, `assess`, `validate_reference`, and `evaluate` are asynchronous
-commands that own execution effects. `describe_dataset` reads metadata without
+`execution.create_runtime` synchronously assembles provider execution capabilities.
+`verification.verify_case`, `assessment.assess`, `verification.validate_reference`, and
+`evaluation.evaluate` are asynchronous commands that own execution effects.
+`describe_dataset` reads metadata without
 downloading/importing all cases;
 `get_provenance` includes source and private-case fingerprints.
 
@@ -661,7 +665,7 @@ rates; a zero cache rate is valid only if that usage is actually free. No model
 vendor price is inferred for an HF provider route. Other providers may use Inspect's
 built-in prices, or the same explicit override. Missing pricing fails before
 sample VMs are allocated. The public command accepts `cost_limit=0.25` and a
-`evaluation_settings.ModelPricing(...)` value as `model_cost`.
+`ModelPricing(...)` value imported from `evals.python.evaluation` as `model_cost`.
 
 The parent logs the resolved cap and prices; native Inspect logs retain usage,
 costs and cost-limit cutoffs. Cost is checked after each model response, so the

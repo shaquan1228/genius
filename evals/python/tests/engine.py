@@ -13,7 +13,8 @@ from inspect_ai.model import ModelName, ModelOutput
 from inspect_ai.scorer import CORRECT, INCORRECT, Target
 from inspect_ai.solver import TaskState
 
-from evals.python import commands, verification
+from evals.python import assessment as assessment_api
+from evals.python.assessment import Assessment
 from evals.python.integrations.inspect import environments, scoring, workspace
 from evals.python.integrations.inspect.agents import AGENT_REGISTRY
 from evals.python.integrations.inspect.tasks import baseline, genius
@@ -29,6 +30,7 @@ from evals.python.tests.support import (
     results as _results,
 )
 from evals.python.tests.verification import _agent_port, _grader_port, _runtime_port
+from evals.python.verification import VerificationResult
 from kernel import Verification
 from kernel._operations import grader as grader_ops
 
@@ -128,7 +130,7 @@ def crashed_agent_is_scored_on_its_workspace(
 def verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
     with patch(
         "evals.python.verification.verify",
-        return_value=verification.VerificationResult(
+        return_value=VerificationResult(
             verification=Verification.HarnessError("grader failed to import")
         ),
     ):
@@ -150,7 +152,7 @@ def scorer_maps_sdk_observation_to_public_assessment() -> None:
     )
     state.output = ModelOutput.from_content("mockllm/model", "observed answer")
     agent, runtime = _agent_port(), _runtime_port(_grader_port())
-    assessment = verification.Assessment(
+    assessment = Assessment(
         verification=Verification.Passed(),
         detail="canonical evidence",
         metadata={"nested": {"items": (True, None, 4.2)}},
@@ -161,7 +163,7 @@ def scorer_maps_sdk_observation_to_public_assessment() -> None:
         patch.object(scoring, "sandbox"),
         patch.object(environments, "environment", return_value=agent),
         patch.object(environments, "runtime", return_value=runtime),
-        patch.object(commands, "assess", return_value=assessment) as execute,
+        patch.object(assessment_api, "assess", return_value=assessment) as execute,
     ):
         score = asyncio.run(scoring.score_sample(state, Target([""])))
     assert score.metadata is not None
@@ -197,7 +199,7 @@ from unittest.mock import PropertyMock, patch
 from kernel._operations import grader as grader_ops
 with patch.object(type(grader_ops), "required_names", new_callable=PropertyMock,
                   return_value=["correctness", "scope", "extension"]):
-    from evals.python import queries
+    from evals.python import grading
     from evals.python.integrations.inspect import completeness, scoring
     from inspect_ai.scorer._scorer import scorer_metrics
     from inspect_ai.scorer import CORRECT, INCORRECT
@@ -210,7 +212,7 @@ with patch.object(type(grader_ops), "required_names", new_callable=PropertyMock,
     assert completeness.complete_value(encoded)
     pairs = [("correctness", True), ("scope", False), ("extension", True)]
     with patch.object(grader_ops, "grade", return_value=pairs):
-        scores = queries.score_case(case_id="small-decision", response="{}", changed_files=())
+        scores = grading.score_case(case_id="small-decision", response="{}", changed_files=())
     assert scoring.score_values(scores) == encoded
 """,
         ],

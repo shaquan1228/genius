@@ -11,7 +11,8 @@ from inspect_ai.model import ModelName
 from inspect_ai.solver import TaskState
 from inspect_swe import claude_code, codex_cli
 
-from evals.python import evaluation_settings, queries
+from evals.python import datasets, evaluation
+from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.agents import (
     AGENT_REGISTRY,
@@ -152,15 +153,15 @@ def codex_options_disable_network() -> None:
 
 def explicit_agent_version_is_logged() -> None:
     task = build_task(
-        profile=profiles.load_profile("genius", spec=queries.resolve_settings()),
-        spec=queries.resolve_settings(),
+        profile=profiles.load_profile("genius", spec=evaluation.resolve_settings()),
+        spec=evaluation.resolve_settings(),
         agent="codex",
         version="0.137.0",
-        catalog=queries.load_dataset(selection="smoke"),
-        instructions=profiles.load_instructions(queries.resolve_settings()),
-        provenance=queries.get_provenance(selection=queries.load_dataset(selection="smoke")),
+        catalog=datasets.load_dataset(selection="smoke"),
+        instructions=profiles.load_instructions(evaluation.resolve_settings()),
+        provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
-    spec = queries.resolve_settings()
+    spec = evaluation.resolve_settings()
     assert (task.epochs, task.message_limit, task.cost_limit, task.time_limit) == (
         spec.epochs,
         spec.message_limit,
@@ -178,15 +179,15 @@ def custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
     monkeypatch.setitem(
         AGENT_REGISTRY, "other", replace(AGENT_REGISTRY["codex"], default_version="custom-version")
     )
-    request = evaluation_settings.EvaluationSettings(model="mockllm/model", agent="other")
-    spec = queries.resolve_settings()
+    request = EvaluationSettings(model="mockllm/model", agent="other")
+    spec = evaluation.resolve_settings()
     task = build_task(
         profile=profiles.load_profile("baseline", spec=spec),
         spec=spec,
         agent=request.agent,
-        catalog=queries.load_dataset(selection="smoke"),
+        catalog=datasets.load_dataset(selection="smoke"),
         instructions=profiles.load_instructions(spec),
-        provenance=queries.get_provenance(selection=queries.load_dataset(selection="smoke")),
+        provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     assert task.metadata is not None
     assert (task.metadata["agent"], task.metadata["agent_version"]) == ("other", "custom-version")

@@ -18,7 +18,8 @@ import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.progress as progress_adapter
 import evals.python.integrations.inspect.remote  # noqa: F401 - register the HF sandbox
 import evals.python.integrations.inspect.tasks as task_adapter
-from evals.python import evaluation_settings, queries
+from evals.python import datasets, evaluation
+from evals.python.evaluation import EvaluationSettings
 from kernel import Experiment
 
 
@@ -39,9 +40,7 @@ def crash_summary(log: EvalLog) -> str:
     return f"{log.eval.task}: {crashes} of {len(samples)} samples had an agent crash"
 
 
-def selected_samples(
-    task: Task, *, request: evaluation_settings.EvaluationSettings
-) -> list[str] | None:
+def selected_samples(task: Task, *, request: EvaluationSettings) -> list[str] | None:
     selected = request.sample_ids
     if selected is None:
         return None
@@ -53,12 +52,10 @@ def selected_samples(
     return list(selected)
 
 
-def evaluation_tasks(
-    spec: Experiment, *, request: evaluation_settings.EvaluationSettings
-) -> list[Task]:
-    catalog = queries.load_dataset(selection=request.dataset)
+def evaluation_tasks(spec: Experiment, *, request: EvaluationSettings) -> list[Task]:
+    catalog = datasets.load_dataset(selection=request.dataset)
     instructions = profile_adapter.load_instructions(spec)
-    provenance = queries.get_provenance(selection=catalog)
+    provenance = datasets.get_provenance(selection=catalog)
     build = partial(
         task_adapter.build_task,
         spec=spec,
@@ -80,7 +77,7 @@ def evaluation_tasks(
 
 
 def diagnostic_tasks(
-    spec: Experiment, *, request: evaluation_settings.EvaluationSettings, build: partial[Task]
+    spec: Experiment, *, request: EvaluationSettings, build: partial[Task]
 ) -> list[Task]:
     modes = request.deliveries or ()
     single = Experiment(
@@ -105,8 +102,8 @@ def diagnostic_tasks(
     ]
 
 
-async def evaluate_async(request: evaluation_settings.EvaluationSettings) -> int:
-    spec = queries.resolve_settings(epochs=request.epochs, cost_limit=request.cost_limit)
+async def evaluate_async(request: EvaluationSettings) -> int:
+    spec = evaluation.resolve_settings(epochs=request.epochs, cost_limit=request.cost_limit)
     tasks = evaluation_tasks(spec, request=request)
     selected_samples(tasks[0], request=request)
     if request.model.startswith("hf-inference-providers/"):
@@ -144,7 +141,7 @@ async def evaluate_async(request: evaluation_settings.EvaluationSettings) -> int
 async def execute(
     tasks: list[Task],
     *,
-    request: evaluation_settings.EvaluationSettings,
+    request: EvaluationSettings,
     spec: Experiment,
     model: Any,
     state: progress_adapter.Progress,

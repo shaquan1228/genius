@@ -4,13 +4,13 @@ from collections.abc import Iterable
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from evals.python import schema
 from evals.python.integrations.datasets.download import Download, cache_path, download
 from evals.python.integrations.evalplus import checks
+from evals.python.schema import DatasetInfo
 from kernel import Completion, Instruction, Reference, Task
 from kernel._operations import fixture as fixture_ops
 
-info = schema.DatasetInfo(
+info = DatasetInfo(
     source="https://github.com/evalplus/humanevalplus_release/releases/download/v0.1.10/HumanEvalPlus.jsonl.gz",
     revision="v0.1.10",
     sha256="42526ec0e7d5f3ee0b06d6ced98f8c8bae3d76519151bfb3d36f79010645bd7f",

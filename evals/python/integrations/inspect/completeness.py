@@ -7,13 +7,13 @@ from inspect_ai import Task
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.scorer import CORRECT, INCORRECT
 
-from evals.python import evaluation_settings
+from evals.python.evaluation import EvaluationSettings
 from kernel._operations import grader as grader_ops
 
 Pair = tuple[str, str, int]
 
 
-def selected_ids(task: Task, *, request: evaluation_settings.EvaluationSettings) -> list[str]:
+def selected_ids(task: Task, *, request: EvaluationSettings) -> list[str]:
     ids = [str(sample.id) for sample in task.dataset]
     if request.sample_ids is not None:
         ids = [case for case in ids if case in request.sample_ids]
@@ -24,9 +24,7 @@ def task_pairs(task: Task, *, ids: list[str], epochs: int) -> set[Pair]:
     return {(task.name, case, epoch) for case in ids for epoch in range(1, epochs + 1)}
 
 
-def expected_pairs(
-    tasks: list[Task], *, request: evaluation_settings.EvaluationSettings, epochs: int
-) -> set[Pair]:
+def expected_pairs(tasks: list[Task], *, request: EvaluationSettings, epochs: int) -> set[Pair]:
     result: set[Pair] = set()
     for task in tasks:
         result.update(task_pairs(task, ids=selected_ids(task, request=request), epochs=epochs))

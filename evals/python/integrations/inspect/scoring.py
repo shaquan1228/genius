@@ -9,7 +9,9 @@ from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import commands, datasets, verification
+from evals.python import assessment
+from evals.python.datasets import Dataset
+from evals.python.verification import Diagnostic
 from kernel import Verification
 from kernel._operations import grader as grader_ops
 
@@ -24,7 +26,7 @@ def with_failure(explanation: str, *, failure: str | None) -> str:
     return f"Agent process crashed: {failure}\n\n{explanation}"
 
 
-def diagnostic(value: verification.Diagnostic) -> JsonValue:
+def diagnostic(value: Diagnostic) -> JsonValue:
     if isinstance(value, Mapping):
         return {key: diagnostic(item) for key, item in value.items()}
     if isinstance(value, tuple):
@@ -33,13 +35,13 @@ def diagnostic(value: verification.Diagnostic) -> JsonValue:
 
 
 async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
-    state: TaskState, target: Target, *, dataset: datasets.Dataset | None = None
+    state: TaskState, target: Target, *, dataset: Dataset | None = None
 ) -> Score:
     failure = state.metadata.get("agent_failure")
     completion = state.output.completion
     changed = tuple(sorted(await workspace_adapter.changed_files(state)))
     current = sandbox()
-    result = await commands.assess(
+    result = await assessment.assess(
         case_id=str(state.metadata["case_id"]),
         response=completion,
         changed_files=changed,
@@ -72,6 +74,6 @@ def evaluation() -> Scorer:
     return score_sample
 
 
-def bound_evaluation(*, dataset: datasets.Dataset) -> Scorer:
+def bound_evaluation(*, dataset: Dataset) -> Scorer:
     # Copy only the public registration; private inputs stay in the bound callback.
     return wraps(evaluation())(partial(score_sample, dataset=dataset))

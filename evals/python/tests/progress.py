@@ -11,7 +11,8 @@ from inspect_ai.dataset import Sample
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, scorer
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 
-from evals.python import commands, evaluation_settings
+from evals.python import evaluation as evaluation_api
+from evals.python.evaluation import EvaluationSettings, ModelPricing
 from evals.python.integrations.hugging_face.job import configuration
 from evals.python.integrations.inspect import completeness, evaluation, progress
 
@@ -117,9 +118,9 @@ def evaluation_stops_heartbeat(outcome: str, *, capsys: pytest.CaptureFixture[st
             pytest.raises(RuntimeError if outcome == "error" else asyncio.CancelledError),
         ):
             await evaluation.evaluate_async(
-                evaluation_settings.EvaluationSettings(
+                EvaluationSettings(
                     model="mockllm/model",
-                    model_cost=evaluation_settings.ModelPricing(
+                    model_cost=ModelPricing(
                         input=0.0, output=0.0, input_cache_write=0.0, input_cache_read=0.0
                     ),
                 )
@@ -145,9 +146,9 @@ def native_evaluation_success(*, tmp_path: Path, capsys: pytest.CaptureFixture[s
     with patch.object(evaluation, "evaluation_tasks", return_value=[task]):
         result = asyncio.run(
             evaluation.evaluate_async(
-                evaluation_settings.EvaluationSettings(
+                EvaluationSettings(
                     model="mockllm/model",
-                    model_cost=evaluation_settings.ModelPricing(
+                    model_cost=ModelPricing(
                         input=0.0, output=0.0, input_cache_write=0.0, input_cache_read=0.0
                     ),
                     epochs=1,
@@ -231,7 +232,7 @@ def incomplete_native_records_fail() -> None:
 
 def public_concurrency_override() -> None:
     with patch.object(evaluation, "evaluate_async", return_value=0) as execute:
-        assert asyncio.run(commands.evaluate(model="mockllm/model", max_samples=3)) == 0
+        assert asyncio.run(evaluation_api.evaluate(model="mockllm/model", max_samples=3)) == 0
     assert execute.call_args.args[0].max_samples == 3
 
 
