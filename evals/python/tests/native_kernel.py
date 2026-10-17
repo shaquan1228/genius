@@ -1,8 +1,8 @@
 """Exercise generated types and real kernel policy through an in-process bridge."""
 
 from collections.abc import Callable
+from inspect import unwrap
 from operator import itemgetter
-from types import ModuleType
 from typing import cast
 
 import pytest
@@ -32,9 +32,6 @@ from kernel import (
 from kernel import (
     ValidationError as DomainValidationError,
 )
-from kernel import experiment as experiment_ops
-from kernel import grader as grader_ops
-from kernel import projection as projection_ops
 from kernel._bridge import native as native_kernel
 
 
@@ -62,29 +59,27 @@ def _answer() -> tuple[Task, Response]:
 def check_answer_projection() -> None:
     case, _ = _answer()
     assert isinstance(case, Task)
-    public = projection_ops.case(task=case)
+    public = Case.create(task=case)
     assert isinstance(public, Case)
-    assert (public.id, hasattr(public, "reference"), projection_ops.verifier(task=case)) == (
+    assert (public.id, hasattr(public, "reference"), Task.verifier(task=case)) == (
         case.id,
         False,
         None,
     )
     assert (
         list(_files(public.files).items()),
-        cast(Completion.Structured, projection_ops.reference(task=case).completion)
-        .response.fields[0]
-        .name,
+        cast(Completion.Structured, (case).reference.completion).response.fields[0].name,
     ) == ([("context.txt", "Public context")], "choice")
 
 
 def check_answer_grading() -> None:
-    assert experiment_ops.resolve(epochs=1).epochs == 1
+    assert Experiment.resolve(epochs=1).epochs == 1
     case, expected = _answer()
     outcome = Outcome.create(changed_files=[], verification=Verification.Unchecked())
-    scores = grader_ops.grade(task=case, response=expected, outcome=outcome)
-    assert tuple(map(itemgetter(0), scores)) == tuple(grader_ops.required_names)
+    scores = Task.grade(task=case, response=expected, outcome=outcome)
+    assert tuple(map(itemgetter(0), scores)) == tuple(Task.required_scores)
     assert dict(scores) == {"correctness": True, "scope": True}
-    assert not dict(grader_ops.grade(task=case, response=None, outcome=outcome))["correctness"]
+    assert not dict(Task.grade(task=case, response=None, outcome=outcome))["correctness"]
 
 
 @pytest.mark.parametrize(
@@ -110,13 +105,13 @@ def check_code(status: Verification.Value, *, correctness: bool) -> None:
             completion=Completion.create(plain=""),
         ),
     )
-    projected = projection_ops.verifier(task=case)
+    projected = Task.verifier(task=case)
     assert projected is not None
-    public_files = [artifact.path for artifact in projection_ops.case(task=case).files]
+    public_files = [artifact.path for artifact in Case.create(task=case).files]
     outcome = Outcome.create(changed_files=["workspace/solution.py"], verification=status)
-    scores = grader_ops.grade(task=case, response=None, outcome=outcome)
+    scores = Task.grade(task=case, response=None, outcome=outcome)
     assert (tuple(map(itemgetter(0), scores)), dict(scores)) == (
-        tuple(grader_ops.required_names),
+        tuple(Task.required_scores),
         {"correctness": correctness, "scope": True},
     )
     outside_scope = Outcome.create(
@@ -125,7 +120,7 @@ def check_code(status: Verification.Value, *, correctness: bool) -> None:
     assert (
         projected.stdin,
         public_files,
-        dict(grader_ops.grade(task=case, response=None, outcome=outside_scope))["scope"],
+        dict(Task.grade(task=case, response=None, outcome=outside_scope))["scope"],
     ) == ("private input", ["solution.py"], False)
 
 
@@ -138,7 +133,7 @@ def check_rejections() -> None:
             ]
         )
     with pytest.raises(TypeError):
-        cast(Callable[..., Experiment], experiment_ops.resolve)(epochs="wrong type")
+        cast(Callable[..., Experiment], Experiment.resolve)(epochs="wrong type")
 
 
 @pytest.mark.parametrize(
@@ -168,9 +163,9 @@ def owned_alternatives_preserve_native_identity(
     )
 
 
-def public_kernel_exports_native_types_and_operations() -> None:
+def public_kernel_exports_only_types() -> None:
     assert all(
-        isinstance(getattr(kernel_types, name), (type, ModuleType)) or name == "sources"
+        name[0].isupper() and isinstance(getattr(kernel_types, name), type)
         for name in vars(kernel_types)["__all__"]
     )
     assert (
@@ -178,6 +173,7 @@ def public_kernel_exports_native_types_and_operations() -> None:
             "Ast",
             "Grader",
             "Projection",
+            "sources",
             "Answer",
             "Code",
             "Inline",
@@ -186,4 +182,22 @@ def public_kernel_exports_native_types_and_operations() -> None:
             "HarnessError",
         }
         & vars(kernel_types).keys()
+    )
+
+
+@pytest.mark.parametrize(
+    ("owner", "method", "native_owner"),
+    [
+        ("Fixture", "files", "Fixture"),
+        ("Task", "grade", "Task"),
+        ("Task", "verifier", "Task"),
+        ("Experiment", "resolve", "Experiment"),
+        ("File", "valid_path", "File"),
+        ("Completion", "trim", "Completion"),
+        ("TextRule", "word_count", "Text_rule"),
+    ],
+)
+def type_methods_bind_the_native_owner(owner: str, *, method: str, native_owner: str) -> None:
+    assert unwrap(getattr(getattr(kernel_types, owner), method)) is getattr(
+        getattr(native_kernel, native_owner), method
     )

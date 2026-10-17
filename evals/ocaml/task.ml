@@ -71,3 +71,60 @@ let resolve_resources ~(task : t) ~resources =
   Result.map_error
     (fun failure -> { failure with Validation_failure.case_id = Some task.id })
     result
+
+let definitions = [ ("correctness", `Correctness); ("scope", `Scope) ]
+let required_scores = List.map fst definitions
+
+let answer (criterion : Rubric.t) response =
+  match response with
+  | None -> false
+  | Some (response : Response.t) ->
+      let exact, text_valid =
+        match criterion.text_rule with
+        | None -> (response.fields, true)
+        | Some rule ->
+            let valid =
+              match
+                List.find_opt
+                  (fun (field : Response_field.t) -> field.name = rule.field)
+                  response.fields
+              with
+              | Some { value = Response_value.String { value = text }; _ } ->
+                  let words = Text_rule.word_count ~text in
+                  rule.min_words <= words && words <= rule.max_words
+              | Some { value = Response_value.Bool _; _ } | None -> false
+            in
+            ( List.filter
+                (fun (field : Response_field.t) -> field.name <> rule.field)
+                response.fields,
+              valid )
+      in
+      text_valid && List.sort compare exact = List.sort compare criterion.expected.fields
+
+let grade ~(task : t) ~response ~(outcome : Outcome.t) =
+  let correctness =
+    match task.criterion with
+    | Criterion.Code _ -> (
+        match outcome.verification with
+        | Verification.Harness_error { detail } ->
+            Error (Grading_failure.Verification_harness_error { detail })
+        | Verification.Passed -> Ok true
+        | Verification.Unchecked | Verification.Failed | Verification.Invalid_submission
+        | Verification.Timed_out ->
+            Ok false)
+    | Criterion.Answer { rubric } -> Ok (answer rubric response)
+  in
+  Result.map
+    (fun correctness ->
+      let allowed = List.map (fun path -> "workspace/" ^ path) task.allowed_files in
+      let scope = List.for_all (fun path -> List.mem path allowed) outcome.changed_files in
+      List.map
+        (fun (name, criterion) ->
+          (name, match criterion with `Correctness -> correctness | `Scope -> scope))
+        definitions)
+    correctness
+
+let verifier ~(task : t) =
+  match task.criterion with
+  | Criterion.Code { verifier } -> Some verifier
+  | Criterion.Answer _ -> None

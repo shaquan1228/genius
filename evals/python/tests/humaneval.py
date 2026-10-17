@@ -75,17 +75,17 @@ def imported_profile_public_inputs_match() -> None:
         name: profiles.files(
             load_profile(name="genius", spec=evaluation.resolve_settings()),
             case=case,
-            instructions=profiles.load_instructions(evaluation.resolve_settings()),
+            documents=profiles.load_documents(evaluation.resolve_settings()),
         )[name]
         for name in profiles.files(
             load_profile(name="baseline", spec=evaluation.resolve_settings()),
             case=case,
-            instructions=profiles.load_instructions(evaluation.resolve_settings()),
+            documents=profiles.load_documents(evaluation.resolve_settings()),
         )
     } == profiles.files(
         load_profile(name="baseline", spec=evaluation.resolve_settings()),
         case=case,
-        instructions=profiles.load_instructions(evaluation.resolve_settings()),
+        documents=profiles.load_documents(evaluation.resolve_settings()),
     )
 
 
@@ -124,7 +124,7 @@ def dataset_selector_grades_one_trusted_record() -> None:
             load_profile(name="baseline", spec=evaluation.resolve_settings()),
             cases=datasets.list_cases(),
             dataset="humanevalplus",
-            instructions=profiles.load_instructions(evaluation.resolve_settings()),
+            documents=profiles.load_documents(evaluation.resolve_settings()),
         )
     assert samples[0].metadata == {
         "case_id": case.id,

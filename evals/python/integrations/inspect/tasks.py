@@ -19,7 +19,7 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
     profile: Profile,
     spec: Experiment,
     catalog: Dataset,
-    instructions: Mapping[str, bytes],
+    documents: Mapping[str, bytes],
     provenance: DatasetProvenance,
     agent: str,
     version: str = "",
@@ -36,7 +36,7 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
         dataset=profile_adapter.samples(
             profile,
             cases=tuple(catalog.cases.values()),
-            instructions=instructions,
+            documents=documents,
             dataset=dataset,
             delivery=instruction_delivery,
             instruction_root=instruction_root,
@@ -62,9 +62,9 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
             ).hexdigest(),
             "instruction_delivery": instruction_delivery,
             "instructions_sha256": profile_adapter.content_hash(
-                files=profile_adapter.instruction_files(
+                files=profile_adapter.document_files(
                     profile_adapter.load_profile(name="genius", spec=spec),
-                    instructions=instructions,
+                    documents=documents,
                 )
             ),
             "fixtures_sha256": provenance.source_hash,
@@ -81,7 +81,7 @@ def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke"
         profile=profile_adapter.load_profile("baseline", spec=spec),
         spec=spec,
         catalog=catalog,
-        instructions=profile_adapter.load_instructions(spec),
+        documents=profile_adapter.load_documents(spec),
         provenance=datasets.get_provenance(selection=catalog),
         agent=agent,
         version=version,
@@ -97,7 +97,7 @@ def genius(*, agent: str = "claude", version: str = "", dataset: str = "smoke") 
         profile=profile_adapter.load_profile("genius", spec=spec),
         spec=spec,
         catalog=catalog,
-        instructions=profile_adapter.load_instructions(spec),
+        documents=profile_adapter.load_documents(spec),
         provenance=datasets.get_provenance(selection=catalog),
         agent=agent,
         version=version,

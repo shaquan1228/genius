@@ -1,30 +1,7 @@
 # Generated from compiled OCaml interfaces; do not edit.
-from functools import cache
-
-from . import artifact as artifact
-from . import case as case
-from . import completion as completion
-from . import content as content
-from . import criterion as criterion
-from . import experiment as experiment
-from . import file as file
-from . import fixture as fixture
-from . import grader as grader
-from . import instruction as instruction
-from . import outcome as outcome
-from . import profile as profile
-from . import projection as projection
-from . import reference as reference
-from . import resource_binding as resource_binding
-from . import response as response
-from . import response_field as response_field
-from . import response_value as response_value
-from . import rubric as rubric
-from . import task as task
-from . import text_rule as text_rule
-from . import verifier as verifier
 from ._bridge import GradingError as GradingError
 from ._bridge import ValidationError as ValidationError
+from ._bridge import bind as _bind
 from ._bridge import named as _named
 from ._bridge import native as _native
 
@@ -38,6 +15,7 @@ File = _named(constructor=_native.File.t)
 Fixture = _native.Fixture.t
 GradingFailure = _native.Grading_failure.t
 Instruction = _named(constructor=_native.Instruction.t)
+Kernel = _named(constructor=_native.Kernel.t)
 Outcome = _named(constructor=_native.Outcome.t)
 Profile = _named(constructor=_native.Profile.t)
 Reference = _named(constructor=_native.Reference.t)
@@ -82,42 +60,184 @@ ValidationCode.InvalidExperimentSetting = _named(
 )
 ValidationCode.MissingResource = _named(constructor=_native.Validation_code.Missing_resource)
 ValidationCode.InvalidAlternative = _named(constructor=_native.Validation_code.Invalid_alternative)
-File.create = staticmethod(file.create)
-Fixture.create = staticmethod(fixture.create)
+File.create = staticmethod(
+    _bind(
+        operation=_native.File.create,
+        arguments={"path": False, "contents": False},
+        failure="validation_failure",
+    )
+)
+File.valid_path = staticmethod(
+    _bind(operation=_native.File.valid_path, arguments={"path": False}, failure=None)
+)
+File.path_issues = staticmethod(
+    _bind(
+        operation=_native.File.path_issues, arguments={"field": False, "paths": False}, failure=None
+    )
+)
+Fixture.create = staticmethod(
+    _bind(
+        operation=_native.Fixture.create, arguments={"files": False}, failure="validation_failure"
+    )
+)
+Fixture.empty = _native.Fixture.empty
+Fixture.add = staticmethod(
+    _bind(
+        operation=_native.Fixture.add,
+        arguments={"fixture": False, "file": False},
+        failure="validation_failure",
+    )
+)
+Fixture.overlay = staticmethod(
+    _bind(
+        operation=_native.Fixture.overlay,
+        arguments={"base": False, "overrides": False},
+        failure=None,
+    )
+)
+Fixture.files = staticmethod(
+    _bind(operation=_native.Fixture.files, arguments={"fixture": False}, failure=None)
+)
 ResponseValue.Value = ResponseValue
 ResponseValue.String = _named(constructor=_native.Response_value.String)
 ResponseValue.String._default_type = ()
 ResponseValue.Bool = _named(constructor=_native.Response_value.Bool)
 ResponseValue.Bool._default_type = ()
-ResponseValue.create = staticmethod(response_value.create)
-ResponseField.create = staticmethod(response_field.create)
-Response.create = staticmethod(response.create)
-ResourceBinding.create = staticmethod(resource_binding.create)
+ResponseValue.create = staticmethod(
+    _bind(
+        operation=_native.Response_value.create,
+        arguments={"string": True, "bool": True},
+        failure="validation_failure",
+    )
+)
+ResponseField.create = staticmethod(
+    _bind(
+        operation=_native.Response_field.create,
+        arguments={"name": False, "value": False},
+        failure="validation_failure",
+    )
+)
+Response.create = staticmethod(
+    _bind(
+        operation=_native.Response.create, arguments={"fields": False}, failure="validation_failure"
+    )
+)
+Response.empty = _native.Response.empty
+ResourceBinding.create = staticmethod(
+    _bind(
+        operation=_native.Resource_binding.create,
+        arguments={"key": False, "contents": False},
+        failure=None,
+    )
+)
 Content.Value = Content
 Content.Inline = _named(constructor=_native.Content.Inline)
 Content.Inline._default_type = ()
 Content.Resource = _named(constructor=_native.Content.Resource)
 Content.Resource._default_type = ()
-Content.create = staticmethod(content.create)
-Artifact.create = staticmethod(artifact.create)
-Instruction.create = staticmethod(instruction.create)
-TextRule.create = staticmethod(text_rule.create)
-Rubric.create = staticmethod(rubric.create)
-Verifier.create = staticmethod(verifier.create)
+Content.create = staticmethod(
+    _bind(
+        operation=_native.Content.create,
+        arguments={"inline": True, "resource": True},
+        failure="validation_failure",
+    )
+)
+Artifact.create = staticmethod(
+    _bind(
+        operation=_native.Artifact.create,
+        arguments={"path": False, "content": False},
+        failure="validation_failure",
+    )
+)
+Artifact.resolve = staticmethod(
+    _bind(
+        operation=_native.Artifact.resolve,
+        arguments={"artifact": False, "resources": False},
+        failure="validation_failure",
+    )
+)
+Instruction.create = staticmethod(
+    _bind(
+        operation=_native.Instruction.create,
+        arguments={"skill": False, "prompt": False},
+        failure="validation_failure",
+    )
+)
+Instruction.valid_name = staticmethod(
+    _bind(operation=_native.Instruction.valid_name, arguments={"name": False}, failure=None)
+)
+TextRule.create = staticmethod(
+    _bind(
+        operation=_native.Text_rule.create,
+        arguments={"field": False, "min_words": False, "max_words": False},
+        failure="validation_failure",
+    )
+)
+TextRule.word_count = staticmethod(
+    _bind(operation=_native.Text_rule.word_count, arguments={"text": False}, failure=None)
+)
+Rubric.create = staticmethod(
+    _bind(
+        operation=_native.Rubric.create,
+        arguments={"expected": False, "text_rule": False},
+        failure="validation_failure",
+    )
+)
+Verifier.create = staticmethod(
+    _bind(
+        operation=_native.Verifier.create,
+        arguments={
+            "inputs": False,
+            "files": False,
+            "tools": False,
+            "command": False,
+            "stdin": False,
+            "timeout_seconds": False,
+        },
+        failure="validation_failure",
+    )
+)
+Verifier.resolve_resources = staticmethod(
+    _bind(
+        operation=_native.Verifier.resolve_resources,
+        arguments={"verifier": False, "resources": False},
+        failure="validation_failure",
+    )
+)
 Criterion.Value = Criterion
 Criterion.Code = _named(constructor=_native.Criterion.Code)
 Criterion.Code._default_type = ()
 Criterion.Answer = _named(constructor=_native.Criterion.Answer)
 Criterion.Answer._default_type = ()
-Criterion.create = staticmethod(criterion.create)
+Criterion.create = staticmethod(
+    _bind(
+        operation=_native.Criterion.create,
+        arguments={"code": True, "answer": True},
+        failure="validation_failure",
+    )
+)
 Completion.Value = Completion
 Completion.Plain = _named(constructor=_native.Completion.Plain)
 Completion.Plain._default_type = ()
 Completion.Structured = _named(constructor=_native.Completion.Structured)
 Completion.Structured._default_type = ()
-Completion.create = staticmethod(completion.create)
-Reference.create = staticmethod(reference.create)
-Task.create = staticmethod(task.create)
+Completion.create = staticmethod(
+    _bind(
+        operation=_native.Completion.create,
+        arguments={"plain": True, "structured": True},
+        failure="validation_failure",
+    )
+)
+Completion.trim = staticmethod(
+    _bind(operation=_native.Completion.trim, arguments={"text": False}, failure=None)
+)
+Reference.create = staticmethod(
+    _bind(
+        operation=_native.Reference.create,
+        arguments={"edits": False, "completion": False},
+        failure=None,
+    )
+)
 Verification.Value = Verification
 Verification.Unchecked = _named(constructor=_native.Verification.Unchecked)
 Verification.Passed = _named(constructor=_native.Verification.Passed)
@@ -125,20 +245,89 @@ Verification.Failed = _named(constructor=_native.Verification.Failed)
 Verification.InvalidSubmission = _named(constructor=_native.Verification.Invalid_submission)
 Verification.TimedOut = _named(constructor=_native.Verification.Timed_out)
 Verification.HarnessError = _named(constructor=_native.Verification.Harness_error)
-Outcome.create = staticmethod(outcome.create)
+Outcome.create = staticmethod(
+    _bind(
+        operation=_native.Outcome.create,
+        arguments={"changed_files": False, "verification": False},
+        failure=None,
+    )
+)
 GradingFailure.Value = GradingFailure
 GradingFailure.VerificationHarnessError = _named(
     constructor=_native.Grading_failure.Verification_harness_error
 )
-Profile.create = staticmethod(profile.create)
-Experiment.create = staticmethod(experiment.create)
-Case.create = staticmethod(case.create)
-
-
-@cache
-def sources() -> tuple[tuple[str, str], ...]:
-    return tuple((str(name), str(contents)) for name, contents in _native.sources)
-
+Task.create = staticmethod(
+    _bind(
+        operation=_native.Task.create,
+        arguments={
+            "id": False,
+            "fixture": False,
+            "instruction": False,
+            "criterion": False,
+            "allowed_files": False,
+            "reference": False,
+        },
+        failure="validation_failure",
+    )
+)
+Task.resolve_resources = staticmethod(
+    _bind(
+        operation=_native.Task.resolve_resources,
+        arguments={"task": False, "resources": False},
+        failure="validation_failure",
+    )
+)
+Task.required_scores = _native.Task.required_scores
+Task.grade = staticmethod(
+    _bind(
+        operation=_native.Task.grade,
+        arguments={"task": False, "response": False, "outcome": False},
+        failure="grading_failure",
+    )
+)
+Task.verifier = staticmethod(
+    _bind(operation=_native.Task.verifier, arguments={"task": False}, failure=None)
+)
+Profile.create = staticmethod(
+    _bind(
+        operation=_native.Profile.create,
+        arguments={"name": False, "preamble": False, "instructions": False},
+        failure=None,
+    )
+)
+Experiment.default = _native.Experiment.default
+Experiment.resolve = staticmethod(
+    _bind(
+        operation=_native.Experiment.resolve,
+        arguments={
+            "profiles": True,
+            "epochs": True,
+            "message_limit": True,
+            "cost_limit": True,
+            "time_limit": True,
+            "cache": True,
+        },
+        failure="validation_failure",
+    )
+)
+Experiment.create = staticmethod(
+    _bind(
+        operation=_native.Experiment.create,
+        arguments={
+            "profiles": False,
+            "epochs": False,
+            "message_limit": False,
+            "cost_limit": False,
+            "time_limit": False,
+            "cache": False,
+        },
+        failure="validation_failure",
+    )
+)
+Case.create = staticmethod(
+    _bind(operation=_native.Case.create, arguments={"task": False}, failure=None)
+)
+Kernel.current = _native.Kernel.current
 
 __all__ = [
     "Artifact",
@@ -152,6 +341,7 @@ __all__ = [
     "GradingError",
     "GradingFailure",
     "Instruction",
+    "Kernel",
     "Outcome",
     "Profile",
     "Reference",
@@ -169,27 +359,4 @@ __all__ = [
     "ValidationIssue",
     "Verification",
     "Verifier",
-    "artifact",
-    "case",
-    "completion",
-    "content",
-    "criterion",
-    "experiment",
-    "file",
-    "fixture",
-    "grader",
-    "instruction",
-    "outcome",
-    "profile",
-    "projection",
-    "reference",
-    "resource_binding",
-    "response",
-    "response_field",
-    "response_value",
-    "rubric",
-    "sources",
-    "task",
-    "text_rule",
-    "verifier",
 ]

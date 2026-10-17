@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from typing import assert_type
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -11,8 +11,7 @@ from evals.python import datasets, evaluation, grading
 from evals.python.datasets import Dataset, DatasetProvenance
 from evals.python.grading import Scores
 from evals.python.schema import DatasetInfo
-from kernel import Case, Experiment, Verification
-from kernel import projection as projection_ops
+from kernel import Case, Experiment, Task, Verification
 
 
 def public_queries_preserve_canonical_objects() -> None:
@@ -46,9 +45,7 @@ def public_hashes_match_existing_provenance() -> None:
 
 def public_grade_preserves_input_and_result() -> None:
     verification = Verification.Passed()
-    with patch(
-        "kernel.grader.grade", return_value=[("correctness", True), ("scope", True)]
-    ) as grade:
+    with patch("kernel.Task.grade", return_value=[("correctness", True), ("scope", True)]) as grade:
         result = assert_type(
             grading.score_case(
                 case_id="clear-task",
@@ -100,8 +97,10 @@ def malformed_candidates_receive_incorrect_scores(response: str) -> None:
 
 def reference_query_returns_canonical_reference() -> None:
     dataset = datasets.load_dataset()
-    expected = projection_ops.reference(task=dataset.records["small-decision"])
-    with patch("kernel.projection.reference", return_value=expected) as project:
+    expected = (dataset.records["small-decision"]).reference
+    with patch.object(
+        Task, "reference", new_callable=PropertyMock, return_value=expected
+    ) as project:
         actual = datasets.get_reference(case_id="small-decision", selection=dataset)
     assert actual is expected
-    project.assert_called_once_with(task=dataset.records["small-decision"])
+    project.assert_called_once_with()

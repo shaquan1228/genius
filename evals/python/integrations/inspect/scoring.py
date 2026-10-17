@@ -12,8 +12,7 @@ import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import assessment
 from evals.python.datasets import Dataset
 from evals.python.verification import Diagnostic
-from kernel import Verification
-from kernel import grader as grader_ops
+from kernel import Task, Verification
 
 
 def score_values(scores: Mapping[str, bool]) -> dict[str, str]:
@@ -70,7 +69,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
     )
 
 
-@scorer(metrics={name: [accuracy(), stderr()] for name in grader_ops.required_names})
+@scorer(metrics={name: [accuracy(), stderr()] for name in Task.required_scores})
 def evaluation() -> Scorer:
     return score_sample
 

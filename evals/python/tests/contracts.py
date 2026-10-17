@@ -19,11 +19,8 @@ from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.declarations import _reference_text
 from evals.python.tests.projections import reference, verifier
 from evals.python.tests.support import choice_case as _choice_case
-from kernel import Case, Experiment, File, Verification
+from kernel import Case, Experiment, File, Fixture, Task, Verification
 from kernel import ValidationError as DomainValidationError
-from kernel import fixture as fixture_ops
-from kernel import grader as grader_ops
-from kernel import projection as projection_ops
 
 
 @pytest.fixture
@@ -55,7 +52,7 @@ def third_dataset_requires_only_python_declarations(third_dataset: Dataset) -> N
         agent="codex",
         dataset="third",
         catalog=datasets.load_dataset(selection=third_dataset),
-        instructions=profiles.load_instructions(evaluation.resolve_settings()),
+        documents=profiles.load_documents(evaluation.resolve_settings()),
         provenance=datasets.get_provenance(selection=third_dataset),
     )
     assert task.dataset[0].id == "third-case"
@@ -71,7 +68,7 @@ def default_sandbox_is_local() -> None:
         spec=evaluation.resolve_settings(),
         agent="codex",
         catalog=datasets.load_dataset(selection="smoke"),
-        instructions=profiles.load_instructions(evaluation.resolve_settings()),
+        documents=profiles.load_documents(evaluation.resolve_settings()),
         provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     assert task.sandbox is not None
@@ -108,7 +105,7 @@ def all_contract_collections_are_immutable() -> None:
     with pytest.raises(TypeError):
         info.attributes["new"] = "value"  # type: ignore[index]
     with pytest.raises(TypeError):
-        fixture_ops.files(fixture=expected.edits)[0] = File.create(path="new", contents="value")  # type: ignore[index]
+        Fixture.files(fixture=expected.edits)[0] = File.create(path="new", contents="value")  # type: ignore[index]
     spec = evaluation.resolve_settings()
     with pytest.raises((AttributeError, TypeError)):
         spec.profiles[0].preamble = "changed"  # type: ignore[misc]
@@ -123,7 +120,7 @@ def run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
         spec=spec,
         agent="codex",
         catalog=datasets.load_dataset(selection="smoke"),
-        instructions=profiles.load_instructions(spec),
+        documents=profiles.load_documents(spec),
         provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     assert (task.epochs, task.cost_limit, task.time_limit, task.config.cache) == (
@@ -182,8 +179,8 @@ def verifier_projection_and_grading_use_native_values() -> None:
         verification=Verification.Passed(),
     )
     with (
-        patch.object(projection_ops, "verifier", wraps=projection_ops.verifier) as projection,
-        patch.object(grader_ops, "grade", wraps=grader_ops.grade) as kernel_grade,
+        patch.object(Task, "verifier", wraps=Task.verifier) as projection,
+        patch.object(Task, "grade", wraps=Task.grade) as kernel_grade,
     ):
         projected = verifier(case_id)
         assert projected is not None

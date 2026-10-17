@@ -31,12 +31,11 @@ from evals.python.tests.support import (
 )
 from evals.python.tests.verification import _agent_port, _grader_port, _runtime_port
 from evals.python.verification import VerificationResult
-from kernel import Verification
-from kernel import grader as grader_ops
+from kernel import Task, Verification
 
 
 def complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
-    with patch("kernel.grader.grade", wraps=grader_ops.grade) as grading:
+    with patch("kernel.Task.grade", wraps=Task.grade) as grading:
         logs = _offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
     assert grading.call_count == 16
     expected = [
@@ -198,21 +197,21 @@ def extended_native_contract_drives_fresh_inspect_registration() -> None:
             "-c",
             """
 from unittest.mock import patch
-from kernel import grader as grader_ops
-with patch.object(grader_ops, "required_names", ["correctness", "scope", "extension"]):
+from kernel import Task
+with patch.object(Task, "required_scores", ["correctness", "scope", "extension"]):
     from evals.python import grading
     from evals.python.integrations.inspect import completeness, scoring
     from inspect_ai.scorer._scorer import scorer_metrics
     from inspect_ai.scorer import CORRECT, INCORRECT
     metrics = scorer_metrics(scoring.evaluation())
     assert isinstance(metrics, dict)
-    assert tuple(metrics) == tuple(grader_ops.required_names)
+    assert tuple(metrics) == tuple(Task.required_scores)
     assert all(len(items) == 2 for items in metrics.values())
     assert not completeness.complete_value({"correctness": CORRECT, "scope": INCORRECT})
     encoded = {"correctness": CORRECT, "scope": INCORRECT, "extension": CORRECT}
     assert completeness.complete_value(encoded)
     pairs = [("correctness", True), ("scope", False), ("extension", True)]
-    with patch.object(grader_ops, "grade", return_value=pairs):
+    with patch.object(Task, "grade", return_value=pairs):
         scores = grading.score_case(case_id="small-decision", response="{}", changed_files=())
     assert scoring.score_values(scores) == encoded
 """,

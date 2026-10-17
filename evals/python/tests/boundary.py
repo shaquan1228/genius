@@ -13,11 +13,13 @@ import pytest
 
 import kernel as native
 from evals.python import datasets, evaluation
-from kernel import Case, Experiment, sources
+from kernel import Case, Experiment, Kernel
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
 OCAML_ROOT = PYTHON_ROOT.parent / "ocaml"
-LIBRARY = tuple(OCAML_ROOT / name for name, _ in sources() if name.endswith((".ml", ".mli")))
+LIBRARY = tuple(
+    OCAML_ROOT / file.path for file in Kernel.current.sources if file.path.endswith((".ml", ".mli"))
+)
 
 
 PUBLIC_OPERATIONS = {
@@ -160,7 +162,7 @@ def public_operations_carry_dataset_selection(owner: str, *, name: str) -> None:
 
 @pytest.mark.parametrize("path", sorted(OCAML_ROOT.glob("*.mli")))
 def domain_types_live_with_owner_contracts(path: Path) -> None:
-    if path.stem in ("grader", "projection", "validation"):
+    if path.stem in ("validation", "text"):
         return
     assert re.search(r"^type t\b", path.read_text(), re.M)
     assert re.search(r"^type t\b", path.with_suffix(".ml").read_text(), re.M)
@@ -381,8 +383,8 @@ libc = ctypes.CDLL(None)
 libc.getenv.restype = ctypes.c_char_p
 names = (b"PATH", b"PYTHONHOME", b"PYTHONPATH")
 before = tuple(libc.getenv(name) for name in names)
-from kernel import experiment as experiment_ops
-assert experiment_ops.resolve(epochs=1).epochs == 1
+from kernel import Experiment
+assert Experiment.resolve(epochs=1).epochs == 1
 assert tuple(libc.getenv(name) for name in names) == before
 assert list(pathlib.Path.cwd().iterdir()) == []
 subprocess.run([sys.executable, "-c", "import re, pathlib"], check=True)

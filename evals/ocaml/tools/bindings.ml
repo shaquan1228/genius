@@ -146,8 +146,7 @@ let export_interface paths =
           Format.printf "@.")
         signature;
       Format.printf "end@.")
-    modules;
-  Format.printf "val sources : (string * string) list@."
+    modules
 
 let () =
   try

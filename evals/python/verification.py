@@ -14,9 +14,7 @@ from evals.python import datasets, execution
 from evals.python.datasets import Selection
 from evals.python.execution import Completion, Environment, Execution, Runtime
 from evals.python.schema import FROZEN
-from kernel import Content, Verification, Verifier
-from kernel import fixture as fixture_ops
-from kernel import projection as projection_ops
+from kernel import Content, Fixture, Task, Verification, Verifier
 
 __all__ = ["Diagnostic", "VerificationResult", "validate_reference", "verify_case"]
 
@@ -226,7 +224,7 @@ async def verify_case(
     agent: InstanceOf[Environment],
     runtime: InstanceOf[Runtime],
 ) -> VerificationResult:
-    checks = projection_ops.verifier(task=datasets.record(case_id, selection=selection))
+    checks = Task.verifier(task=datasets.record(case_id, selection=selection))
     if checks is None:
         return VerificationResult(verification=Verification.Unchecked())
     return await verify(checks, agent=agent, runtime=runtime)
@@ -241,7 +239,7 @@ async def validate_reference(
 ) -> VerificationResult:
     selection = datasets.load_dataset(selection=selection)
     record = datasets.record(case_id, selection=selection)
-    if projection_ops.verifier(task=record) is None:
+    if Task.verifier(task=record) is None:
         return VerificationResult(verification=Verification.Unchecked())
     runtime = runtime or execution.create_runtime()
     try:
@@ -249,9 +247,7 @@ async def validate_reference(
             await stage_reference(
                 {
                     file.path: file.contents
-                    for file in fixture_ops.files(
-                        fixture=projection_ops.reference(task=record).edits
-                    )
+                    for file in Fixture.files(fixture=(record).reference.edits)
                 },
                 agent=agent,
             )

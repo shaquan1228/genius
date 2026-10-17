@@ -48,11 +48,11 @@ lint-ocaml:
 	@command -v ocamlc >/dev/null || { echo "Install OCaml 4.13+ for kernel checks." >&2; exit 1; }
 	@build_dir=$$(mktemp -d) && \
 	  (trap 'rm -rf "$$build_dir"' EXIT; \
-	    cp $(filter-out ocaml/genius_evals_kernel.ml,$(wildcard ocaml/*.mli ocaml/*.ml)) "$$build_dir" && cd "$$build_dir" && \
+	    cp $(filter-out ocaml/genius_evals_kernel.ml ocaml/kernel.ml,$(wildcard ocaml/*.mli ocaml/*.ml)) "$$build_dir" && cd "$$build_dir" && \
 	    ocamlc $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml))
 
 # Pure kernel modules in dependency order.
-KERNEL = $(shell cd ocaml && ocamldep -sort $(notdir $(filter-out ocaml/genius_evals_kernel.ml,$(wildcard ocaml/*.mli ocaml/*.ml))))
+KERNEL = $(shell cd ocaml && ocamldep -sort $(notdir $(filter-out ocaml/genius_evals_kernel.ml ocaml/kernel.ml,$(wildcard ocaml/*.mli ocaml/*.ml))))
 
 # Link a test with only the modules it may use, so a new dependency fails to compile.
 ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
@@ -61,7 +61,7 @@ ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
 
 VALIDATION = validation_code.mli validation_code.ml validation_issue.mli validation_issue.ml validation_failure.mli validation_failure.ml validation.mli validation.ml
 FILES = $(VALIDATION) file.mli file.ml fixture.mli fixture.ml
-RESPONSE = $(VALIDATION) response_value.mli response_value.ml response_field.mli response_field.ml response.mli response.ml text_rule.mli text_rule.ml rubric.mli rubric.ml
+RESPONSE = $(VALIDATION) text.mli text.ml response_value.mli response_value.ml response_field.mli response_field.ml response.mli response.ml text_rule.mli text_rule.ml rubric.mli rubric.ml
 VERIFIER = $(VALIDATION) file.mli file.ml content.mli content.ml resource_binding.mli resource_binding.ml artifact.mli artifact.ml verifier.mli verifier.ml
 
 test-ocaml:

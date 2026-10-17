@@ -176,12 +176,14 @@ def installed_kernel_keeps_policy_and_provenance_together(tmp_path: Path) -> Non
 from unittest.mock import patch
 with patch('subprocess.run', side_effect=AssertionError('Import compiled the kernel')):
     from kernel import Fixture
-    from kernel import experiment as experiment_ops, fixture as fixture_ops, sources
-    spec = experiment_ops.resolve()
+    from kernel import Experiment, File, Kernel
+    spec = Experiment.resolve()
     assert isinstance(Fixture.create(files=[]), Fixture)
-    assert not hasattr(Fixture.create(files=[]), 'add')
-    assert dict(sources())['experiment.ml'].find('epochs = 7') >= 0
-    assert dict(sources())['experiment.ml'].find('epochs = 9') == -1
+    Fixture.add(fixture=Fixture.empty, file=File.create(path='probe.py', contents='text'))
+    assert not Fixture.files(fixture=Fixture.empty)
+    modules = {file.path: file.contents for file in Kernel.current.sources}
+    assert modules['experiment.ml'].find('epochs = 7') >= 0
+    assert modules['experiment.ml'].find('epochs = 9') == -1
     print(json.dumps({'epochs': spec.epochs}))
 """
     result = subprocess.run(
@@ -341,3 +343,23 @@ def compiled_private_nullary_constructors_retain_their_boundary(tmp_path: Path) 
     stub = generate.domain_bindings(_schema((path,))[0]["items"])
     assert "class Ready(_types.State):\n        def __init__(self, *, _token: Never)" in stub
     assert "class Set(_types.State):\n        def __init__(self, *, _token: Never)" in stub
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "val root_function : unit -> bool",
+        "module Service : sig val run : unit -> int end",
+        "module Values : sig type t = int list val create : values:int list -> t end",
+    ],
+)
+def only_nominal_owners_can_export_type_methods(tmp_path: Path, *, text: str) -> None:
+    path = _compile(tmp_path / "nonowner", text=text)
+    with pytest.raises(ValueError, match=r"Public kernel|Public owner|Native aliases"):
+        generate.render(_schema((path,)))
+
+
+def bindings_publish_only_the_type_interface() -> None:
+    root = EVALS / "python/kernel"
+    assert {path.name for path in root.glob("*.py")} == {"__init__.py", "_bridge.py", "generate.py"}
+    assert {path.name for path in root.glob("*.pyi")} == {"__init__.pyi"}

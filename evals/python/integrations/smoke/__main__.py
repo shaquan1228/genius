@@ -6,8 +6,7 @@ from typing import assert_never
 from evals.python import datasets, grading, verification
 from evals.python.datasets import Dataset
 from evals.python.grading import Scores
-from kernel import Case, Completion, Verification
-from kernel import fixture as fixture_ops
+from kernel import Case, Completion, Fixture, Verification
 
 
 def response(completion: Completion.Value) -> str:
@@ -31,7 +30,7 @@ async def validate(case: Case, *, dataset: Dataset) -> bool:
             case_id=case.id,
             response=response(reference.completion),
             changed_files=tuple(
-                f"workspace/{file.path}" for file in fixture_ops.files(fixture=reference.edits)
+                f"workspace/{file.path}" for file in Fixture.files(fixture=reference.edits)
             ),
             verification=result.verification,
             selection=dataset,

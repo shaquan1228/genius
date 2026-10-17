@@ -18,3 +18,10 @@ val create :
 
 val resolve_resources :
   task:t -> resources:Resource_binding.t list -> (t, Validation_failure.t) result
+
+val required_scores : string list
+
+val grade :
+  task:t -> response:Response.t option -> outcome:Outcome.t -> (Score.t, Grading_failure.t) result
+
+val verifier : task:t -> Verifier.t option

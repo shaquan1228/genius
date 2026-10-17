@@ -215,7 +215,7 @@ def compiled_grading_preserves_canonical_inputs_and_results() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(),))
     verification = Verification.Passed()
     with patch(
-        "kernel.grader.grade", return_value=[("correctness", True), ("scope", True)]
+        "kernel.Task.grade", return_value=[("correctness", True), ("scope", True)]
     ) as kernel_grade:
         assert _grade(dataset=dataset, verification=verification) == dict(kernel_grade.return_value)
     assert kernel_grade.call_args.kwargs["task"] is dataset.records["external"]

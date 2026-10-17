@@ -16,15 +16,12 @@ module Verifier = Verifier
 module Criterion = Criterion
 module Completion = Completion
 module Reference = Reference
-module Task = Task
 module Verification = Verification
 module Outcome = Outcome
 module Grading_failure = Grading_failure
 module Score = Score
+module Task = Task
 module Profile = Profile
 module Experiment = Experiment
 module Case = Case
-module Grader = Grader
-module Projection = Projection
-
-let sources = Build_info.sources
+module Kernel = Kernel

@@ -123,8 +123,14 @@ Alternative factories require exactly one named input: `Content.create(inline="t
 Python overloads reject both or neither input during type checking. Named payloads remain
 available for inspection, such as `content.text` and `completion.response`.
 
-Public native operations live in their owner modules, such as `kernel.fixture` and
-`kernel.grader`. They adapt native results and named calls without duplicating domain policy.
+The `kernel` package exports types and exceptions. Operations belong to those types:
+`Case.create(task=...)`, `Task.grade(task=..., response=..., outcome=...)`,
+`Fixture.files(fixture=...)`, and `Experiment.resolve(...)`. Compiled source provenance
+is available through the native `Kernel.current` value and its `sources` collection.
+Bindings adapt native results and named calls without duplicating domain policy.
+
+Inspect calls loaded skill files `documents`; their path-to-bytes mapping stays local
+to the file and SDK adapter. `Instruction` remains the core task's skill and prompt.
 
 ```python
 from kernel import ValidationError, Verifier

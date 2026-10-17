@@ -10,3 +10,5 @@ let create ~field ~min_words ~max_words =
           "Invalid text rule"
           [ field ]))
     { field; min_words; max_words }
+
+let word_count = Text.word_count

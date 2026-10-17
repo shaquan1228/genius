@@ -17,3 +17,5 @@ let create ?plain ?structured () =
                 [ "plain"; "structured" ];
             ];
         }
+
+let trim = Text.trim

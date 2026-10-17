@@ -76,7 +76,7 @@ let decision =
 let no_changes = { Outcome.changed_files = []; verification = Verification.Unchecked }
 
 let scores ?(outcome = no_changes) ~response ~task () =
-  Result.get_ok (Grader.grade ~task ~response ~outcome)
+  Result.get_ok (Task.grade ~task ~response ~outcome)
 
 let correct ~fields ~task =
   List.assoc "correctness" (scores ~response:(Some (response ~fields)) ~task ())
@@ -135,7 +135,7 @@ let () =
         ])
     [ []; [ "workspace/source.txt" ]; [ "workspace/other.txt" ]; [ "../outside" ] ];
   assert (
-    Grader.grade
+    Task.grade
       ~task:code_case
       ~response:None
       ~outcome:{ no_changes with verification = Verification.Harness_error { detail = "offline" } }
@@ -238,10 +238,10 @@ let () =
   List.iter
     (fun code ->
       let space = utf8 code in
-      assert (Grader.word_count ~text:("first" ^ space ^ "second") = 2);
-      assert (Grader.trim ~text:(space ^ "first" ^ space) = "first"))
+      assert (Text_rule.word_count ~text:("first" ^ space ^ "second") = 2);
+      assert (Completion.trim ~text:(space ^ "first" ^ space) = "first"))
     separators;
-  assert (Grader.word_count ~text:("first" ^ utf8 0x200B ^ "second") = 1);
+  assert (Text_rule.word_count ~text:("first" ^ utf8 0x200B ^ "second") = 1);
   List.iter
     (fun count ->
       let words = String.concat (utf8 0x2003) (List.init count (fun _ -> "word")) in
@@ -257,7 +257,7 @@ let () =
     [ 0; 1; 40; 41 ]
 
 let () =
-  let public = Projection.case ~task:code_case in
+  let public = Case.create ~task:code_case in
   assert (public.id = code_case.id);
   assert (public.prompt = code_case.instruction.prompt);
   assert (
@@ -265,17 +265,16 @@ let () =
     = [ "source.txt"; "visible.txt"; "helper.txt" ]);
   assert (
     not (List.exists (fun (artifact : Artifact.t) -> artifact.path = "verifier.py") public.files));
-  assert (Projection.verifier ~task:code_case = Some checks);
-  assert (Projection.reference ~task:code_case = code_case.reference);
-  assert (Projection.verifier ~task:decision = None);
-  assert ((Projection.case ~task:decision).files = []);
+  assert (Task.verifier ~task:code_case = Some checks);
+  assert (Task.verifier ~task:decision = None);
+  assert ((Case.create ~task:decision).files = []);
   let resolved =
     Result.get_ok
       (Task.resolve_resources
          ~task:code_case
          ~resources:[ Resource_binding.create ~key:"public-helper" ~contents:"public contents" ])
   in
-  let resolved_checks = Option.get (Projection.verifier ~task:resolved) in
+  let resolved_checks = Option.get (Task.verifier ~task:resolved) in
   assert (
     resolved_checks.tools
     = [
@@ -295,5 +294,5 @@ let () =
     = [ Validation_code.Missing_resource ]);
   assert (Task.resolve_resources ~task:decision ~resources:[] = Ok decision);
   List.iter
-    (fun task -> assert (List.map fst (scores ~response:None ~task ()) = Grader.required_names))
+    (fun task -> assert (List.map fst (scores ~response:None ~task ()) = Task.required_scores))
     [ code_case; decision ]

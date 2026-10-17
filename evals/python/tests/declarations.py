@@ -30,7 +30,6 @@ from kernel import (
 from kernel import (
     ValidationError as DomainValidationError,
 )
-from kernel import fixture as fixture_ops
 
 
 def _override[T](value: T | None, *, original: T) -> T:
@@ -177,7 +176,7 @@ def missing_private_resource_fails_at_resolution() -> None:
 def declarations_preserve_private_reference_edits(*, code: bool) -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(code=code),))
     reference = private_reference("external", selection=dataset)
-    assert {file.path: file.contents for file in fixture_ops.files(fixture=reference.edits)} == {
+    assert {file.path: file.contents for file in Fixture.files(fixture=reference.edits)} == {
         "main.py": "fixed"
     }
 
@@ -316,7 +315,7 @@ def native_fields_retain_immutable_snapshots() -> None:
     initial = [File.create(path="main.py", contents="broken")]
     fixture = Fixture.create(files=initial)
     initial[0] = File.create(path="main.py", contents="changed")
-    assert {file.path: file.contents for file in fixture_ops.files(fixture=fixture)} == {
+    assert {file.path: file.contents for file in Fixture.files(fixture=fixture)} == {
         "main.py": "broken"
     }
     artifacts = [
@@ -358,7 +357,7 @@ def answer_construction_supports_each_optional_rule_shape(criterion: Criterion.V
 
 
 def _reference_files(value: Reference) -> dict[str, str]:
-    return {file.path: file.contents for file in fixture_ops.files(fixture=value.edits)}
+    return {file.path: file.contents for file in Fixture.files(fixture=value.edits)}
 
 
 def _reference_text(value: Reference) -> str:

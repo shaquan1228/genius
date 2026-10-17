@@ -24,6 +24,7 @@ from evals.python.tests.support import offline_run as _offline_run
 from evals.python.tests.support import results as _results
 from kernel import (
     Artifact,
+    Case,
     Completion,
     Content,
     Criterion,
@@ -37,7 +38,6 @@ from kernel import (
     Rubric,
     TextRule,
 )
-from kernel import projection as projection_ops
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
@@ -53,7 +53,7 @@ def instruction_snapshot_survives_source_changes(
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(contents)
-    snapshot = profiles.load_instructions(spec)
+    snapshot = profiles.load_documents(spec)
     (tmp_path / profiles.REASONING_DOCUMENTS[0]).write_text("changed")
     (tmp_path / profiles.REASONING_DOCUMENTS[1]).unlink()
     assert dict(snapshot) == {f"instructions/{name}": data for name, data in material.items()}
@@ -62,7 +62,7 @@ def instruction_snapshot_survives_source_changes(
 def composition_uses_supplied_bytes_without_filesystem_access() -> None:
     spec = evaluation_api.resolve_settings()
     profile = profiles.load_profile("genius", spec=spec)
-    snapshot = profiles.load_instructions(spec)
+    snapshot = profiles.load_documents(spec)
     case = datasets.list_cases()[0]
     expected_hash = profiles.content_hash(snapshot)
     with (
@@ -70,9 +70,7 @@ def composition_uses_supplied_bytes_without_filesystem_access() -> None:
         patch.object(Path, "read_text", side_effect=AssertionError("late text read")),
         patch.object(Path, "rglob", side_effect=AssertionError("late directory scan")),
     ):
-        sample = profiles.samples(profile, cases=(case,), instructions=snapshot, delivery="inline")[
-            0
-        ]
+        sample = profiles.samples(profile, cases=(case,), documents=snapshot, delivery="inline")[0]
         mounted = cast(Mapping[str, str], sample.files)
         skill = base64.b64decode(mounted["instructions/skills/reasoning/SKILL.md"].split(",", 1)[1])
         assert (
@@ -94,7 +92,7 @@ def evaluation_prepares_once_for_all_tasks(
         patch(
             "evals.python.datasets.smoke.cases", return_value=tuple(cohort.records.values())
         ) as load,
-        patch.object(profiles, "load_instructions", wraps=profiles.load_instructions) as read,
+        patch.object(profiles, "load_documents", wraps=profiles.load_documents) as read,
         patch.object(datasets, "get_provenance", wraps=datasets.get_provenance) as provenance,
     ):
         tasks = evaluation.evaluation_tasks(spec, request=request)
@@ -146,13 +144,13 @@ def private_tasks() -> list[Task]:
         for choice in ("B", "A")
     ]
     spec = evaluation_api.resolve_settings(epochs=1)
-    instructions = profiles.load_instructions(spec)
+    documents = profiles.load_documents(spec)
     tasks = [
         build_task(
             profile=profiles.load_profile("baseline", spec=spec),
             spec=spec,
             catalog=dataset,
-            instructions=instructions,
+            documents=documents,
             provenance=datasets.get_provenance(selection=dataset),
             agent="codex",
             task_name=f"private-{index}",
@@ -216,14 +214,14 @@ def native_profiles_share_fingerprinted_codex_guidance(
     )
     spec = evaluation_api.resolve_settings(epochs=1)
     dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
-    instructions = profiles.load_instructions(spec)
+    documents = profiles.load_documents(spec)
     tasks = [
         build_task(
             profile=profile,
             spec=spec,
             agent="codex",
             catalog=dataset,
-            instructions=instructions,
+            documents=documents,
             provenance=datasets.get_provenance(selection=dataset),
         )
         for profile in spec.profiles
@@ -253,6 +251,6 @@ def unresolved_public_resource_cannot_reach_agent_files() -> None:
             Artifact.create(path="context.txt", content=Content.create(resource="private-resource"))
         ],
     )
-    case = projection_ops.case(task=_copy_case(definition, criterion=Criterion.create(code=checks)))
+    case = Case.create(task=_copy_case(definition, criterion=Criterion.create(code=checks)))
     with pytest.raises(ValueError, match="Unresolved resource in public case external"):
-        profiles.files(profiles.load_profile("baseline", spec=spec), case=case, instructions={})
+        profiles.files(profiles.load_profile("baseline", spec=spec), case=case, documents={})

@@ -17,6 +17,7 @@ from kernel import (
     File,
     Fixture,
     Instruction,
+    Kernel,
     Reference,
     Response,
     ResponseField,
@@ -24,9 +25,7 @@ from kernel import (
     Rubric,
     Task,
     Verification,
-    sources,
 )
-from kernel import grader as grader_ops
 
 
 def commands_and_queries_use_in_process_kernel_calls() -> None:
@@ -76,7 +75,7 @@ def unknown_case_is_a_harness_error() -> None:
 
 def native_kernel_errors_propagate() -> None:
     with (
-        patch.object(grader_ops, "grade", side_effect=RuntimeError("kernel failed")),
+        patch.object(Task, "grade", side_effect=RuntimeError("kernel failed")),
         pytest.raises(RuntimeError, match="kernel failed"),
     ):
         _judgment(response="{}")
@@ -94,13 +93,13 @@ def grading_does_not_recompile_or_cache_results() -> None:
     responses = ("invalid", '{"choice":"B","reason":"Cheap"}', '{"choice":"A","reason":"Cheap"}')
     with (
         patch("subprocess.run", side_effect=AssertionError("Unexpected compilation")),
-        patch.object(grader_ops, "grade", wraps=grader_ops.grade) as grade,
+        patch.object(Task, "grade", wraps=Task.grade) as grade,
     ):
         assert [_judgment(response=response) for response in responses] == [False, True, False]
         assert grade.call_count == 3
 
 
-@pytest.mark.parametrize("source", [name for name, _ in sources()])
+@pytest.mark.parametrize("source", [file.path for file in Kernel.current.sources])
 def kernel_fingerprint_tracks_every_trusted_source(source: str) -> None:
     original = datasets.kernel_sources()
     changed = Sources(
@@ -136,7 +135,7 @@ def candidate_duplicate_keys_keep_last_value() -> None:
 
 def additional_named_scores_cross_bridge_without_decoder_changes() -> None:
     with patch.object(
-        grader_ops,
+        Task,
         "grade",
         return_value=[("correctness", True), ("scope", False), ("new_metric", True)],
     ):

@@ -1,15 +1,11 @@
 """Resolve experiment settings and launch evaluations through the runner adapter."""
 
-from typing import TYPE_CHECKING, Annotated, Literal, cast
+from typing import Annotated, Literal, cast
 
 from pydantic import AfterValidator, BaseModel, Field, validate_call
 
 from evals.python.schema import FROZEN
 from kernel import Experiment
-from kernel import experiment as experiment_ops
-
-if TYPE_CHECKING:
-    from kernel.experiment import ResolveArgs
 
 __all__ = [
     "EvaluationSettings",
@@ -80,8 +76,11 @@ def resolve_settings(
         "time_limit": time_limit,
         "cache": cache,
     }
-    return experiment_ops.resolve(
-        **cast("ResolveArgs", {name: value for name, value in options.items() if value is not None})
+    return Experiment.resolve(
+        **cast(
+            "Experiment.ResolveArgs",
+            {name: value for name, value in options.items() if value is not None},
+        )
     )
 
 

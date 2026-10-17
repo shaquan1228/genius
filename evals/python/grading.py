@@ -9,8 +9,7 @@ from pydantic import validate_call
 from evals.python import datasets
 from evals.python.datasets import Selection
 from evals.python.schema import FROZEN
-from kernel import Outcome, Response, ResponseField, ResponseValue, Task, Verification
-from kernel import grader as grader_ops
+from kernel import Completion, Outcome, Response, ResponseField, ResponseValue, Task, Verification
 
 __all__ = ["Scores", "score_case"]
 
@@ -37,7 +36,7 @@ def _response(fields: object) -> Response:
 
 
 def _candidate(text: str) -> Response | None:
-    text = grader_ops.trim(text=text)
+    text = Completion.trim(text=text)
     if text.startswith("```json\n") and text.endswith("\n```"):
         text = text[8:-4]
     try:
@@ -49,7 +48,7 @@ def _candidate(text: str) -> Response | None:
 def score(
     case: Task, *, response: str, changed_files: tuple[str, ...], verification: Verification.Value
 ) -> Scores:
-    pairs = grader_ops.grade(
+    pairs = Task.grade(
         task=case,
         response=_candidate(response),
         outcome=Outcome.create(changed_files=changed_files, verification=verification),

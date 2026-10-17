@@ -108,7 +108,7 @@ def implicit_dictionary_conversion_cannot_bypass_factories(consumer: str) -> Non
     }
     create = cast(Callable[..., Task], Task.create)
     operations: dict[str, Callable[[], object]] = {
-        "grader": lambda: native.Grader.grade(
+        "grader": lambda: native.Task.grade(
             task=fields,
             response=None,
             outcome=Outcome.create(changed_files=(), verification=Verification.Unchecked()),
