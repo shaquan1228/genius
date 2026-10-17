@@ -11,7 +11,7 @@ from inspect_ai.model import ModelName, ModelOutput
 from inspect_ai.scorer import CORRECT, INCORRECT, Target
 from inspect_ai.solver import TaskState
 
-from evals.python import commands
+from evals.python import commands, verification
 from evals.python.integrations.inspect import environments, scoring, workspace
 from evals.python.integrations.inspect.agents import AGENT_REGISTRY
 from evals.python.integrations.inspect.tasks import baseline, genius
@@ -126,7 +126,7 @@ def crashed_agent_is_scored_on_its_workspace(
 def verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
     with patch(
         "evals.python.verification.verify",
-        return_value=commands.VerificationResult(
+        return_value=verification.VerificationResult(
             verification=Verification.HarnessError("grader failed to import")
         ),
     ):
@@ -148,7 +148,7 @@ def scorer_maps_sdk_observation_to_public_assessment() -> None:
     )
     state.output = ModelOutput.from_content("mockllm/model", "observed answer")
     agent, runtime = _agent_port(), _runtime_port(_grader_port())
-    assessment = commands.Assessment(
+    assessment = verification.Assessment(
         verification=Verification.Passed(),
         detail="canonical evidence",
         metadata={"nested": {"items": (True, None, 4.2)}},

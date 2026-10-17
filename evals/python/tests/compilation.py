@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import commands, datasets, queries
+from evals.python import commands, datasets, grading, queries, schema, verification
 from evals.python.tests.declarations import (
     _copy_case,
     _copy_verifier,
@@ -35,7 +35,7 @@ from kernel._operations import fixture as fixture_ops
 
 def compile_dataset_exposes_canonical_public_cases() -> None:
     definition = _declaration()
-    dataset = assert_type(queries.compile_dataset(cases=(definition,)), queries.Dataset)
+    dataset = assert_type(queries.compile_dataset(cases=(definition,)), datasets.Dataset)
     assert isinstance(dataset, datasets.Dataset)
     cases = assert_type(queries.list_cases(selection=dataset), tuple[Case, ...])
     assert cases[0] is dataset.cases[definition.id]
@@ -64,7 +64,7 @@ def compile_query_forwards_canonical_values_and_results() -> None:
     assert queries.list_cases(selection=dataset) == tuple(dataset.cases.values())
 
 
-def _independent_datasets() -> tuple[queries.Dataset, queries.Dataset]:
+def _independent_datasets() -> tuple[datasets.Dataset, datasets.Dataset]:
     first = _declaration()
     assert isinstance(first.criterion, Criterion.Code)
     checks = _copy_verifier(first.criterion[0], stdin="different private stdin")
@@ -112,7 +112,7 @@ def compiled_metadata_queries_do_not_download() -> None:
 
 def compiled_provenance_retains_python_metadata() -> None:
     definition = _declaration()
-    info = queries.DatasetInfo(
+    info = schema.DatasetInfo(
         source="python://external", revision="one", sha256="digest", count=1, attributes={}
     )
     original = queries.compile_dataset(cases=(definition,), info=info)
@@ -177,7 +177,7 @@ def compilation_hashes_include_trusted_source_changes() -> None:
     assert original.cases_hash != updated.cases_hash
 
 
-def _grade(*, dataset: queries.Dataset, verification: Verification.Value) -> queries.Scores:
+def _grade(*, dataset: datasets.Dataset, verification: Verification.Value) -> grading.Scores:
     return queries.score_case(
         case_id="external",
         response="done",
@@ -231,7 +231,7 @@ def empty_and_duplicate_compilation() -> None:
 
 
 def compile_query_validates_its_boundary_without_bypassing_kernel() -> None:
-    compile_dataset: Callable[..., queries.Dataset] = queries.compile_dataset
+    compile_dataset: Callable[..., datasets.Dataset] = queries.compile_dataset
     with pytest.raises(ValidationError):
         compile_dataset(cases=[_declaration()])
     public_case = Case(id="public", skill="reasoning", prompt="", files=[])
@@ -252,19 +252,19 @@ def unknown_case_in_compiled_dataset_fails_closed() -> None:
 
 def compiled_selection_flows_through_all_verification_commands() -> None:
     dataset = queries.compile_dataset(cases=(_declaration(code=False),))
-    agent = commands.Environment(
+    agent = verification.Environment(
         execute=AsyncMock(), read_bytes=AsyncMock(), write_bytes=AsyncMock()
     )
-    runtime = commands.Runtime(create=AsyncMock(), cleanup=AsyncMock())
+    runtime = verification.Runtime(create=AsyncMock(), cleanup=AsyncMock())
 
     async def execute() -> None:
-        verification = assert_type(
+        result = assert_type(
             await commands.verify(
                 case_id="external", selection=dataset, agent=agent, runtime=runtime
             ),
-            commands.VerificationResult,
+            verification.VerificationResult,
         )
-        assert isinstance(verification.verification, Verification.Unchecked)
+        assert isinstance(result.verification, Verification.Unchecked)
         assessment = assert_type(
             await commands.assess(
                 case_id="external",
@@ -274,14 +274,14 @@ def compiled_selection_flows_through_all_verification_commands() -> None:
                 agent=agent,
                 runtime=runtime,
             ),
-            commands.Assessment,
+            verification.Assessment,
         )
         assert assessment.scores == {"correctness": True, "scope": True}
         reference = assert_type(
             await commands.validate_reference(
                 case_id="external", selection=dataset, runtime=runtime
             ),
-            commands.VerificationResult,
+            verification.VerificationResult,
         )
         assert isinstance(reference.verification, Verification.Unchecked)
 

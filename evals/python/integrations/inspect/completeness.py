@@ -6,12 +6,12 @@ from collections.abc import Sequence
 from inspect_ai import Task
 from inspect_ai.log import EvalLog, EvalSample
 
-from evals.python import commands
+from evals.python import evaluation_settings
 
 Pair = tuple[str, str, int]
 
 
-def selected_ids(task: Task, *, request: commands.EvaluationSettings) -> list[str]:
+def selected_ids(task: Task, *, request: evaluation_settings.EvaluationSettings) -> list[str]:
     ids = [str(sample.id) for sample in task.dataset]
     if request.sample_ids is not None:
         ids = [case for case in ids if case in request.sample_ids]
@@ -23,7 +23,7 @@ def task_pairs(task: Task, *, ids: list[str], epochs: int) -> set[Pair]:
 
 
 def expected_pairs(
-    tasks: list[Task], *, request: commands.EvaluationSettings, epochs: int
+    tasks: list[Task], *, request: evaluation_settings.EvaluationSettings, epochs: int
 ) -> set[Pair]:
     result: set[Pair] = set()
     for task in tasks:

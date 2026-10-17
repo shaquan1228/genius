@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import datasets, queries
+from evals.python import datasets, grading, queries
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.tasks import build_task
@@ -24,7 +24,7 @@ from kernel._operations import projection as projection_ops
 
 
 @pytest.fixture
-def third_dataset(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> queries.Dataset:
+def third_dataset(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> datasets.Dataset:
     (tmp_path / "third.py").write_text(
         "from evals.python.tests.support import choice_case\ninfo = None\n"
         "def cases():\n    return (choice_case(case_id='third-case', a=1, b=2),)\n"
@@ -33,7 +33,7 @@ def third_dataset(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> queries
     return queries.load_dataset(selection="third")
 
 
-def _third_grade(*, case_id: str = "third-case", selection: queries.Dataset) -> queries.Scores:
+def _third_grade(*, case_id: str = "third-case", selection: datasets.Dataset) -> grading.Scores:
     return score_case(
         case_id=case_id,
         selection=selection,
@@ -43,7 +43,7 @@ def _third_grade(*, case_id: str = "third-case", selection: queries.Dataset) -> 
     )
 
 
-def third_dataset_requires_only_python_declarations(third_dataset: queries.Dataset) -> None:
+def third_dataset_requires_only_python_declarations(third_dataset: datasets.Dataset) -> None:
     cases = queries.list_cases(selection=third_dataset)
     assert cases[0].id == "third-case"
     task = build_task(
@@ -75,7 +75,7 @@ def default_sandbox_is_local() -> None:
     assert task.sandbox.type == "local"
 
 
-def third_dataset_imports_and_grades_records(third_dataset: queries.Dataset) -> None:
+def third_dataset_imports_and_grades_records(third_dataset: datasets.Dataset) -> None:
     imported = queries.compile_dataset(cases=(_choice_case(case_id="new-case", a=1, b=2),))
     with patch.object(datasets, "load_dataset", return_value=imported):
         assert _third_grade(case_id="new-case", selection=third_dataset)["correctness"]

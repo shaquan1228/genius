@@ -2,10 +2,10 @@
 
 from inspect_ai.model import Model, ModelCost, ModelInfo, get_model_info, set_model_info
 
-from evals.python import commands
+from evals.python import evaluation_settings
 
 
-def configure(model: Model, *, request: commands.EvaluationSettings) -> dict[str, float]:
+def configure(model: Model, *, request: evaluation_settings.EvaluationSettings) -> dict[str, float]:
     info = get_model_info(model)
     prices = request.model_cost
     if prices is None:
@@ -18,12 +18,12 @@ def configure(model: Model, *, request: commands.EvaluationSettings) -> dict[str
 
 
 def known_prices(
-    info: ModelInfo | None, *, request: commands.EvaluationSettings
-) -> commands.ModelPricing:
+    info: ModelInfo | None, *, request: evaluation_settings.EvaluationSettings
+) -> evaluation_settings.ModelPricing:
     routed = request.model.startswith(("hf-inference-providers/", "genius-hf/"))
     if routed or info is None or info.cost is None:
         raise ValueError(
             "Set EVAL_MODEL_COST with exact provider USD prices per million tokens "
             "for input, output, input_cache_write, and input_cache_read"
         )
-    return commands.ModelPricing.model_validate(info.cost.model_dump())
+    return evaluation_settings.ModelPricing.model_validate(info.cost.model_dump())

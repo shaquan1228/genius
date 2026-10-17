@@ -12,20 +12,20 @@ import pytest
 from inspect_ai.util import ExecResult
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
-from evals.python import commands, queries
-from evals.python.commands import (
+from evals.python import commands, queries, verification
+from evals.python.integrations.inspect.environments import environment, runtime
+from evals.python.queries import score_case
+from evals.python.tests.declarations import _copy_case, _declaration, _reference_files
+from evals.python.tests.projections import reference, verifier
+from evals.python.verification import (
     Completion as ProcessCompletion,
 )
-from evals.python.commands import (
+from evals.python.verification import (
     Environment,
     Execution,
     Runtime,
     VerificationResult,
 )
-from evals.python.integrations.inspect.environments import environment, runtime
-from evals.python.queries import score_case
-from evals.python.tests.declarations import _copy_case, _declaration, _reference_files
-from evals.python.tests.projections import reference, verifier
 from kernel import (
     Completion,
     Content,
@@ -95,7 +95,7 @@ async def _run(agent: Environment, *, runtime: Runtime) -> VerificationResult:
     ):
         return assert_type(
             await commands.verify(case_id="clear-task", agent=agent, runtime=runtime),
-            commands.VerificationResult,
+            verification.VerificationResult,
         )
 
 
@@ -405,7 +405,7 @@ def assessment_grades_canonical_observation_and_freezes_scores() -> None:
                     agent=_agent_port(),
                     runtime=_runtime_port(_grader_port()),
                 ),
-                commands.Assessment,
+                verification.Assessment,
             )
         assert isinstance(result.verification, Verification.Unchecked)
         assert result.scores == expected
@@ -465,10 +465,10 @@ def execution_environment_is_immutable_snapshot() -> None:
 
 
 def reference_uses_default_local_adapter_and_real_ocaml() -> None:
-    async def execute() -> commands.VerificationResult:
+    async def execute() -> verification.VerificationResult:
         return assert_type(
             await commands.validate_reference(case_id="clear-task"),
-            commands.VerificationResult,
+            verification.VerificationResult,
         )
 
     result = asyncio.run(execute())

@@ -10,7 +10,7 @@ from types import MappingProxyType
 
 from inspect_ai.dataset import Sample
 
-from evals.python import commands
+from evals.python import evaluation_settings
 from evals.python.paths import REPO_ROOT
 from kernel import Case, Content, Experiment, Profile
 
@@ -35,7 +35,10 @@ def load_instructions(spec: Experiment) -> Mapping[str, bytes]:
 
 
 def instruction_envelope(
-    *, delivery: commands.InstructionDelivery, root: str, instructions: Mapping[str, bytes]
+    *,
+    delivery: evaluation_settings.InstructionDelivery,
+    root: str,
+    instructions: Mapping[str, bytes],
 ) -> str:
     paths = [str(PurePosixPath(root) / name) for name in REASONING_DOCUMENTS]
     if delivery == "manifest":
@@ -77,7 +80,7 @@ def prompt(
     *,
     case: Case,
     instructions: Mapping[str, bytes],
-    delivery: commands.InstructionDelivery = "files",
+    delivery: evaluation_settings.InstructionDelivery = "files",
     instruction_root: str = "../instructions",
 ) -> str:
     preamble = profile.preamble.format(skill=case.skill)
@@ -118,7 +121,7 @@ def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery optio
     cases: tuple[Case, ...],
     instructions: Mapping[str, bytes],
     dataset: str = "smoke",
-    delivery: commands.InstructionDelivery = "files",
+    delivery: evaluation_settings.InstructionDelivery = "files",
     instruction_root: str = "../instructions",
 ) -> list[Sample]:
     return [

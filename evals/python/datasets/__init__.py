@@ -19,6 +19,13 @@ from kernel._operations import sources
 
 
 @dataclass(frozen=True, kw_only=True)
+class DatasetProvenance:
+    info: DatasetInfo | None
+    source_hash: str
+    cases_hash: str
+
+
+@dataclass(frozen=True, kw_only=True)
 class Sources:
     modules: tuple[tuple[str, str], ...]
     resources: tuple[tuple[str, str], ...]

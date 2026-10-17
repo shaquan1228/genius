@@ -16,7 +16,7 @@ from inspect_ai.scorer import CORRECT, INCORRECT
 from inspect_ai.scorer._scorer import scorer_create
 from inspect_ai.solver import generate
 
-from evals.python import commands, queries
+from evals.python import evaluation_settings, queries
 from evals.python.integrations.inspect import evaluation, profiles, scoring
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.declarations import _copy_case, _declaration
@@ -80,12 +80,12 @@ def composition_uses_supplied_bytes_without_filesystem_access() -> None:
 
 @pytest.mark.parametrize("deliveries", [None, ("files", "manifest")])
 def evaluation_prepares_once_for_all_tasks(
-    deliveries: tuple[commands.InstructionDelivery, ...] | None,
+    deliveries: tuple[evaluation_settings.InstructionDelivery, ...] | None,
 ) -> None:
     spec = queries.resolve_settings(epochs=2)
     original = queries.load_dataset()
     cohort = replace(original, cases={"clear-task": original.cases["clear-task"]})
-    request = commands.EvaluationSettings(model="mockllm/model", deliveries=deliveries)
+    request = evaluation_settings.EvaluationSettings(model="mockllm/model", deliveries=deliveries)
     with (
         patch.object(queries, "load_dataset", return_value=cohort) as load,
         patch.object(profiles, "load_instructions", wraps=profiles.load_instructions) as read,

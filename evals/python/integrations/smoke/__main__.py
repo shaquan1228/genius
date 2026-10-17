@@ -3,7 +3,7 @@ import json
 import sys
 from typing import assert_never
 
-from evals.python import commands, queries
+from evals.python import commands, datasets, grading, queries
 from kernel import Case, Completion, Verification
 from kernel._operations import fixture as fixture_ops
 
@@ -18,10 +18,10 @@ def response(completion: Completion.Value) -> str:
             assert_never(unreachable)
 
 
-async def validate(case: Case, *, dataset: queries.Dataset) -> bool:
+async def validate(case: Case, *, dataset: datasets.Dataset) -> bool:
     reference = queries.get_reference(case_id=case.id, selection=dataset)
     result = await commands.validate_reference(case_id=case.id, selection=dataset)
-    scores: queries.Scores = {}
+    scores: grading.Scores = {}
     if not isinstance(result.verification, Verification.HarnessError):
         scores = queries.score_case(
             case_id=case.id,

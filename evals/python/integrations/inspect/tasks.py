@@ -8,7 +8,7 @@ import evals.python.integrations.inspect.agents as agent_adapter
 import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.scoring as scoring_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import commands, queries
+from evals.python import datasets, evaluation_settings, queries
 from kernel import Experiment, Profile
 
 
@@ -16,14 +16,14 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
     *,
     profile: Profile,
     spec: Experiment,
-    catalog: queries.Dataset,
+    catalog: datasets.Dataset,
     instructions: Mapping[str, bytes],
-    provenance: queries.DatasetProvenance,
+    provenance: datasets.DatasetProvenance,
     agent: str,
     version: str = "",
     dataset: str = "smoke",
     sandbox: str = "local",
-    instruction_delivery: commands.InstructionDelivery = "files",
+    instruction_delivery: evaluation_settings.InstructionDelivery = "files",
     instruction_root: str = "../instructions",
     task_name: str | None = None,
     diagnostic_epoch: int | None = None,

@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from evals.python import commands, queries
+from evals.python import commands, queries, verification
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.humaneval import _record
@@ -63,7 +63,7 @@ def memory_workaround_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
 def reference_validation_uses_public_operation_and_thaws_only_cli_output() -> None:
     case = _import_records((_record(),))[0]
     dataset = _import_dataset((_record(),))
-    canonical = commands.VerificationResult(
+    canonical = verification.VerificationResult(
         verification=Verification.Passed(), metadata={"test": {"items": (True,)}}
     )
     with patch.object(
