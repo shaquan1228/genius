@@ -4,8 +4,11 @@ from typing import TYPE_CHECKING, cast
 
 from pydantic import validate_call
 
-import kernel
-from evals.python import datasets, grading, schema
+from evals.python import datasets, grading
+from evals.python.datasets import Dataset, DatasetProvenance, Selection
+from evals.python.grading import UNCHECKED, Scores
+from evals.python.schema import FROZEN, DatasetInfo, Files
+from kernel import Case, Experiment, Reference, Task, Verification
 from kernel._operations import experiment as experiment_ops
 from kernel._operations import projection as projection_ops
 
@@ -25,34 +28,34 @@ __all__ = [
 ]
 
 
-@validate_call(config=schema.FROZEN)
+@validate_call(config=FROZEN)
 def compile_dataset(
     *,
-    cases: tuple[kernel.Task, ...],
-    info: schema.DatasetInfo | None = None,
-    resources: schema.Files | None = None,
-) -> datasets.Dataset:
+    cases: tuple[Task, ...],
+    info: DatasetInfo | None = None,
+    resources: Files | None = None,
+) -> Dataset:
     return datasets.compile_declarations(
         cases, info=info, resources={} if resources is None else resources
     )
 
 
-@validate_call(config=schema.FROZEN)
-def load_dataset(*, selection: datasets.Selection = "smoke") -> datasets.Dataset:
+@validate_call(config=FROZEN)
+def load_dataset(*, selection: Selection = "smoke") -> Dataset:
     return datasets.load_dataset(selection)
 
 
-@validate_call(config=schema.FROZEN)
-def list_cases(*, selection: datasets.Selection = "smoke") -> tuple[kernel.Case, ...]:
+@validate_call(config=FROZEN)
+def list_cases(*, selection: Selection = "smoke") -> tuple[Case, ...]:
     return tuple(datasets.load_dataset(selection).cases.values())
 
 
-@validate_call(config=schema.FROZEN)
-def get_reference(*, case_id: str, selection: datasets.Selection = "smoke") -> kernel.Reference:
+@validate_call(config=FROZEN)
+def get_reference(*, case_id: str, selection: Selection = "smoke") -> Reference:
     return projection_ops.reference(datasets.record(case_id, selection=selection))
 
 
-@validate_call(config=schema.FROZEN)
+@validate_call(config=FROZEN)
 def resolve_settings(
     *,
     epochs: int | None = None,
@@ -60,7 +63,7 @@ def resolve_settings(
     cost_limit: float | None = None,
     time_limit: int | None = None,
     cache: bool | None = None,
-) -> kernel.Experiment:
+) -> Experiment:
     options = {
         "epochs": epochs,
         "message_limit": message_limit,
@@ -73,30 +76,30 @@ def resolve_settings(
     )
 
 
-@validate_call(config=schema.FROZEN)
-def describe_dataset(*, selection: datasets.Selection = "smoke") -> schema.DatasetInfo | None:
+@validate_call(config=FROZEN)
+def describe_dataset(*, selection: Selection = "smoke") -> DatasetInfo | None:
     return datasets.dataset_info(selection)
 
 
-@validate_call(config=schema.FROZEN)
-def get_provenance(*, selection: datasets.Selection = "smoke") -> datasets.DatasetProvenance:
+@validate_call(config=FROZEN)
+def get_provenance(*, selection: Selection = "smoke") -> DatasetProvenance:
     dataset = datasets.load_dataset(selection)
-    return datasets.DatasetProvenance(
+    return DatasetProvenance(
         info=dataset.info,
         source_hash=datasets.fingerprint(dataset.sources),
         cases_hash=datasets.cases_hash(dataset),
     )
 
 
-@validate_call(config=schema.FROZEN)
+@validate_call(config=FROZEN)
 def score_case(
     *,
     case_id: str,
     response: str,
     changed_files: tuple[str, ...],
-    verification: kernel.Verification.Value = grading.UNCHECKED,
-    selection: datasets.Selection = "smoke",
-) -> grading.Scores:
+    verification: Verification.Value = UNCHECKED,
+    selection: Selection = "smoke",
+) -> Scores:
     return grading.score(
         datasets.record(case_id, selection=selection),
         response=response,
