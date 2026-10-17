@@ -429,7 +429,7 @@ These small regression tasks do not establish that Genius improves performance o
 ## Required boolean scores
 
 OCaml Grader definitions own the ordered required boolean scores, exposed by
-`queries.required_score_names()`. Native grade labels, Python required-score validation,
+`kernel._operations.grader.required_names`. Native grade labels, Python required-score validation,
 Inspect accuracy/stderr metric keys, and encoded-score completeness use that declaration.
 The bridge rejects duplicate names and non-boolean values before constructing a mapping;
 additional unique boolean scores remain supported. Inspect metric registration captures the

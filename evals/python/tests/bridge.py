@@ -221,12 +221,13 @@ def malformed_native_scores_are_rejected(pairs: list[tuple[str, object]]) -> Non
 
 
 def required_scores_follow_native_declaration() -> None:
-    with patch.object(
-        type(grader_ops),
-        "required_names",
-        new_callable=PropertyMock,
-        return_value=["correctness", "scope", "extension"],
+    with (
+        patch.object(
+            type(grader_ops),
+            "required_names",
+            new_callable=PropertyMock,
+            return_value=["correctness", "scope", "extension"],
+        ),
+        pytest.raises(ValueError, match="score names"),
     ):
-        assert queries.required_score_names() == ("correctness", "scope", "extension")
-        with pytest.raises(ValueError, match="score names"):
-            _judgment(response="{}")
+        _judgment(response="{}")
