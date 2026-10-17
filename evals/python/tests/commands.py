@@ -46,6 +46,8 @@ def runner_entrypoint_validates_before_allocating_sandboxes(
             },
         ),
         (verification.validate_reference, {"case_id": "case", "runtime": object()}),
+        (evaluation.evaluate, {"settings": object()}),
+        (evaluation.evaluate, {"settings": {"model": "openai/test"}}),
     ],
 )
 def capability_commands_reject_non_capabilities(
@@ -59,6 +61,7 @@ def capability_commands_reject_non_capabilities(
 
 
 def public_evaluation_preserves_validated_settings_at_the_sdk_edge() -> None:
+    settings = EvaluationSettings(model="openai/test", sample_ids=("clear-task",))
     with patch(
         "evals.python.integrations.inspect.evaluation.evaluate_async",
         new_callable=AsyncMock,
@@ -66,14 +69,11 @@ def public_evaluation_preserves_validated_settings_at_the_sdk_edge() -> None:
     ) as evaluate:
 
         async def execute() -> int:
-            return assert_type(
-                await evaluation.evaluate(model="openai/test", sample_ids=("clear-task",)), int
-            )
+            return assert_type(await evaluation.evaluate(settings), int)
 
         assert asyncio.run(execute()) == 3
     assert evaluate.await_args is not None
-    settings = evaluate.await_args.args[0]
-    assert isinstance(settings, EvaluationSettings)
+    assert evaluate.await_args.args[0] is settings
     assert (settings.model, settings.sample_ids) == ("openai/test", ("clear-task",))
     with pytest.raises(ValidationError):
         settings.model = "changed"
@@ -83,10 +83,10 @@ def public_evaluation_preserves_validated_settings_at_the_sdk_edge() -> None:
     "arguments", [{"limit": 0}, {"sample_ids": ()}, {"deliveries": ("files", "files")}]
 )
 def direct_evaluation_validates_before_sdk_execution(arguments: dict[str, object]) -> None:
-    operation: Callable[..., Awaitable[int]] = evaluation.evaluate
-
     async def execute() -> None:
-        await operation(model="openai/test", **arguments)
+        await evaluation.evaluate(
+            EvaluationSettings.model_validate({"model": "openai/test", **arguments})
+        )
 
     with (
         patch("evals.python.integrations.inspect.evaluation.evaluate_async") as evaluate,

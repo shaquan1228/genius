@@ -57,9 +57,6 @@ AGENT_REGISTRY: dict[AgentKind, AgentSpec] = {
         ),
     ),
 }
-DEFAULT_VERSIONS: dict[AgentKind, str] = {
-    kind: spec.default_version for kind, spec in AGENT_REGISTRY.items()
-}
 
 
 def coding_agent(kind: AgentKind, *, version: str) -> Agent:

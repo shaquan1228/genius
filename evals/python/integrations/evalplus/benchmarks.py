@@ -5,14 +5,13 @@ import asyncio
 import json
 import os
 import platform
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import Literal, assert_never
 
 from pydantic import BaseModel, ConfigDict
 
 from evals.python import datasets, verification
 from evals.python.datasets import Dataset
-from evals.python.verification import Diagnostic
 from kernel import Case
 
 
@@ -42,16 +41,8 @@ async def validate_case(case: Case, *, dataset: Dataset) -> dict[str, object]:
         "case_id": case.id,
         "status": type(result.verification).__name__.lower(),
         "detail": result.detail,
-        "metadata": diagnostic(result.metadata),
+        "metadata": result.metadata_json(),
     }
-
-
-def diagnostic(value: Diagnostic) -> object:
-    if isinstance(value, Mapping):
-        return {key: diagnostic(item) for key, item in value.items()}
-    if isinstance(value, tuple):
-        return [diagnostic(item) for item in value]
-    return value
 
 
 def parser() -> argparse.ArgumentParser:

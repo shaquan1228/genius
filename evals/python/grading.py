@@ -45,17 +45,6 @@ def _candidate(text: str) -> Response | None:
         return None
 
 
-def score(
-    case: Task, *, response: str, changed_files: tuple[str, ...], verification: Verification.Value
-) -> Scores:
-    pairs = Task.grade(
-        task=case,
-        response=_candidate(response),
-        outcome=Outcome.create(changed_files=changed_files, verification=verification),
-    )
-    return MappingProxyType(dict(pairs))
-
-
 @validate_call(config=FROZEN)
 def score_case(
     *,
@@ -65,9 +54,9 @@ def score_case(
     verification: Verification.Value = UNCHECKED,
     selection: Selection = "smoke",
 ) -> Scores:
-    return score(
-        datasets.record(case_id, selection=selection),
-        response=response,
-        changed_files=changed_files,
-        verification=verification,
+    pairs = Task.grade(
+        task=datasets.record(case_id, selection=selection),
+        response=_candidate(response),
+        outcome=Outcome.create(changed_files=changed_files, verification=verification),
     )
+    return MappingProxyType(dict(pairs))

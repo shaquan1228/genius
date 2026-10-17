@@ -5,13 +5,11 @@ from typing import cast
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer, stderr
 from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
-from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import assessment
 from evals.python.datasets import Dataset
-from evals.python.verification import Diagnostic
 from kernel import Task, Verification
 
 
@@ -23,14 +21,6 @@ def with_failure(explanation: str, *, failure: str | None) -> str:
     if failure is None:
         return explanation
     return f"Agent process crashed: {failure}\n\n{explanation}"
-
-
-def diagnostic(value: Diagnostic) -> JsonValue:
-    if isinstance(value, Mapping):
-        return {key: diagnostic(item) for key, item in value.items()}
-    if isinstance(value, tuple):
-        return [diagnostic(item) for item in value]
-    return value
 
 
 async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
@@ -62,7 +52,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
                 "status": type(evidence.verification).__name__.lower(),
                 "detail": evidence.detail,
             },
-            "verifier_metadata": diagnostic(evidence.metadata),
+            "verifier_metadata": evidence.metadata_json(),
             "changed_files": changed,
             "agent_failure": failure,
         },

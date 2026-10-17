@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from inspect_ai import Task, eval_async
 from inspect_ai.log import EvalLog
-from inspect_ai.model import GenerateConfig, get_model, modelapi
+from inspect_ai.model import GenerateConfig, Model, get_model, modelapi
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 
 import evals.python.integrations.inspect.completeness as completeness_adapter
@@ -143,7 +143,7 @@ async def execute(
     *,
     request: EvaluationSettings,
     spec: Experiment,
-    model: Any,
+    model: Model,
     state: progress_adapter.Progress,
 ) -> int:
     epochs = 1 if request.deliveries else spec.epochs
