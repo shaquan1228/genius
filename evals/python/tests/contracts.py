@@ -21,9 +21,9 @@ from evals.python.tests.projections import reference, verifier
 from evals.python.tests.support import choice_case as _choice_case
 from kernel import Case, Experiment, File, Verification
 from kernel import ValidationError as DomainValidationError
-from kernel._operations import fixture as fixture_ops
-from kernel._operations import grader as grader_ops
-from kernel._operations import projection as projection_ops
+from kernel import fixture as fixture_ops
+from kernel import grader as grader_ops
+from kernel import projection as projection_ops
 
 
 @pytest.fixture
@@ -188,6 +188,6 @@ def verifier_projection_and_grading_use_native_values() -> None:
         projected = verifier(case_id)
         assert projected is not None
         assert checks is not None
-        projection.assert_called_once_with(datasets.record(case_id, selection="smoke"))
+        projection.assert_called_once_with(task=datasets.record(case_id, selection="smoke"))
         assert (grade()["correctness"], grade()["correctness"]) == (True, True)
         assert (projected.stdin, kernel_grade.call_count) == (checks.stdin, 2)

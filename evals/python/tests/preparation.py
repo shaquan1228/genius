@@ -37,7 +37,7 @@ from kernel import (
     Rubric,
     TextRule,
 )
-from kernel._operations import projection as projection_ops
+from kernel import projection as projection_ops
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
@@ -115,9 +115,9 @@ def private_tasks() -> list[Task]:
         instruction=Instruction.create(
             skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
         ),
-        reference=Reference(
+        reference=Reference.create(
             edits=Fixture.create(files=[File.create(path="main.py", contents=PRIVATE_SENTINEL)]),
-            completion=Completion.Plain(text=PRIVATE_SENTINEL),
+            completion=Completion.create(plain=PRIVATE_SENTINEL),
         ),
     )
     snapshots = [
@@ -125,15 +125,15 @@ def private_tasks() -> list[Task]:
             cases=(
                 _copy_case(
                     definition,
-                    criterion=Criterion.Answer(
-                        rubric=Rubric.create(
+                    criterion=Criterion.create(
+                        answer=Rubric.create(
                             expected=Response.create(
                                 fields=[
                                     ResponseField.create(
-                                        name="choice", value=ResponseValue.String(value=choice)
+                                        name="choice", value=ResponseValue.create(string=choice)
                                     ),
                                     ResponseField.create(
-                                        name="safe", value=ResponseValue.Bool(value=True)
+                                        name="safe", value=ResponseValue.create(bool=True)
                                     ),
                                 ]
                             ),
@@ -250,11 +250,9 @@ def unresolved_public_resource_cannot_reach_agent_files() -> None:
     checks = _copy_verifier(
         definition.criterion.verifier,
         tools=[
-            Artifact.create(path="context.txt", content=Content.Resource(key="private-resource"))
+            Artifact.create(path="context.txt", content=Content.create(resource="private-resource"))
         ],
     )
-    case = projection_ops.case(
-        task=_copy_case(definition, criterion=Criterion.Code(verifier=checks))
-    )
+    case = projection_ops.case(task=_copy_case(definition, criterion=Criterion.create(code=checks)))
     with pytest.raises(ValueError, match="Unresolved resource in public case external"):
         profiles.files(profiles.load_profile("baseline", spec=spec), case=case, instructions={})

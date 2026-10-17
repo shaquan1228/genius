@@ -61,7 +61,7 @@ assert total([(1.5, 2)]) == 3.0
 """,
         ),
         allowed_files=("receipt.py",),
-        reference=Reference(
+        reference=Reference.create(
             edits=Fixture.create(
                 files=[
                     File.create(
@@ -71,7 +71,7 @@ assert total([(1.5, 2)]) == 3.0
                     )
                 ]
             ),
-            completion=Completion.Plain(text="Each quantity now contributes to the total."),
+            completion=Completion.create(plain="Each quantity now contributes to the total."),
         ),
     )
 
@@ -146,14 +146,14 @@ for value in (0, -1):
 """,
         ),
         allowed_files=("config.py", "client.py"),
-        reference=Reference(
+        reference=Reference.create(
             edits=Fixture.create(
                 files=[
                     File.create(path="config.py", contents=f"timeout_seconds = {requested}\n"),
                     File.create(path="client.py", contents=client(requested)),
                 ]
             ),
-            completion=Completion.Plain(text="Updated both defaults and preserved overrides."),
+            completion=Completion.create(plain="Updated both defaults and preserved overrides."),
         ),
     )
 
@@ -174,12 +174,12 @@ def cases() -> tuple[Task, ...]:
                     "Do not change files."
                 ),
             ),
-            criterion=Criterion.Answer(
-                rubric=Rubric.create(
+            criterion=Criterion.create(
+                answer=Rubric.create(
                     expected=Response.create(
                         fields=[
                             ResponseField.create(
-                                name="choice", value=ResponseValue.String(value="B")
+                                name="choice", value=ResponseValue.create(string="B")
                             )
                         ]
                     ),
@@ -191,18 +191,18 @@ def cases() -> tuple[Task, ...]:
                 )
             ),
             allowed_files=(),
-            reference=Reference(
+            reference=Reference.create(
                 edits=Fixture.create(files=[]),
-                completion=Completion.Structured(
-                    response=Response.create(
+                completion=Completion.create(
+                    structured=Response.create(
                         fields=[
                             ResponseField.create(
-                                name="choice", value=ResponseValue.String(value="B")
+                                name="choice", value=ResponseValue.create(string="B")
                             ),
                             ResponseField.create(
                                 name="reason",
-                                value=ResponseValue.String(
-                                    value="B costs less for identical service."
+                                value=ResponseValue.create(
+                                    string="B costs less for identical service."
                                 ),
                             ),
                         ]
@@ -224,15 +224,15 @@ def cases() -> tuple[Task, ...]:
                     "change_rule (boolean), and reason (one sentence). Do not change files."
                 ),
             ),
-            criterion=Criterion.Answer(
-                rubric=Rubric.create(
+            criterion=Criterion.create(
+                answer=Rubric.create(
                     expected=Response.create(
                         fields=[
                             ResponseField.create(
-                                name="decision_was_supported", value=ResponseValue.Bool(value=True)
+                                name="decision_was_supported", value=ResponseValue.create(bool=True)
                             ),
                             ResponseField.create(
-                                name="change_rule", value=ResponseValue.Bool(value=False)
+                                name="change_rule", value=ResponseValue.create(bool=False)
                             ),
                         ]
                     ),
@@ -240,21 +240,21 @@ def cases() -> tuple[Task, ...]:
                 )
             ),
             allowed_files=(),
-            reference=Reference(
+            reference=Reference.create(
                 edits=Fixture.create(files=[]),
-                completion=Completion.Structured(
-                    response=Response.create(
+                completion=Completion.create(
+                    structured=Response.create(
                         fields=[
                             ResponseField.create(
-                                name="decision_was_supported", value=ResponseValue.Bool(value=True)
+                                name="decision_was_supported", value=ResponseValue.create(bool=True)
                             ),
                             ResponseField.create(
-                                name="change_rule", value=ResponseValue.Bool(value=False)
+                                name="change_rule", value=ResponseValue.create(bool=False)
                             ),
                             ResponseField.create(
                                 name="reason",
-                                value=ResponseValue.String(
-                                    value="One loss did not change the known odds."
+                                value=ResponseValue.create(
+                                    string="One loss did not change the known odds."
                                 ),
                             ),
                         ]

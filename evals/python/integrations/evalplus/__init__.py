@@ -8,14 +8,14 @@ from kernel import Artifact, Content, Criterion, Verifier
 
 
 def checks(*, record: str, manifest: Mapping[str, object]) -> Criterion.Value:
-    return Criterion.Code(
-        verifier=Verifier.create(
+    return Criterion.create(
+        code=Verifier.create(
             inputs=("solution.py",),
             files=[
                 Artifact.create(
                     path="verifier.py",
-                    content=Content.Inline(
-                        text=Path(__file__).with_name("evalplus_verifier.py").read_text()
+                    content=Content.create(
+                        inline=Path(__file__).with_name("evalplus_verifier.py").read_text()
                     ),
                 )
             ],

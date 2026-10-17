@@ -8,7 +8,7 @@
 
 (subdir generated
  (rule
-  (targets __init__.py __init__.pyi _operations.py _operations.pyi _case.pyi _construct.pyi _experiment.pyi _fixture.pyi _grader.pyi _projection.pyi)
+  (targets __init__.py __init__.pyi artifact.py artifact.pyi case.py case.pyi completion.py completion.pyi content.py content.pyi criterion.py criterion.pyi experiment.py experiment.pyi file.py file.pyi fixture.py fixture.pyi grader.py grader.pyi instruction.py instruction.pyi outcome.py outcome.pyi profile.py profile.pyi projection.py projection.pyi reference.py reference.pyi resource_binding.py resource_binding.pyi response.py response.pyi response_field.py response_field.pyi response_value.py response_value.pyi rubric.py rubric.pyi task.py task.pyi text_rule.py text_rule.pyi verifier.py verifier.pyi)
   (deps ../generate.py ../schema.json ../../../pyproject.toml)
   (action
    (progn
@@ -29,4 +29,25 @@
  (action
   (progn
    (diff __init__.py generated/__init__.py)
-   (diff _operations.py generated/_operations.py))))
+   (diff artifact.py generated/artifact.py)
+   (diff case.py generated/case.py)
+   (diff completion.py generated/completion.py)
+   (diff content.py generated/content.py)
+   (diff criterion.py generated/criterion.py)
+   (diff experiment.py generated/experiment.py)
+   (diff file.py generated/file.py)
+   (diff fixture.py generated/fixture.py)
+   (diff grader.py generated/grader.py)
+   (diff instruction.py generated/instruction.py)
+   (diff outcome.py generated/outcome.py)
+   (diff profile.py generated/profile.py)
+   (diff projection.py generated/projection.py)
+   (diff reference.py generated/reference.py)
+   (diff resource_binding.py generated/resource_binding.py)
+   (diff response.py generated/response.py)
+   (diff response_field.py generated/response_field.py)
+   (diff response_value.py generated/response_value.py)
+   (diff rubric.py generated/rubric.py)
+   (diff task.py generated/task.py)
+   (diff text_rule.py generated/text_rule.py)
+   (diff verifier.py generated/verifier.py))))

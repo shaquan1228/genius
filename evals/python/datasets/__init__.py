@@ -11,11 +11,10 @@ from typing import Protocol, cast
 from pydantic import TypeAdapter, validate_call
 
 from evals.python.schema import FROZEN, DatasetInfo, FileName, Files
-from kernel import Case, Fixture, Reference, ResourceBinding, Task
-from kernel._operations import case as case_ops
-from kernel._operations import fixture as fixture_ops
-from kernel._operations import projection as projection_ops
-from kernel._operations import sources
+from kernel import Case, Fixture, Reference, ResourceBinding, Task, sources
+from kernel import fixture as fixture_ops
+from kernel import projection as projection_ops
+from kernel import task as task_ops
 
 __all__ = [
     "Dataset",
@@ -59,11 +58,16 @@ def fingerprint(value: Sources) -> str:
 
 
 def _canonical(value: object) -> object:
-    if value is None or isinstance(value, (str, bool, int, float)):
-        return value
-    if isinstance(value, Fixture):
-        return tuple(_canonical(file) for file in fixture_ops.files(fixture=value))
-    return (type(value).__name__, tuple(_canonical(item) for item in cast(Sequence[object], value)))
+    match value:
+        case None | str() | bool() | int() | float():
+            return value
+        case Fixture():
+            return tuple(_canonical(file) for file in fixture_ops.files(fixture=value))
+        case _:
+            return (
+                type(value).__name__,
+                tuple(_canonical(item) for item in cast(Sequence[object], value)),
+            )
 
 
 def value_fingerprint(value: Task) -> str:
@@ -112,7 +116,7 @@ class _CaseKey:
 
 
 def _resolve(case: Task, *, sources: Sources) -> Task:
-    return case_ops.resolve_resources(
+    return task_ops.resolve_resources(
         task=case,
         resources=[
             ResourceBinding.create(key=key, contents=text) for key, text in sources.resources

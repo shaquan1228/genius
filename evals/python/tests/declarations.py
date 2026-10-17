@@ -30,7 +30,7 @@ from kernel import (
 from kernel import (
     ValidationError as DomainValidationError,
 )
-from kernel._operations import fixture as fixture_ops
+from kernel import fixture as fixture_ops
 
 
 def _override[T](value: T | None, *, original: T) -> T:
@@ -88,16 +88,18 @@ def _files(value: Sequence[Artifact]) -> dict[str, str]:
 def _declaration(*, code: bool = True) -> Task:
     criterion: Criterion.Value
     if code:
-        criterion = Criterion.Code(
-            verifier=Verifier.create(
+        criterion = Criterion.create(
+            code=Verifier.create(
                 inputs=("main.py",),
                 files=[
                     Artifact.create(
-                        path="verify.py", content=Content.Inline(text="private assertions")
+                        path="verify.py", content=Content.create(inline="private assertions")
                     )
                 ],
                 tools=[
-                    Artifact.create(path="check.sh", content=Content.Inline(text="visible helper"))
+                    Artifact.create(
+                        path="check.sh", content=Content.create(inline="visible helper")
+                    )
                 ],
                 command=("python3", "verify.py"),
                 stdin="private stdin",
@@ -105,12 +107,12 @@ def _declaration(*, code: bool = True) -> Task:
             )
         )
     else:
-        criterion = Criterion.Answer(
-            rubric=Rubric.create(
+        criterion = Criterion.create(
+            answer=Rubric.create(
                 expected=Response.create(
                     fields=[
-                        ResponseField.create(name="choice", value=ResponseValue.String(value="B")),
-                        ResponseField.create(name="safe", value=ResponseValue.Bool(value=True)),
+                        ResponseField.create(name="choice", value=ResponseValue.create(string="B")),
+                        ResponseField.create(name="safe", value=ResponseValue.create(bool=True)),
                     ]
                 ),
                 text_rule=TextRule.create(field="reason", min_words=1, max_words=5),
@@ -122,15 +124,15 @@ def _declaration(*, code: bool = True) -> Task:
         instruction=Instruction.create(skill="reasoning", prompt="Fix it: é"),
         criterion=criterion,
         allowed_files=("main.py",),
-        reference=Reference(
+        reference=Reference.create(
             edits=Fixture.create(files=[File.create(path="main.py", contents="fixed")]),
-            completion=Completion.Plain(text="done")
+            completion=Completion.create(plain="done")
             if code
-            else Completion.Structured(
-                response=Response.create(
+            else Completion.create(
+                structured=Response.create(
                     fields=[
-                        ResponseField.create(name="choice", value=ResponseValue.String(value="B")),
-                        ResponseField.create(name="safe", value=ResponseValue.Bool(value=True)),
+                        ResponseField.create(name="choice", value=ResponseValue.create(string="B")),
+                        ResponseField.create(name="safe", value=ResponseValue.create(bool=True)),
                     ]
                 )
             ),
@@ -164,9 +166,9 @@ def missing_private_resource_fails_at_resolution() -> None:
     assert isinstance(definition.criterion, Criterion.Code)
     checks = _copy_verifier(
         definition.criterion.verifier,
-        files=[Artifact.create(path="verify.py", content=Content.Resource(key="missing.py"))],
+        files=[Artifact.create(path="verify.py", content=Content.create(resource="missing.py"))],
     )
-    definition = _copy_case(definition, criterion=Criterion.Code(verifier=checks))
+    definition = _copy_case(definition, criterion=Criterion.create(code=checks))
     with pytest.raises(DomainValidationError, match=r"missing\.py"):
         datasets.compile_dataset(cases=(definition,))
 
@@ -227,18 +229,18 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
         lambda c: _copy_case(c, fixture=Fixture.create(files=[])),
         lambda c: _copy_case(
             c,
-            criterion=Criterion.Answer(
-                rubric=Rubric.create(expected=Response.create(fields=[]), text_rule=None)
+            criterion=Criterion.create(
+                answer=Rubric.create(expected=Response.create(fields=[]), text_rule=None)
             ),
         ),
         lambda c: _copy_case(
             c,
-            criterion=Criterion.Answer(
-                rubric=Rubric.create(
+            criterion=Criterion.create(
+                answer=Rubric.create(
                     expected=Response.create(
                         fields=[
                             ResponseField.create(
-                                name="choice", value=ResponseValue.String(value="B")
+                                name="choice", value=ResponseValue.create(string="B")
                             )
                         ]
                     ),
@@ -248,11 +250,11 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
         ),
         lambda c: _copy_case(
             c,
-            reference=Reference(
+            reference=Reference.create(
                 edits=Fixture.create(
                     files=[File.create(path="outside.py", contents="unauthorized")]
                 ),
-                completion=Completion.Plain(text=""),
+                completion=Completion.create(plain=""),
             ),
         ),
     ],
@@ -273,9 +275,12 @@ def kernel_constructors_validate_raw_declarations(
         ("timeout_seconds", 0),
         (
             "files",
-            lambda: [Artifact.create(path="main.py", content=Content.Inline(text="overlap"))],
+            lambda: [Artifact.create(path="main.py", content=Content.create(inline="overlap"))],
         ),
-        ("tools", lambda: [Artifact.create(path="../secret", content=Content.Inline(text="bad"))]),
+        (
+            "tools",
+            lambda: [Artifact.create(path="../secret", content=Content.create(inline="bad"))],
+        ),
     ],
 )
 def nested_constructor_rules_fail_closed(field: str, *, value: object) -> None:
@@ -287,7 +292,12 @@ def nested_constructor_rules_fail_closed(field: str, *, value: object) -> None:
         for name in ("inputs", "files", "tools", "command", "stdin", "timeout_seconds")
     }
     with pytest.raises(DomainValidationError):
-        Verifier.create(**{**fields, field: value() if callable(value) else value})
+        _copy_case(
+            definition,
+            criterion=Criterion.create(
+                code=Verifier.create(**{**fields, field: value() if callable(value) else value})
+            ),
+        )
 
 
 @pytest.mark.parametrize(("minimum", "maximum"), [(-1, 2), (3, 2)])
@@ -297,7 +307,7 @@ def answer_constructor_rules_fail_closed(minimum: int, *, maximum: int) -> None:
 
 
 def native_fields_retain_immutable_snapshots() -> None:
-    fields = [ResponseField.create(name="choice", value=ResponseValue.String(value="B"))]
+    fields = [ResponseField.create(name="choice", value=ResponseValue.create(string="B"))]
     answer = Rubric.create(expected=Response.create(fields=fields), text_rule=None)
     fields.clear()
     assert len(answer.expected.fields) == 1
@@ -310,7 +320,7 @@ def native_fields_retain_immutable_snapshots() -> None:
         "main.py": "broken"
     }
     artifacts = [
-        Artifact.create(path="verify.py", content=Content.Inline(text="private assertions"))
+        Artifact.create(path="verify.py", content=Content.create(inline="private assertions"))
     ]
     definition = _declaration()
     assert isinstance(definition.criterion, Criterion.Code)
@@ -322,18 +332,18 @@ def native_fields_retain_immutable_snapshots() -> None:
 @pytest.mark.parametrize(
     "criterion",
     [
-        Criterion.Answer(
-            rubric=Rubric.create(
+        Criterion.create(
+            answer=Rubric.create(
                 expected=Response.create(
                     fields=[
-                        ResponseField.create(name="choice", value=ResponseValue.String(value="B"))
+                        ResponseField.create(name="choice", value=ResponseValue.create(string="B"))
                     ]
                 ),
                 text_rule=None,
             )
         ),
-        Criterion.Answer(
-            rubric=Rubric.create(
+        Criterion.create(
+            answer=Rubric.create(
                 expected=Response.create(fields=[]),
                 text_rule=TextRule.create(field="reason", min_words=1, max_words=5),
             )

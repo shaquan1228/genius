@@ -6,10 +6,10 @@ from pydantic import AfterValidator, BaseModel, Field, validate_call
 
 from evals.python.schema import FROZEN
 from kernel import Experiment
-from kernel._operations import experiment as experiment_ops
+from kernel import experiment as experiment_ops
 
 if TYPE_CHECKING:
-    from kernel._experiment import ResolveArgs
+    from kernel.experiment import ResolveArgs
 
 __all__ = [
     "EvaluationSettings",

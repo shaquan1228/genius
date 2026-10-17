@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from collections.abc import Callable, Mapping
+from functools import wraps
 from importlib import import_module
 from inspect import Parameter, Signature
 from pathlib import Path
@@ -82,6 +83,7 @@ def bind(
     contract = signature(arguments)
     error = ValidationError if failure == "validation_failure" else GradingError
 
+    @wraps(operation)
     def call(**kwargs: Any) -> Any:
         contract.bind(**kwargs)
         result = operation(**kwargs)

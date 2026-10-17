@@ -7,7 +7,7 @@ from evals.python import datasets, grading, verification
 from evals.python.datasets import Dataset
 from evals.python.grading import Scores
 from kernel import Case, Completion, Verification
-from kernel._operations import fixture as fixture_ops
+from kernel import fixture as fixture_ops
 
 
 def response(completion: Completion.Value) -> str:

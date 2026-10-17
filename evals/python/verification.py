@@ -15,8 +15,8 @@ from evals.python.datasets import Selection
 from evals.python.execution import Completion, Environment, Execution, Runtime
 from evals.python.schema import FROZEN
 from kernel import Content, Verification, Verifier
-from kernel._operations import fixture as fixture_ops
-from kernel._operations import projection as projection_ops
+from kernel import fixture as fixture_ops
+from kernel import projection as projection_ops
 
 __all__ = ["Diagnostic", "VerificationResult", "validate_reference", "verify_case"]
 

@@ -13,7 +13,7 @@ from evals.python import assessment
 from evals.python.datasets import Dataset
 from evals.python.verification import Diagnostic
 from kernel import Verification
-from kernel._operations import grader as grader_ops
+from kernel import grader as grader_ops
 
 
 def score_values(scores: Mapping[str, bool]) -> dict[str, str]:

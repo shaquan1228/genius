@@ -6,8 +6,18 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, PlainSerializer
 
+from kernel import file as file_ops
+
 FROZEN = ConfigDict(strict=True, extra="forbid", frozen=True, arbitrary_types_allowed=True)
-FileName = Annotated[str, Field(pattern=r"^[a-zA-Z_][a-zA-Z0-9_.-]*$")]
+
+
+def _file_name(value: str) -> str:
+    if not file_ops.valid_path(path=value):
+        raise ValueError("Invalid file name")
+    return value
+
+
+FileName = Annotated[str, AfterValidator(_file_name)]
 Files = Annotated[Mapping[FileName, str], AfterValidator(MappingProxyType), PlainSerializer(dict)]
 Attributes = Annotated[Mapping[str, str], AfterValidator(MappingProxyType), PlainSerializer(dict)]
 

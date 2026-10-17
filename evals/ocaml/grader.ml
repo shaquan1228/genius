@@ -56,10 +56,10 @@ let trim ~text =
   in
   bounds 0 None 0
 
-let answer (criterion : Ast.rubric) response =
+let answer (criterion : Rubric.t) response =
   match response with
   | None -> false
-  | Some (response : Ast.response) ->
+  | Some (response : Response.t) ->
       let exact, text_valid =
         match criterion.text_rule with
         | None -> (response.fields, true)
@@ -67,30 +67,33 @@ let answer (criterion : Ast.rubric) response =
             let valid =
               match
                 List.find_opt
-                  (fun (field : Ast.response_field) -> field.name = rule.field)
+                  (fun (field : Response_field.t) -> field.name = rule.field)
                   response.fields
               with
-              | Some { value = Ast.String { value = text }; _ } ->
+              | Some { value = Response_value.String { value = text }; _ } ->
                   let words = word_count ~text in
                   rule.min_words <= words && words <= rule.max_words
-              | Some { value = Ast.Bool _; _ } | None -> false
+              | Some { value = Response_value.Bool _; _ } | None -> false
             in
             ( List.filter
-                (fun (field : Ast.response_field) -> field.name <> rule.field)
+                (fun (field : Response_field.t) -> field.name <> rule.field)
                 response.fields,
               valid )
       in
       text_valid && List.sort compare exact = List.sort compare criterion.expected.fields
 
-let grade ~(task : Ast.task) ~response ~(outcome : Ast.outcome) =
+let grade ~(task : Task.t) ~response ~(outcome : Outcome.t) =
   let correctness =
     match task.criterion with
-    | Ast.Code _ -> (
+    | Criterion.Code _ -> (
         match outcome.verification with
-        | Ast.Harness_error { detail } -> Error (Ast.Verification_harness_error { detail })
-        | Ast.Passed -> Ok true
-        | Ast.Unchecked | Ast.Failed | Ast.Invalid_submission | Ast.Timed_out -> Ok false)
-    | Ast.Answer { rubric } -> Ok (answer rubric response)
+        | Verification.Harness_error { detail } ->
+            Error (Grading_failure.Verification_harness_error { detail })
+        | Verification.Passed -> Ok true
+        | Verification.Unchecked | Verification.Failed | Verification.Invalid_submission
+        | Verification.Timed_out ->
+            Ok false)
+    | Criterion.Answer { rubric } -> Ok (answer rubric response)
   in
   Result.map
     (fun correctness ->

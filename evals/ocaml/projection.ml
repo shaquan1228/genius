@@ -1,5 +1,7 @@
-let verifier ~(task : Ast.task) =
-  match task.criterion with Ast.Code { verifier } -> Some verifier | Ast.Answer _ -> None
+let verifier ~(task : Task.t) =
+  match task.criterion with
+  | Criterion.Code { verifier } -> Some verifier
+  | Criterion.Answer _ -> None
 
-let case = Ast.project_case
-let reference ~(task : Ast.task) = task.reference
+let case = Case.create
+let reference ~(task : Task.t) = task.reference

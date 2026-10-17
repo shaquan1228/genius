@@ -55,7 +55,7 @@ def declaration(raw: str) -> Task:
             record=raw, manifest={**info.model_dump(exclude={"attributes"}), **info.attributes}
         ),
         allowed_files=("solution.py",),
-        reference=Reference(
+        reference=Reference.create(
             edits=Fixture.create(
                 files=[
                     File.create(
@@ -63,7 +63,7 @@ def declaration(raw: str) -> Task:
                     )
                 ]
             ),
-            completion=Completion.Plain(text=""),
+            completion=Completion.create(plain=""),
         ),
     )
 

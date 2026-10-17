@@ -32,11 +32,11 @@ from evals.python.tests.support import (
 from evals.python.tests.verification import _agent_port, _grader_port, _runtime_port
 from evals.python.verification import VerificationResult
 from kernel import Verification
-from kernel._operations import grader as grader_ops
+from kernel import grader as grader_ops
 
 
 def complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
-    with patch("kernel._operations.grader.grade", wraps=grader_ops.grade) as grading:
+    with patch("kernel.grader.grade", wraps=grader_ops.grade) as grading:
         logs = _offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
     assert grading.call_count == 16
     expected = [
@@ -198,7 +198,7 @@ def extended_native_contract_drives_fresh_inspect_registration() -> None:
             "-c",
             """
 from unittest.mock import patch
-from kernel._operations import grader as grader_ops
+from kernel import grader as grader_ops
 with patch.object(grader_ops, "required_names", ["correctness", "scope", "extension"]):
     from evals.python import grading
     from evals.python.integrations.inspect import completeness, scoring

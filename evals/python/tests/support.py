@@ -92,12 +92,12 @@ def choice_case(*, case_id: str, a: int, b: int) -> Task:
         id=case_id,
         fixture=Fixture.create(files=[]),
         instruction=Instruction.create(skill="reasoning", prompt="Choose A or B with a reason"),
-        criterion=Criterion.Answer(
-            rubric=Rubric.create(
+        criterion=Criterion.create(
+            answer=Rubric.create(
                 expected=Response.create(
                     fields=[
                         ResponseField.create(
-                            name="choice", value=ResponseValue.String(value=choice)
+                            name="choice", value=ResponseValue.create(string=choice)
                         )
                     ]
                 ),
@@ -105,16 +105,16 @@ def choice_case(*, case_id: str, a: int, b: int) -> Task:
             )
         ),
         allowed_files=(),
-        reference=Reference(
+        reference=Reference.create(
             edits=Fixture.create(files=[]),
-            completion=Completion.Structured(
-                response=Response.create(
+            completion=Completion.create(
+                structured=Response.create(
                     fields=[
                         ResponseField.create(
-                            name="choice", value=ResponseValue.String(value=choice)
+                            name="choice", value=ResponseValue.create(string=choice)
                         ),
                         ResponseField.create(
-                            name="reason", value=ResponseValue.String(value="The cost is lower.")
+                            name="reason", value=ResponseValue.create(string="The cost is lower.")
                         ),
                     ]
                 )

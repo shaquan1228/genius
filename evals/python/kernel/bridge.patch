@@ -13,6 +13,15 @@
        let transl_implementation =
          if Config.flambda then
            Translmod.transl_implementation_flambda
+@@ -482,6 +485,7 @@
+ let rec wake_up_modules (p : Path.t) =
+   match Path.Map.find p !Ocaml_in_python_api.pending_module_table with
+-  | l -> ignore (Lazy.force l)
++  | l ->
++      if Option.is_none (Ocaml_in_python_api.Paths.find_opt p) then ignore (Lazy.force l)
+   | exception Not_found ->
+       match p with
+       | Pdot (p, _) -> wake_up_modules p
 @@ -549,10 +552,10 @@
        index
  

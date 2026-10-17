@@ -51,9 +51,9 @@ print(json.dumps({'marker': os.environ['GENIUS_VERIFIER_MARKER'],
 def _checks(**updates: object) -> Verifier:
     values = {
         "inputs": ("solution.py",),
-        "files": [Artifact.create(path="grader.py", content=Content.Inline(text=DRIVER))],
+        "files": [Artifact.create(path="grader.py", content=Content.create(inline=DRIVER))],
         "tools": [
-            Artifact.create(path="visible.py", content=Content.Inline(text="raise Exception()"))
+            Artifact.create(path="visible.py", content=Content.create(inline="raise Exception()"))
         ],
         "command": ("python3", "grader.py"),
         "stdin": "42",
@@ -95,7 +95,7 @@ def _runtime_port(grader: Environment) -> Runtime:
 
 async def _run(agent: Environment, *, runtime: Runtime) -> VerificationResult:
     with (
-        patch("kernel._operations.projection.verifier", return_value=_checks()),
+        patch("kernel.projection.verifier", return_value=_checks()),
         patch("evals.python.verification.token_hex", return_value="secret"),
     ):
         return assert_type(
@@ -113,7 +113,7 @@ def python_inputs_execute_in_fresh_workspace(source: str) -> None:
             await agent.exec(["mkdir", "workspace"])
             await agent.write_file("workspace/solution.py", source)
             await agent.write_file("workspace/grader.py", "raise Exception('tampered')")
-            with patch("kernel._operations.projection.verifier", return_value=_checks()):
+            with patch("kernel.projection.verifier", return_value=_checks()):
                 result = await verification.verify_case(
                     case_id="clear-task", agent=environment(agent), runtime=runtime(agent)
                 )
@@ -339,10 +339,10 @@ def invalid_executable_contract_is_rejected(updates: dict[str, object]) -> None:
                     fixture=Fixture.create(
                         files=[File.create(path="solution.py", contents="print(42)")]
                     ),
-                    criterion=Criterion.Code(verifier=_checks(**updates)),
+                    criterion=Criterion.create(code=_checks(**updates)),
                     allowed_files=("solution.py",),
-                    reference=Reference(
-                        edits=Fixture.create(files=[]), completion=Completion.Plain(text="")
+                    reference=Reference.create(
+                        edits=Fixture.create(files=[]), completion=Completion.create(plain="")
                     ),
                 ),
             )
@@ -392,7 +392,7 @@ def private_artifacts_are_excluded_from_public_files() -> None:
 def public_answer_only_verification_never_allocates() -> None:
     async def execute() -> None:
         ports = _runtime_port(_grader_port())
-        with patch("kernel._operations.projection.verifier", return_value=None):
+        with patch("kernel.projection.verifier", return_value=None):
             result = await verification.verify_case(
                 case_id="small-decision", agent=_agent_port(), runtime=ports
             )
@@ -447,8 +447,8 @@ def assessment_owns_immutable_scores_and_retains_evidence() -> None:
 def assessment_refuses_harness_error_before_grading() -> None:
     async def execute() -> None:
         with (
-            patch("kernel._operations.projection.verifier", return_value=_checks()),
-            patch("kernel._operations.grader.grade") as grading,
+            patch("kernel.projection.verifier", return_value=_checks()),
+            patch("kernel.grader.grade") as grading,
             pytest.raises(RuntimeError, match="Verification harness error"),
         ):
             await assessment.assess(
@@ -506,7 +506,7 @@ def reference_uses_default_local_adapter_and_real_ocaml() -> None:
 
 def answer_only_reference_never_allocates() -> None:
     ports = _runtime_port(_grader_port())
-    with patch("kernel._operations.projection.verifier", return_value=None):
+    with patch("kernel.projection.verifier", return_value=None):
         result = asyncio.run(
             verification.validate_reference(case_id="small-decision", runtime=ports)
         )
@@ -520,14 +520,14 @@ def reference_candidate_and_grader_are_both_cleaned() -> None:
         ports = _runtime_port(grader)
         cast(AsyncMock, ports.create).side_effect = [agent, grader]
         with (
-            patch("kernel._operations.projection.verifier", return_value=_checks()),
+            patch("kernel.projection.verifier", return_value=_checks()),
             patch(
-                "kernel._operations.projection.reference",
-                return_value=Reference(
+                "kernel.projection.reference",
+                return_value=Reference.create(
                     edits=Fixture.create(
                         files=[File.create(path="solution.py", contents="print(42)")]
                     ),
-                    completion=Completion.Plain(text=""),
+                    completion=Completion.create(plain=""),
                 ),
             ),
             patch("evals.python.verification.token_hex", return_value="secret"),
@@ -557,12 +557,12 @@ def reference_setup_failures_preserve_lifecycle(stage: str) -> None:
         error = asyncio.CancelledError() if stage == "cancel" else TimeoutError("setup")
         cast(AsyncMock, effects[stage]).side_effect = error
         with (
-            patch("kernel._operations.projection.verifier", return_value=_checks()),
+            patch("kernel.projection.verifier", return_value=_checks()),
             patch(
-                "kernel._operations.projection.reference",
-                return_value=Reference(
+                "kernel.projection.reference",
+                return_value=Reference.create(
                     edits=Fixture.create(files=[File.create(path="solution.py", contents="")]),
-                    completion=Completion.Plain(text=""),
+                    completion=Completion.create(plain=""),
                 ),
             ),
         ):
@@ -586,11 +586,11 @@ def reference_nonzero_mkdir_is_harness_error() -> None:
         agent = _agent_port()
         cast(AsyncMock, agent.execute).return_value = _output(code=1)
         with (
-            patch("kernel._operations.projection.verifier", return_value=_checks()),
+            patch("kernel.projection.verifier", return_value=_checks()),
             patch(
-                "kernel._operations.projection.reference",
-                return_value=Reference(
-                    edits=Fixture.create(files=[]), completion=Completion.Plain(text="")
+                "kernel.projection.reference",
+                return_value=Reference.create(
+                    edits=Fixture.create(files=[]), completion=Completion.create(plain="")
                 ),
             ),
         ):
@@ -613,7 +613,7 @@ def assessment_replaces_untrusted_verification_with_execution() -> None:
             verification=untrusted,
         )
         with (
-            patch("kernel._operations.projection.verifier", return_value=_checks()),
+            patch("kernel.projection.verifier", return_value=_checks()),
             patch("evals.python.verification.token_hex", return_value="secret"),
         ):
             result = await assessment.assess(
@@ -720,9 +720,9 @@ def unresolved_verifier_resource_is_a_harness_error() -> None:
     agent, grader = _agent_port(), _grader_port()
     ports = _runtime_port(grader)
     checks = _checks(
-        files=[Artifact.create(path="grader.py", content=Content.Resource(key="unresolved"))]
+        files=[Artifact.create(path="grader.py", content=Content.create(resource="unresolved"))]
     )
-    with patch("kernel._operations.projection.verifier", return_value=checks):
+    with patch("kernel.projection.verifier", return_value=checks):
         result = asyncio.run(
             verification.verify_case(case_id="clear-task", agent=agent, runtime=ports)
         )
@@ -793,9 +793,9 @@ def reference_pins_named_dataset_before_awaiting_allocation() -> None:
             allocated += 1
             current = _copy_case(
                 _declaration(code=False),
-                reference=Reference(
+                reference=Reference.create(
                     edits=Fixture.create(files=[File.create(path="main.py", contents="changed")]),
-                    completion=Completion.Plain(text="changed"),
+                    completion=Completion.create(plain="changed"),
                 ),
             )
             return agent if allocated == 1 else grader

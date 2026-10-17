@@ -1,9 +1,12 @@
 let spec ~inputs ~files ~tools ~command ~timeout_seconds =
-  Construct.verifier ~inputs ~files ~tools ~command ~stdin:"private" ~timeout_seconds
+  Verifier.create ~inputs ~files ~tools ~command ~stdin:"private" ~timeout_seconds
 
 let () =
   let artifact =
-    Result.get_ok (Construct.artifact ~path:"grader.py" ~content:(Ast.Inline { text = "trusted" }))
+    Result.get_ok
+      (Artifact.create
+         ~path:"grader.py"
+         ~content:(Result.get_ok (Content.create ~inline:"trusted" ())))
   in
   let checks =
     Result.get_ok
@@ -21,9 +24,13 @@ let () =
         Result.is_error (spec ~inputs ~files:[] ~tools:[] ~command:[ "run" ] ~timeout_seconds:5)))
     [ []; [ "a.py"; "a.py" ]; [ "../bad" ]; [ "/bad" ]; [ "bad/path" ]; [ "" ]; [ "-argument" ] ];
   assert (
-    Result.is_error (Construct.artifact ~path:"../bad" ~content:(Ast.Inline { text = "private" })));
+    Result.is_error
+      (Artifact.create
+         ~path:"../bad"
+         ~content:(Result.get_ok (Content.create ~inline:"private" ()))));
   let overlap =
-    Result.get_ok (Construct.artifact ~path:"a.py" ~content:(Ast.Inline { text = "private" }))
+    Result.get_ok
+      (Artifact.create ~path:"a.py" ~content:(Result.get_ok (Content.create ~inline:"private" ())))
   in
   assert (
     Result.is_error
@@ -32,5 +39,9 @@ let () =
   | Ok _ -> assert false
   | Error failure ->
       assert (
-        List.map (fun (issue : Ast.validation_issue) -> issue.code) failure.issues
-        = [ Ast.Invalid_path; Ast.Invalid_command; Ast.Nonpositive_timeout ])
+        List.map (fun (issue : Validation_issue.t) -> issue.code) failure.issues
+        = [
+            Validation_code.Invalid_path;
+            Validation_code.Invalid_command;
+            Validation_code.Nonpositive_timeout;
+          ])

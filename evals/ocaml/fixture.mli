@@ -1,4 +1,7 @@
-val empty : Ast.fixture
-val add : fixture:Ast.fixture -> file:Ast.file -> (Ast.fixture, Ast.validation_failure) result
-val overlay : base:Ast.fixture -> overrides:Ast.fixture -> Ast.fixture
-val files : fixture:Ast.fixture -> Ast.file list
+type t
+
+val create : files:File.t list -> (t, Validation_failure.t) result
+val empty : t
+val add : fixture:t -> file:File.t -> (t, Validation_failure.t) result
+val overlay : base:t -> overrides:t -> t
+val files : fixture:t -> File.t list

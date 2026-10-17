@@ -8,7 +8,7 @@ from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.scorer import CORRECT, INCORRECT
 
 from evals.python.evaluation import EvaluationSettings
-from kernel._operations import grader as grader_ops
+from kernel import grader as grader_ops
 
 Pair = tuple[str, str, int]
 

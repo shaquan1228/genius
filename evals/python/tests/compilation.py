@@ -81,12 +81,12 @@ def _independent_datasets() -> tuple[Dataset, Dataset]:
     checks = _copy_verifier(first.criterion.verifier, stdin="different private stdin")
     second = _copy_case(
         first,
-        criterion=Criterion.Code(verifier=checks),
-        reference=Reference(
+        criterion=Criterion.create(code=checks),
+        reference=Reference.create(
             edits=Fixture.create(
                 files=[File.create(path="main.py", contents="another fixed solution")]
             ),
-            completion=Completion.Plain(text="another answer"),
+            completion=Completion.create(plain="another answer"),
         ),
     )
     return datasets.compile_dataset(cases=(first,)), datasets.compile_dataset(cases=(second,))
@@ -150,9 +150,9 @@ def compiled_datasets_supply_independent_evaluator_resources(resource_name: str)
     assert isinstance(definition.criterion, Criterion.Code)
     checks = _copy_verifier(
         definition.criterion.verifier,
-        files=[Artifact.create(path="verify.py", content=Content.Resource(key=resource_name))],
+        files=[Artifact.create(path="verify.py", content=Content.create(resource=resource_name))],
     )
-    definition = _copy_case(definition, criterion=Criterion.Code(verifier=checks))
+    definition = _copy_case(definition, criterion=Criterion.create(code=checks))
     first = datasets.compile_dataset(
         cases=(definition,), resources={resource_name: "first checker"}
     )
@@ -215,7 +215,7 @@ def compiled_grading_preserves_canonical_inputs_and_results() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(),))
     verification = Verification.Passed()
     with patch(
-        "kernel._operations.grader.grade", return_value=[("correctness", True), ("scope", True)]
+        "kernel.grader.grade", return_value=[("correctness", True), ("scope", True)]
     ) as kernel_grade:
         assert _grade(dataset=dataset, verification=verification) == dict(kernel_grade.return_value)
     assert kernel_grade.call_args.kwargs["task"] is dataset.records["external"]
@@ -232,7 +232,7 @@ def compiled_dataset_is_immutable() -> None:
         cast(dict[str, Case], dataset.cases)["external"] = dataset.cases["external"]
     with pytest.raises(TypeError):
         dataset.cases["external"].files[0] = Artifact.create(  # type: ignore[index]
-            path="main.py", content=Content.Inline(text="changed")
+            path="main.py", content=Content.create(inline="changed")
         )
     with pytest.raises(FrozenInstanceError):
         dataset.sources.modules = ()  # type: ignore[misc]
@@ -363,9 +363,9 @@ def direct_dataset_construction_resolves_resources() -> None:
     assert isinstance(definition.criterion, Criterion.Code)
     checks = _copy_verifier(
         definition.criterion.verifier,
-        files=[Artifact.create(path="verify.py", content=Content.Resource(key="checker"))],
+        files=[Artifact.create(path="verify.py", content=Content.create(resource="checker"))],
     )
-    definition = _copy_case(definition, criterion=Criterion.Code(verifier=checks))
+    definition = _copy_case(definition, criterion=Criterion.create(code=checks))
     with pytest.raises(DomainValidationError, match="checker"):
         Dataset(sources=datasets.kernel_sources(), records={definition.id: definition})
     resources = {"checker": "private checker"}

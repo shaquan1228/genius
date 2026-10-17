@@ -24,9 +24,9 @@ from kernel import (
     Rubric,
     Task,
     Verification,
+    sources,
 )
-from kernel._operations import grader as grader_ops
-from kernel._operations import sources
+from kernel import grader as grader_ops
 
 
 def commands_and_queries_use_in_process_kernel_calls() -> None:
@@ -62,14 +62,6 @@ def kernel_grades_response_and_scope() -> None:
     assert dict(scores) == {"correctness": True, "scope": True}
     with pytest.raises(TypeError):
         scores["scope"] = False  # type: ignore[index]
-
-
-def unknown_kernel_score_names_are_rejected() -> None:
-    with (
-        patch.object(grader_ops, "grade", return_value=[]),
-        pytest.raises(ValueError, match="score names"),
-    ):
-        _judgment(response="{}")
 
 
 def unknown_case_is_a_harness_error() -> None:
@@ -163,8 +155,8 @@ def reference_channels_export_independently_and_escape() -> None:
     safe = True
     expected_fields = Response.create(
         fields=[
-            ResponseField.create(name="state", value=ResponseValue.String(value=state)),
-            ResponseField.create(name="safe", value=ResponseValue.Bool(value=safe)),
+            ResponseField.create(name="state", value=ResponseValue.create(string=state)),
+            ResponseField.create(name="safe", value=ResponseValue.create(bool=safe)),
         ]
     )
     dataset = datasets.compile_dataset(
@@ -173,13 +165,13 @@ def reference_channels_export_independently_and_escape() -> None:
                 id="reference",
                 fixture=Fixture.create(files=[]),
                 instruction=Instruction.create(skill="reasoning", prompt="fields"),
-                criterion=Criterion.Answer(
-                    rubric=Rubric.create(expected=expected_fields, text_rule=None)
+                criterion=Criterion.create(
+                    answer=Rubric.create(expected=expected_fields, text_rule=None)
                 ),
                 allowed_files=("result.txt",),
-                reference=Reference(
+                reference=Reference.create(
                     edits=Fixture.create(files=[File.create(path="result.txt", contents="result")]),
-                    completion=Completion.Structured(response=expected_fields),
+                    completion=Completion.create(structured=expected_fields),
                 ),
             ),
         )
@@ -208,32 +200,3 @@ def reference_channels_export_independently_and_escape() -> None:
 )
 def nonstandard_json_is_an_incorrect_candidate(response: str) -> None:
     assert not _judgment(response=response)
-
-
-@pytest.mark.parametrize(
-    "pairs",
-    [
-        [("correctness", True)],
-        [("correctness", True), ("scope", True), ("scope", False)],
-        [("correctness", 1), ("scope", True)],
-        [("correctness", True), ("scope", True), ("extra", "yes")],
-    ],
-)
-def malformed_native_scores_are_rejected(pairs: list[tuple[str, object]]) -> None:
-    with (
-        patch.object(grader_ops, "grade", return_value=pairs),
-        pytest.raises(ValueError, match="score"),
-    ):
-        _judgment(response="{}")
-
-
-def required_scores_follow_native_declaration() -> None:
-    with (
-        patch.object(
-            grader_ops,
-            "required_names",
-            ["correctness", "scope", "extension"],
-        ),
-        pytest.raises(ValueError, match="score names"),
-    ):
-        _judgment(response="{}")

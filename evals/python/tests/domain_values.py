@@ -1,7 +1,7 @@
 """Validated domain values and typed failures cross the native bridge directly."""
 
 from collections.abc import Callable
-from inspect import Parameter, signature
+from inspect import Parameter, signature, unwrap
 from typing import cast
 from unittest.mock import patch
 
@@ -35,7 +35,8 @@ def public_factories_name_their_collection_arguments() -> None:
 def checked_factories_preserve_native_identity() -> None:
     task = choice_case(case_id="validated", a=1, b=2)
     assert isinstance(task, Task)
-    assert Task is native.task
+    assert Task is native.Task.t
+    assert unwrap(Task.create) is native.Task.create
     with pytest.raises((AttributeError, TypeError)):
         task.id = ""  # type: ignore[misc]
 
@@ -43,7 +44,7 @@ def checked_factories_preserve_native_identity() -> None:
 def raw_native_construction_cannot_bypass_validation() -> None:
     task = choice_case(case_id="validated", a=1, b=2)
     with pytest.raises((RuntimeError, TypeError)):
-        native.task(
+        native.Task.t(
             id="",
             fixture=task.fixture,
             instruction=task.instruction,
@@ -71,7 +72,7 @@ def validation_errors_retain_native_issues() -> None:
         ValidationCode.InvalidCommand,
         ValidationCode.NonpositiveTimeout,
     } <= codes
-    assert all(isinstance(issue, native.validation_issue) for issue in issues)
+    assert all(isinstance(issue, native.Validation_issue.t) for issue in issues)
 
 
 def harness_failures_have_a_distinct_error_contract() -> None:
@@ -110,7 +111,7 @@ def implicit_dictionary_conversion_cannot_bypass_factories(consumer: str) -> Non
         "grader": lambda: native.Grader.grade(
             task=fields,
             response=None,
-            outcome=Outcome(changed_files=(), verification=Verification.Unchecked()),
+            outcome=Outcome.create(changed_files=(), verification=Verification.Unchecked()),
         ),
         "task": lambda: create(
             **{**fields, "instruction": {"skill": "reasoning", "prompt": "raw"}}
@@ -118,8 +119,8 @@ def implicit_dictionary_conversion_cannot_bypass_factories(consumer: str) -> Non
         "criterion": lambda: create(
             **{
                 **fields,
-                "criterion": cast(Callable[..., object], Criterion.Code)(
-                    verifier={
+                "criterion": cast(Callable[..., object], Criterion.create)(
+                    code={
                         "inputs": ("solution.py",),
                         "files": (),
                         "tools": (),
@@ -130,7 +131,7 @@ def implicit_dictionary_conversion_cannot_bypass_factories(consumer: str) -> Non
                 ),
             }
         ),
-        "response": lambda: native.Construct.rubric(expected={"fields": []}, text_rule=None),
+        "response": lambda: native.Rubric.create(expected={"fields": []}, text_rule=None),
     }
     with pytest.raises(TypeError):
         operations[consumer]()
@@ -192,12 +193,12 @@ def variant_calls_reject_missing_or_unknown_names(fields: dict[str, object]) -> 
     ("constructor", "fields"),
     [
         (Fixture.create, {"files": [("main.py", "text")]}),
-        (Response.create, {"fields": [("choice", domain.ResponseValue.String(value="B"))]}),
+        (Response.create, {"fields": [("choice", domain.ResponseValue.create(string="B"))]}),
         (
             Verifier.create,
             {
                 "inputs": ["main.py"],
-                "files": [("verify.py", domain.Content.Inline(text="check"))],
+                "files": [("verify.py", domain.Content.create(inline="check"))],
                 "tools": [],
                 "command": ["python3", "verify.py"],
                 "stdin": "",
@@ -210,4 +211,42 @@ def collections_require_named_domain_entries(
     constructor: Callable[..., object], *, fields: dict[str, object]
 ) -> None:
     with pytest.raises(TypeError):
+        constructor(**fields)
+
+
+@pytest.mark.parametrize("owner", ["Content", "Completion", "Criterion", "ResponseValue"])
+def alternative_factories_require_one_named_choice(owner: str) -> None:
+    with pytest.raises(ValidationError, match="exactly one") as caught:
+        getattr(domain, owner).create()
+    assert isinstance(caught.value.issues[0].code, ValidationCode.InvalidAlternative)
+
+
+@pytest.mark.parametrize(
+    ("owner", "fields"),
+    [
+        ("Content", {"inline": "", "resource": "checker"}),
+        ("Completion", {"plain": "", "structured": Response.create(fields=[])}),
+        ("ResponseValue", {"string": "", "bool": False}),
+    ],
+)
+def alternative_factories_reject_multiple_named_choices(
+    owner: str, *, fields: dict[str, object]
+) -> None:
+    with pytest.raises(ValidationError, match="exactly one"):
+        getattr(domain, owner).create(**fields)
+
+
+@pytest.mark.parametrize(
+    ("constructor", "fields"),
+    [
+        (domain.Content.Inline, {"text": "unchecked"}),
+        (domain.Content.Resource, {"key": "unchecked"}),
+        (domain.Completion.Plain, {"text": "unchecked"}),
+        (domain.ResponseValue.String, {"value": "unchecked"}),
+    ],
+)
+def private_alternatives_require_the_owner_factory(
+    constructor: Callable[..., object], *, fields: dict[str, object]
+) -> None:
+    with pytest.raises(RuntimeError, match="private type"):
         constructor(**fields)

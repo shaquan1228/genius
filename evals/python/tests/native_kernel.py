@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from operator import itemgetter
+from types import ModuleType
 from typing import cast
 
 import pytest
@@ -31,21 +32,21 @@ from kernel import (
 from kernel import (
     ValidationError as DomainValidationError,
 )
+from kernel import experiment as experiment_ops
+from kernel import grader as grader_ops
+from kernel import projection as projection_ops
 from kernel._bridge import native as native_kernel
-from kernel._operations import experiment as experiment_ops
-from kernel._operations import grader as grader_ops
-from kernel._operations import projection as projection_ops
 
 
 def _answer() -> tuple[Task, Response]:
     expected = Response.create(
-        fields=[ResponseField.create(name="choice", value=ResponseValue.String(value="B"))]
+        fields=[ResponseField.create(name="choice", value=ResponseValue.create(string="B"))]
     )
     fixture = Fixture.create(files=[File.create(path="context.txt", contents="Public context")])
-    reference = Reference(
-        edits=Fixture.create(files=[]), completion=Completion.Structured(response=expected)
+    reference = Reference.create(
+        edits=Fixture.create(files=[]), completion=Completion.create(structured=expected)
     )
-    criterion = Criterion.Answer(rubric=Rubric.create(expected=expected, text_rule=None))
+    criterion = Criterion.create(answer=Rubric.create(expected=expected, text_rule=None))
     instruction = Instruction.create(skill="reasoning", prompt="Choose B")
     case = Task.create(
         id="native-answer",
@@ -79,7 +80,7 @@ def check_answer_projection() -> None:
 def check_answer_grading() -> None:
     assert experiment_ops.resolve(epochs=1).epochs == 1
     case, expected = _answer()
-    outcome = Outcome(changed_files=[], verification=Verification.Unchecked())
+    outcome = Outcome.create(changed_files=[], verification=Verification.Unchecked())
     scores = grader_ops.grade(task=case, response=expected, outcome=outcome)
     assert tuple(map(itemgetter(0), scores)) == tuple(grader_ops.required_names)
     assert dict(scores) == {"correctness": True, "scope": True}
@@ -92,7 +93,7 @@ def check_answer_grading() -> None:
 def check_code(status: Verification.Value, *, correctness: bool) -> None:
     checks = Verifier.create(
         inputs=["solution.py"],
-        files=[Artifact.create(path="verify.py", content=Content.Inline(text="private check"))],
+        files=[Artifact.create(path="verify.py", content=Content.create(inline="private check"))],
         tools=[],
         command=["python3", "verify.py"],
         stdin="private input",
@@ -102,23 +103,23 @@ def check_code(status: Verification.Value, *, correctness: bool) -> None:
         id="native-code",
         fixture=Fixture.create(files=[File.create(path="solution.py", contents="pass")]),
         instruction=Instruction.create(skill="reasoning", prompt="Fix solution.py"),
-        criterion=Criterion.Code(verifier=checks),
+        criterion=Criterion.create(code=checks),
         allowed_files=["solution.py"],
-        reference=Reference(
+        reference=Reference.create(
             edits=Fixture.create(files=[File.create(path="solution.py", contents="fixed")]),
-            completion=Completion.Plain(text=""),
+            completion=Completion.create(plain=""),
         ),
     )
     projected = projection_ops.verifier(task=case)
     assert projected is not None
     public_files = [artifact.path for artifact in projection_ops.case(task=case).files]
-    outcome = Outcome(changed_files=["workspace/solution.py"], verification=status)
+    outcome = Outcome.create(changed_files=["workspace/solution.py"], verification=status)
     scores = grader_ops.grade(task=case, response=None, outcome=outcome)
     assert (tuple(map(itemgetter(0), scores)), dict(scores)) == (
         tuple(grader_ops.required_names),
         {"correctness": correctness, "scope": True},
     )
-    outside_scope = Outcome(
+    outside_scope = Outcome.create(
         changed_files=["workspace/other.py"], verification=Verification.Passed()
     )
     assert (
@@ -142,31 +143,34 @@ def check_rejections() -> None:
 
 @pytest.mark.parametrize(
     ("public_name", "native_name"),
-    [("Case", "case"), ("Task", "task"), ("Rubric", "rubric")],
+    [("Case", "Case"), ("Task", "Task"), ("Rubric", "Rubric")],
 )
 def explicit_types_preserve_native_identity(public_name: str, *, native_name: str) -> None:
-    assert getattr(kernel_types, public_name) is getattr(native_kernel, native_name)
+    assert getattr(kernel_types, public_name) is getattr(native_kernel, native_name).t
 
 
 @pytest.mark.parametrize(
     ("owner", "alternative", "native_name"),
     [
-        ("Criterion", "Answer", "Answer"),
-        ("Content", "Inline", "Inline"),
-        ("Completion", "Plain", "Plain"),
-        ("ResponseValue", "String", "String"),
-        ("Verification", "HarnessError", "Harness_error"),
+        ("Criterion", "Answer", "Criterion.Answer"),
+        ("Content", "Inline", "Content.Inline"),
+        ("Completion", "Plain", "Completion.Plain"),
+        ("ResponseValue", "String", "Response_value.String"),
+        ("Verification", "HarnessError", "Verification.Harness_error"),
     ],
 )
 def owned_alternatives_preserve_native_identity(
     owner: str, *, alternative: str, native_name: str
 ) -> None:
-    assert getattr(getattr(kernel_types, owner), alternative) is getattr(native_kernel, native_name)
+    native_owner, native_alternative = native_name.split(".")
+    assert getattr(getattr(kernel_types, owner), alternative) is getattr(
+        getattr(native_kernel, native_owner), native_alternative
+    )
 
 
-def public_kernel_exports_only_domain_types() -> None:
+def public_kernel_exports_native_types_and_operations() -> None:
     assert all(
-        name[0].isupper() and isinstance(getattr(kernel_types, name), type)
+        isinstance(getattr(kernel_types, name), (type, ModuleType)) or name == "sources"
         for name in vars(kernel_types)["__all__"]
     )
     assert (
@@ -174,7 +178,6 @@ def public_kernel_exports_only_domain_types() -> None:
             "Ast",
             "Grader",
             "Projection",
-            "sources",
             "Answer",
             "Code",
             "Inline",

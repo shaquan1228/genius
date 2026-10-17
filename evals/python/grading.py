@@ -2,7 +2,6 @@
 
 import json
 from collections.abc import Mapping
-from operator import itemgetter
 from types import MappingProxyType
 
 from pydantic import validate_call
@@ -11,7 +10,7 @@ from evals.python import datasets
 from evals.python.datasets import Selection
 from evals.python.schema import FROZEN
 from kernel import Outcome, Response, ResponseField, ResponseValue, Task, Verification
-from kernel._operations import grader as grader_ops
+from kernel import grader as grader_ops
 
 __all__ = ["Scores", "score_case"]
 
@@ -21,9 +20,9 @@ UNCHECKED = Verification.Unchecked()
 
 def _scalar(value: object) -> ResponseValue.Value:
     if isinstance(value, bool):
-        return ResponseValue.Bool(value=value)
+        return ResponseValue.create(bool=value)
     if isinstance(value, str):
-        return ResponseValue.String(value=value)
+        return ResponseValue.create(string=value)
     raise ValueError("Response fields must be strings or booleans")
 
 
@@ -53,15 +52,8 @@ def score(
     pairs = grader_ops.grade(
         task=case,
         response=_candidate(response),
-        outcome=Outcome(changed_files=changed_files, verification=verification),
+        outcome=Outcome.create(changed_files=changed_files, verification=verification),
     )
-    names = tuple(map(itemgetter(0), pairs))
-    if len(set(names)) != len(names):
-        raise ValueError("Kernel returned duplicate score names")
-    if not all(isinstance(value, bool) for _, value in pairs):
-        raise ValueError("Kernel returned non-boolean scores")
-    if not set(grader_ops.required_names) <= set(names):
-        raise ValueError("Kernel omitted required score names")
     return MappingProxyType(dict(pairs))
 
 

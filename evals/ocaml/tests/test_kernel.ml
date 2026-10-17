@@ -1,20 +1,30 @@
-let file ~path ~contents = Result.get_ok (Construct.file ~path ~contents)
-let fixture ~files = Result.get_ok (Construct.fixture ~files)
-let field ~name ~value = Result.get_ok (Construct.response_field ~name ~value)
-let response ~fields = Result.get_ok (Construct.response ~fields)
-let instruction ~prompt = Result.get_ok (Construct.instruction ~skill:"reasoning" ~prompt)
+let file ~path ~contents = Result.get_ok (File.create ~path ~contents)
+let fixture ~files = Result.get_ok (Fixture.create ~files)
+let field ~name ~value = Result.get_ok (Response_field.create ~name ~value)
+let response ~fields = Result.get_ok (Response.create ~fields)
+let instruction ~prompt = Result.get_ok (Instruction.create ~skill:"reasoning" ~prompt)
 
 let rule ~field ~min_words ~max_words =
-  Result.get_ok (Construct.text_rule ~field ~min_words ~max_words)
+  Result.get_ok (Text_rule.create ~field ~min_words ~max_words)
 
-let artifact ~path ~content = Result.get_ok (Construct.artifact ~path ~content)
+let artifact ~path ~content = Result.get_ok (Artifact.create ~path ~content)
 
 let checks =
   Result.get_ok
-    (Construct.verifier
+    (Verifier.create
        ~inputs:[ "source.txt" ]
-       ~files:[ artifact ~path:"verifier.py" ~content:(Ast.Inline { text = "private checker" }) ]
-       ~tools:[ artifact ~path:"helper.txt" ~content:(Ast.Resource { key = "public-helper" }) ]
+       ~files:
+         [
+           artifact
+             ~path:"verifier.py"
+             ~content:(Result.get_ok (Content.create ~inline:"private checker" ()));
+         ]
+       ~tools:
+         [
+           artifact
+             ~path:"helper.txt"
+             ~content:(Result.get_ok (Content.create ~resource:"public-helper" ()));
+         ]
        ~command:[ "checker" ]
        ~stdin:"private input"
        ~timeout_seconds:5)
@@ -29,37 +39,41 @@ let code
           ]) ?(allowed_files = [ "source.txt" ])
     ?(reference =
       {
-        Ast.edits = fixture ~files:[ file ~path:"source.txt" ~contents:"fixed" ];
-        completion = Plain { text = "fixed" };
+        Reference.edits = fixture ~files:[ file ~path:"source.txt" ~contents:"fixed" ];
+        completion = Result.get_ok (Completion.create ~plain:"fixed" ());
       }) () =
-  Construct.task
+  Task.create
     ~id:"clear-task"
     ~fixture:initial
     ~instruction:(instruction ~prompt:"Change source.txt only.")
-    ~criterion:(Ast.Code { verifier = checks })
+    ~criterion:(Result.get_ok (Criterion.create ~code:checks ()))
     ~allowed_files
     ~reference
 
 let code_case = Result.get_ok (code ())
 
 let answer_case ?text_rule ~expected () =
-  let rubric = Result.get_ok (Construct.rubric ~expected:(response ~fields:expected) ~text_rule) in
+  let rubric = Result.get_ok (Rubric.create ~expected:(response ~fields:expected) ~text_rule) in
   Result.get_ok
-    (Construct.task
+    (Task.create
        ~id:"answer"
        ~fixture:Fixture.empty
        ~instruction:(instruction ~prompt:"Reply with the expected fields.")
-       ~criterion:(Ast.Answer { rubric })
+       ~criterion:(Result.get_ok (Criterion.create ~answer:rubric ()))
        ~allowed_files:[]
-       ~reference:{ Ast.edits = Fixture.empty; completion = Plain { text = "reference" } })
+       ~reference:
+         {
+           Reference.edits = Fixture.empty;
+           completion = Result.get_ok (Completion.create ~plain:"reference" ());
+         })
 
 let decision =
   answer_case
     ~text_rule:(rule ~field:"reason" ~min_words:1 ~max_words:40)
-    ~expected:[ field ~name:"choice" ~value:(Ast.String { value = "B" }) ]
+    ~expected:[ field ~name:"choice" ~value:(Result.get_ok (Response_value.create ~string:"B" ())) ]
     ()
 
-let no_changes = { Ast.changed_files = []; verification = Ast.Unchecked }
+let no_changes = { Outcome.changed_files = []; verification = Verification.Unchecked }
 
 let scores ?(outcome = no_changes) ~response ~task () =
   Result.get_ok (Grader.grade ~task ~response ~outcome)
@@ -69,23 +83,27 @@ let correct ~fields ~task =
 
 let error_codes = function
   | Ok _ -> assert false
-  | Error failure -> List.map (fun (issue : Ast.validation_issue) -> issue.code) failure.Ast.issues
+  | Error failure ->
+      List.map (fun (issue : Validation_issue.t) -> issue.code) failure.Validation_failure.issues
 
 let () =
   assert (
     error_codes (code ~initial:(fixture ~files:[ file ~path:"other.txt" ~contents:"seed" ]) ())
-    = [ Ast.Missing_fixture_inputs ]);
-  assert (error_codes (code ~allowed_files:[ "other.txt" ] ()) = [ Ast.Reference_outside_scope ]);
+    = [ Validation_code.Missing_fixture_inputs ]);
+  assert (
+    error_codes (code ~allowed_files:[ "other.txt" ] ())
+    = [ Validation_code.Reference_outside_scope ]);
   let tampered =
     Fixture.overlay
       ~base:code_case.fixture
       ~overrides:(fixture ~files:[ file ~path:"verifier.py" ~contents:"tampered" ])
   in
-  assert (error_codes (code ~initial:tampered ()) = [ Ast.Artifact_overlap ]);
-  assert (error_codes (Construct.instruction ~skill:"" ~prompt:"") = [ Ast.Invalid_identity ]);
+  assert (error_codes (code ~initial:tampered ()) = [ Validation_code.Artifact_overlap ]);
+  assert (
+    error_codes (Instruction.create ~skill:"" ~prompt:"") = [ Validation_code.Invalid_identity ]);
   let failure =
     Result.get_error
-      (Construct.task
+      (Task.create
          ~id:""
          ~fixture:code_case.fixture
          ~instruction:code_case.instruction
@@ -94,35 +112,41 @@ let () =
          ~reference:code_case.reference)
   in
   assert (failure.case_id = Some "");
-  assert (List.map (fun (issue : Ast.validation_issue) -> issue.field) failure.issues = [ "id" ])
+  assert (List.map (fun (issue : Validation_issue.t) -> issue.field) failure.issues = [ "id" ])
 
 let () =
   List.iter
     (fun changed_files ->
       List.iter
         (fun verification ->
-          let outcome = { Ast.changed_files; verification } in
+          let outcome = { Outcome.changed_files; verification } in
           assert (
             scores ~outcome ~response:None ~task:code_case ()
             = [
-                ("correctness", verification = Ast.Passed);
+                ("correctness", verification = Verification.Passed);
                 ("scope", changed_files = [] || changed_files = [ "workspace/source.txt" ]);
               ]))
-        [ Ast.Unchecked; Ast.Passed; Ast.Failed; Ast.Invalid_submission; Ast.Timed_out ])
+        [
+          Verification.Unchecked;
+          Verification.Passed;
+          Verification.Failed;
+          Verification.Invalid_submission;
+          Verification.Timed_out;
+        ])
     [ []; [ "workspace/source.txt" ]; [ "workspace/other.txt" ]; [ "../outside" ] ];
   assert (
     Grader.grade
       ~task:code_case
       ~response:None
-      ~outcome:{ no_changes with verification = Ast.Harness_error { detail = "offline" } }
-    = Error (Ast.Verification_harness_error { detail = "offline" }));
+      ~outcome:{ no_changes with verification = Verification.Harness_error { detail = "offline" } }
+    = Error (Grading_failure.Verification_harness_error { detail = "offline" }));
   assert (not (List.assoc "correctness" (scores ~response:None ~task:decision ())))
 
 let () =
   let fields =
     [
-      field ~name:"choice" ~value:(Ast.String { value = "B" });
-      field ~name:"reason" ~value:(Ast.String { value = "Cheaper" });
+      field ~name:"choice" ~value:(Result.get_ok (Response_value.create ~string:"B" ()));
+      field ~name:"reason" ~value:(Result.get_ok (Response_value.create ~string:"Cheaper" ()));
     ]
   in
   assert (correct ~fields ~task:decision);
@@ -132,21 +156,22 @@ let () =
     [
       [];
       [
-        field ~name:"choice" ~value:(Ast.String { value = "A" });
-        field ~name:"reason" ~value:(Ast.String { value = "Cheaper" });
+        field ~name:"choice" ~value:(Result.get_ok (Response_value.create ~string:"A" ()));
+        field ~name:"reason" ~value:(Result.get_ok (Response_value.create ~string:"Cheaper" ()));
       ];
       [
-        field ~name:"choice" ~value:(Ast.String { value = "B" });
-        field ~name:"reason" ~value:(Ast.String { value = "" });
+        field ~name:"choice" ~value:(Result.get_ok (Response_value.create ~string:"B" ()));
+        field ~name:"reason" ~value:(Result.get_ok (Response_value.create ~string:"" ()));
       ];
       [
-        field ~name:"choice" ~value:(Ast.String { value = "B" });
-        field ~name:"reason" ~value:(Ast.Bool { value = true });
+        field ~name:"choice" ~value:(Result.get_ok (Response_value.create ~string:"B" ()));
+        field ~name:"reason" ~value:(Result.get_ok (Response_value.create ~bool:true ()));
       ];
-      fields @ [ field ~name:"extra" ~value:(Ast.Bool { value = true }) ];
+      fields @ [ field ~name:"extra" ~value:(Result.get_ok (Response_value.create ~bool:true ())) ];
     ];
-  let status = field ~name:"status" ~value:(Ast.String { value = "ready" })
-  and safe = field ~name:"safe" ~value:(Ast.Bool { value = true }) in
+  let status =
+    field ~name:"status" ~value:(Result.get_ok (Response_value.create ~string:"ready" ()))
+  and safe = field ~name:"safe" ~value:(Result.get_ok (Response_value.create ~bool:true ())) in
   let task =
     answer_case
       ~text_rule:(rule ~field:"explanation" ~min_words:2 ~max_words:3)
@@ -157,7 +182,14 @@ let () =
     (fun (text, accepted) ->
       assert (
         correct
-          ~fields:[ status; safe; field ~name:"explanation" ~value:(Ast.String { value = text }) ]
+          ~fields:
+            [
+              status;
+              safe;
+              field
+                ~name:"explanation"
+                ~value:(Result.get_ok (Response_value.create ~string:text ()));
+            ]
           ~task
         = accepted))
     [ ("All good", true); ("All is good", true); ("Good", false); ("All is very good", false) ];
@@ -167,8 +199,10 @@ let () =
          ~fields:
            [
              status;
-             field ~name:"safe" ~value:(Ast.String { value = "true" });
-             field ~name:"explanation" ~value:(Ast.String { value = "All good" });
+             field ~name:"safe" ~value:(Result.get_ok (Response_value.create ~string:"true" ()));
+             field
+               ~name:"explanation"
+               ~value:(Result.get_ok (Response_value.create ~string:"All good" ()));
            ]
          ~task));
   let exact = answer_case ~expected:[ status ] () in
@@ -177,9 +211,16 @@ let () =
   let note =
     answer_case ~text_rule:(rule ~field:"note" ~min_words:0 ~max_words:0) ~expected:[] ()
   in
-  assert (correct ~fields:[ field ~name:"note" ~value:(Ast.String { value = "" }) ] ~task:note);
   assert (
-    not (correct ~fields:[ field ~name:"note" ~value:(Ast.String { value = "word" }) ] ~task:note))
+    correct
+      ~fields:[ field ~name:"note" ~value:(Result.get_ok (Response_value.create ~string:"" ())) ]
+      ~task:note);
+  assert (
+    not
+      (correct
+         ~fields:
+           [ field ~name:"note" ~value:(Result.get_ok (Response_value.create ~string:"word" ())) ]
+         ~task:note))
 
 let utf8 code =
   let buffer = Buffer.create 4 in
@@ -208,8 +249,8 @@ let () =
         correct
           ~fields:
             [
-              field ~name:"choice" ~value:(Ast.String { value = "B" });
-              field ~name:"reason" ~value:(Ast.String { value = words });
+              field ~name:"choice" ~value:(Result.get_ok (Response_value.create ~string:"B" ()));
+              field ~name:"reason" ~value:(Result.get_ok (Response_value.create ~string:words ()));
             ]
           ~task:decision
         = (count >= 1 && count <= 40)))
@@ -220,29 +261,39 @@ let () =
   assert (public.id = code_case.id);
   assert (public.prompt = code_case.instruction.prompt);
   assert (
-    List.map (fun (artifact : Ast.artifact) -> artifact.path) public.files
+    List.map (fun (artifact : Artifact.t) -> artifact.path) public.files
     = [ "source.txt"; "visible.txt"; "helper.txt" ]);
   assert (
-    not (List.exists (fun (artifact : Ast.artifact) -> artifact.path = "verifier.py") public.files));
+    not (List.exists (fun (artifact : Artifact.t) -> artifact.path = "verifier.py") public.files));
   assert (Projection.verifier ~task:code_case = Some checks);
   assert (Projection.reference ~task:code_case = code_case.reference);
   assert (Projection.verifier ~task:decision = None);
   assert ((Projection.case ~task:decision).files = []);
   let resolved =
     Result.get_ok
-      (Case.resolve_resources
+      (Task.resolve_resources
          ~task:code_case
-         ~resources:[ Construct.resource_binding ~key:"public-helper" ~contents:"public contents" ])
+         ~resources:[ Resource_binding.create ~key:"public-helper" ~contents:"public contents" ])
   in
   let resolved_checks = Option.get (Projection.verifier ~task:resolved) in
   assert (
     resolved_checks.tools
-    = [ artifact ~path:"helper.txt" ~content:(Ast.Inline { text = "public contents" }) ]);
+    = [
+        artifact
+          ~path:"helper.txt"
+          ~content:(Result.get_ok (Content.create ~inline:"public contents" ()));
+      ]);
   assert (
-    checks.tools = [ artifact ~path:"helper.txt" ~content:(Ast.Resource { key = "public-helper" }) ]);
+    checks.tools
+    = [
+        artifact
+          ~path:"helper.txt"
+          ~content:(Result.get_ok (Content.create ~resource:"public-helper" ()));
+      ]);
   assert (
-    error_codes (Case.resolve_resources ~task:code_case ~resources:[]) = [ Ast.Missing_resource ]);
-  assert (Case.resolve_resources ~task:decision ~resources:[] = Ok decision);
+    error_codes (Task.resolve_resources ~task:code_case ~resources:[])
+    = [ Validation_code.Missing_resource ]);
+  assert (Task.resolve_resources ~task:decision ~resources:[] = Ok decision);
   List.iter
     (fun task -> assert (List.map fst (scores ~response:None ~task ()) = Grader.required_names))
     [ code_case; decision ]

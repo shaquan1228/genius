@@ -48,7 +48,7 @@ from kernel import (
 from kernel import (
     ValidationError as DomainValidationError,
 )
-from kernel._operations import fixture as fixture_ops
+from kernel import fixture as fixture_ops
 
 
 def public_projection_uses_native_types() -> None:
@@ -213,7 +213,7 @@ def cases_are_immutable() -> None:
     with pytest.raises((AttributeError, TypeError)):
         case.id = "changed"  # type: ignore[misc]
     with pytest.raises(TypeError):
-        case.files[0] = Artifact.create(path="receipt.py", content=Content.Inline(text="changed"))  # type: ignore[index]
+        case.files[0] = Artifact.create(path="receipt.py", content=Content.create(inline="changed"))  # type: ignore[index]
     with pytest.raises(TypeError):
         fixture_ops.files(fixture=reference(case.id).edits)[0] = File.create(  # type: ignore[index]
             path="receipt.py", contents="changed"
@@ -245,10 +245,10 @@ def generic_python_case_exports_without_language_restriction() -> None:
         id="python-case",
         fixture=Fixture.create(files=[File.create(path="solution.py", contents="print(42)")]),
         instruction=Instruction.create(skill="reasoning", prompt="Return 42"),
-        criterion=Criterion.Code(
-            verifier=Verifier.create(
+        criterion=Criterion.create(
+            code=Verifier.create(
                 inputs=("solution.py",),
-                files=[Artifact.create(path="grader.py", content=Content.Inline(text="trusted"))],
+                files=[Artifact.create(path="grader.py", content=Content.create(inline="trusted"))],
                 tools=[],
                 command=("python3", "grader.py"),
                 stdin="private",
@@ -256,8 +256,8 @@ def generic_python_case_exports_without_language_restriction() -> None:
             )
         ),
         allowed_files=("solution.py",),
-        reference=Reference(
-            edits=Fixture.create(files=[]), completion=Completion.Plain(text="done")
+        reference=Reference.create(
+            edits=Fixture.create(files=[]), completion=Completion.create(plain="done")
         ),
     )
     dataset = datasets.compile_dataset(cases=(definition,))
@@ -277,7 +277,7 @@ def experiment_configuration_reaches_tasks_and_profiles() -> None:
     before = evaluation.resolve_settings()
     spec = Experiment.create(
         profiles=[
-            Profile(
+            Profile.create(
                 name=item.name,
                 preamble=item.preamble.replace("Apply that", "Follow that"),
                 instructions=item.instructions,

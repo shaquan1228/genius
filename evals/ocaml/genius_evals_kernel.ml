@@ -1,10 +1,29 @@
-include Ast
-(** Public findlib library. Domain values retain their original OCaml identities. *)
-
-module Case = Case
-module Construct = Construct
-module Experiment = Experiment
+module Validation_code = Validation_code
+module Validation_issue = Validation_issue
+module Validation_failure = Validation_failure
+module File = File
 module Fixture = Fixture
+module Response_value = Response_value
+module Response_field = Response_field
+module Response = Response
+module Resource_binding = Resource_binding
+module Content = Content
+module Artifact = Artifact
+module Instruction = Instruction
+module Text_rule = Text_rule
+module Rubric = Rubric
+module Verifier = Verifier
+module Criterion = Criterion
+module Completion = Completion
+module Reference = Reference
+module Task = Task
+module Verification = Verification
+module Outcome = Outcome
+module Grading_failure = Grading_failure
+module Score = Score
+module Profile = Profile
+module Experiment = Experiment
+module Case = Case
 module Grader = Grader
 module Projection = Projection
 

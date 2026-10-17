@@ -103,17 +103,28 @@ cases = datasets.list_cases(selection=dataset)
 For dataset authoring, start with [datasets/smoke.py](python/datasets/smoke.py).
 Use `datasets.compile_dataset(cases=...)` to work with your own declarations.
 
-Domain values come from the OCaml `Ast` interface. Constrained records are private:
+Each domain component owns its type and constructors in its OCaml `.ml` and `.mli` files.
+The public binding interface is generated from those compiled owner contracts.
+Constrained records and alternatives are private:
 Python authors use `Task.create(...)`, `Verifier.create(...)`, `Instruction.create(...)`,
 `TextRule.create(...)`, and `Rubric.create(...)`. These factories return immutable native
 values after checking their invariants. Raw representations stay inside the OCaml
 implementation; projections and graders accept the validated values directly.
 
 `Rubric.create(expected=...)` accepts a checked `Response`. Create responses with
-`Response.create(fields=[ResponseField.create(name="choice", value=ResponseValue.String(value="B"))])`.
-Structured reference completions use `Completion.Structured(response=...)`; fields remain readable through
+`Response.create(fields=[ResponseField.create(name="choice", value=ResponseValue.create(string="B"))])`.
+Structured reference completions use `Completion.create(structured=...)`; fields remain readable through
 `response.fields`. Resource resolution returns a new validated task and preserves the
 original declaration.
+
+Alternative factories require exactly one named input: `Content.create(inline="text")` or
+`Content.create(resource="checker")`, and `Completion.create(plain="done")` or
+`Completion.create(structured=response)`. The OCaml owner checks that contract; generated
+Python overloads reject both or neither input during type checking. Named payloads remain
+available for inspection, such as `content.text` and `completion.response`.
+
+Public native operations live in their owner modules, such as `kernel.fixture` and
+`kernel.grader`. They adapt native results and named calls without duplicating domain policy.
 
 ```python
 from kernel import ValidationError, Verifier

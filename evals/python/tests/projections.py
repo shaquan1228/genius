@@ -3,7 +3,7 @@
 from evals.python import datasets
 from evals.python.datasets import Selection
 from kernel import Case, Reference, Verifier
-from kernel._operations import projection as projection_ops
+from kernel import projection as projection_ops
 
 __test__ = False
 
