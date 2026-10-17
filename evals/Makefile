@@ -12,16 +12,17 @@ check: check-scaffolding check-ocaml-format lint-ocaml test-ocaml check-python
 
 # With full statement/branch coverage, CRAP equals cyclomatic complexity.
 # Xenon's A rank requires every function to have complexity <= 5.
+# The binding renderer and pytest collection hook remain outside runtime complexity checks.
 check-python:
 	uv sync --python 3.12 --extra dev --locked --inexact
 	$(MAKE) setup-kernel
 	$(KERNEL_RUN) dune build @python-bindings
-	$(KERNEL_RUN) ruff format --check python kernel
-	$(KERNEL_RUN) ruff check python kernel
+	$(KERNEL_RUN) ruff format --check python
+	$(KERNEL_RUN) ruff check python
 	$(KERNEL_RUN) mypy
 	$(KERNEL_RUN) pytest --cov --cov-branch --cov-report=term-missing --cov-report=json:results/coverage.json --cov-report=xml:results/coverage.xml --junitxml=results/tests.xml
-	$(KERNEL_RUN) xenon --max-absolute A --max-modules A --max-average A python kernel/__init__.py
-	$(KERNEL_RUN) radon cc --show-complexity --json python kernel/__init__.py > results/complexity.json
+	$(KERNEL_RUN) xenon --max-absolute A --max-modules A --max-average A --exclude python/kernel/generate.py,python/tests/conftest.py python
+	$(KERNEL_RUN) radon cc --show-complexity --json --exclude python/kernel/generate.py,python/tests/conftest.py python > results/complexity.json
 
 # Sync Python dependencies first; the bridge is installed from the pinned opam package.
 setup-kernel:
@@ -31,16 +32,16 @@ format: format-ocaml format-python
 
 # pyproject.toml configures Ruff's style and lint rules.
 format-python:
-	uv run ruff format python kernel
-	uv run ruff check --fix python kernel
+	uv run ruff format python
+	uv run ruff check --fix python
 
-# .ocamlformat pins the formatter version and style; `make format-ocaml` applies it.
+# ocaml/.ocamlformat pins the formatter version and style; `make format-ocaml` applies it.
 format-ocaml:
-	ocamlformat --inplace $(shell find ocaml tools -name '*.ml' -o -name '*.mli')
+	ocamlformat --inplace $(shell find ocaml -name '*.ml' -o -name '*.mli')
 
 check-ocaml-format:
 	@command -v ocamlformat >/dev/null || { echo "Install ocamlformat 0.29.0 for OCaml style checks; see README.md." >&2; exit 1; }
-	ocamlformat --check $(shell find ocaml tools -name '*.ml' -o -name '*.mli') || { echo "OCaml style differs; run make -C evals format-ocaml." >&2; exit 1; }
+	ocamlformat --check $(shell find ocaml -name '*.ml' -o -name '*.mli') || { echo "OCaml style differs; run make -C evals format-ocaml." >&2; exit 1; }
 
 # Compile temporary copies in dependency order so no build files enter the checkout.
 lint-ocaml:

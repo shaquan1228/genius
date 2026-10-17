@@ -108,7 +108,7 @@ def compilation_preserves_independent_private_inputs() -> None:
 
 def compiled_metadata_queries_do_not_download() -> None:
     a, b = _independent_datasets()
-    with patch("evals.python.datasets.humanevalplus.download") as download:
+    with patch("evals.python.datasets.humanevalplus._download") as download:
         assert datasets.describe_dataset(selection=a) is None
         a_provenance = datasets.get_provenance(selection=a)
         b_provenance = datasets.get_provenance(selection=b)
