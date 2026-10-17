@@ -45,7 +45,6 @@ opam exec --switch=genius-kernel-414 -- uv run --project evals python -m evals.p
 HumanEval+ downloads are pinned and checksum verified by `python/datasets/humanevalplus.py`.
 Its `HumanEval/32` reference
 fails the pinned official evaluator; full reference validation therefore exits nonzero.
-On macOS, `validate --trusted-macos-memory-workaround` supports trusted upstream references.
 
 ## Run on Hugging Face
 

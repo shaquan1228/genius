@@ -3,8 +3,6 @@
 import argparse
 import asyncio
 import json
-import os
-import platform
 from collections.abc import Sequence
 from typing import Literal, assert_never
 
@@ -49,11 +47,6 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("command", choices=("info", "validate"))
     result.add_argument("--limit", type=int, default=None)
-    result.add_argument(
-        "--trusted-macos-memory-workaround",
-        action="store_true",
-        help="Disable EvalPlus's incompatible macOS memory guard for trusted references only",
-    )
     return result
 
 
@@ -62,21 +55,11 @@ class Options(BaseModel):
 
     command: Literal["info", "validate"] = "validate"
     limit: int | None = None
-    trusted_macos_memory_workaround: bool = False
-
-
-def configure_memory(arguments: Options) -> None:
-    if not arguments.trusted_macos_memory_workaround:
-        return
-    if platform.system() != "Darwin":
-        raise ValueError("Memory workaround is only supported for trusted macOS validation")
-    os.environ["EVALPLUS_MAX_MEMORY_BYTES"] = "-1"
 
 
 def validate(arguments: Options) -> int:
     if arguments.limit is not None and arguments.limit < 1:
         raise ValueError("--limit must be positive")
-    configure_memory(arguments=arguments)
     dataset = datasets.load_dataset(selection="humanevalplus")
     results = [
         asyncio.run(validate_case(case=case, dataset=dataset))
