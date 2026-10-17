@@ -95,8 +95,10 @@ def external_seed_fails_reference_passes_and_scope_is_enforced() -> None:
             await runtime.cleanup(agent, interrupted=False)
 
     results = asyncio.run(execute())
-    assert isinstance(results[0].verification, Verification.Failed)
-    assert all(isinstance(result.verification, Verification.Passed) for result in results[1:])
+    assert isinstance(results[0].evidence.verification, Verification.Failed)
+    assert all(
+        isinstance(result.evidence.verification, Verification.Passed) for result in results[1:]
+    )
     assert tuple(result.scores for result in results) == (
         {"correctness": False, "scope": True},
         {"correctness": True, "scope": True},
@@ -123,7 +125,7 @@ def external_answer_uses_kernel_rules_without_allocating() -> None:
         '{"decision_was_supported":true,"change_rule":false,"reason":"Check existing behavior"}'
     )
     result = asyncio.run(assess(response))
-    assert isinstance(result.verification, Verification.Unchecked)
+    assert isinstance(result.evidence.verification, Verification.Unchecked)
     assert result.scores == {"correctness": True, "scope": True}
     wrong_type = asyncio.run(assess(response.replace("true", '"true"')))
     assert wrong_type.scores == {"correctness": False, "scope": True}

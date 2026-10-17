@@ -51,18 +51,19 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
         agent=environments_adapter.environment(current),
         runtime=environments_adapter.runtime(current),
     )
+    evidence = result.evidence
     explanation = (
-        completion if isinstance(result.verification, Verification.Unchecked) else result.detail
+        completion if isinstance(evidence.verification, Verification.Unchecked) else evidence.detail
     )
     return Score(
         value=score_values(result.scores),
         explanation=with_failure(explanation, failure=failure),
         metadata={
             "verification": {
-                "status": type(result.verification).__name__.lower(),
-                "detail": result.detail,
+                "status": type(evidence.verification).__name__.lower(),
+                "detail": evidence.detail,
             },
-            "verifier_metadata": diagnostic(result.metadata),
+            "verifier_metadata": diagnostic(evidence.metadata),
             "changed_files": changed,
             "agent_failure": failure,
         },

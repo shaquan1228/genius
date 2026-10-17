@@ -153,9 +153,11 @@ def scorer_maps_sdk_observation_to_public_assessment() -> None:
     state.output = ModelOutput.from_content("mockllm/model", "observed answer")
     agent, runtime = _agent_port(), _runtime_port(_grader_port())
     assessment = Assessment(
-        verification=Verification.Passed(),
-        detail="canonical evidence",
-        metadata={"nested": {"items": (True, None, 4.2)}},
+        evidence=VerificationResult(
+            verification=Verification.Passed(),
+            detail="canonical evidence",
+            metadata={"nested": {"items": (True, None, 4.2)}},
+        ),
         scores={"correctness": True, "scope": False},
     )
     with (
@@ -172,7 +174,7 @@ def scorer_maps_sdk_observation_to_public_assessment() -> None:
         score.value,
         score.explanation,
         score.metadata["verifier_metadata"],
-        assessment.metadata,
+        assessment.evidence.metadata,
     ) == (
         {
             "case_id": "clear-task",
