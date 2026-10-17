@@ -34,12 +34,17 @@ type instruction = { skill : string; prompt : string }
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
 type text_rule = { field : string; min_words : int; max_words : int }
 
+(* Rubric: requirements used to grade a response. Eval rubrics specify criteria;
+   exact scalar expectations and a bounded-text rule are our deterministic subset.
+   https://github.com/openai/evals/blob/main/docs/eval-templates.md#example-model-graded-evals
+   https://teaching.cornell.edu/teaching-resources/assessing-student-learning/using-rubrics *)
+type rubric = { expected : response; text_rule : text_rule option }
+
 (* Criterion: a declarative success condition, applied by a grader rather than by
    the candidate. The code/structured-response distinction is this repository's design.
    https://developers.openai.com/api/docs/guides/evals
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
-type answer = { expected : response; text_rule : text_rule option }
-type criterion = Code of verifier | Answer of answer
+type criterion = Code of verifier | Answer of rubric
 
 (* Reference: reference output used for offline validation, distinct from a
    criterion's expected fields. Combining file edits and a completion is our mapping.
