@@ -12,8 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from evals.python.integrations.evalplus import checks
 from evals.python.schema import DatasetInfo
-from kernel import Completion, Instruction, Reference, Task
-from kernel._operations import fixture as fixture_ops
+from kernel import Completion, Fixture, Instruction, Reference, Task
 
 info = DatasetInfo(
     source="https://github.com/evalplus/humanevalplus_release/releases/download/v0.1.10/HumanEvalPlus.jsonl.gz",
@@ -44,7 +43,7 @@ def declaration(raw: str) -> Task:
     problem = Problem.model_validate_json(raw)
     return Task.create(
         id="humaneval-" + problem.task_id.split("/")[1],
-        fixture=fixture_ops.of_files([("solution.py", problem.prompt)]),
+        fixture=Fixture.create([("solution.py", problem.prompt)]),
         instruction=Instruction.create(
             skill="reasoning",
             prompt=(
@@ -57,9 +56,7 @@ def declaration(raw: str) -> Task:
         ),
         allowed_files=("solution.py",),
         reference=Reference(
-            edits=fixture_ops.of_files(
-                [("solution.py", problem.prompt + problem.canonical_solution)]
-            ),
+            edits=Fixture.create([("solution.py", problem.prompt + problem.canonical_solution)]),
             completion=Completion.Plain(""),
         ),
     )

@@ -4,6 +4,7 @@ from evals.python.integrations.smoke import checks
 from kernel import (
     Completion,
     Criterion,
+    Fixture,
     Instruction,
     Reference,
     Response,
@@ -12,7 +13,6 @@ from kernel import (
     Task,
     TextRule,
 )
-from kernel._operations import fixture as fixture_ops
 
 info = None
 
@@ -20,7 +20,7 @@ info = None
 def receipt(*, term: str = "price") -> Task:
     return Task.create(
         id="clear-task",
-        fixture=fixture_ops.of_files(
+        fixture=Fixture.create(
             [
                 (
                     "receipt.py",
@@ -59,7 +59,7 @@ assert total([(1.5, 2)]) == 3.0
         ),
         allowed_files=("receipt.py",),
         reference=Reference(
-            edits=fixture_ops.of_files(
+            edits=Fixture.create(
                 [
                     (
                         "receipt.py",
@@ -91,7 +91,7 @@ def timeout(*, initial: int = 15, requested: int = 30) -> Task:
         raise ValueError("Timeout changes need distinct positive initial and requested values")
     return Task.create(
         id="known-preflight",
-        fixture=fixture_ops.of_files(
+        fixture=Fixture.create(
             [
                 ("config.py", f"timeout_seconds = {initial}\n"),
                 ("client.py", client(initial)),
@@ -144,7 +144,7 @@ for value in (0, -1):
         ),
         allowed_files=("config.py", "client.py"),
         reference=Reference(
-            edits=fixture_ops.of_files(
+            edits=Fixture.create(
                 [
                     ("config.py", f"timeout_seconds = {requested}\n"),
                     ("client.py", client(requested)),
@@ -161,7 +161,7 @@ def cases() -> tuple[Task, ...]:
         timeout(),
         Task.create(
             id="small-decision",
-            fixture=fixture_ops.empty,
+            fixture=Fixture.create([]),
             instruction=Instruction.create(
                 skill="bayesian",
                 prompt=(
@@ -183,7 +183,7 @@ def cases() -> tuple[Task, ...]:
             ),
             allowed_files=(),
             reference=Reference(
-                edits=fixture_ops.empty,
+                edits=Fixture.create([]),
                 completion=Completion.Structured(
                     Response.create(
                         [
@@ -196,7 +196,7 @@ def cases() -> tuple[Task, ...]:
         ),
         Task.create(
             id="decision-review",
-            fixture=fixture_ops.empty,
+            fixture=Fixture.create([]),
             instruction=Instruction.create(
                 skill="bayesian",
                 prompt=(
@@ -219,7 +219,7 @@ def cases() -> tuple[Task, ...]:
             ),
             allowed_files=(),
             reference=Reference(
-                edits=fixture_ops.empty,
+                edits=Fixture.create([]),
                 completion=Completion.Structured(
                     Response.create(
                         [
