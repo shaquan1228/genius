@@ -1,6 +1,5 @@
 """Assessment coordinates verification and grading over one dataset snapshot."""
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
@@ -9,6 +8,7 @@ from pydantic import InstanceOf, validate_call
 from evals.python import datasets, grading, verification
 from evals.python.datasets import Selection
 from evals.python.execution import Environment, Runtime
+from evals.python.grading import Scores
 from evals.python.schema import FROZEN
 from evals.python.verification import VerificationResult
 from kernel import Verification
@@ -17,11 +17,11 @@ __all__ = ["Assessment", "assess"]
 
 
 @dataclass(frozen=True, kw_only=True)
-class Assessment(VerificationResult):
-    scores: Mapping[str, bool]
+class Assessment:
+    evidence: VerificationResult
+    scores: Scores
 
     def __post_init__(self) -> None:
-        super().__post_init__()
         object.__setattr__(self, "scores", MappingProxyType(dict(self.scores)))
 
 
@@ -42,9 +42,7 @@ async def assess(
     if isinstance(result.verification, Verification.HarnessError):
         raise RuntimeError(f"Verification harness error: {result.verification[0]}")
     return Assessment(
-        verification=result.verification,
-        detail=result.detail,
-        metadata=result.metadata,
+        evidence=result,
         scores=grading.score_case(
             case_id=case_id,
             response=response,

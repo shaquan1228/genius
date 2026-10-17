@@ -284,6 +284,7 @@ def compiled_selection_flows_through_all_verification_commands() -> None:
             Assessment,
         )
         assert assessment.scores == {"correctness": True, "scope": True}
+        assert isinstance(assessment.evidence.verification, Verification.Unchecked)
         reference = assert_type(
             await verification.validate_reference(
                 case_id="external", selection=dataset, runtime=runtime

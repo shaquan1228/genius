@@ -391,10 +391,11 @@ def public_answer_only_verification_never_allocates() -> None:
 
 def assessment_grades_canonical_observation_and_freezes_scores() -> None:
     async def execute() -> None:
+        evidence = VerificationResult(verification=Verification.Unchecked())
         expected = score_case(
             case_id="clear-task", response="answer", changed_files=("receipt.py",)
         )
-        with patch("kernel._operations.projection.verifier", return_value=None):
+        with patch.object(verification, "verify_case", return_value=evidence):
             result = assert_type(
                 await assessment.assess(
                     case_id="clear-task",
@@ -405,12 +406,28 @@ def assessment_grades_canonical_observation_and_freezes_scores() -> None:
                 ),
                 Assessment,
             )
-        assert isinstance(result.verification, Verification.Unchecked)
+        assert isinstance(result.evidence.verification, Verification.Unchecked)
+        assert result.evidence is evidence
+        assert not isinstance(result, VerificationResult)
         assert result.scores == expected
         with pytest.raises(TypeError):
             result.scores["correctness"] = True  # type: ignore[index]
 
     asyncio.run(execute())
+
+
+def assessment_owns_immutable_scores_and_retains_evidence() -> None:
+    evidence = VerificationResult(
+        verification=Verification.Passed(), metadata={"nested": {"items": (True,)}}
+    )
+    scores = {"correctness": True}
+    result = Assessment(evidence=evidence, scores=scores)
+    scores["correctness"] = False
+    assert result.scores == {"correctness": True}
+    assert result.evidence.metadata == {"nested": {"items": (True,)}}
+    for name in ("evidence", "scores"):
+        with pytest.raises(FrozenInstanceError):
+            setattr(result, name, None)
 
 
 def assessment_refuses_harness_error_before_grading() -> None:
@@ -588,7 +605,7 @@ def assessment_replaces_untrusted_verification_with_execution() -> None:
                 agent=_agent_port(),
                 runtime=_runtime_port(_grader_port()),
             )
-        assert isinstance(result.verification, Verification.Passed)
+        assert isinstance(result.evidence.verification, Verification.Passed)
         assert result.scores["correctness"]
         assert not prior_scores["correctness"]
         assert isinstance(untrusted, Verification.Failed)
@@ -610,7 +627,7 @@ def assessment_runs_actual_private_checks_before_grading() -> None:
                 agent=environment(agent),
                 runtime=runtime(agent),
             )
-            assert isinstance(result.verification, Verification.Passed)
+            assert isinstance(result.evidence.verification, Verification.Passed)
             assert result.scores["correctness"]
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
@@ -732,9 +749,9 @@ def assessment_pins_named_dataset_until_grading_and_next_operation_reloads() -> 
                 agent=agent,
                 runtime=ports,
             )
-        assert isinstance(first.verification, Verification.Passed)
+        assert isinstance(first.evidence.verification, Verification.Passed)
         assert first.scores["correctness"]
-        assert isinstance(second.verification, Verification.Unchecked)
+        assert isinstance(second.evidence.verification, Verification.Unchecked)
         assert not second.scores["correctness"]
         cast(AsyncMock, ports.cleanup).assert_awaited_once_with(grader, interrupted=False)
 

@@ -595,6 +595,14 @@ result = await assessment.assess(
 exit_code = await evaluation.evaluate(model="openai/your-model", dataset="humanevalplus")
 ```
 
+`assessment.assess` returns an immutable `Assessment` containing `evidence: VerificationResult`
+and `scores: Scores`. Read the native outcome through `result.evidence.verification`,
+diagnostic text through `result.evidence.detail`, and metadata through
+`result.evidence.metadata`. Scores remain at `result.scores`.
+The assessment retains the original evidence object and freezes a copy of its scores.
+Standalone `verification.verify_case` and `verification.validate_reference` return
+`VerificationResult` directly, with `verification`, `detail`, and `metadata` fields.
+
 Each callable validates its arguments and returns its declared result directly.
 `load_dataset`, `list_cases`, `resolve_settings`, `compile_dataset`, `describe_dataset`, `get_provenance`,
 `get_reference` and `score_case` are queries. They load or derive dataset values
