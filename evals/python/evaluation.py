@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal, cast
 
-from pydantic import AfterValidator, BaseModel, Field, validate_call
+from pydantic import AfterValidator, BaseModel, Field, InstanceOf, validate_call
 
 from evals.python.schema import FROZEN
 from kernel import Experiment
@@ -84,43 +84,8 @@ def resolve_settings(
     )
 
 
-async def evaluate(
-    *,
-    model: str,
-    run_id: str | None = None,
-    agent: str = "claude",
-    version: str = "",
-    dataset: str = "smoke",
-    sandbox: str = "local",
-    instruction_root: str = "../instructions",
-    epochs: int | None = None,
-    cost_limit: float | None = None,
-    model_cost: ModelPricing | None = None,
-    max_samples: int = 1,
-    limit: int | None = None,
-    sample_ids: tuple[str, ...] | None = None,
-    instruction_delivery: InstructionDelivery = "files",
-    deliveries: tuple[InstructionDelivery, ...] | None = None,
-    log_dir: str = "/results/live",
-) -> int:
-    settings = EvaluationSettings(
-        model=model,
-        run_id=run_id,
-        agent=agent,
-        version=version,
-        dataset=dataset,
-        sandbox=sandbox,
-        instruction_root=instruction_root,
-        epochs=epochs,
-        cost_limit=cost_limit,
-        model_cost=model_cost,
-        max_samples=max_samples,
-        limit=limit,
-        sample_ids=sample_ids,
-        instruction_delivery=instruction_delivery,
-        deliveries=deliveries,
-        log_dir=log_dir,
-    )
+@validate_call(config=FROZEN)
+async def evaluate(settings: InstanceOf[EvaluationSettings]) -> int:
     from evals.python.integrations.inspect import evaluation  # noqa: PLC0415 - lazy SDK composition
 
     return await evaluation.evaluate_async(settings)

@@ -161,7 +161,7 @@ def import_cache_tracks_verifier_source(
 ) -> None:
     first = datasets.load_dataset(selection="humanevalplus")
     before = cast(Verifier, verifier("humaneval-0", selection=first))
-    script = tmp_path / "evalplus_verifier.py"
+    script = tmp_path / "verifier.py"
     script.write_text(_files(before.files)["verifier.py"] + "\n")
     monkeypatch.setattr(evalplus, "__file__", str(tmp_path / "__init__.py"))
     second = datasets.load_dataset(selection="humanevalplus")

@@ -46,7 +46,7 @@ def hf_job_calls_evaluation_with_validated_settings(monkeypatch: pytest.MonkeyPa
     before = dict(os.environ)
     with patch.object(evaluation, "evaluate", new_callable=AsyncMock, return_value=7) as execute:
         assert run() == 7
-    request = EvaluationSettings.model_validate(execute.call_args.kwargs)
+    request = execute.call_args.args[0]
     assert isinstance(request, EvaluationSettings)
     assert (request.sample_ids, request.deliveries, request.epochs, request.cost_limit) == (
         ("clear-task",),
@@ -83,7 +83,7 @@ def inspect_evaluation_uses_request_without_reading_job_environment(
     ):
 
         async def execute() -> int:
-            return assert_type(await evaluation.evaluate(**request.model_dump()), int)
+            return assert_type(await evaluation.evaluate(request), int)
 
         assert asyncio.run(execute()) == 1
         assert evaluate.call_args.args[0] is not None

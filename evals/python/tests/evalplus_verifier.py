@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from evals.python.integrations.evalplus import evalplus_verifier as driver
+from evals.python.integrations.evalplus import verifier as driver
 from evals.python.integrations.evalplus.benchmarks import benchmark_info
 from evals.python.paths import EVALS_ROOT
 from evals.python.tests.humaneval import _record
@@ -49,7 +49,7 @@ def official_checker(*, tmp_path: Path, source: str, status: str, memory_limit: 
         [
             sys.executable,
             "-I",
-            str(EVALS_ROOT / "python/integrations/evalplus/evalplus_verifier.py"),
+            str(EVALS_ROOT / "python/integrations/evalplus/verifier.py"),
             "evalplus",
         ],
         input=json.dumps(_payload()),
@@ -285,7 +285,7 @@ def driver_entrypoint(
         patch.object(sys, "argv", ["verifier", *arguments]),
     ):
         runpy.run_path(
-            str(EVALS_ROOT / "python/integrations/evalplus/evalplus_verifier.py"),
+            str(EVALS_ROOT / "python/integrations/evalplus/verifier.py"),
             run_name="__main__",
         )
     evidence = json.loads(capsys.readouterr().out)

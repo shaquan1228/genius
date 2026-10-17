@@ -73,12 +73,11 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
     )
 
 
-@task
-def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
+def _task(profile: str, *, agent: str, version: str, dataset: str) -> Task:
     spec = evaluation.resolve_settings()
     catalog = datasets.load_dataset(selection=dataset)
     return build_task(
-        profile=profile_adapter.load_profile("baseline", spec=spec),
+        profile=profile_adapter.load_profile(profile, spec=spec),
         spec=spec,
         catalog=catalog,
         documents=profile_adapter.load_documents(spec),
@@ -87,19 +86,13 @@ def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke"
         version=version,
         dataset=dataset,
     )
+
+
+@task
+def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
+    return _task("baseline", agent=agent, version=version, dataset=dataset)
 
 
 @task
 def genius(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
-    spec = evaluation.resolve_settings()
-    catalog = datasets.load_dataset(selection=dataset)
-    return build_task(
-        profile=profile_adapter.load_profile("genius", spec=spec),
-        spec=spec,
-        catalog=catalog,
-        documents=profile_adapter.load_documents(spec),
-        provenance=datasets.get_provenance(selection=catalog),
-        agent=agent,
-        version=version,
-        dataset=dataset,
-    )
+    return _task("genius", agent=agent, version=version, dataset=dataset)

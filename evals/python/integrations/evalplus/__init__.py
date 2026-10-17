@@ -15,7 +15,7 @@ def checks(*, record: str, manifest: Mapping[str, object]) -> Criterion.Value:
                 Artifact.create(
                     path="verifier.py",
                     content=Content.create(
-                        inline=Path(__file__).with_name("evalplus_verifier.py").read_text()
+                        inline=Path(__file__).with_name("verifier.py").read_text()
                     ),
                 )
             ],

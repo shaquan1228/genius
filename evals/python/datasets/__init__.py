@@ -142,22 +142,16 @@ def _compile(
     return Dataset(sources=sources, records=private, info=info)
 
 
-def compile_records(
-    *, sources: Sources, records: tuple[Task, ...], info: DatasetInfo | None = None
-) -> Dataset:
-    return _compile(
-        sources=sources, records=tuple(_CaseKey(record) for record in records), info=info
-    )
-
-
 def compile_declarations(
     definitions: tuple[Task, ...],
     *,
     info: DatasetInfo | None = None,
     resources: Mapping[str, str] = MappingProxyType({}),
 ) -> Dataset:
-    return compile_records(
-        sources=kernel_sources(resources=resources), records=definitions, info=info
+    return _compile(
+        sources=kernel_sources(resources=resources),
+        records=tuple(_CaseKey(record) for record in definitions),
+        info=info,
     )
 
 

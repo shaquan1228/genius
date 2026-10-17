@@ -76,7 +76,7 @@ def only_standalone_drivers_use_subprocess() -> None:
         if "subprocess" in _imported(path)
     }
     assert callers == {
-        "integrations/evalplus/evalplus_verifier.py",
+        "integrations/evalplus/verifier.py",
         "integrations/smoke/verifier.py",
     }
 
@@ -201,7 +201,7 @@ def hugging_face_owns_only_its_sdk() -> None:
 
 
 @pytest.mark.parametrize(
-    ("owner", "filename"), [("evalplus", "evalplus_verifier.py"), ("smoke", "verifier.py")]
+    ("owner", "filename"), [("evalplus", "verifier.py"), ("smoke", "verifier.py")]
 )
 def framework_driver_is_standalone(owner: str, *, filename: str) -> None:
     path = PYTHON_ROOT / "integrations" / owner / filename

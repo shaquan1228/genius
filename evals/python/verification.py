@@ -35,6 +35,14 @@ def _freeze(value: Diagnostic | JsonValue) -> Diagnostic:
     return value
 
 
+def _json(value: Diagnostic) -> JsonValue:
+    if isinstance(value, Mapping):
+        return {key: _json(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_json(item) for item in value]
+    return value
+
+
 @dataclass(frozen=True, kw_only=True)
 class VerificationResult:
     verification: Verification.Value
@@ -49,6 +57,9 @@ class VerificationResult:
             "metadata",
             MappingProxyType({key: _freeze(value) for key, value in self.metadata.items()}),
         )
+
+    def metadata_json(self) -> dict[str, JsonValue]:
+        return {key: _json(value) for key, value in self.metadata.items()}
 
 
 class _Evidence(BaseModel):
