@@ -4,9 +4,9 @@ Depth, the game frame, and how to price a decision. The update is in `bayes.md`.
 
 ## Depth
 
-**Scan.** The ask is "what are my options". Or there are no numbers. Ten lines. No tree.
+**Scan.** Start here. Ten lines. No tree. Use simple arithmetic when helpful; numbers alone do not require Solve.
 
-**Solve.** Numbers are present. Or the user asks for the math.
+**Solve.** The user asks for the math, or further calculation could change the decision.
 
 Select the depth before you write. A Scan in the Solve shape hides the answer. A Solve in the Scan shape does not answer the question. A Scan can move up to a Solve in its last line.
 

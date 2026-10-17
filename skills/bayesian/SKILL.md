@@ -26,8 +26,8 @@ Frame the decision as a game. Name each option. Price each option as an interval
 ## Rules
 
 - Do the analysis in the answer. Do not ask permission. Do not announce the skill.
-- Select the depth first. Use Scan for "what are my options" or when there are no numbers.
-- Use Solve when numbers are present, or when the user asks for the math.
+- Select the depth first. Start with Scan; numbers alone do not require Solve.
+- Use Solve when the user asks for the math, or further calculation could change the decision. Apply tree and sampling rules only in Solve.
 - Frame the game before you price it (GNS-001).
 - Name the parties, the goal of each party, and where the accounting stops.
 - Say if the game is one-shot or repeated. Say if the game is closed or open.
@@ -52,6 +52,7 @@ Frame the decision as a game. Name each option. Price each option as an interval
 - Say when EV is the wrong test. A branch that ends the game is a survival question.
 - End each answer with the fact you do not know that moves the answer most. Give its cost.
 - Say what to re-price after the probe returns (GNS-002). Say whether the answer fell inside your interval.
+- Judge a past decision using evidence available at the time. Track the outcome separately; one result does not establish a pattern.
 - Do not build a tree if one option is clearly best, or if nothing is at stake (GNS-005). Say so and stop.
 - Do not run this on a routine technical choice that has a conventional default.
 - Price the decision the user gives. Do not judge the user.
@@ -83,7 +84,7 @@ Solve also requires all of these:
 
 1. Load the identity if absent. Read `references/method.md`.
 2. **Gate.** Confirm two or more live options and an uncertain result. If one option is clearly best, say so and stop (GNS-005). Then select Scan or Solve.
-3. **Frame.** Name the game and where the accounting stops. List each live option (GNS-001). Scan stops after step 6.
+3. **Frame.** Name the game and where the accounting stops. List each live option (GNS-001). For Scan, report the options, recommendation, and missing fact without building a tree. Use simple arithmetic if helpful; skip steps 5–7.
 4. **Update.** If another party has acted, use `references/bayes.md`. Put the prior next to the posterior.
 5. **Set the intervals.** Use `references/bounds.md`. Anchor on a base rate, then widen. Count only decisive outcomes. Set the unit and the horizon.
 6. **Propagate.** Build the tree. Sample the assumed inputs and run the tree on each draw. Report P10, P50, P90, and the probability the best option wins.
