@@ -9,7 +9,6 @@ from typing import Any
 HEADER = "# Generated from compiled OCaml interfaces; do not edit.\n"
 PREAMBLE = "from collections.abc import Sequence\n\n"
 PRIMITIVES = {"string": "str", "bool": "bool", "int": "int", "float": "float", "unit": "None"}
-TYPE_NAMES = {"answer": "Rubric"}
 type Node = dict[str, Any]
 
 
@@ -22,9 +21,7 @@ def identifier(value: object) -> str:
 
 def public_name(value: object) -> str:
     name = identifier(value)
-    return identifier(
-        TYPE_NAMES.get(name, "".join(part[:1].upper() + part[1:] for part in name.split("_")))
-    )
+    return identifier("".join(part[:1].upper() + part[1:] for part in name.split("_")))
 
 
 def type_name(value: Node, *, qualify: bool = False, variants: frozenset[str] = frozenset()) -> str:

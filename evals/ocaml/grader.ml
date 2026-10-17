@@ -56,7 +56,7 @@ let trim text =
   in
   bounds 0 None 0
 
-let answer (criterion : Ast.answer) response =
+let answer (criterion : Ast.rubric) response =
   match response with
   | None -> false
   | Some response ->

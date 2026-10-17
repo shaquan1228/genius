@@ -126,7 +126,7 @@ def check_rejections() -> None:
 
 @pytest.mark.parametrize(
     ("public_name", "native_name"),
-    [("Case", "case"), ("Task", "task"), ("Rubric", "answer")],
+    [("Case", "case"), ("Task", "task"), ("Rubric", "rubric")],
 )
 def explicit_types_preserve_native_identity(public_name: str, *, native_name: str) -> None:
     assert getattr(kernel_types, public_name) is getattr(native_kernel, native_name)
