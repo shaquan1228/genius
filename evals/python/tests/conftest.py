@@ -1,5 +1,7 @@
 import inspect
 
+__test__ = False
+
 
 def pytest_pycollect_makeitem(collector: object, name: str, obj: object) -> list[object] | None:
     module = getattr(collector, "obj", None)

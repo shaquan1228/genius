@@ -14,7 +14,7 @@ import pytest
 from kernel import generate
 
 EVALS = Path(__file__).resolve().parents[2]
-READER = EVALS / "_build/default/tools/bindings.exe"
+READER = EVALS / "_build/default/ocaml/tools/bindings.exe"
 
 
 def _schema(paths: tuple[Path, ...]) -> list[generate.Node]:
@@ -104,7 +104,7 @@ def _promote_bindings(workspace: Path) -> None:
 
 @pytest.fixture
 def binding_workspace(tmp_path: Path) -> Path:
-    for name in ("ocaml", "tools", "kernel"):
+    for name in ("ocaml", "python/kernel"):
         shutil.copytree(
             EVALS / name,
             tmp_path / name,
@@ -117,7 +117,7 @@ def binding_workspace(tmp_path: Path) -> Path:
 
 
 def dune_binding_builds_are_incremental(binding_workspace: Path) -> None:
-    generated = binding_workspace / "_build/default/kernel/generated/__init__.pyi"
+    generated = binding_workspace / "_build/default/python/kernel/generated/__init__.pyi"
     before = generated.stat().st_mtime_ns
     _build_bindings(binding_workspace)
     assert generated.stat().st_mtime_ns == before
@@ -128,9 +128,13 @@ def dune_requires_promotion_for_changed_runtime_exports(binding_workspace: Path)
     assert stale.returncode != 0
     assert "DuneProbe" in stale.stdout + stale.stderr
     _promote_bindings(binding_workspace)
-    assert "def payload(self) -> int:" in (binding_workspace / "kernel/__init__.pyi").read_text()
     assert (
-        "DuneProbe = _native.dune_probe" in (binding_workspace / "kernel/__init__.py").read_text()
+        "def payload(self) -> int:"
+        in (binding_workspace / "python/kernel/__init__.pyi").read_text()
+    )
+    assert (
+        "DuneProbe = _native.dune_probe"
+        in (binding_workspace / "python/kernel/__init__.py").read_text()
     )
 
 
@@ -140,18 +144,20 @@ def dune_rebuilds_stubs_after_compiled_types_change(binding_workspace: Path) -> 
     source = binding_workspace / "ocaml/ast.ml"
     source.write_text(source.read_text().replace("payload : int", "payload : string"))
     _build_bindings(binding_workspace)
-    assert "def payload(self) -> str:" in (binding_workspace / "kernel/__init__.pyi").read_text()
+    assert (
+        "def payload(self) -> str:"
+        in (binding_workspace / "python/kernel/__init__.pyi").read_text()
+    )
 
 
 def dune_clean_removes_stubs_and_preserves_runtime_sources(binding_workspace: Path) -> None:
     subprocess.run(["dune", "clean"], cwd=binding_workspace, check=True, capture_output=True)
-    assert not (binding_workspace / "kernel/__init__.pyi").exists()
-    assert (binding_workspace / "kernel/__init__.py").exists()
+    assert not (binding_workspace / "python/kernel/__init__.pyi").exists()
+    assert (binding_workspace / "python/kernel/__init__.py").exists()
 
 
 def installed_kernel_keeps_policy_and_provenance_together(tmp_path: Path) -> None:
-    for name in ("ocaml", "tools"):
-        shutil.copytree(EVALS / name, tmp_path / name, ignore=shutil.ignore_patterns("tests"))
+    shutil.copytree(EVALS / "ocaml", tmp_path / "ocaml", ignore=shutil.ignore_patterns("tests"))
     shutil.copyfile(EVALS / "dune-project", tmp_path / "dune-project")
     source = tmp_path / "ocaml/experiment.ml"
     source.write_text(source.read_text().replace("epochs = 5", "epochs = 7"))
@@ -193,7 +199,7 @@ def missing_installed_package_reports_setup_command() -> None:
         patch("ocaml.require", side_effect=ImportError("No such package")),
         pytest.raises(ImportError, match="make -C evals setup-kernel"),
     ):
-        runpy.run_path(str(EVALS / "kernel/_bridge.py"))
+        runpy.run_path(str(EVALS / "python/kernel/_bridge.py"))
 
 
 def incompatible_python_identifiers_fail_loudly(tmp_path: Path) -> None:

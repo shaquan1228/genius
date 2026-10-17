@@ -19,15 +19,15 @@ fi
 # The bridge discovers Python while building; use the same interpreter as the harness.
 export PATH="$evals_root/.venv/bin:$PATH"
 # Keep the pinned bridge's generated compiler files out of callers' working directories.
-bridge_patch=$(.venv/bin/python -c 'import hashlib, pathlib; print(hashlib.sha256(pathlib.Path("kernel/bridge.patch").read_bytes()).hexdigest()[:16])')
+bridge_patch=$(.venv/bin/python -c 'import hashlib, pathlib; print(hashlib.sha256(pathlib.Path("python/kernel/bridge.patch").read_bytes()).hexdigest()[:16])')
 bridge_source="$(opam var --global root)/genius-kernel-bridge-$bridge_commit-$bridge_patch"
 if ! test -d "$bridge_source/.git"; then
     git clone --no-checkout https://github.com/ocamllibs/ocaml-in-python.git "$bridge_source"
     git -C "$bridge_source" checkout --detach "$bridge_commit"
 fi
-if ! git -C "$bridge_source" apply --reverse --check "$evals_root/kernel/bridge.patch" 2>/dev/null; then
-    git -C "$bridge_source" apply --check "$evals_root/kernel/bridge.patch"
-    git -C "$bridge_source" apply "$evals_root/kernel/bridge.patch"
+if ! git -C "$bridge_source" apply --reverse --check "$evals_root/python/kernel/bridge.patch" 2>/dev/null; then
+    git -C "$bridge_source" apply --check "$evals_root/python/kernel/bridge.patch"
+    git -C "$bridge_source" apply "$evals_root/python/kernel/bridge.patch"
 fi
 opam pin add --switch="$kernel_switch" --kind=path ocaml-in-python "$bridge_source" --yes --no-action
 opam install --switch="$kernel_switch" ocaml-in-python ppxlib.0.26.0 dune.3.24.2 --yes --assume-depexts --jobs=4

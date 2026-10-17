@@ -1,10 +1,15 @@
-"""Pinned HumanEval+ records mapped to canonical case declarations."""
+"""Download pinned HumanEval+ records and map them to canonical case declarations."""
 
+import gzip
+import hashlib
+import os
+import urllib.request
 from collections.abc import Iterable
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from evals.python.integrations.datasets.download import Download, cache_path, download
 from evals.python.integrations.evalplus import checks
 from evals.python.schema import DatasetInfo
 from kernel import Completion, Instruction, Reference, Task
@@ -60,10 +65,32 @@ def declaration(raw: str) -> Task:
     )
 
 
+def _cache_path(sha256: str) -> Path:
+    root = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache")))
+    return root / "genius-evals" / f"{sha256}.jsonl"
+
+
+def _download(*, source: str, sha256: str, destination: Path) -> bytes:
+    if destination.exists():
+        data = destination.read_bytes()
+    else:
+        with urllib.request.urlopen(source, timeout=60) as response:
+            data = gzip.decompress(response.read())
+    if hashlib.sha256(data).hexdigest() != sha256:
+        raise ValueError("Dataset checksum mismatch")
+    if not destination.exists():
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with NamedTemporaryFile(dir=destination.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            try:
+                stream.write(data)
+                stream.close()
+                temporary.replace(destination)
+            finally:
+                temporary.unlink(missing_ok=True)
+    return data
+
+
 def cases() -> tuple[Task, ...]:
-    data = download(
-        request=Download(
-            source=info.source, sha256=info.sha256, destination=cache_path(info.sha256)
-        )
-    )
+    data = _download(source=info.source, sha256=info.sha256, destination=_cache_path(info.sha256))
     return declarations(data.decode().splitlines())

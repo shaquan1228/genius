@@ -4,6 +4,18 @@ Compare baseline and Genius agents with [Inspect AI](https://inspect.aisi.org.uk
 and [Inspect SWE](https://meridianlabs-ai.github.io/inspect_swe/).
 The bundled datasets are a four-case smoke suite and the 164-problem HumanEval+ benchmark.
 
+## Source layout
+
+| Path | Contains |
+| --- | --- |
+| `ocaml/` | Domain types, validation, grading, and `.ocamlformat` configuration |
+| `ocaml/tools/` | Build executables for source provenance and binding generation |
+| `python/` | Dataset loading, evaluation workflows, and integrations |
+| `python/kernel/` | The installed Python package `kernel` and its binding-generation support |
+| `python/tests/` | Python tests and their `conftest.py` collection hook |
+
+The shared Makefile, Dune project, and Python package configuration live at this root.
+
 ## Check the harness offline
 
 Install opam, [uv](https://docs.astral.sh/uv/), Git, Make, and a C compiler.
@@ -30,7 +42,8 @@ opam exec --switch=genius-kernel-414 -- uv run --project evals python -m evals.p
 opam exec --switch=genius-kernel-414 -- uv run --project evals python -m evals.python.integrations.evalplus.benchmarks validate --limit 3
 ```
 
-HumanEval+ downloads are pinned and checksum verified. Its `HumanEval/32` reference
+HumanEval+ downloads are pinned and checksum verified by `python/datasets/humanevalplus.py`.
+Its `HumanEval/32` reference
 fails the pinned official evaluator; full reference validation therefore exits nonzero.
 On macOS, `validate --trusted-macos-memory-workaround` supports trusted upstream references.
 

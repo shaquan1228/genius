@@ -26,7 +26,7 @@ def public_queries_preserve_canonical_objects() -> None:
 def public_queries_select_canonical_projections() -> None:
     assert datasets.list_cases(selection=datasets.compile_dataset(cases=())) == ()
     assert assert_type(datasets.describe_dataset(), DatasetInfo | None) is None
-    with patch("evals.python.datasets.humanevalplus.download") as download:
+    with patch("evals.python.datasets.humanevalplus._download") as download:
         info = datasets.describe_dataset(selection="humanevalplus")
     assert isinstance(info, DatasetInfo)
     download.assert_not_called()

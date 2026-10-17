@@ -18,6 +18,7 @@ dependencies = [
 
 [tool.setuptools]
 packages = ["kernel"]
+package-dir = {kernel = "python/kernel"}
 
 [project.optional-dependencies]
 dev = [
@@ -41,19 +42,24 @@ ignore = ["PLR2004"]
 [tool.ruff.lint.per-file-ignores]
 "python/assessment.py" = ["PLR0913"]
 "python/evaluation.py" = ["PLR0913"]
-"conftest.py" = ["PLR0917"]
-"kernel/*.pyi" = ["F401", "N801", "N818", "N999"]
+"python/tests/conftest.py" = ["PLR0917"]
+"python/kernel/*.pyi" = ["F401", "N801", "N818", "N999"]
 
 [tool.ruff.lint.pylint]
 # Only the first parameter may be positional, so callers name every other argument.
 # Pytest passes fixtures by name, so tests follow the same rule.
 max-positional-args = 1
 
+[tool.ruff.lint.isort]
+known-first-party = ["evals", "kernel"]
+
 [tool.mypy]
 strict = true
 enable_error_code = ["exhaustive-match"]
 files = ["python"]
-mypy_path = ".."
+mypy_path = ["..", "python"]
+# Check bindings through their top-level kernel imports, avoiding a second module identity.
+exclude = ["^python/kernel/"]
 
 [tool.pytest.ini_options]
 testpaths = ["python/tests"]
@@ -64,8 +70,8 @@ pythonpath = [".."]
 
 [tool.coverage.run]
 branch = true
-source = ["python", "kernel"]
-omit = ["kernel/generate.py"]
+source = ["python"]
+omit = ["python/kernel/generate.py", "python/tests/conftest.py"]
 
 [tool.coverage.report]
 fail_under = 100

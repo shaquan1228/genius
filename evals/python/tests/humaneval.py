@@ -144,7 +144,7 @@ def pinned_manifest() -> None:
 @pytest.fixture
 def synthetic_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
     data = "\n".join(_record(task_id=f"HumanEval/{i}") for i in range(164)).encode()
-    monkeypatch.setattr(humanevalplus, "download", lambda request: data)
+    monkeypatch.setattr(humanevalplus, "_download", lambda **request: data)
 
 
 def dataset_index_keeps_all_cases(synthetic_dataset: None) -> None:
@@ -179,7 +179,7 @@ def import_cache_tracks_verifier_source(
 
 
 def dataset_count_mismatch(*, synthetic_dataset: None, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(humanevalplus, "download", lambda request: _record().encode())
+    monkeypatch.setattr(humanevalplus, "_download", lambda **request: _record().encode())
     with pytest.raises(ValueError, match="count"):
         datasets.list_cases(selection="humanevalplus")
 

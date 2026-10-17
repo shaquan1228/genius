@@ -139,8 +139,8 @@ def domain_modules_are_codec_free() -> None:
 def public_operations_use_native_calls_without_a_transport_layer(owner: str) -> None:
     path = PYTHON_ROOT / ("datasets/__init__.py" if owner == "datasets" else f"{owner}.py")
     assert "subprocess" not in _imported(path)
-    assert not (PYTHON_ROOT.parent / "kernel/build.py").exists()
-    assert "subprocess" not in _imported(PYTHON_ROOT.parent / "kernel/__init__.py")
+    assert not (PYTHON_ROOT / "kernel/build.py").exists()
+    assert "subprocess" not in _imported(PYTHON_ROOT / "kernel/__init__.py")
 
 
 @pytest.mark.parametrize(
