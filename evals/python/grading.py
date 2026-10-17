@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Mapping
+from operator import itemgetter
 from types import MappingProxyType
 
 from kernel import InvalidArgument, Outcome, Response, ResponseValue, Task, Verification
@@ -39,13 +40,16 @@ def _candidate(text: str) -> Response | None:
 def score(
     case: Task, *, response: str, changed_files: tuple[str, ...], verification: Verification.Value
 ) -> Scores:
-    scores = dict(
-        grader_ops.grade(
-            case,
-            response=_candidate(response),
-            outcome=Outcome(changed_files=changed_files, verification=verification),
-        )
+    pairs = grader_ops.grade(
+        case,
+        response=_candidate(response),
+        outcome=Outcome(changed_files=changed_files, verification=verification),
     )
-    if not {"correctness", "scope"} <= scores.keys():
+    names = tuple(map(itemgetter(0), pairs))
+    if len(set(names)) != len(names):
+        raise ValueError("Kernel returned duplicate score names")
+    if not all(isinstance(value, bool) for _, value in pairs):
+        raise ValueError("Kernel returned non-boolean scores")
+    if not set(grader_ops.required_names) <= set(names):
         raise ValueError("Kernel omitted required score names")
-    return MappingProxyType(scores)
+    return MappingProxyType(dict(pairs))

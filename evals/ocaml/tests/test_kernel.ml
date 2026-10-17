@@ -351,3 +351,11 @@ let () =
       answer with
       reference = { answer.reference with completion = Ast.Structured [ ("", Ast.Bool true) ] };
     }
+
+let () =
+  assert (Grader.required_names = [ "correctness"; "scope" ]);
+  List.iter
+    (fun case ->
+      assert (
+        List.map fst (Grader.grade case ~response:None ~outcome:no_changes) = Grader.required_names))
+    cases

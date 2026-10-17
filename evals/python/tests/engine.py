@@ -1,6 +1,8 @@
 """Check Inspect scoring, repeated runs, and saved logs."""
 
 import asyncio
+import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -183,3 +185,38 @@ def scorer_maps_sdk_observation_to_public_assessment() -> None:
         {"nested": {"items": [True, None, 4.2]}},
         {"nested": {"items": (True, None, 4.2)}},
     )
+
+
+def extended_native_contract_drives_fresh_inspect_registration() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+from unittest.mock import PropertyMock, patch
+from kernel._operations import grader as grader_ops
+with patch.object(type(grader_ops), "required_names", new_callable=PropertyMock,
+                  return_value=["correctness", "scope", "extension"]):
+    from evals.python import queries
+    from evals.python.integrations.inspect import completeness, scoring
+    from inspect_ai.scorer._scorer import scorer_metrics
+    from inspect_ai.scorer import CORRECT, INCORRECT
+    metrics = scorer_metrics(scoring.evaluation())
+    assert isinstance(metrics, dict)
+    assert tuple(metrics) == tuple(grader_ops.required_names)
+    assert all(len(items) == 2 for items in metrics.values())
+    assert not completeness.complete_value({"correctness": CORRECT, "scope": INCORRECT})
+    encoded = {"correctness": CORRECT, "scope": INCORRECT, "extension": CORRECT}
+    assert completeness.complete_value(encoded)
+    pairs = [("correctness", True), ("scope", False), ("extension", True)]
+    with patch.object(grader_ops, "grade", return_value=pairs):
+        scores = queries.score_case(case_id="small-decision", response="{}", changed_files=())
+    assert scoring.score_values(scores) == encoded
+""",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=Path(__file__).resolve().parents[3],
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

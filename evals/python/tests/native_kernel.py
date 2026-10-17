@@ -1,6 +1,7 @@
 """Exercise generated types and real kernel policy through an in-process bridge."""
 
 from collections.abc import Callable
+from operator import itemgetter
 from typing import cast
 
 import pytest
@@ -70,6 +71,7 @@ def check_answer_grading() -> None:
     case, expected = _answer()
     outcome = Outcome(changed_files=[], verification=Verification.Unchecked())
     scores = grader_ops.grade(case, response=expected, outcome=outcome)
+    assert tuple(map(itemgetter(0), scores)) == tuple(grader_ops.required_names)
     assert dict(scores) == {"correctness": True, "scope": True}
     assert not dict(grader_ops.grade(case, response=None, outcome=outcome))["correctness"]
 
@@ -100,10 +102,11 @@ def check_code(status: Verification.Value, *, correctness: bool) -> None:
     assert projected is not None
     public_files = [name for name, _ in projection_ops.case(case).files]
     outcome = Outcome(changed_files=["workspace/solution.py"], verification=status)
-    assert dict(grader_ops.grade(case, response=None, outcome=outcome)) == {
-        "correctness": correctness,
-        "scope": True,
-    }
+    scores = grader_ops.grade(case, response=None, outcome=outcome)
+    assert (tuple(map(itemgetter(0), scores)), dict(scores)) == (
+        tuple(grader_ops.required_names),
+        {"correctness": correctness, "scope": True},
+    )
     outside_scope = Outcome(
         changed_files=["workspace/other.py"], verification=Verification.Passed()
     )

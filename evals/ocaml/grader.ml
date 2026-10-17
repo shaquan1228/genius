@@ -1,3 +1,6 @@
+let definitions = [ ("correctness", `Correctness); ("scope", `Scope) ]
+let required_names = List.map fst definitions
+
 let whitespace_width text index =
   let length = String.length text in
   let starts value =
@@ -86,4 +89,7 @@ let grade (case : Ast.task) ~response ~(outcome : Ast.outcome) =
   in
   let allowed = List.map (fun path -> "workspace/" ^ path) case.allowed_files in
   let scope = List.for_all (fun path -> List.mem path allowed) outcome.changed_files in
-  [ ("correctness", correctness); ("scope", scope) ]
+  List.map
+    (fun (name, criterion) ->
+      (name, match criterion with `Correctness -> correctness | `Scope -> scope))
+    definitions

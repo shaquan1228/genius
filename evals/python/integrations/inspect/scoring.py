@@ -11,6 +11,7 @@ import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import commands, datasets, verification
 from kernel import Verification
+from kernel._operations import grader as grader_ops
 
 
 def score_values(scores: Mapping[str, bool]) -> dict[str, str]:
@@ -66,7 +67,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
     )
 
 
-@scorer(metrics={name: [accuracy(), stderr()] for name in ("correctness", "scope")})
+@scorer(metrics={name: [accuracy(), stderr()] for name in grader_ops.required_names})
 def evaluation() -> Scorer:
     return score_sample
 
