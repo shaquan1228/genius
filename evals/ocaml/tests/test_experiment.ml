@@ -19,9 +19,10 @@ let () =
   | _ -> assert false
 
 let () =
-  assert (Experiment.resolve () = Experiment.default);
+  assert (Experiment.resolve () = Ok Experiment.default);
   let resolved =
-    Experiment.resolve ~epochs:2 ~message_limit:8 ~cost_limit:0.1 ~time_limit:10 ~cache:true ()
+    Result.get_ok
+      (Experiment.resolve ~epochs:2 ~message_limit:8 ~cost_limit:0.1 ~time_limit:10 ~cache:true ())
   in
   assert (resolved.epochs = 2);
   assert (resolved.message_limit = Some 8);
@@ -32,10 +33,7 @@ let () =
   assert (Experiment.default.epochs = 5);
   List.iter
     (fun resolve ->
-      List.iter
-        (fun value ->
-          match resolve value with _ -> assert false | exception Invalid_argument _ -> ())
-        [ 0; -1; min_int ])
+      List.iter (fun value -> assert (Result.is_error (resolve value))) [ 0; -1; min_int ])
     [
       (fun value -> Experiment.resolve ~epochs:value ());
       (fun value -> Experiment.resolve ~message_limit:value ());
@@ -44,8 +42,5 @@ let () =
 
 let () =
   List.iter
-    (fun value ->
-      match Experiment.resolve ~cost_limit:value () with
-      | _ -> assert false
-      | exception Invalid_argument _ -> ())
+    (fun value -> assert (Result.is_error (Experiment.resolve ~cost_limit:value ())))
     [ 0.; -1.; Float.infinity; Float.neg_infinity; Float.nan ]

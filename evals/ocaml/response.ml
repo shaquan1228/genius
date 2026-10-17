@@ -1,18 +1,18 @@
-(* Response: model-produced output. The immutable named string/boolean field
-   collection is our structured-output subset, also used for expected and reference data.
-   https://huggingface.co/docs/lighteval/main/en/package_reference/models_outputs
-   https://developers.openai.com/api/docs/guides/evals *)
-let empty : Ast.response = []
+type t = { fields : Response_field.t list }
 
-let of_fields fields =
-  let rec validate seen = function
-    | [] -> ()
-    | (name, _) :: rest ->
-        if name = "" || List.mem name seen then
-          invalid_arg "Response fields need unique nonempty names";
-        validate (name :: seen) rest
+let empty : t = { fields = [] }
+
+let create ~(fields : Response_field.t list) =
+  let rec collect seen = function
+    | [] -> []
+    | (field : Response_field.t) :: rest ->
+        Validation.when_invalid
+          (not (List.mem field.name seen))
+          (Validation.issue
+             Validation_code.Invalid_response_field
+             "response.fields"
+             "Response fields need unique names"
+             [ field.name ])
+        @ collect (field.name :: seen) rest
   in
-  validate [] fields;
-  fields
-
-let fields response = response
+  Validation.checked (collect [] fields) { fields }

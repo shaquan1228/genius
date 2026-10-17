@@ -1,5 +1,4 @@
-val empty : Ast.response
-(** Validate unique, nonempty names without changing field order. *)
+type t = private { fields : Response_field.t list }
 
-val of_fields : (string * Ast.response_value) list -> Ast.response
-val fields : Ast.response -> (string * Ast.response_value) list
+val create : fields:Response_field.t list -> (t, Validation_failure.t) result
+val empty : t

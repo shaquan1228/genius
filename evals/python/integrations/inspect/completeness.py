@@ -3,28 +3,30 @@
 from collections import Counter
 from collections.abc import Sequence
 
-from inspect_ai import Task
+from inspect_ai import Task as InspectTask
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.scorer import CORRECT, INCORRECT
 
 from evals.python.evaluation import EvaluationSettings
-from kernel._operations import grader as grader_ops
+from kernel import Task
 
 Pair = tuple[str, str, int]
 
 
-def selected_ids(task: Task, *, request: EvaluationSettings) -> list[str]:
+def selected_ids(task: InspectTask, *, request: EvaluationSettings) -> list[str]:
     ids = [str(sample.id) for sample in task.dataset]
     if request.sample_ids is not None:
         ids = [case for case in ids if case in request.sample_ids]
     return ids[: request.limit]
 
 
-def task_pairs(task: Task, *, ids: list[str], epochs: int) -> set[Pair]:
+def task_pairs(task: InspectTask, *, ids: list[str], epochs: int) -> set[Pair]:
     return {(task.name, case, epoch) for case in ids for epoch in range(1, epochs + 1)}
 
 
-def expected_pairs(tasks: list[Task], *, request: EvaluationSettings, epochs: int) -> set[Pair]:
+def expected_pairs(
+    tasks: list[InspectTask], *, request: EvaluationSettings, epochs: int
+) -> set[Pair]:
     result: set[Pair] = set()
     for task in tasks:
         result.update(task_pairs(task, ids=selected_ids(task, request=request), epochs=epochs))
@@ -47,7 +49,7 @@ def scored(sample: EvalSample) -> bool:
 
 def complete_value(value: object) -> bool:
     return isinstance(value, dict) and all(
-        value.get(name) in (CORRECT, INCORRECT) for name in grader_ops.required_names
+        value.get(name) in (CORRECT, INCORRECT) for name in Task.required_scores
     )
 
 

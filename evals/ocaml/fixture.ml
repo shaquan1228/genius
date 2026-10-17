@@ -1,17 +1,25 @@
-(* Fixture: initial-state files. This immutable collection is our file-based mapping
-   of sample files and task environments, not a universal evaluation fixture schema.
-   https://inspect.aisi.org.uk/datasets.html#sample-files
-   https://docs.harborframework.com/tasks/environment *)
-module Files = Fixture_store
+module Files = Map.Make (String)
 
-let empty : Ast.fixture = Files.empty
+type t = File.t Files.t
 
-let add ~path ~contents fixture =
-  if Files.mem path fixture then invalid_arg ("Duplicate fixture path: " ^ path);
-  Files.add path contents fixture
+let empty = Files.empty
+let files ~fixture = List.map snd (Files.bindings fixture)
 
-let of_files files =
-  List.fold_left (fun fixture (path, contents) -> add ~path ~contents fixture) empty files
+let add ~fixture ~(file : File.t) =
+  Validation.checked
+    (Validation.when_invalid
+       (not (Files.mem file.path fixture))
+       (Validation.issue
+          Validation_code.Duplicate_path
+          "fixture"
+          ("Duplicate fixture path: " ^ file.path)
+          [ file.path ]))
+    (Files.add file.path file fixture)
 
-let overlay base ~overrides = Files.overlay base overrides
-let files = Files.files
+let create ~files =
+  List.fold_left
+    (fun result file -> Result.bind result (fun fixture -> add ~fixture ~file))
+    (Ok empty)
+    files
+
+let overlay ~base ~overrides = Files.union (fun _ _ replacement -> Some replacement) base overrides

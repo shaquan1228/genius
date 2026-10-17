@@ -6,16 +6,17 @@ from typing import assert_never
 from evals.python import datasets, grading, verification
 from evals.python.datasets import Dataset
 from evals.python.grading import Scores
-from kernel import Case, Completion, Verification
-from kernel._operations import fixture as fixture_ops
+from kernel import Case, Completion, Fixture, Verification
 
 
 def response(completion: Completion.Value) -> str:
     match completion:
         case Completion.Plain():
-            return completion[0]
+            return completion.text
         case Completion.Structured():
-            return json.dumps({name: value[0] for name, value in completion[0]})
+            return json.dumps(
+                {field.name: field.value.value for field in completion.response.fields}
+            )
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -29,7 +30,7 @@ async def validate(case: Case, *, dataset: Dataset) -> bool:
             case_id=case.id,
             response=response(reference.completion),
             changed_files=tuple(
-                f"workspace/{name}" for name, _ in fixture_ops.files(reference.edits)
+                f"workspace/{file.path}" for file in Fixture.files(fixture=reference.edits)
             ),
             verification=result.verification,
             selection=dataset,

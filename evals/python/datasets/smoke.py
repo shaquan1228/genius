@@ -4,30 +4,34 @@ from evals.python.integrations.smoke import checks
 from kernel import (
     Completion,
     Criterion,
+    File,
+    Fixture,
     Instruction,
     Reference,
+    Response,
+    ResponseField,
     ResponseValue,
     Rubric,
     Task,
     TextRule,
 )
-from kernel._operations import fixture as fixture_ops
 
 info = None
 
 
 def receipt(*, term: str = "price") -> Task:
-    return Task(
+    return Task.create(
         id="clear-task",
-        fixture=fixture_ops.of_files(
-            [
-                (
-                    "receipt.py",
-                    f"def total(items):\n    return sum({term} for price, quantity in items)\n",
+        fixture=Fixture.create(
+            files=[
+                File.create(
+                    path="receipt.py",
+                    contents="def total(items):\n"
+                    f"    return sum({term} for price, quantity in items)\n",
                 ),
-                (
-                    "test_receipt.py",
-                    """import runpy
+                File.create(
+                    path="test_receipt.py",
+                    contents="""import runpy
 
 total = runpy.run_path("receipt.py")["total"]
 assert total([]) == 0
@@ -36,7 +40,7 @@ assert total([(3.0, 1), (4.0, 1)]) == 7.0
                 ),
             ]
         ),
-        instruction=Instruction(
+        instruction=Instruction.create(
             skill="reasoning",
             prompt=(
                 "Fix total in receipt.py so each item's quantity contributes to the total. "
@@ -57,17 +61,17 @@ assert total([(1.5, 2)]) == 3.0
 """,
         ),
         allowed_files=("receipt.py",),
-        reference=Reference(
-            edits=fixture_ops.of_files(
-                [
-                    (
-                        "receipt.py",
-                        "def total(items):\n"
+        reference=Reference.create(
+            edits=Fixture.create(
+                files=[
+                    File.create(
+                        path="receipt.py",
+                        contents="def total(items):\n"
                         "    return sum(price * quantity for price, quantity in items)\n",
                     )
                 ]
             ),
-            completion=Completion.Plain("Each quantity now contributes to the total."),
+            completion=Completion.create(plain="Each quantity now contributes to the total."),
         ),
     )
 
@@ -88,15 +92,15 @@ def timeout(value=None):
 def timeout(*, initial: int = 15, requested: int = 30) -> Task:
     if initial <= 0 or requested <= 0 or initial == requested:
         raise ValueError("Timeout changes need distinct positive initial and requested values")
-    return Task(
+    return Task.create(
         id="known-preflight",
-        fixture=fixture_ops.of_files(
-            [
-                ("config.py", f"timeout_seconds = {initial}\n"),
-                ("client.py", client(initial)),
-                (
-                    "test_client.py",
-                    """import runpy
+        fixture=Fixture.create(
+            files=[
+                File.create(path="config.py", contents=f"timeout_seconds = {initial}\n"),
+                File.create(path="client.py", contents=client(initial)),
+                File.create(
+                    path="test_client.py",
+                    contents="""import runpy
 
 config = runpy.run_path("config.py")
 client = runpy.run_path("client.py")
@@ -112,7 +116,7 @@ else:
                 ),
             ]
         ),
-        instruction=Instruction(
+        instruction=Instruction.create(
             skill="preflight",
             prompt=(
                 f"On branch eval, change the default timeout from {initial} to {requested} seconds "
@@ -142,14 +146,14 @@ for value in (0, -1):
 """,
         ),
         allowed_files=("config.py", "client.py"),
-        reference=Reference(
-            edits=fixture_ops.of_files(
-                [
-                    ("config.py", f"timeout_seconds = {requested}\n"),
-                    ("client.py", client(requested)),
+        reference=Reference.create(
+            edits=Fixture.create(
+                files=[
+                    File.create(path="config.py", contents=f"timeout_seconds = {requested}\n"),
+                    File.create(path="client.py", contents=client(requested)),
                 ]
             ),
-            completion=Completion.Plain("Updated both defaults and preserved overrides."),
+            completion=Completion.create(plain="Updated both defaults and preserved overrides."),
         ),
     )
 
@@ -158,10 +162,10 @@ def cases() -> tuple[Task, ...]:
     return (
         receipt(),
         timeout(),
-        Task(
+        Task.create(
             id="small-decision",
-            fixture=fixture_ops.empty,
-            instruction=Instruction(
+            fixture=Fixture.create(files=[]),
+            instruction=Instruction.create(
                 skill="bayesian",
                 prompt=(
                     "Choose a service for a one-month trial. A costs $10 total; B costs $8 total. "
@@ -170,10 +174,16 @@ def cases() -> tuple[Task, ...]:
                     "Do not change files."
                 ),
             ),
-            criterion=Criterion.Answer(
-                Rubric(
-                    expected=[("choice", ResponseValue.String("B"))],
-                    text_rule=TextRule(
+            criterion=Criterion.create(
+                answer=Rubric.create(
+                    expected=Response.create(
+                        fields=[
+                            ResponseField.create(
+                                name="choice", value=ResponseValue.create(string="B")
+                            )
+                        ]
+                    ),
+                    text_rule=TextRule.create(
                         field="reason",
                         min_words=1,
                         max_words=40,
@@ -181,20 +191,29 @@ def cases() -> tuple[Task, ...]:
                 )
             ),
             allowed_files=(),
-            reference=Reference(
-                edits=fixture_ops.empty,
-                completion=Completion.Structured(
-                    [
-                        ("choice", ResponseValue.String("B")),
-                        ("reason", ResponseValue.String("B costs less for identical service.")),
-                    ]
+            reference=Reference.create(
+                edits=Fixture.create(files=[]),
+                completion=Completion.create(
+                    structured=Response.create(
+                        fields=[
+                            ResponseField.create(
+                                name="choice", value=ResponseValue.create(string="B")
+                            ),
+                            ResponseField.create(
+                                name="reason",
+                                value=ResponseValue.create(
+                                    string="B costs less for identical service."
+                                ),
+                            ),
+                        ]
+                    )
                 ),
             ),
         ),
-        Task(
+        Task.create(
             id="decision-review",
-            fixture=fixture_ops.empty,
-            instruction=Instruction(
+            fixture=Fixture.create(files=[]),
+            instruction=Instruction.create(
                 skill="bayesian",
                 prompt=(
                     "I took a one-time $1 bet with a known 80% chance of winning $1 profit "
@@ -205,24 +224,41 @@ def cases() -> tuple[Task, ...]:
                     "change_rule (boolean), and reason (one sentence). Do not change files."
                 ),
             ),
-            criterion=Criterion.Answer(
-                Rubric(
-                    expected=[
-                        ("decision_was_supported", ResponseValue.Bool(True)),  # noqa: FBT003
-                        ("change_rule", ResponseValue.Bool(False)),  # noqa: FBT003
-                    ],
-                    text_rule=TextRule(field="reason", min_words=1, max_words=40),
+            criterion=Criterion.create(
+                answer=Rubric.create(
+                    expected=Response.create(
+                        fields=[
+                            ResponseField.create(
+                                name="decision_was_supported", value=ResponseValue.create(bool=True)
+                            ),
+                            ResponseField.create(
+                                name="change_rule", value=ResponseValue.create(bool=False)
+                            ),
+                        ]
+                    ),
+                    text_rule=TextRule.create(field="reason", min_words=1, max_words=40),
                 )
             ),
             allowed_files=(),
-            reference=Reference(
-                edits=fixture_ops.empty,
-                completion=Completion.Structured(
-                    [
-                        ("decision_was_supported", ResponseValue.Bool(True)),  # noqa: FBT003
-                        ("change_rule", ResponseValue.Bool(False)),  # noqa: FBT003
-                        ("reason", ResponseValue.String("One loss did not change the known odds.")),
-                    ]
+            reference=Reference.create(
+                edits=Fixture.create(files=[]),
+                completion=Completion.create(
+                    structured=Response.create(
+                        fields=[
+                            ResponseField.create(
+                                name="decision_was_supported", value=ResponseValue.create(bool=True)
+                            ),
+                            ResponseField.create(
+                                name="change_rule", value=ResponseValue.create(bool=False)
+                            ),
+                            ResponseField.create(
+                                name="reason",
+                                value=ResponseValue.create(
+                                    string="One loss did not change the known odds."
+                                ),
+                            ),
+                        ]
+                    )
                 ),
             ),
         ),

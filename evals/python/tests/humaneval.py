@@ -65,7 +65,7 @@ def imported_case_keeps_grader_private() -> None:
     assert _files(case.files) == {"solution.py": json.loads(_record())["prompt"]}
     assert (
         "canonical_solution" in case.prompt,
-        "verifier.py" in dict(case.files),
+        "verifier.py" in {artifact.path: artifact.content for artifact in case.files},
     ) == (False, False)
 
 
@@ -75,17 +75,17 @@ def imported_profile_public_inputs_match() -> None:
         name: profiles.files(
             load_profile(name="genius", spec=evaluation.resolve_settings()),
             case=case,
-            instructions=profiles.load_instructions(evaluation.resolve_settings()),
+            documents=profiles.load_documents(evaluation.resolve_settings()),
         )[name]
         for name in profiles.files(
             load_profile(name="baseline", spec=evaluation.resolve_settings()),
             case=case,
-            instructions=profiles.load_instructions(evaluation.resolve_settings()),
+            documents=profiles.load_documents(evaluation.resolve_settings()),
         )
     } == profiles.files(
         load_profile(name="baseline", spec=evaluation.resolve_settings()),
         case=case,
-        instructions=profiles.load_instructions(evaluation.resolve_settings()),
+        documents=profiles.load_documents(evaluation.resolve_settings()),
     )
 
 
@@ -124,7 +124,7 @@ def dataset_selector_grades_one_trusted_record() -> None:
             load_profile(name="baseline", spec=evaluation.resolve_settings()),
             cases=datasets.list_cases(),
             dataset="humanevalplus",
-            instructions=profiles.load_instructions(evaluation.resolve_settings()),
+            documents=profiles.load_documents(evaluation.resolve_settings()),
         )
     assert samples[0].metadata == {
         "case_id": case.id,
@@ -150,7 +150,10 @@ def synthetic_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
 def dataset_index_keeps_all_cases(synthetic_dataset: None) -> None:
     cases = datasets.list_cases(selection="humanevalplus")
     assert (len(cases), len({case.id for case in cases})) == (164, 164)
-    assert all(tuple(dict(case.files)) == ("solution.py",) for case in cases)
+    assert all(
+        tuple({artifact.path: artifact.content for artifact in case.files}) == ("solution.py",)
+        for case in cases
+    )
 
 
 def import_cache_tracks_verifier_source(

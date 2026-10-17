@@ -2,7 +2,6 @@
 
 import json
 from collections.abc import Mapping
-from operator import itemgetter
 from types import MappingProxyType
 
 from pydantic import validate_call
@@ -10,9 +9,7 @@ from pydantic import validate_call
 from evals.python import datasets
 from evals.python.datasets import Selection
 from evals.python.schema import FROZEN
-from kernel import InvalidArgument, Outcome, Response, ResponseValue, Task, Verification
-from kernel._operations import grader as grader_ops
-from kernel._operations import response as response_ops
+from kernel import Completion, Outcome, Response, ResponseField, ResponseValue, Task, Verification
 
 __all__ = ["Scores", "score_case"]
 
@@ -22,43 +19,40 @@ UNCHECKED = Verification.Unchecked()
 
 def _scalar(value: object) -> ResponseValue.Value:
     if isinstance(value, bool):
-        return ResponseValue.Bool(value)
+        return ResponseValue.create(bool=value)
     if isinstance(value, str):
-        return ResponseValue.String(value)
+        return ResponseValue.create(string=value)
     raise ValueError("Response fields must be strings or booleans")
 
 
 def _response(fields: object) -> Response:
     if not isinstance(fields, dict):
         raise ValueError("Expected response object")
-    return response_ops.of_fields([(name, _scalar(value)) for name, value in fields.items()])
+    return Response.create(
+        fields=[
+            ResponseField.create(name=name, value=_scalar(value)) for name, value in fields.items()
+        ]
+    )
 
 
 def _candidate(text: str) -> Response | None:
-    text = grader_ops.trim(text)
+    text = Completion.trim(text=text)
     if text.startswith("```json\n") and text.endswith("\n```"):
         text = text[8:-4]
     try:
         return _response(json.loads(text))
-    except (ValueError, RecursionError, InvalidArgument):
+    except (ValueError, RecursionError):
         return None
 
 
 def score(
     case: Task, *, response: str, changed_files: tuple[str, ...], verification: Verification.Value
 ) -> Scores:
-    pairs = grader_ops.grade(
-        case,
+    pairs = Task.grade(
+        task=case,
         response=_candidate(response),
-        outcome=Outcome(changed_files=changed_files, verification=verification),
+        outcome=Outcome.create(changed_files=changed_files, verification=verification),
     )
-    names = tuple(map(itemgetter(0), pairs))
-    if len(set(names)) != len(names):
-        raise ValueError("Kernel returned duplicate score names")
-    if not all(isinstance(value, bool) for _, value in pairs):
-        raise ValueError("Kernel returned non-boolean scores")
-    if not set(grader_ops.required_names) <= set(names):
-        raise ValueError("Kernel omitted required score names")
     return MappingProxyType(dict(pairs))
 
 

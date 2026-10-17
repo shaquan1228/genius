@@ -1,7 +1,5 @@
 """Prepared inputs stay consistent through composition, scoring, and native logs."""
 
-# Native boolean variants have a single positional payload.
-# ruff: noqa: FBT003
 import base64
 from collections.abc import Mapping
 from dataclasses import replace
@@ -21,21 +19,25 @@ from evals.python import evaluation as evaluation_api
 from evals.python.evaluation import EvaluationSettings, InstructionDelivery
 from evals.python.integrations.inspect import evaluation, profiles, scoring
 from evals.python.integrations.inspect.tasks import build_task
-from evals.python.tests.declarations import _copy_case, _declaration
+from evals.python.tests.declarations import _copy_case, _copy_verifier, _declaration
 from evals.python.tests.support import offline_run as _offline_run
 from evals.python.tests.support import results as _results
 from kernel import (
+    Artifact,
     Case,
     Completion,
     Content,
     Criterion,
+    File,
+    Fixture,
     Instruction,
     Reference,
+    Response,
+    ResponseField,
     ResponseValue,
     Rubric,
     TextRule,
 )
-from kernel._operations import fixture as fixture_ops
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
@@ -51,7 +53,7 @@ def instruction_snapshot_survives_source_changes(
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(contents)
-    snapshot = profiles.load_instructions(spec)
+    snapshot = profiles.load_documents(spec)
     (tmp_path / profiles.REASONING_DOCUMENTS[0]).write_text("changed")
     (tmp_path / profiles.REASONING_DOCUMENTS[1]).unlink()
     assert dict(snapshot) == {f"instructions/{name}": data for name, data in material.items()}
@@ -60,7 +62,7 @@ def instruction_snapshot_survives_source_changes(
 def composition_uses_supplied_bytes_without_filesystem_access() -> None:
     spec = evaluation_api.resolve_settings()
     profile = profiles.load_profile("genius", spec=spec)
-    snapshot = profiles.load_instructions(spec)
+    snapshot = profiles.load_documents(spec)
     case = datasets.list_cases()[0]
     expected_hash = profiles.content_hash(snapshot)
     with (
@@ -68,9 +70,7 @@ def composition_uses_supplied_bytes_without_filesystem_access() -> None:
         patch.object(Path, "read_text", side_effect=AssertionError("late text read")),
         patch.object(Path, "rglob", side_effect=AssertionError("late directory scan")),
     ):
-        sample = profiles.samples(profile, cases=(case,), instructions=snapshot, delivery="inline")[
-            0
-        ]
+        sample = profiles.samples(profile, cases=(case,), documents=snapshot, delivery="inline")[0]
         mounted = cast(Mapping[str, str], sample.files)
         skill = base64.b64decode(mounted["instructions/skills/reasoning/SKILL.md"].split(",", 1)[1])
         assert (
@@ -92,7 +92,7 @@ def evaluation_prepares_once_for_all_tasks(
         patch(
             "evals.python.datasets.smoke.cases", return_value=tuple(cohort.records.values())
         ) as load,
-        patch.object(profiles, "load_instructions", wraps=profiles.load_instructions) as read,
+        patch.object(profiles, "load_documents", wraps=profiles.load_documents) as read,
         patch.object(datasets, "get_provenance", wraps=datasets.get_provenance) as provenance,
     ):
         tasks = evaluation.evaluation_tasks(spec, request=request)
@@ -110,12 +110,12 @@ def evaluation_prepares_once_for_all_tasks(
 def private_tasks() -> list[Task]:
     definition = _copy_case(
         _declaration(code=False),
-        instruction=Instruction(
+        instruction=Instruction.create(
             skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
         ),
-        reference=Reference(
-            edits=fixture_ops.of_files([("main.py", PRIVATE_SENTINEL)]),
-            completion=Completion.Plain(PRIVATE_SENTINEL),
+        reference=Reference.create(
+            edits=Fixture.create(files=[File.create(path="main.py", contents=PRIVATE_SENTINEL)]),
+            completion=Completion.create(plain=PRIVATE_SENTINEL),
         ),
     )
     snapshots = [
@@ -123,13 +123,19 @@ def private_tasks() -> list[Task]:
             cases=(
                 _copy_case(
                     definition,
-                    criterion=Criterion.Answer(
-                        Rubric(
-                            expected=[
-                                ("choice", ResponseValue.String(choice)),
-                                ("safe", ResponseValue.Bool(True)),
-                            ],
-                            text_rule=TextRule(field="reason", min_words=1, max_words=5),
+                    criterion=Criterion.create(
+                        answer=Rubric.create(
+                            expected=Response.create(
+                                fields=[
+                                    ResponseField.create(
+                                        name="choice", value=ResponseValue.create(string=choice)
+                                    ),
+                                    ResponseField.create(
+                                        name="safe", value=ResponseValue.create(bool=True)
+                                    ),
+                                ]
+                            ),
+                            text_rule=TextRule.create(field="reason", min_words=1, max_words=5),
                         )
                     ),
                 ),
@@ -138,13 +144,13 @@ def private_tasks() -> list[Task]:
         for choice in ("B", "A")
     ]
     spec = evaluation_api.resolve_settings(epochs=1)
-    instructions = profiles.load_instructions(spec)
+    documents = profiles.load_documents(spec)
     tasks = [
         build_task(
             profile=profiles.load_profile("baseline", spec=spec),
             spec=spec,
             catalog=dataset,
-            instructions=instructions,
+            documents=documents,
             provenance=datasets.get_provenance(selection=dataset),
             agent="codex",
             task_name=f"private-{index}",
@@ -208,14 +214,14 @@ def native_profiles_share_fingerprinted_codex_guidance(
     )
     spec = evaluation_api.resolve_settings(epochs=1)
     dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
-    instructions = profiles.load_instructions(spec)
+    documents = profiles.load_documents(spec)
     tasks = [
         build_task(
             profile=profile,
             spec=spec,
             agent="codex",
             catalog=dataset,
-            instructions=instructions,
+            documents=documents,
             provenance=datasets.get_provenance(selection=dataset),
         )
         for profile in spec.profiles
@@ -237,11 +243,14 @@ def _assert_guidance_logs(logs: list[EvalLog], *, digest: str) -> None:
 
 def unresolved_public_resource_cannot_reach_agent_files() -> None:
     spec = evaluation_api.resolve_settings()
-    case = Case(
-        id="unresolved",
-        skill="reasoning",
-        prompt="Use the supplied context",
-        files=[("context.txt", Content.Resource("private-resource"))],
+    definition = _declaration()
+    assert isinstance(definition.criterion, Criterion.Code)
+    checks = _copy_verifier(
+        definition.criterion.verifier,
+        tools=[
+            Artifact.create(path="context.txt", content=Content.create(resource="private-resource"))
+        ],
     )
-    with pytest.raises(ValueError, match="Unresolved resource in public case unresolved"):
-        profiles.files(profiles.load_profile("baseline", spec=spec), case=case, instructions={})
+    case = Case.create(task=_copy_case(definition, criterion=Criterion.create(code=checks)))
+    with pytest.raises(ValueError, match="Unresolved resource in public case external"):
+        profiles.files(profiles.load_profile("baseline", spec=spec), case=case, documents={})

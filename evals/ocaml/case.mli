@@ -1,10 +1,3 @@
-val validate : Ast.task -> Ast.task
+type t = private { id : string; skill : string; prompt : string; files : Artifact.t list }
 
-val make :
-  id:string ->
-  fixture:Ast.fixture ->
-  instruction:Ast.instruction ->
-  criterion:Ast.criterion ->
-  allowed_files:string list ->
-  reference:Ast.reference ->
-  Ast.task
+val create : task:Task.t -> t

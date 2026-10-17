@@ -11,11 +11,7 @@ from typing import Protocol, cast
 from pydantic import TypeAdapter, validate_call
 
 from evals.python.schema import FROZEN, DatasetInfo, FileName, Files
-from kernel import Case, Content, Criterion, Fixture, Reference, Task, Verifier
-from kernel._operations import case as case_ops
-from kernel._operations import fixture as fixture_ops
-from kernel._operations import projection as projection_ops
-from kernel._operations import sources
+from kernel import Case, Fixture, Kernel, Reference, ResourceBinding, Task
 
 __all__ = [
     "Dataset",
@@ -47,7 +43,7 @@ class Sources:
         object.__setattr__(self, "resources", tuple((name, text) for name, text in self.resources))
 
 
-_MODULES = sources()
+_MODULES = tuple((file.path, file.contents) for file in Kernel.current.sources)
 
 
 def kernel_sources(*, resources: Mapping[str, str] = MappingProxyType({})) -> Sources:
@@ -59,11 +55,16 @@ def fingerprint(value: Sources) -> str:
 
 
 def _canonical(value: object) -> object:
-    if value is None or isinstance(value, (str, bool, int, float)):
-        return value
-    if isinstance(value, Fixture):
-        return tuple(fixture_ops.files(value))
-    return (type(value).__name__, tuple(_canonical(item) for item in cast(Sequence[object], value)))
+    match value:
+        case None | str() | bool() | int() | float():
+            return value
+        case Fixture():
+            return tuple(_canonical(file) for file in Fixture.files(fixture=value))
+        case _:
+            return (
+                type(value).__name__,
+                tuple(_canonical(item) for item in cast(Sequence[object], value)),
+            )
 
 
 def value_fingerprint(value: Task) -> str:
@@ -81,7 +82,7 @@ class Dataset:
         records = dict(self.records)
         _validate_snapshot(self.sources, count=len(records), info=self.info)
         normalized = _resolve_records(records, sources=self.sources)
-        public = {name: projection_ops.case(record) for name, record in normalized.items()}
+        public = {name: Case.create(task=record) for name, record in normalized.items()}
         object.__setattr__(self, "cases", MappingProxyType(public))
         object.__setattr__(self, "records", MappingProxyType(normalized))
 
@@ -111,41 +112,12 @@ class _CaseKey:
         object.__setattr__(self, "digest", value_fingerprint(self.value))
 
 
-def _artifacts(
-    values: Sequence[tuple[str, Content.Value]], *, resources: Mapping[str, str]
-) -> tuple[tuple[str, Content.Value], ...]:
-    return tuple(
-        (
-            name,
-            Content.Inline(resources[content[0]])
-            if isinstance(content, Content.Resource)
-            else content,
-        )
-        for name, content in values
-    )
-
-
 def _resolve(case: Task, *, sources: Sources) -> Task:
-    case_ops.validate(case)
-    if isinstance(case.criterion, Criterion.Answer):
-        return case
-    checks = case.criterion[0]
-    resources = dict(sources.resources)
-    verifier = Verifier(
-        inputs=checks.inputs,
-        files=_artifacts(checks.files, resources=resources),
-        tools=_artifacts(checks.tools, resources=resources),
-        command=checks.command,
-        stdin=checks.stdin,
-        timeout_seconds=checks.timeout_seconds,
-    )
-    return case_ops.make(
-        id=case.id,
-        fixture=case.fixture,
-        instruction=case.instruction,
-        criterion=Criterion.Code(verifier),
-        allowed_files=case.allowed_files,
-        reference=case.reference,
+    return Task.resolve_resources(
+        task=case,
+        resources=[
+            ResourceBinding.create(key=key, contents=text) for key, text in sources.resources
+        ],
     )
 
 
@@ -241,7 +213,7 @@ def list_cases(*, selection: Selection = "smoke") -> tuple[Case, ...]:
 
 @validate_call(config=FROZEN)
 def get_reference(*, case_id: str, selection: Selection = "smoke") -> Reference:
-    return projection_ops.reference(record(case_id, selection=selection))
+    return (record(case_id, selection=selection)).reference
 
 
 @validate_call(config=FROZEN)

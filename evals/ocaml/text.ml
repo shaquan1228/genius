@@ -1,6 +1,3 @@
-let definitions = [ ("correctness", `Correctness); ("scope", `Scope) ]
-let required_names = List.map fst definitions
-
 let whitespace_width text index =
   let length = String.length text in
   let starts value =
@@ -35,7 +32,7 @@ let whitespace_width text index =
       in
       match List.find_opt starts spaces with None -> 0 | Some value -> String.length value)
 
-let word_count text =
+let word_count ~text =
   let rec count index in_word total =
     if index = String.length text then total
     else
@@ -45,7 +42,7 @@ let word_count text =
   in
   count 0 false 0
 
-let trim text =
+let trim ~text =
   let rec bounds index first last =
     if index = String.length text then
       match first with None -> "" | Some start -> String.sub text start (last - start)
@@ -55,41 +52,3 @@ let trim text =
       else bounds (index + 1) (match first with None -> Some index | some -> some) (index + 1)
   in
   bounds 0 None 0
-
-let answer (criterion : Ast.rubric) response =
-  match response with
-  | None -> false
-  | Some response ->
-      let fields = Response.fields response in
-      let exact, text_valid =
-        match criterion.text_rule with
-        | None -> (fields, true)
-        | Some rule ->
-            let valid =
-              match List.assoc_opt rule.field fields with
-              | Some (Ast.String text) ->
-                  let words = word_count text in
-                  rule.min_words <= words && words <= rule.max_words
-              | Some (Ast.Bool _) | None -> false
-            in
-            (List.remove_assoc rule.field fields, valid)
-      in
-      text_valid && List.sort compare exact = List.sort compare (Response.fields criterion.expected)
-
-let grade (case : Ast.task) ~response ~(outcome : Ast.outcome) =
-  let case = Case.validate case in
-  let correctness =
-    match case.criterion with
-    | Ast.Code _ -> (
-        match outcome.verification with
-        | Ast.Harness_error detail -> invalid_arg ("Verification harness error: " ^ detail)
-        | Ast.Passed -> true
-        | _ -> false)
-    | Ast.Answer criterion -> answer criterion response
-  in
-  let allowed = List.map (fun path -> "workspace/" ^ path) case.allowed_files in
-  let scope = List.for_all (fun path -> List.mem path allowed) outcome.changed_files in
-  List.map
-    (fun (name, criterion) ->
-      (name, match criterion with `Correctness -> correctness | `Scope -> scope))
-    definitions

@@ -1,2 +1,3 @@
-(* Reference constructor shared by code-case builders. Ast.reference defines the fields. *)
-let edits files = { Ast.edits = files; completion = Plain "Reference edits applied." }
+type t = { edits : Fixture.t; completion : Completion.t }
+
+let create ~edits ~completion : t = { edits; completion }

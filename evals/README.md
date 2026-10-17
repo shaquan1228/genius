@@ -102,3 +102,54 @@ cases = datasets.list_cases(selection=dataset)
 
 For dataset authoring, start with [datasets/smoke.py](python/datasets/smoke.py).
 Use `datasets.compile_dataset(cases=...)` to work with your own declarations.
+
+Each domain component owns its type and constructors in its OCaml `.ml` and `.mli` files.
+The public binding interface is generated from those compiled owner contracts.
+Constrained records and alternatives are private:
+Python authors use `Task.create(...)`, `Verifier.create(...)`, `Instruction.create(...)`,
+`TextRule.create(...)`, and `Rubric.create(...)`. These factories return immutable native
+values after checking their invariants. Raw representations stay inside the OCaml
+implementation; projections and graders accept the validated values directly.
+
+`Rubric.create(expected=...)` accepts a checked `Response`. Create responses with
+`Response.create(fields=[ResponseField.create(name="choice", value=ResponseValue.create(string="B"))])`.
+Structured reference completions use `Completion.create(structured=...)`; fields remain readable through
+`response.fields`. Resource resolution returns a new validated task and preserves the
+original declaration.
+
+Alternative factories require exactly one named input: `Content.create(inline="text")` or
+`Content.create(resource="checker")`, and `Completion.create(plain="done")` or
+`Completion.create(structured=response)`. The OCaml owner checks that contract; generated
+Python overloads reject both or neither input during type checking. Named payloads remain
+available for inspection, such as `content.text` and `completion.response`.
+
+The `kernel` package exports types and exceptions. Operations belong to those types:
+`Case.create(task=...)`, `Task.grade(task=..., response=..., outcome=...)`,
+`Fixture.files(fixture=...)`, and `Experiment.resolve(...)`. Compiled source provenance
+is available through the native `Kernel.current` value and its `sources` collection.
+Bindings adapt native results and named calls without duplicating domain policy.
+
+Inspect calls loaded skill files `documents`; their path-to-bytes mapping stays local
+to the file and SDK adapter. `Instruction` remains the core task's skill and prompt.
+
+```python
+from kernel import ValidationError, Verifier
+
+try:
+    Verifier.create(
+        inputs=("solution.py",), files=(), tools=(), command=(), stdin="", timeout_seconds=0
+    )
+except ValidationError as error:
+    for issue in error.issues:
+        print(issue.code, issue.field, issue.message, tuple(issue.values))
+```
+
+The OCaml constructors return typed `result` values. The generated native Python adapter
+unwraps successful results and raises `ValidationError` with native issues on rejected
+input. A verifier harness malfunction raises `GradingError`, retaining its native failure
+in `error.error`; an incorrect or malformed candidate answer receives an unsuccessful
+correctness score. Domain objects and errors cross the in-process bridge directly.
+Runtime JSON decoding remains at external text boundaries such as candidate responses.
+
+The pinned bridge patch preserves private-record construction restrictions, distinct
+polymorphic result parameters, and domain type context while adapting result payloads.

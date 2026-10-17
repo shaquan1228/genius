@@ -35,7 +35,7 @@ def compiled_includes_and_inference_drive_bindings(tmp_path: Path) -> None:
     path = _compile(
         tmp_path / "sample",
         text="""include sig
-          type token = A | B of string
+          type token = A | B of { value : string }
           type item = { flag : bool; values : (string * int option) list }
         end
         val choose : ?fallback:string option -> expected:token -> unit -> token
@@ -43,7 +43,7 @@ def compiled_includes_and_inference_drive_bindings(tmp_path: Path) -> None:
     )
     (tmp_path / "sample.mli").unlink()
     items = _schema((path,))[0]["items"]
-    stub = generate.ast_bindings(items[:-1])
+    stub = generate.domain_bindings(items[:-1])
     assert (
         "class A(_types.Token):" in stub,
         "class B(_types.Token):" in stub,
@@ -71,6 +71,7 @@ def inferred_compiled_values_drive_bindings(tmp_path: Path) -> None:
         "val identity : 'a -> 'a",
         "type 'a box = Box of 'a",
         "type pair = Pair of string * int",
+        "type scalar = Scalar of string",
         "type state = { mutable value : int }",
         "module Alias = String",
     ],
@@ -92,8 +93,10 @@ def _build_bindings(workspace: Path, *, check: bool = True) -> subprocess.Comple
 
 
 def _add_probe(workspace: Path) -> subprocess.CompletedProcess[str]:
-    source = workspace / "ocaml/ast.ml"
+    source = workspace / "ocaml/instruction.ml"
     source.write_text(source.read_text() + "\ntype dune_probe = { payload : int }\n")
+    interface = workspace / "ocaml/instruction.mli"
+    interface.write_text(interface.read_text() + "\ntype dune_probe = { payload : int }\n")
     return _build_bindings(workspace, check=False)
 
 
@@ -133,7 +136,7 @@ def dune_requires_promotion_for_changed_runtime_exports(binding_workspace: Path)
         in (binding_workspace / "python/kernel/__init__.pyi").read_text()
     )
     assert (
-        "DuneProbe = _native.dune_probe"
+        "DuneProbe = _named(constructor=_native.Instruction.dune_probe)"
         in (binding_workspace / "python/kernel/__init__.py").read_text()
     )
 
@@ -141,8 +144,10 @@ def dune_requires_promotion_for_changed_runtime_exports(binding_workspace: Path)
 def dune_rebuilds_stubs_after_compiled_types_change(binding_workspace: Path) -> None:
     _add_probe(binding_workspace)
     _promote_bindings(binding_workspace)
-    source = binding_workspace / "ocaml/ast.ml"
+    source = binding_workspace / "ocaml/instruction.ml"
     source.write_text(source.read_text().replace("payload : int", "payload : string"))
+    interface = binding_workspace / "ocaml/instruction.mli"
+    interface.write_text(interface.read_text().replace("payload : int", "payload : string"))
     _build_bindings(binding_workspace)
     assert (
         "def payload(self) -> str:"
@@ -171,12 +176,14 @@ def installed_kernel_keeps_policy_and_provenance_together(tmp_path: Path) -> Non
 from unittest.mock import patch
 with patch('subprocess.run', side_effect=AssertionError('Import compiled the kernel')):
     from kernel import Fixture
-    from kernel._operations import experiment as experiment_ops, fixture as fixture_ops, sources
-    spec = experiment_ops.resolve()
-    assert isinstance(fixture_ops.empty, Fixture)
-    assert not hasattr(fixture_ops.empty, 'add')
-    assert dict(sources())['experiment.ml'].find('epochs = 7') >= 0
-    assert dict(sources())['experiment.ml'].find('epochs = 9') == -1
+    from kernel import Experiment, File, Kernel
+    spec = Experiment.resolve()
+    assert isinstance(Fixture.create(files=[]), Fixture)
+    Fixture.add(fixture=Fixture.empty, file=File.create(path='probe.py', contents='text'))
+    assert not Fixture.files(fixture=Fixture.empty)
+    modules = {file.path: file.contents for file in Kernel.current.sources}
+    assert modules['experiment.ml'].find('epochs = 7') >= 0
+    assert modules['experiment.ml'].find('epochs = 9') == -1
     print(json.dumps({'epochs': spec.epochs}))
 """
     result = subprocess.run(
@@ -205,11 +212,11 @@ def missing_installed_package_reports_setup_command() -> None:
 def incompatible_python_identifiers_fail_loudly(tmp_path: Path) -> None:
     path = _compile(tmp_path / "keywords", text="type state = None | Value")
     with pytest.raises(ValueError, match="Unsupported Python identifier: None"):
-        generate.ast_bindings(_schema((path,))[0]["items"])
+        generate.domain_bindings(_schema((path,))[0]["items"])
 
 
 @pytest.mark.parametrize(
-    "text", ["type foo_bar = string\ntype fooBar = bool", "type invalid_argument = { code : int }"]
+    "text", ["type foo_bar = string\ntype fooBar = bool", "type grading_error = { code : int }"]
 )
 def capitalized_binding_names_cannot_silently_collide(tmp_path: Path, *, text: str) -> None:
     path = _compile(tmp_path / "collision", text=text)
@@ -221,8 +228,8 @@ def capitalized_binding_names_cannot_silently_collide(tmp_path: Path, *, text: s
 def constructor_names_can_match_their_owner(tmp_path: Path) -> None:
     path = _compile(tmp_path / "owned", text="type entry = Entry")
     items = _schema((path,))[0]["items"]
-    assert "Entry.Entry = _native.Entry" in generate.runtime_types(items)
-    assert "class Entry(_types.Entry):" in generate.ast_bindings(items)
+    assert "Entry.Entry = _named(constructor=_native.Entry)" in generate.runtime_types(items)
+    assert "class Entry(_types.Entry):" in generate.domain_bindings(items)
 
 
 @pytest.mark.parametrize("text", ["type state = Value", "type state = Foo_bar | FooBar"])
@@ -231,3 +238,128 @@ def alternative_names_cannot_silently_collide(tmp_path: Path, *, text: str) -> N
     items = _schema((path,))[0]["items"]
     with pytest.raises(ValueError, match="alternative names collide"):
         generate.runtime_types(items)
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        'let forge (task : Genius_evals_kernel.Task.t) = { task with id = "" }',
+        "let forge (value : Genius_evals_kernel.Verifier.t) = { value with inputs = [] }",
+        "let forge : Genius_evals_kernel.Response.t = { fields = [] }",
+    ],
+)
+def ocaml_clients_cannot_construct_unvalidated_values(tmp_path: Path, *, expression: str) -> None:
+    source = tmp_path / "forge.ml"
+    source.write_text(expression)
+    result = subprocess.run(
+        ["ocamlfind", "ocamlc", "-package", "genius_evals_kernel", "-c", str(source)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "private type" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "text", ["val create : string -> string", "val create : fields:string list -> string -> string"]
+)
+def unnamed_operation_inputs_fail_generation(tmp_path: Path, *, text: str) -> None:
+    path = _compile(tmp_path / "unnamed", text=text)
+    item = _schema((path,))[0]["items"][0]
+    with pytest.raises(ValueError, match="arguments must be named"):
+        generate.operation(item)
+
+
+def factories_must_return_their_owner_type(tmp_path: Path) -> None:
+    path = _compile(
+        tmp_path / "mismatch",
+        text="module Response : sig type t = { fields : string list }\n"
+        "val create : fields:string list -> string end",
+    )
+    with pytest.raises(ValueError, match="owner type"):
+        generate.owner_declarations(_schema((path,))[0]["items"])
+
+
+@pytest.mark.parametrize(
+    ("source", "accepted"),
+    [
+        ('Content.create(inline="")', True),
+        ('Content.create(resource="checker")', True),
+        ('Completion.create(plain="")', True),
+        ("ResponseValue.create(bool=False)", True),
+        ("Content.create()", False),
+        ('Content.create(inline="x", resource="checker")', False),
+        ("Completion.create()", False),
+        ('Completion.create(plain="", structured=Response.create(fields=[]))', False),
+        ('ResponseValue.create(string="x", bool=False)', False),
+        ("Criterion.create()", False),
+        ('Content.Inline("unchecked")', False),
+        ('TextRule(field="x", min_words=1, max_words=2)', False),
+    ],
+)
+def compiler_owned_factory_contracts_are_checked_statically(
+    tmp_path: Path, *, source: str, accepted: bool
+) -> None:
+    path = tmp_path / "factory_contract.py"
+    path.write_text(
+        "from kernel import Content, Completion, Response, ResponseValue, Criterion, TextRule\n"
+        + source
+        + "\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "mypy", "--config-file", str(EVALS / "pyproject.toml"), str(path)],
+        cwd=EVALS,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert (result.returncode == 0) is accepted, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "signature",
+    [
+        "?a:string -> ?b:string -> int -> t",
+        "?a:string -> ?b:string -> required:int -> unit -> t",
+        "?a:string -> ?b:string -> t",
+    ],
+)
+def exclusive_contracts_cannot_silently_lose_arguments(tmp_path: Path, *, signature: str) -> None:
+    path = _compile(
+        tmp_path / "exclusive",
+        text=f"type t = Ready\nval create : {signature} [@@python.exclusive]",
+    )
+    value = _schema((path,))[0]["items"][-1]
+    with pytest.raises(ValueError, match=r"Exclusive factories|arguments must be named"):
+        generate.operation(value)
+
+
+def compiled_private_nullary_constructors_retain_their_boundary(tmp_path: Path) -> None:
+    path = _compile(
+        tmp_path / "private_sum", text="type state = private Ready | Set of { value : string }"
+    )
+    stub = generate.domain_bindings(_schema((path,))[0]["items"])
+    assert "class Ready(_types.State):\n        def __init__(self, *, _token: Never)" in stub
+    assert "class Set(_types.State):\n        def __init__(self, *, _token: Never)" in stub
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "val root_function : unit -> bool",
+        "module Service : sig val run : unit -> int end",
+        "module Values : sig type t = int list val create : values:int list -> t end",
+    ],
+)
+def only_nominal_owners_can_export_type_methods(tmp_path: Path, *, text: str) -> None:
+    path = _compile(tmp_path / "nonowner", text=text)
+    with pytest.raises(ValueError, match=r"Public kernel|Public owner|Native aliases"):
+        generate.render(_schema((path,)))
+
+
+def bindings_publish_only_the_type_interface() -> None:
+    root = EVALS / "python/kernel"
+    assert {path.name for path in root.glob("*.py")} == {"__init__.py", "_bridge.py", "generate.py"}
+    assert {path.name for path in root.glob("*.pyi")} == {"__init__.pyi"}

@@ -49,18 +49,16 @@ let field value =
 
 let constructor value =
   if value.cd_res <> None then unsupported "GADT constructor";
-  let arguments =
+  let fields =
     match value.cd_args with
-    | Cstr_tuple (([] | [ _ ]) as arguments) -> arguments
-    | Cstr_tuple _ -> unsupported "multi-argument constructor"
-    | Cstr_record _ -> unsupported "inline record constructor"
+    | Cstr_tuple [] -> []
+    | Cstr_record fields -> List.map field fields
+    | Cstr_tuple _ -> unsupported "unnamed constructor arguments"
   in
-  object_
-    [ ("name", quote (Ident.name value.cd_id)); ("arguments", array (List.map type_ arguments)) ]
+  object_ [ ("name", quote (Ident.name value.cd_id)); ("fields", array fields) ]
 
 let declaration name value =
   if value.type_params <> [] then unsupported ("parameterized type " ^ name);
-  if value.type_private <> Public then unsupported ("private type " ^ name);
   let fields =
     match (value.type_kind, value.type_manifest) with
     | Type_abstract, None -> [ ("kind", quote "abstract") ]
@@ -71,7 +69,13 @@ let declaration name value =
         [ ("kind", quote "variant"); ("constructors", array (List.map constructor constructors)) ]
     | _ -> unsupported ("type representation " ^ name)
   in
-  object_ (("name", quote name) :: fields)
+  object_
+    (("name", quote name) :: ("private", string_of_bool (value.type_private = Private)) :: fields)
+
+let exclusive value =
+  List.exists
+    (fun attribute -> attribute.Parsetree.attr_name.txt = "python.exclusive")
+    value.val_attributes
 
 let rec items signature =
   List.map
@@ -83,6 +87,7 @@ let rec items signature =
               ("kind", quote "value");
               ("name", quote (Ident.name id));
               ("type", type_ value.val_type);
+              ("exclusive", string_of_bool (exclusive value));
             ]
       | Sig_module (id, Mp_present, { md_type = Mty_signature signature; _ }, _, Exported) ->
           object_
@@ -99,52 +104,49 @@ let signature path =
   object_ [ ("module", quote cmi.cmi_name); ("items", array (items cmi.cmi_sign)) ]
 
 let export_interface paths =
-  match paths with
-  | [] -> invalid_arg "Expected compiled Ast interface"
-  | ast_path :: operations ->
-      let ast = (Cmi_format.read_cmi ast_path).cmi_sign in
-      let ast_module =
-        Path.Pdot (Path.Pident (Ident.create_persistent "Genius_evals_kernel__"), "Ast")
-      in
-      let substitution =
-        List.fold_left
-          (fun substitution -> function
-            | Sig_type (id, _, _, _) ->
-                Subst.add_type_path
-                  (Path.Pdot (ast_module, Ident.name id))
-                  (Path.Pident id)
-                  substitution
-            | _ -> unsupported "non-type Ast declaration")
-          Subst.identity
-          ast
-      in
-      let ast =
-        List.map
-          (function
-            | Sig_type (id, value, recursive, visibility) when Ident.name id = "fixture" ->
-                Sig_type
-                  ( id,
-                    { value with type_manifest = None; type_kind = Type_abstract },
-                    recursive,
-                    visibility )
-            | item -> item)
-          ast
-      in
-      Printtyp.signature Format.std_formatter ast;
-      Format.pp_print_newline Format.std_formatter ();
+  if paths = [] then invalid_arg "Expected compiled owner interfaces";
+  let prefix = "Genius_evals_kernel__" in
+  let modules =
+    List.map
+      (fun path ->
+        let cmi = Cmi_format.read_cmi path in
+        let name =
+          String.sub
+            cmi.cmi_name
+            (String.length prefix)
+            (String.length cmi.cmi_name - String.length prefix)
+        in
+        (name, cmi))
+      paths
+  in
+  let substitution =
+    List.fold_left
+      (fun substitution (name, cmi) ->
+        let target = Path.Pident (Ident.create_persistent name) in
+        let wrapped = Path.Pdot (Path.Pident (Ident.create_persistent prefix), name) in
+        substitution
+        |> Subst.add_module_path wrapped target
+        |> Subst.add_module_path
+             (Path.Pident (Ident.create_persistent cmi.Cmi_format.cmi_name))
+             target)
+      Subst.identity
+      modules
+  in
+  List.iter
+    (fun (name, cmi) ->
+      let signature = Subst.signature Subst.Keep substitution cmi.Cmi_format.cmi_sign in
+      Format.printf "module %s : sig@." name;
       List.iter
-        (fun path ->
-          let cmi = Cmi_format.read_cmi path in
-          let name =
-            String.sub
-              cmi.cmi_name
-              (String.length "Genius_evals_kernel__")
-              (String.length cmi.cmi_name - String.length "Genius_evals_kernel__")
-          in
-          let signature = Subst.signature Subst.Keep substitution cmi.cmi_sign in
-          Format.printf "module %s : sig@.%a@.end@." name Printtyp.signature signature)
-        operations;
-      Format.printf "val sources : (string * string) list@."
+        (fun item ->
+          Format.printf "%a" Printtyp.signature [ item ];
+          (match item with
+          | Sig_value (_, value, _) when exclusive value ->
+              Format.pp_print_string Format.std_formatter " [@@python.exclusive]"
+          | _ -> ());
+          Format.printf "@.")
+        signature;
+      Format.printf "end@.")
+    modules
 
 let () =
   try

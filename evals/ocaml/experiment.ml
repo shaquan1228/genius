@@ -1,4 +1,13 @@
-let default : Ast.experiment =
+type t = {
+  profiles : Profile.t list;
+  epochs : int;
+  message_limit : int option;
+  cost_limit : float;
+  time_limit : int;
+  cache : bool;
+}
+
+let default : t =
   {
     profiles =
       [
@@ -18,15 +27,30 @@ let default : Ast.experiment =
     cache = false;
   }
 
-let resolve ?(epochs = default.epochs) ?message_limit ?(cost_limit = default.cost_limit)
-    ?(time_limit = default.time_limit) ?(cache = default.cache) () =
-  List.iter
-    (fun (name, value) ->
-      if value <= 0 then invalid_arg ("Experiment " ^ name ^ " must be positive"))
-    [ ("epochs", epochs); ("time_limit", time_limit) ];
-  Option.iter
-    (fun value -> if value <= 0 then invalid_arg "Experiment message_limit must be positive")
-    message_limit;
-  if (not (Float.is_finite cost_limit)) || cost_limit <= 0. then
-    invalid_arg "Experiment cost_limit must be finite and positive";
-  { Ast.profiles = default.profiles; epochs; message_limit; cost_limit; time_limit; cache }
+let resolve ?(profiles = default.profiles) ?(epochs = default.epochs) ?message_limit
+    ?(cost_limit = default.cost_limit) ?(time_limit = default.time_limit) ?(cache = default.cache)
+    () =
+  let positive field value =
+    Validation.when_invalid
+      (value > 0)
+      (Validation.issue
+         Validation_code.Invalid_experiment_setting
+         field
+         ("Experiment " ^ field ^ " must be positive")
+         [])
+  in
+  let problems =
+    positive "epochs" epochs @ positive "time_limit" time_limit
+    @ (match message_limit with None -> [] | Some value -> positive "message_limit" value)
+    @ Validation.when_invalid
+        (Float.is_finite cost_limit && cost_limit > 0.)
+        (Validation.issue
+           Validation_code.Invalid_experiment_setting
+           "cost_limit"
+           "Experiment cost_limit must be finite and positive"
+           [])
+  in
+  Validation.checked problems { profiles; epochs; message_limit; cost_limit; time_limit; cache }
+
+let create ~profiles ~epochs ~message_limit ~cost_limit ~time_limit ~cache =
+  resolve ~profiles ~epochs ?message_limit ~cost_limit ~time_limit ~cache ()

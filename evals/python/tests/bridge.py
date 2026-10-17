@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from unittest.mock import PropertyMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -14,17 +14,18 @@ from evals.python.tests.projections import reference, verifier
 from kernel import (
     Completion,
     Criterion,
+    File,
+    Fixture,
     Instruction,
+    Kernel,
     Reference,
+    Response,
+    ResponseField,
     ResponseValue,
     Rubric,
     Task,
     Verification,
 )
-from kernel._operations import fixture as fixture_ops
-from kernel._operations import grader as grader_ops
-from kernel._operations import response as response_ops
-from kernel._operations import sources
 
 
 def commands_and_queries_use_in_process_kernel_calls() -> None:
@@ -62,14 +63,6 @@ def kernel_grades_response_and_scope() -> None:
         scores["scope"] = False  # type: ignore[index]
 
 
-def unknown_kernel_score_names_are_rejected() -> None:
-    with (
-        patch.object(grader_ops, "grade", return_value=[]),
-        pytest.raises(ValueError, match="score names"),
-    ):
-        _judgment(response="{}")
-
-
 def unknown_case_is_a_harness_error() -> None:
     with pytest.raises(KeyError):
         score_case(
@@ -82,7 +75,7 @@ def unknown_case_is_a_harness_error() -> None:
 
 def native_kernel_errors_propagate() -> None:
     with (
-        patch.object(grader_ops, "grade", side_effect=RuntimeError("kernel failed")),
+        patch.object(Task, "grade", side_effect=RuntimeError("kernel failed")),
         pytest.raises(RuntimeError, match="kernel failed"),
     ):
         _judgment(response="{}")
@@ -100,13 +93,13 @@ def grading_does_not_recompile_or_cache_results() -> None:
     responses = ("invalid", '{"choice":"B","reason":"Cheap"}', '{"choice":"A","reason":"Cheap"}')
     with (
         patch("subprocess.run", side_effect=AssertionError("Unexpected compilation")),
-        patch.object(grader_ops, "grade", wraps=grader_ops.grade) as grade,
+        patch.object(Task, "grade", wraps=Task.grade) as grade,
     ):
         assert [_judgment(response=response) for response in responses] == [False, True, False]
         assert grade.call_count == 3
 
 
-@pytest.mark.parametrize("source", [name for name, _ in sources()])
+@pytest.mark.parametrize("source", [file.path for file in Kernel.current.sources])
 def kernel_fingerprint_tracks_every_trusted_source(source: str) -> None:
     original = datasets.kernel_sources()
     changed = Sources(
@@ -142,7 +135,7 @@ def candidate_duplicate_keys_keep_last_value() -> None:
 
 def additional_named_scores_cross_bridge_without_decoder_changes() -> None:
     with patch.object(
-        grader_ops,
+        Task,
         "grade",
         return_value=[("correctness", True), ("scope", False), ("new_metric", True)],
     ):
@@ -159,20 +152,25 @@ def reference_channels_export_independently_and_escape() -> None:
     state = 'quote" \\ \n é'
     fields: dict[str, str | bool] = {"state": state, "safe": True}
     safe = True
-    expected_fields = response_ops.of_fields(
-        [("state", ResponseValue.String(state)), ("safe", ResponseValue.Bool(safe))]
+    expected_fields = Response.create(
+        fields=[
+            ResponseField.create(name="state", value=ResponseValue.create(string=state)),
+            ResponseField.create(name="safe", value=ResponseValue.create(bool=safe)),
+        ]
     )
     dataset = datasets.compile_dataset(
         cases=(
-            Task(
+            Task.create(
                 id="reference",
-                fixture=fixture_ops.empty,
-                instruction=Instruction(skill="reasoning", prompt="fields"),
-                criterion=Criterion.Answer(Rubric(expected=expected_fields, text_rule=None)),
+                fixture=Fixture.create(files=[]),
+                instruction=Instruction.create(skill="reasoning", prompt="fields"),
+                criterion=Criterion.create(
+                    answer=Rubric.create(expected=expected_fields, text_rule=None)
+                ),
                 allowed_files=("result.txt",),
-                reference=Reference(
-                    edits=fixture_ops.of_files([("result.txt", "result")]),
-                    completion=Completion.Structured(expected_fields),
+                reference=Reference.create(
+                    edits=Fixture.create(files=[File.create(path="result.txt", contents="result")]),
+                    completion=Completion.create(structured=expected_fields),
                 ),
             ),
         )
@@ -201,33 +199,3 @@ def reference_channels_export_independently_and_escape() -> None:
 )
 def nonstandard_json_is_an_incorrect_candidate(response: str) -> None:
     assert not _judgment(response=response)
-
-
-@pytest.mark.parametrize(
-    "pairs",
-    [
-        [("correctness", True)],
-        [("correctness", True), ("scope", True), ("scope", False)],
-        [("correctness", 1), ("scope", True)],
-        [("correctness", True), ("scope", True), ("extra", "yes")],
-    ],
-)
-def malformed_native_scores_are_rejected(pairs: list[tuple[str, object]]) -> None:
-    with (
-        patch.object(grader_ops, "grade", return_value=pairs),
-        pytest.raises(ValueError, match="score"),
-    ):
-        _judgment(response="{}")
-
-
-def required_scores_follow_native_declaration() -> None:
-    with (
-        patch.object(
-            type(grader_ops),
-            "required_names",
-            new_callable=PropertyMock,
-            return_value=["correctness", "scope", "extension"],
-        ),
-        pytest.raises(ValueError, match="score names"),
-    ):
-        _judgment(response="{}")

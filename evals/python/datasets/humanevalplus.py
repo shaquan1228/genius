@@ -12,8 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from evals.python.integrations.evalplus import checks
 from evals.python.schema import DatasetInfo
-from kernel import Completion, Instruction, Reference, Task
-from kernel._operations import fixture as fixture_ops
+from kernel import Completion, File, Fixture, Instruction, Reference, Task
 
 info = DatasetInfo(
     source="https://github.com/evalplus/humanevalplus_release/releases/download/v0.1.10/HumanEvalPlus.jsonl.gz",
@@ -42,10 +41,10 @@ def declarations(records: Iterable[str]) -> tuple[Task, ...]:
 
 def declaration(raw: str) -> Task:
     problem = Problem.model_validate_json(raw)
-    return Task(
+    return Task.create(
         id="humaneval-" + problem.task_id.split("/")[1],
-        fixture=fixture_ops.of_files([("solution.py", problem.prompt)]),
-        instruction=Instruction(
+        fixture=Fixture.create(files=[File.create(path="solution.py", contents=problem.prompt)]),
+        instruction=Instruction.create(
             skill="reasoning",
             prompt=(
                 "Implement the specified function in solution.py. Preserve its signature and edit "
@@ -56,11 +55,15 @@ def declaration(raw: str) -> Task:
             record=raw, manifest={**info.model_dump(exclude={"attributes"}), **info.attributes}
         ),
         allowed_files=("solution.py",),
-        reference=Reference(
-            edits=fixture_ops.of_files(
-                [("solution.py", problem.prompt + problem.canonical_solution)]
+        reference=Reference.create(
+            edits=Fixture.create(
+                files=[
+                    File.create(
+                        path="solution.py", contents=problem.prompt + problem.canonical_solution
+                    )
+                ]
             ),
-            completion=Completion.Plain(""),
+            completion=Completion.create(plain=""),
         ),
     )
 

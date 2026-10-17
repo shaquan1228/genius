@@ -27,17 +27,21 @@ from evals.python.tests.declarations import (
 from evals.python.tests.projections import reference, verifier
 from evals.python.verification import VerificationResult
 from kernel import (
+    Artifact,
     Case,
     Completion,
     Content,
     Criterion,
-    InvalidArgument,
+    File,
+    Fixture,
     Reference,
     Task,
     Verification,
     Verifier,
 )
-from kernel._operations import fixture as fixture_ops
+from kernel import (
+    ValidationError as DomainValidationError,
+)
 
 
 def compile_dataset_exposes_canonical_public_cases() -> None:
@@ -54,7 +58,7 @@ def compiled_cases_separate_construction_from_public_projection() -> None:
     assert not isinstance(case, Task)
     assert isinstance(case, Case)
     assert not hasattr(case, "reference")
-    assert "verify.py" not in dict(case.files)
+    assert "verify.py" not in {artifact.path: artifact.content for artifact in case.files}
 
 
 def compiled_selection_reuses_the_compilation_snapshot() -> None:
@@ -74,13 +78,15 @@ def compile_query_forwards_canonical_values_and_results() -> None:
 def _independent_datasets() -> tuple[Dataset, Dataset]:
     first = _declaration()
     assert isinstance(first.criterion, Criterion.Code)
-    checks = _copy_verifier(first.criterion[0], stdin="different private stdin")
+    checks = _copy_verifier(first.criterion.verifier, stdin="different private stdin")
     second = _copy_case(
         first,
-        criterion=Criterion.Code(checks),
-        reference=Reference(
-            edits=fixture_ops.of_files([("main.py", "another fixed solution")]),
-            completion=Completion.Plain("another answer"),
+        criterion=Criterion.create(code=checks),
+        reference=Reference.create(
+            edits=Fixture.create(
+                files=[File.create(path="main.py", contents="another fixed solution")]
+            ),
+            completion=Completion.create(plain="another answer"),
         ),
     )
     return datasets.compile_dataset(cases=(first,)), datasets.compile_dataset(cases=(second,))
@@ -143,9 +149,10 @@ def compiled_datasets_supply_independent_evaluator_resources(resource_name: str)
     definition = _declaration()
     assert isinstance(definition.criterion, Criterion.Code)
     checks = _copy_verifier(
-        definition.criterion[0], files=[("verify.py", Content.Resource(resource_name))]
+        definition.criterion.verifier,
+        files=[Artifact.create(path="verify.py", content=Content.create(resource=resource_name))],
     )
-    definition = _copy_case(definition, criterion=Criterion.Code(checks))
+    definition = _copy_case(definition, criterion=Criterion.create(code=checks))
     first = datasets.compile_dataset(
         cases=(definition,), resources={resource_name: "first checker"}
     )
@@ -208,10 +215,10 @@ def compiled_grading_preserves_canonical_inputs_and_results() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(),))
     verification = Verification.Passed()
     with patch(
-        "kernel._operations.grader.grade", return_value=[("correctness", True), ("scope", True)]
+        "kernel.Task.grade", return_value=[("correctness", True), ("scope", True)]
     ) as kernel_grade:
         assert _grade(dataset=dataset, verification=verification) == dict(kernel_grade.return_value)
-    assert kernel_grade.call_args.args[0] is dataset.records["external"]
+    assert kernel_grade.call_args.kwargs["task"] is dataset.records["external"]
     assert isinstance(kernel_grade.call_args.kwargs["outcome"].verification, Verification.Passed)
 
 
@@ -224,7 +231,9 @@ def compiled_dataset_is_immutable() -> None:
     with pytest.raises(TypeError):
         cast(dict[str, Case], dataset.cases)["external"] = dataset.cases["external"]
     with pytest.raises(TypeError):
-        dataset.cases["external"].files[0] = ("main.py", Content.Inline("changed"))  # type: ignore[index]
+        dataset.cases["external"].files[0] = Artifact.create(  # type: ignore[index]
+            path="main.py", content=Content.create(inline="changed")
+        )
     with pytest.raises(FrozenInstanceError):
         dataset.sources.modules = ()  # type: ignore[misc]
     with pytest.raises(TypeError):
@@ -243,12 +252,11 @@ def compile_query_validates_its_boundary_without_bypassing_kernel() -> None:
     compile_dataset: Callable[..., Dataset] = datasets.compile_dataset
     with pytest.raises(ValidationError):
         compile_dataset(cases=[_declaration()])
-    public_case = Case(id="public", skill="reasoning", prompt="", files=[])
+    public_case = datasets.list_cases()[0]
     with pytest.raises(ValidationError):
         compile_dataset(cases=(public_case,))
-    invalid = _copy_case(_declaration(), allowed_files=())
-    with pytest.raises(InvalidArgument, match="outside allowed_files"):
-        datasets.compile_dataset(cases=(invalid,))
+    with pytest.raises(DomainValidationError, match="outside allowed_files"):
+        _copy_case(_declaration(), allowed_files=())
 
 
 def unknown_case_in_compiled_dataset_fails_closed() -> None:
@@ -324,7 +332,11 @@ def direct_dataset_construction_derives_public_cases_and_copies_records() -> Non
     with patch("evals.python.datasets._module", side_effect=AssertionError("reload")):
         assert datasets.load_dataset(selection=dataset) is dataset
         assert (
-            datasets.get_reference(case_id=definition.id, selection=dataset).completion[0] == "done"
+            cast(
+                Completion.Plain,
+                datasets.get_reference(case_id=definition.id, selection=dataset).completion,
+            ).text
+            == "done"
         )
 
 
@@ -342,19 +354,19 @@ def direct_dataset_construction_validates_metadata_count() -> None:
 
 
 def direct_dataset_construction_validates_native_records() -> None:
-    invalid = _copy_case(_declaration(), allowed_files=())
-    with pytest.raises(InvalidArgument, match="outside allowed_files"):
-        Dataset(sources=datasets.kernel_sources(), records={invalid.id: invalid})
+    with pytest.raises(DomainValidationError, match="outside allowed_files"):
+        _copy_case(_declaration(), allowed_files=())
 
 
 def direct_dataset_construction_resolves_resources() -> None:
     definition = _declaration()
     assert isinstance(definition.criterion, Criterion.Code)
     checks = _copy_verifier(
-        definition.criterion[0], files=[("verify.py", Content.Resource("checker"))]
+        definition.criterion.verifier,
+        files=[Artifact.create(path="verify.py", content=Content.create(resource="checker"))],
     )
-    definition = _copy_case(definition, criterion=Criterion.Code(checks))
-    with pytest.raises(KeyError, match="checker"):
+    definition = _copy_case(definition, criterion=Criterion.create(code=checks))
+    with pytest.raises(DomainValidationError, match="checker"):
         Dataset(sources=datasets.kernel_sources(), records={definition.id: definition})
     resources = {"checker": "private checker"}
     dataset = Dataset(
@@ -364,7 +376,7 @@ def direct_dataset_construction_resolves_resources() -> None:
     resolved = verifier(definition.id, selection=dataset)
     assert resolved is not None
     assert _files(resolved.files) == {"verify.py": "private checker"}
-    assert "verify.py" not in dict(dataset.cases[definition.id].files)
+    assert "verify.py" not in _files(dataset.cases[definition.id].files)
 
 
 def direct_sources_retain_owned_immutable_collections() -> None:

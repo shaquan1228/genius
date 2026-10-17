@@ -13,12 +13,13 @@ import pytest
 
 import kernel as native
 from evals.python import datasets, evaluation
-from kernel import Case, Experiment
-from kernel._operations import sources
+from kernel import Case, Experiment, Kernel
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
 OCAML_ROOT = PYTHON_ROOT.parent / "ocaml"
-LIBRARY = tuple(OCAML_ROOT / name for name, _ in sources() if name.endswith((".ml", ".mli")))
+LIBRARY = tuple(
+    OCAML_ROOT / file.path for file in Kernel.current.sources if file.path.endswith((".ml", ".mli"))
+)
 
 
 PUBLIC_OPERATIONS = {
@@ -124,10 +125,10 @@ def inspect_integration_does_not_select_hugging_face() -> None:
     assert not any(name.startswith("evals.python.integrations.hugging_face") for name in imports)
 
 
-def dataset_internals_stay_private() -> None:
+@pytest.mark.parametrize("prefix", ["evals.python.datasets._", "evals.python.tests", "kernel._"])
+def runtime_consumers_use_public_namespaces(prefix: str) -> None:
     names = {name for path in _runtime_files() for name in _imported(path)}
-    assert not any(name.startswith("evals.python.datasets._") for name in names)
-    assert not any(name.startswith("evals.python.tests") for name in names)
+    assert not any(name.startswith(prefix) for name in names)
 
 
 def domain_modules_are_codec_free() -> None:
@@ -159,28 +160,19 @@ def public_operations_carry_dataset_selection(owner: str, *, name: str) -> None:
     assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
 
 
-def shared_domain_types_live_in_ast() -> None:
-    operations = (
-        "fixture",
-        "response",
-        "verifier",
-        "criterion",
-        "case",
-        "reference",
-        "grader",
-        "experiment",
-        "projection",
-    )
-    bodies = [(OCAML_ROOT / f"{name}.ml").read_text() for name in operations]
-    assert not any(re.search(r"^type ", body, re.M) for body in bodies)
-    assert not re.search(r"^let |^module ", (OCAML_ROOT / "ast.ml").read_text(), re.M)
+@pytest.mark.parametrize("path", sorted(OCAML_ROOT.glob("*.mli")))
+def domain_types_live_with_owner_contracts(path: Path) -> None:
+    if path.stem in ("validation", "text"):
+        return
+    assert re.search(r"^type t\b", path.read_text(), re.M)
+    assert re.search(r"^type t\b", path.with_suffix(".ml").read_text(), re.M)
 
 
-def public_interfaces_only_declare_operations() -> None:
-    assert not any(
-        re.search(r"^type ", path.read_text(), re.M)
-        for path in OCAML_ROOT.glob("*.mli")
-        if path.name != "fixture_store.mli"
+def kernel_facade_only_exports_owner_modules() -> None:
+    assert not (OCAML_ROOT / "ast.ml").exists()
+    assert not (OCAML_ROOT / "construct.ml").exists()
+    assert not re.search(
+        r"^type |^include ", (OCAML_ROOT / "genius_evals_kernel.ml").read_text(), re.M
     )
 
 
@@ -391,8 +383,8 @@ libc = ctypes.CDLL(None)
 libc.getenv.restype = ctypes.c_char_p
 names = (b"PATH", b"PYTHONHOME", b"PYTHONPATH")
 before = tuple(libc.getenv(name) for name in names)
-from kernel._operations import experiment as experiment_ops
-assert experiment_ops.resolve(epochs=1).epochs == 1
+from kernel import Experiment
+assert Experiment.resolve(epochs=1).epochs == 1
 assert tuple(libc.getenv(name) for name in names) == before
 assert list(pathlib.Path.cwd().iterdir()) == []
 subprocess.run([sys.executable, "-c", "import re, pathlib"], check=True)

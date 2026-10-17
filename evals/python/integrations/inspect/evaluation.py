@@ -54,13 +54,13 @@ def selected_samples(task: Task, *, request: EvaluationSettings) -> list[str] | 
 
 def evaluation_tasks(spec: Experiment, *, request: EvaluationSettings) -> list[Task]:
     catalog = datasets.load_dataset(selection=request.dataset)
-    instructions = profile_adapter.load_instructions(spec)
+    documents = profile_adapter.load_documents(spec)
     provenance = datasets.get_provenance(selection=catalog)
     build = partial(
         task_adapter.build_task,
         spec=spec,
         catalog=catalog,
-        instructions=instructions,
+        documents=documents,
         provenance=provenance,
         agent=request.agent,
         version=request.version,
@@ -80,7 +80,7 @@ def diagnostic_tasks(
     spec: Experiment, *, request: EvaluationSettings, build: partial[Task]
 ) -> list[Task]:
     modes = request.deliveries or ()
-    single = Experiment(
+    single = Experiment.create(
         profiles=spec.profiles,
         epochs=1,
         message_limit=spec.message_limit,

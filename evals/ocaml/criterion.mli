@@ -1,2 +1,4 @@
-val answer : ?text_rule:Ast.text_rule -> expected:Ast.response -> unit -> Ast.criterion
-val validate : Ast.criterion -> Ast.criterion
+type t = private Code of { verifier : Verifier.t } | Answer of { rubric : Rubric.t }
+
+val create : ?code:Verifier.t -> ?answer:Rubric.t -> unit -> (t, Validation_failure.t) result
+[@@python.exclusive]

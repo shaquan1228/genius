@@ -19,10 +19,8 @@ from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.declarations import _reference_text
 from evals.python.tests.projections import reference, verifier
 from evals.python.tests.support import choice_case as _choice_case
-from kernel import Case, Experiment, InvalidArgument, Verification
-from kernel._operations import fixture as fixture_ops
-from kernel._operations import grader as grader_ops
-from kernel._operations import projection as projection_ops
+from kernel import Case, Experiment, File, Fixture, Task, Verification
+from kernel import ValidationError as DomainValidationError
 
 
 @pytest.fixture
@@ -54,7 +52,7 @@ def third_dataset_requires_only_python_declarations(third_dataset: Dataset) -> N
         agent="codex",
         dataset="third",
         catalog=datasets.load_dataset(selection=third_dataset),
-        instructions=profiles.load_instructions(evaluation.resolve_settings()),
+        documents=profiles.load_documents(evaluation.resolve_settings()),
         provenance=datasets.get_provenance(selection=third_dataset),
     )
     assert task.dataset[0].id == "third-case"
@@ -70,7 +68,7 @@ def default_sandbox_is_local() -> None:
         spec=evaluation.resolve_settings(),
         agent="codex",
         catalog=datasets.load_dataset(selection="smoke"),
-        instructions=profiles.load_instructions(evaluation.resolve_settings()),
+        documents=profiles.load_documents(evaluation.resolve_settings()),
         provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     assert task.sandbox is not None
@@ -89,14 +87,14 @@ def public_projection_contains_no_private_material() -> None:
     for case in datasets.list_cases():
         assert isinstance(case, Case)
         assert (hasattr(case, "reference"), hasattr(case, "criterion")) == (False, False)
-        assert "verifier.py" not in dict(case.files)
+        assert "verifier.py" not in {artifact.path: artifact.content for artifact in case.files}
 
 
 def public_projection_includes_visible_tools() -> None:
     case = datasets.list_cases()[0]
-    assert "test_receipt.py" in dict(
-        case.files
-    )  # The visible helper remains available to the agent.
+    assert "test_receipt.py" in {
+        artifact.path: artifact.content for artifact in case.files
+    }  # The visible helper remains available to the agent.
 
 
 def all_contract_collections_are_immutable() -> None:
@@ -107,7 +105,7 @@ def all_contract_collections_are_immutable() -> None:
     with pytest.raises(TypeError):
         info.attributes["new"] = "value"  # type: ignore[index]
     with pytest.raises(TypeError):
-        fixture_ops.files(expected.edits)[0] = ("new", "value")  # type: ignore[index]
+        Fixture.files(fixture=expected.edits)[0] = File.create(path="new", contents="value")  # type: ignore[index]
     spec = evaluation.resolve_settings()
     with pytest.raises((AttributeError, TypeError)):
         spec.profiles[0].preamble = "changed"  # type: ignore[misc]
@@ -122,7 +120,7 @@ def run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
         spec=spec,
         agent="codex",
         catalog=datasets.load_dataset(selection="smoke"),
-        instructions=profiles.load_instructions(spec),
+        documents=profiles.load_documents(spec),
         provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     assert (task.epochs, task.cost_limit, task.time_limit, task.config.cache) == (
@@ -138,7 +136,7 @@ def run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
 @pytest.mark.parametrize("value", [0, -1])
 def kernel_rejects_invalid_run_overrides(field: str, *, value: int) -> None:
     operation = cast(Callable[..., Experiment], resolve_settings)
-    with pytest.raises(InvalidArgument):
+    with pytest.raises(DomainValidationError):
         operation(**{field: value})
 
 
@@ -181,12 +179,12 @@ def verifier_projection_and_grading_use_native_values() -> None:
         verification=Verification.Passed(),
     )
     with (
-        patch.object(projection_ops, "verifier", wraps=projection_ops.verifier) as projection,
-        patch.object(grader_ops, "grade", wraps=grader_ops.grade) as kernel_grade,
+        patch.object(Task, "verifier", wraps=Task.verifier) as projection,
+        patch.object(Task, "grade", wraps=Task.grade) as kernel_grade,
     ):
         projected = verifier(case_id)
         assert projected is not None
         assert checks is not None
-        projection.assert_called_once_with(datasets.record(case_id, selection="smoke"))
+        projection.assert_called_once_with(task=datasets.record(case_id, selection="smoke"))
         assert (grade()["correctness"], grade()["correctness"]) == (True, True)
         assert (projected.stdin, kernel_grade.call_count) == (checks.stdin, 2)

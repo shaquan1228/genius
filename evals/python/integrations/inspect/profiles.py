@@ -23,7 +23,7 @@ REASONING_DOCUMENTS = (
 )
 
 
-def load_instructions(spec: Experiment) -> Mapping[str, bytes]:
+def load_documents(spec: Experiment) -> Mapping[str, bytes]:
     return MappingProxyType(
         {
             f"instructions/{path.relative_to(REPO_ROOT).as_posix()}": path.read_bytes()
@@ -34,11 +34,11 @@ def load_instructions(spec: Experiment) -> Mapping[str, bytes]:
     )
 
 
-def instruction_envelope(
+def document_envelope(
     *,
     delivery: InstructionDelivery,
     root: str,
-    instructions: Mapping[str, bytes],
+    documents: Mapping[str, bytes],
 ) -> str:
     paths = [str(PurePosixPath(root) / name) for name in REASONING_DOCUMENTS]
     if delivery == "manifest":
@@ -52,7 +52,7 @@ def instruction_envelope(
         "they are already loaded. Resolve other references from their containing file.\n\n"
         + "\n\n".join(
             f"<document path={json.dumps(path)}>\n"
-            f"{instructions[f'instructions/{name}'].decode()}</document>"
+            f"{documents[f'instructions/{name}'].decode()}</document>"
             for name, path in zip(REASONING_DOCUMENTS, paths, strict=True)
         )
         + "\n\n"
@@ -70,16 +70,16 @@ def content_hash(files: Mapping[str, bytes]) -> str:
     return hashlib.sha256(json.dumps(contents, sort_keys=True).encode()).hexdigest()
 
 
-def instruction_files(profile: Profile, *, instructions: Mapping[str, bytes]) -> dict[str, bytes]:
+def document_files(profile: Profile, *, documents: Mapping[str, bytes]) -> dict[str, bytes]:
     prefixes = tuple(f"instructions/{folder}/" for folder in profile.instructions)
-    return {name: contents for name, contents in instructions.items() if name.startswith(prefixes)}
+    return {name: contents for name, contents in documents.items() if name.startswith(prefixes)}
 
 
 def prompt(
     profile: Profile,
     *,
     case: Case,
-    instructions: Mapping[str, bytes],
+    documents: Mapping[str, bytes],
     delivery: InstructionDelivery = "files",
     instruction_root: str = "../instructions",
 ) -> str:
@@ -88,9 +88,7 @@ def prompt(
         return preamble + case.prompt
     if case.skill != "reasoning":
         raise ValueError("Instruction delivery diagnostics currently support reasoning only")
-    envelope = instruction_envelope(
-        delivery=delivery, root=instruction_root, instructions=instructions
-    )
+    envelope = document_envelope(delivery=delivery, root=instruction_root, documents=documents)
     return (preamble + envelope if delivery == "manifest" else envelope) + case.prompt
 
 
@@ -98,19 +96,20 @@ def files(
     profile: Profile,
     *,
     case: Case,
-    instructions: Mapping[str, bytes],
+    documents: Mapping[str, bytes],
 ) -> dict[str, str]:
     workspace = {}
-    for name, content in case.files:
+    for artifact in case.files:
+        name, content = artifact.path, artifact.content
         if not isinstance(content, Content.Inline):
             raise ValueError(f"Unresolved resource in public case {case.id}: {name}")
-        workspace[f"workspace/{name}"] = inline_file(contents=content[0].encode())
+        workspace[f"workspace/{name}"] = inline_file(contents=content.text.encode())
     return {
         "workspace/.gitkeep": inline_file(contents=b""),
         **workspace,
         **{
             name: inline_file(contents=contents)
-            for name, contents in instruction_files(profile, instructions=instructions).items()
+            for name, contents in document_files(profile, documents=documents).items()
         },
     }
 
@@ -119,7 +118,7 @@ def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery optio
     profile: Profile,
     *,
     cases: tuple[Case, ...],
-    instructions: Mapping[str, bytes],
+    documents: Mapping[str, bytes],
     dataset: str = "smoke",
     delivery: InstructionDelivery = "files",
     instruction_root: str = "../instructions",
@@ -130,11 +129,11 @@ def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery optio
             input=prompt(
                 profile,
                 case=case,
-                instructions=instructions,
+                documents=documents,
                 delivery=delivery,
                 instruction_root=instruction_root,
             ),
-            files=files(profile, case=case, instructions=instructions),
+            files=files(profile, case=case, documents=documents),
             metadata={"case_id": case.id, "profile": profile.name, "dataset": dataset},
         )
         for case in cases

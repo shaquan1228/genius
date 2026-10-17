@@ -1,11 +1,20 @@
-val valid_path : string -> bool
-val validate : Ast.verifier -> Ast.verifier
+type t = private {
+  inputs : string list;
+  files : Artifact.t list;
+  tools : Artifact.t list;
+  command : string list;
+  stdin : string;
+  timeout_seconds : int;
+}
 
-val make :
+val create :
   inputs:string list ->
-  files:(string * Ast.content) list ->
-  tools:(string * Ast.content) list ->
+  files:Artifact.t list ->
+  tools:Artifact.t list ->
   command:string list ->
   stdin:string ->
   timeout_seconds:int ->
-  Ast.verifier
+  (t, Validation_failure.t) result
+
+val resolve_resources :
+  verifier:t -> resources:Resource_binding.t list -> (t, Validation_failure.t) result

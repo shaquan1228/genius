@@ -37,7 +37,7 @@ def default_smoke_uses_python_owned_cases() -> None:
         "small-decision",
         "decision-review",
     )
-    assert tuple(dict(dataset.cases["clear-task"].files)) == ("receipt.py", "test_receipt.py")
+    assert tuple(_files(dataset.cases["clear-task"].files)) == ("receipt.py", "test_receipt.py")
 
 
 @pytest.mark.parametrize(("initial", "requested"), [(15, 15), (0, 30), (-1, 30), (15, 0), (15, -1)])
@@ -52,9 +52,9 @@ def python_smoke_keeps_checks_and_references_private() -> None:
     cases = datasets.list_cases(selection=dataset)
     code = definitions[0]
     assert isinstance(code.criterion, Criterion.Code)
-    assert code.criterion[0].stdin not in json.dumps(_files(cases[0].files))
+    assert code.criterion.verifier.stdin not in json.dumps(_files(cases[0].files))
     assert _reference_files(code.reference)["receipt.py"] not in _files(cases[0].files).values()
-    assert "verifier.py" not in dict(cases[0].files)
+    assert "verifier.py" not in _files(cases[0].files)
 
 
 async def _assess_code(*, dataset: Dataset, agent: Environment) -> tuple[Assessment, ...]:
@@ -169,7 +169,7 @@ def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixtur
 def offline_cli_reports_harness_failure_without_success(
     *, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    result = VerificationResult(verification=Verification.HarnessError("private diagnostic"))
+    result = VerificationResult(verification=Verification.HarnessError(detail="private diagnostic"))
     with patch.object(verification, "validate_reference", new=AsyncMock(return_value=result)):
         assert _run_cli() == 1
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines()]

@@ -20,15 +20,17 @@ from kernel import (
     Case,
     Completion,
     Criterion,
+    Fixture,
     Instruction,
     Reference,
+    Response,
+    ResponseField,
     ResponseValue,
     Rubric,
     Task,
     TextRule,
     Verifier,
 )
-from kernel._operations import fixture as fixture_ops
 
 __test__ = False
 
@@ -86,24 +88,36 @@ def timeout_case(*, case_id: str, initial: int, requested: int) -> Task:
 
 def choice_case(*, case_id: str, a: int, b: int) -> Task:
     choice = "A" if a < b else "B"
-    return Task(
+    return Task.create(
         id=case_id,
-        fixture=fixture_ops.empty,
-        instruction=Instruction(skill="reasoning", prompt="Choose A or B with a reason"),
-        criterion=Criterion.Answer(
-            Rubric(
-                expected=[("choice", ResponseValue.String(choice))],
-                text_rule=TextRule(field="reason", min_words=1, max_words=40),
+        fixture=Fixture.create(files=[]),
+        instruction=Instruction.create(skill="reasoning", prompt="Choose A or B with a reason"),
+        criterion=Criterion.create(
+            answer=Rubric.create(
+                expected=Response.create(
+                    fields=[
+                        ResponseField.create(
+                            name="choice", value=ResponseValue.create(string=choice)
+                        )
+                    ]
+                ),
+                text_rule=TextRule.create(field="reason", min_words=1, max_words=40),
             )
         ),
         allowed_files=(),
-        reference=Reference(
-            edits=fixture_ops.empty,
-            completion=Completion.Structured(
-                [
-                    ("choice", ResponseValue.String(choice)),
-                    ("reason", ResponseValue.String("The cost is lower.")),
-                ]
+        reference=Reference.create(
+            edits=Fixture.create(files=[]),
+            completion=Completion.create(
+                structured=Response.create(
+                    fields=[
+                        ResponseField.create(
+                            name="choice", value=ResponseValue.create(string=choice)
+                        ),
+                        ResponseField.create(
+                            name="reason", value=ResponseValue.create(string="The cost is lower.")
+                        ),
+                    ]
+                )
             ),
         ),
     )

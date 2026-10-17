@@ -158,7 +158,7 @@ def explicit_agent_version_is_logged() -> None:
         agent="codex",
         version="0.137.0",
         catalog=datasets.load_dataset(selection="smoke"),
-        instructions=profiles.load_instructions(evaluation.resolve_settings()),
+        documents=profiles.load_documents(evaluation.resolve_settings()),
         provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     spec = evaluation.resolve_settings()
@@ -186,7 +186,7 @@ def custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
         spec=spec,
         agent=request.agent,
         catalog=datasets.load_dataset(selection="smoke"),
-        instructions=profiles.load_instructions(spec),
+        documents=profiles.load_documents(spec),
         provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     assert task.metadata is not None
