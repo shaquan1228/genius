@@ -317,34 +317,34 @@ def hosted_sources_require_committed_instruction_paths(
         source.instructions(variant, destination=tmp_path / "output", repository=tmp_path / "repo")
 
 
-@pytest.mark.parametrize("reuse", [False, True])
-def three_variants_share_one_execution_path(api: MagicMock, *, tmp_path: Path, reuse: bool) -> None:
+@pytest.mark.parametrize(
+    ("reuse", "expected_jobs"),
+    [(False, {"plain", "concise", "detailed"}), (True, {"plain", "detailed"})],
+)
+def three_variants_share_one_execution_path(
+    api: MagicMock, *, tmp_path: Path, reuse: bool, expected_jobs: set[str]
+) -> None:
     request = _request(("plain", "concise", "detailed"))
     selections = list(request.variants)
     if reuse:
         selections[1] = selections[1].model_copy(update={"result_ref": "saved"})
     request = request.model_copy(update={"variants": tuple(selections), "baseline": "concise"})
-    api.run_job.side_effect = [SimpleNamespace(id=f"job-{index}") for index in range(3)]
+    api.run_job.side_effect = [
+        SimpleNamespace(id="job-0"),
+        SimpleNamespace(id="job-1"),
+        SimpleNamespace(id="job-2"),
+    ]
     compare.execute(request, output=tmp_path, namespace="owner")
     state = json.loads((tmp_path / "jobs.json").read_text())
-    _assert_three_variant_state(state, reused=reuse)
-    assert api.run_job.call_count == len(state["jobs"])
-    persisted = ComparisonRequest.model_validate_json((tmp_path / "request.json").read_text())
-    _assert_persisted_baseline(persisted, output=tmp_path)
-    _assert_volumes(api)
-
-
-def _assert_persisted_baseline(request: ComparisonRequest, *, output: Path) -> None:
-    assert (request.baseline, tuple(v.variant.name for v in request.variants)) == (
-        "concise",
-        ("plain", "concise", "detailed"),
+    assert (set(state["runs"]), set(state["jobs"]), api.run_job.call_count) == (
+        {"plain", "concise", "detailed"},
+        expected_jobs,
+        len(expected_jobs),
     )
-    assert json.loads((output / "comparison.json").read_text())["baseline"] == "concise"
-
-
-def _assert_three_variant_state(state: dict[str, dict[str, str]], *, reused: bool) -> None:
-    assert set(state["runs"]) == {"plain", "concise", "detailed"}
-    assert set(state["jobs"]) == ({"plain", "detailed"} if reused else set(state["runs"]))
+    persisted = ComparisonRequest.model_validate_json((tmp_path / "request.json").read_text())
+    assert (persisted.baseline, persisted.variants) == ("concise", request.variants)
+    assert json.loads((tmp_path / "comparison.json").read_text())["baseline"] == "concise"
+    _assert_volumes(api)
 
 
 def third_submission_failure_cancels_every_started_variant(

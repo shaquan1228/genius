@@ -53,7 +53,15 @@ class ComparisonRequest(BaseModel):
     def shared_execution(self) -> "ComparisonRequest":
         if self.shared.variant is not None or self.shared.deliveries:
             raise ValueError("Declare variants separately from shared execution settings")
-        _variant_names(self.variants, baseline=self.baseline)
+        return self
+
+    @model_validator(mode="after")
+    def named_variants(self) -> "ComparisonRequest":
+        names = {selected.variant.name for selected in self.variants}
+        if len(names) != len(self.variants):
+            raise ValueError("Variant names must be unique")
+        if self.baseline not in names:
+            raise ValueError("Comparison needs a declared baseline")
         return self
 
 
@@ -78,18 +86,6 @@ class ComparisonReport(BaseModel):
     baseline: str
     runs: dict[str, RunSummary]
     comparisons: dict[str, Contrast]
-
-
-def _variant_names(variants: tuple[VariantRequest, ...], *, baseline: str) -> None:
-    names = tuple(selected.variant.name for selected in variants)
-    _baseline(names, baseline=baseline)
-    if len(set(names)) != len(names):
-        raise ValueError("Variant names must be unique")
-
-
-def _baseline(names: tuple[str, ...], *, baseline: str) -> None:
-    if len(names) < 2 or baseline not in names:
-        raise ValueError("Comparison needs at least two variants and a declared baseline")
 
 
 def _differences(before: Metrics, *, after: Metrics) -> Metrics:
@@ -130,7 +126,8 @@ def _contrast(before: RunSummary, *, after: RunSummary, measurement: Measurement
 def compare_summaries(
     runs: Mapping[str, RunSummary], *, baseline: str, measurement: InstanceOf[Measurement]
 ) -> ComparisonReport:
-    _baseline(tuple(runs), baseline=baseline)
+    if len(runs) < 2 or baseline not in runs:
+        raise ValueError("Comparison needs at least two variants and a declared baseline")
     return ComparisonReport(
         baseline=baseline,
         runs=dict(runs),

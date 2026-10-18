@@ -16,6 +16,7 @@ from evals.python import comparison, evaluation
 from evals.python.comparison import (
     ComparisonReport,
     ComparisonRequest,
+    Contrast,
     Measurement,
     RunSummary,
     VariantRequest,
@@ -72,15 +73,13 @@ def native_results_need_no_second_record_format(native_runs: Path) -> None:
         baseline="treatment",
         measurement=Measurement(),
     )
-    _assert_native_report(report)
+    assert (
+        report.runs["control"].metrics["accuracy"],
+        set(report.comparisons),
+        set(report.comparisons["alternative"].cases),
+    ) == (1.0, {"control", "alternative"}, {"small-decision"})
     assert not (native_runs / "control/run.json").exists()
     assert "mean_seconds" in comparison.render_report(report)
-
-
-def _assert_native_report(report: ComparisonReport) -> None:
-    assert report.runs["control"].metrics["accuracy"] == 1
-    assert set(report.comparisons) == {"control", "alternative"}
-    assert "small-decision" in report.comparisons["alternative"].cases
 
 
 def _rewrite(directory: Path, *, change: str) -> None:
@@ -275,15 +274,16 @@ def other_runners_can_compare_custom_metrics_without_inspect_logs() -> None:
     report = comparison.compare_summaries(
         runs, baseline="short", measurement=Measurement(accuracy_tolerance=0)
     )
-    _assert_custom_contrasts(report)
+    assert report.comparisons == {
+        "plain": Contrast(
+            differences={"tokens": 50}, cases={"case": {"tokens": 50}}, verdict="inconclusive"
+        ),
+        "long": Contrast(
+            differences={"tokens": 150}, cases={"case": {"tokens": 150}}, verdict="inconclusive"
+        ),
+    }
     assert "tokens" in comparison.render_report(report)
-    assert type(report).model_validate_json(report.model_dump_json()) == report
-
-
-def _assert_custom_contrasts(report: ComparisonReport) -> None:
-    assert report.comparisons["plain"].differences == {"tokens": 50}
-    assert report.comparisons["long"].cases == {"case": {"tokens": 150}}
-    assert report.comparisons["plain"].verdict == "inconclusive"
+    assert ComparisonReport.model_validate_json(report.model_dump_json()) == report
 
 
 @pytest.mark.parametrize("change", ["metrics", "cases", "case_metrics", "baseline", "cardinality"])

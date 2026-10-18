@@ -26,10 +26,6 @@ class PreparedVariant:
     selection: VariantRequest
     settings: EvaluationSettings
 
-    @property
-    def name(self) -> str:
-        return self.selection.variant.name
-
 
 def save(path: Path, *, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -81,8 +77,12 @@ def credentials(settings: EvaluationSettings) -> dict[str, str]:
     return secrets
 
 
-def download(api: HfApi, *, plans: tuple[PreparedVariant, ...], output: Path, bucket: str) -> None:
+def download(
+    api: HfApi, *, plans: tuple[PreparedVariant, ...], output: Path, bucket: str, reused: bool
+) -> None:
     for plan in plans:
+        if (plan.selection.result_ref is not None) != reused:
+            continue
         directory = output / "runs" / str(plan.settings.run_id)
         api.sync_bucket(
             f"hf://buckets/{bucket}/runs/{plan.settings.run_id}",
@@ -146,21 +146,6 @@ def prepare_variant(
     )
 
 
-def prepare_variants(
-    request: ComparisonRequest, *, snapshot: Path
-) -> tuple[ComparisonRequest, tuple[PreparedVariant, ...]]:
-    plans = tuple(
-        prepare_variant(v, shared=request.shared, snapshot=snapshot) for v in request.variants
-    )
-    resolved = request.model_copy(
-        update={
-            "variants": tuple(p.selection for p in plans),
-            "shared": plans[0].settings.model_copy(update={"variant": None, "run_id": None}),
-        }
-    )
-    return resolved, plans
-
-
 def upload(api: HfApi, *, snapshot: Path, namespace: str) -> Volume:
     repo = f"{namespace}/genius-evals"
     api.create_repo(repo, repo_type="dataset", private=True, exist_ok=True)
@@ -178,7 +163,7 @@ def launch(api: HfApi, *, plan: PreparedVariant, source_volume: Volume, timeout:
     remote = settings.model_copy(
         update={
             "variant": plan.selection.variant.model_copy(
-                update={"source_dir": f"/source/.variants/{plan.name}"}
+                update={"source_dir": f"/source/.variants/{plan.selection.variant.name}"}
             )
         }
     )
@@ -220,13 +205,13 @@ def jobs(  # noqa: PLR0913 - dispatch lifecycle shares explicit immutable inputs
     timeout: str,
 ) -> Iterator[dict[str, str]]:
     submitted: dict[str, str] = {}
-    runs = {plan.name: plan.settings.run_id for plan in plans}
+    runs = {plan.selection.variant.name: plan.settings.run_id for plan in plans}
     namespace = source_volume.source.split("/", 1)[0]
     try:
         for plan in plans:
             if plan.selection.result_ref is not None:
                 continue
-            submitted[plan.name] = launch(
+            submitted[plan.selection.variant.name] = launch(
                 api, plan=plan, source_volume=source_volume, timeout=timeout
             )
             save(
@@ -262,14 +247,6 @@ def wait(api: HfApi, *, submitted: dict[str, str], namespace: str) -> None:
         executor.shutdown(wait=False, cancel_futures=True)
 
 
-def reused_variant(plan: PreparedVariant) -> bool:
-    return plan.selection.result_ref is not None
-
-
-def run_directories(plans: tuple[PreparedVariant, ...], *, output: Path) -> dict[str, Path]:
-    return {plan.name: output / "runs" / str(plan.settings.run_id) for plan in plans}
-
-
 def execute(
     request: ComparisonRequest, *, output: Path, namespace: str, timeout: str = "4h"
 ) -> None:
@@ -281,10 +258,17 @@ def execute(
     with TemporaryDirectory() as temporary:
         snapshot = Path(temporary)
         source.trusted_snapshot(snapshot, repository=REPO_ROOT)
-        request, plans = prepare_variants(request, snapshot=snapshot)
-        reused = tuple(filter(reused_variant, plans))
-        pending = tuple(p for p in plans if not reused_variant(p))
-        download(api, plans=reused, output=output, bucket=bucket)
+        plans = tuple(
+            prepare_variant(selected, shared=request.shared, snapshot=snapshot)
+            for selected in request.variants
+        )
+        request = request.model_copy(
+            update={
+                "variants": tuple(plan.selection for plan in plans),
+                "shared": plans[0].settings.model_copy(update={"variant": None, "run_id": None}),
+            }
+        )
+        download(api, plans=plans, output=output, bucket=bucket, reused=True)
         save(output / "request.json", value=request.model_dump(mode="json"))
         api.create_bucket(bucket, private=True, exist_ok=True)
         publish(api, request=request, output=output, bucket=bucket)
@@ -298,14 +282,12 @@ def execute(
             timeout=timeout,
         ) as submitted:
             wait(api, submitted=submitted, namespace=namespace)
-            download(
-                api,
-                plans=pending,
-                output=output,
-                bucket=bucket,
-            )
+            download(api, plans=plans, output=output, bucket=bucket, reused=False)
             result = comparison.compare_runs(
-                run_directories(plans, output=output),
+                {
+                    plan.selection.variant.name: output / "runs" / str(plan.settings.run_id)
+                    for plan in plans
+                },
                 baseline=request.baseline,
                 measurement=request.measurement,
             )
