@@ -35,7 +35,7 @@ def _verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> b
             for name, data in _snapshot(directory).items():
                 await agent.write_file(f"workspace/{name}", data)
             result = await verification.verify(
-                Task.verifier(task=datasets.record(case.id, selection=selection)),
+                Task.verifier(task=datasets.load_dataset(selection=selection).records[case.id]),
                 agent=environment(agent),
                 runtime=runtime(agent),
             )

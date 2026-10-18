@@ -6,7 +6,6 @@ import json
 import os
 import subprocess
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal, Protocol, TypedDict, Unpack, assert_never, cast
@@ -49,26 +48,6 @@ class Problem(TypedDict):
 class Payload(TypedDict):
     manifest: Manifest
     record: str
-
-
-@dataclass(frozen=True, kw_only=True)
-class Dependencies:
-    manifest: Manifest
-    destination: str
-
-
-@dataclass(frozen=True, kw_only=True)
-class Phase:
-    record: Problem
-    name: PhaseName
-    code: str
-
-
-@dataclass(frozen=True, kw_only=True)
-class Evaluation:
-    record: Problem
-    code: str
-    metadata: dict[str, object] = field(default_factory=dict)
 
 
 class ReferenceAPI(Protocol):
@@ -120,8 +99,7 @@ def installed_runtime(manifest: Manifest) -> bool:
         return False
 
 
-def dependencies(request: Dependencies) -> None:
-    manifest, destination = request.manifest, request.destination
+def dependencies(manifest: Manifest, *, destination: str) -> None:
     if installed_runtime(manifest=manifest):
         return
     subprocess.run(
@@ -145,8 +123,7 @@ def dependencies(request: Dependencies) -> None:
     sys.path.insert(0, destination)
 
 
-def phase(request: Phase) -> PhaseStatus:
-    record, name, code = request.record, request.name, request.code
+def phase(record: Problem, *, name: PhaseName, code: str) -> PhaseStatus:
     # The dedicated VM bounds memory; EvalPlus's stack limit is incompatible with HF.
     os.environ["EVALPLUS_MAX_MEMORY_BYTES"] = "-1"
     reference = cast(ReferenceAPI, importlib.import_module("evalplus.gen.util"))
@@ -207,16 +184,15 @@ def evaluate(payload: Payload) -> WireResult:
         compile(code, "solution.py", "exec")
     except (SyntaxError, UnicodeError) as error:
         return wire_result(status="invalid_submission", detail=str(error), metadata=metadata)
-    return evaluate_phases(request=Evaluation(record=record, code=code, metadata=metadata))
+    return evaluate_phases(record, code=code, metadata=metadata)
 
 
-def evaluate_phases(request: Evaluation) -> WireResult:
-    record, code, metadata = request.record, request.code, request.metadata
+def evaluate_phases(record: Problem, *, code: str, metadata: dict[str, object]) -> WireResult:
     statuses: dict[PhaseName, PhaseStatus] = {}
     metadata["phases"] = statuses
     try:
         for name in PHASES:
-            statuses[name] = phase(request=Phase(record=record, name=name, code=code))
+            statuses[name] = phase(record, name=name, code=code)
     except Exception as error:
         return wire_result(
             status="harness_error", detail=f"EvalPlus {name} phase: {error}", metadata=metadata
@@ -243,7 +219,7 @@ def evaluate_phases(request: Evaluation) -> WireResult:
 def execute() -> WireResult:
     payload = cast(Payload, json.load(sys.stdin))
     with TemporaryDirectory(prefix="genius-evaluator-", dir=Path.cwd()) as destination:
-        dependencies(request=Dependencies(manifest=payload["manifest"], destination=destination))
+        dependencies(payload["manifest"], destination=destination)
         return evaluate(payload=payload)
 
 

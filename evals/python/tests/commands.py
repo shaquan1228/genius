@@ -10,10 +10,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import evaluation, execution, verification
+from evals.python import EVALS_ROOT, evaluation, execution, verification
 from evals.python.evaluation import EvaluationSettings
 from evals.python.execution import Runtime
-from evals.python.paths import EVALS_ROOT
 
 
 def runner_entrypoint_validates_before_allocating_sandboxes(

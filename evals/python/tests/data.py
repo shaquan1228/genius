@@ -1,7 +1,7 @@
 """Validate schemas and keep the comparison's inputs controlled."""
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import cast
 from unittest.mock import patch
@@ -9,8 +9,8 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import datasets, evaluation
-from evals.python.datasets import Dataset, Sources
+from evals.python import REPO_ROOT, datasets, evaluation
+from evals.python.datasets import Dataset
 from evals.python.evaluation import InstructionDelivery
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import (
@@ -19,7 +19,7 @@ from evals.python.integrations.inspect.profiles import (
     load_profile,
 )
 from evals.python.integrations.inspect.tasks import build_task
-from evals.python.paths import REPO_ROOT
+from evals.python.provenance import fingerprint
 from evals.python.tests.declarations import _copy_case, _files, _reference_files, _reference_text
 from evals.python.tests.projections import public_case, reference, verifier
 from evals.python.tests.support import (
@@ -74,15 +74,21 @@ def profiles_share_fixture_files() -> None:
     spec = evaluation.resolve_settings()
     assert load_profile("genius", spec=spec).name == spec.profiles[1].name
     case = datasets.list_cases()[0]
-    baseline = profiles.files(
-        load_profile(name="baseline", spec=evaluation.resolve_settings()),
-        case=case,
-        documents=profiles.load_documents(evaluation.resolve_settings()),
+    baseline = cast(
+        Mapping[str, str],
+        profiles.samples(
+            load_profile(name="baseline", spec=evaluation.resolve_settings()),
+            cases=(case,),
+            documents=profiles.load_documents(evaluation.resolve_settings()),
+        )[0].files,
     )
-    genius = profiles.files(
-        load_profile(name="genius", spec=evaluation.resolve_settings()),
-        case=case,
-        documents=profiles.load_documents(evaluation.resolve_settings()),
+    genius = cast(
+        Mapping[str, str],
+        profiles.samples(
+            load_profile(name="genius", spec=evaluation.resolve_settings()),
+            cases=(case,),
+            documents=profiles.load_documents(evaluation.resolve_settings()),
+        )[0].files,
     )
     assert {key: genius[key] for key in baseline} == baseline
 
@@ -92,18 +98,24 @@ def only_genius_receives_instructions() -> None:
     assert (
         any(
             key.startswith("instructions/")
-            for key in profiles.files(
-                load_profile(name="baseline", spec=evaluation.resolve_settings()),
-                case=case,
-                documents=profiles.load_documents(evaluation.resolve_settings()),
+            for key in cast(
+                Mapping[str, str],
+                profiles.samples(
+                    load_profile(name="baseline", spec=evaluation.resolve_settings()),
+                    cases=(case,),
+                    documents=profiles.load_documents(evaluation.resolve_settings()),
+                )[0].files,
             )
         ),
         any(
             key.startswith("instructions/")
-            for key in profiles.files(
-                load_profile(name="genius", spec=evaluation.resolve_settings()),
-                case=case,
-                documents=profiles.load_documents(evaluation.resolve_settings()),
+            for key in cast(
+                Mapping[str, str],
+                profiles.samples(
+                    load_profile(name="genius", spec=evaluation.resolve_settings()),
+                    cases=(case,),
+                    documents=profiles.load_documents(evaluation.resolve_settings()),
+                )[0].files,
             )
         ),
     ) == (False, True)
@@ -276,7 +288,6 @@ def experiment_configuration_reaches_tasks_and_profiles() -> None:
         agent="codex",
         catalog=datasets.load_dataset(selection="smoke"),
         documents=profiles.load_documents(spec),
-        provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     assert (
         spec.epochs,
@@ -300,8 +311,11 @@ def delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, name: st
     case = datasets.list_cases()[0]
     root = "/eval/instructions"
     profile = load_profile(name="genius", spec=evaluation.resolve_settings())
-    before = profiles.files(
-        profile, case=case, documents=profiles.load_documents(evaluation.resolve_settings())
+    before = cast(
+        Mapping[str, str],
+        profiles.samples(
+            profile, cases=(case,), documents=profiles.load_documents(evaluation.resolve_settings())
+        )[0].files,
     )
     prompt = profiles.prompt(
         profile,
@@ -312,10 +326,13 @@ def delivery_preserves_instruction_bytes_and_baseline(delivery: str, *, name: st
     )
     assert (
         prompt.endswith(case.prompt),
-        profiles.files(
-            profile,
-            case=case,
-            documents=profiles.load_documents(evaluation.resolve_settings()),
+        cast(
+            Mapping[str, str],
+            profiles.samples(
+                profile,
+                cases=(case,),
+                documents=profiles.load_documents(evaluation.resolve_settings()),
+            )[0].files,
         ),
         profiles.prompt(
             load_profile(name="baseline", spec=evaluation.resolve_settings()),
@@ -340,12 +357,12 @@ def delivery_rejects_unimplemented_skill_instead_of_silently_changing_it() -> No
 
 @pytest.mark.parametrize("source", [file.path for file in Kernel.current.sources])
 def kernel_fingerprint_tracks_every_trusted_source(source: str) -> None:
-    original = datasets.kernel_sources()
-    changed = Sources(
-        modules=tuple(
-            (name, contents + "\n" if name == source else contents)
-            for name, contents in original.modules
-        ),
-        resources=original.resources,
-    )
-    assert datasets.fingerprint(changed) != datasets.fingerprint(original)
+    original = Kernel.current.sources
+    changed = [
+        File.create(
+            path=file.path,
+            contents=file.contents + "\n" if file.path == source else file.contents,
+        )
+        for file in original
+    ]
+    assert fingerprint(changed) != fingerprint(original)

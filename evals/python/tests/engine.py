@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-from inspect_ai.log import EvalSample, read_eval_log
+from inspect_ai.log import EvalLog, EvalSample, read_eval_log
 from inspect_ai.scorer import CORRECT, INCORRECT
 
 from evals.python.integrations.inspect.agents import AGENT_REGISTRY
@@ -36,17 +36,26 @@ def complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
     assert [(log.status, sorted(_results(log))) for log in logs] == [
         ("success", sorted(expected))
     ] * 2
-    saved = read_eval_log(str(logs[0].location))
+    _assert_saved_log(read_eval_log(str(logs[0].location)), count=len(expected))
+
+
+def _assert_saved_log(saved: EvalLog, *, count: int) -> None:
     assert saved.results is not None
-    assert {score.name for score in saved.results.scores} == {"correctness", "scope"}
-    assert (saved.status, len(saved.samples or []), set(saved.stats.model_usage)) == (
+    assert saved.samples is not None
+    assert (
+        {score.name for score in saved.results.scores},
+        saved.status,
+        len(saved.samples),
+        set(saved.stats.model_usage),
+    ) == (
+        {"correctness", "scope"},
         "success",
-        len(expected),
+        count,
         {"mockllm/model"},
     )
-    assert saved.samples is not None
-    cases = {str(sample.id): sample for sample in saved.samples}
-    _assert_answer_judgments(cases["small-decision"])
+    _assert_answer_judgments(
+        next(filter(lambda sample: sample.id == "small-decision", saved.samples))
+    )
 
 
 def _assert_answer_judgments(sample: EvalSample) -> None:

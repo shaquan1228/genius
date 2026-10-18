@@ -8,9 +8,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from evals.python import datasets, verification
+from evals.python import EVALS_ROOT, datasets, verification
 from evals.python.integrations.evalplus import benchmarks
-from evals.python.paths import EVALS_ROOT
 from evals.python.tests.humaneval import _record
 from evals.python.tests.support import import_dataset as _import_dataset
 from evals.python.verification import VerificationResult

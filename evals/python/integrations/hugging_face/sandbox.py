@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from huggingface_hub import Sandbox, SandboxCommandResult
 
+from evals.python import execution
 from evals.python.execution import Completion, Environment, Execution, Runtime
 
 IMAGE = "python:3.12-slim-bookworm"
@@ -115,7 +116,7 @@ async def effect[T](
         return await asyncio.shield(pending)
     except asyncio.CancelledError:
         with suppress(Exception):
-            await _settle(pending)
+            await execution.settle(pending)
         raise
     finally:
         if active is not None:
@@ -148,15 +149,6 @@ def environment(
     return Environment(execute=execute, read_bytes=read, write_bytes=write)
 
 
-async def _settle[T](task: asyncio.Task[T]) -> T:
-    while not task.done():
-        try:
-            await asyncio.shield(task)
-        except asyncio.CancelledError:
-            continue
-    return task.result()
-
-
 async def _kill(client: Sandbox) -> None:
     await effect(lambda: destroy(client))
 
@@ -170,7 +162,7 @@ def runtime(*, image: str | None = None) -> Runtime:
             client = await asyncio.shield(pending)
         except asyncio.CancelledError:
             with suppress(Exception):
-                client = await _settle(pending)
+                client = await execution.settle(pending)
                 await _kill(client)
             raise
         active: set[asyncio.Task[object]] = set()
@@ -184,7 +176,7 @@ def runtime(*, image: str | None = None) -> Runtime:
         async def finish() -> None:
             for pending in tuple(active):
                 with suppress(Exception):
-                    await _settle(pending)
+                    await execution.settle(pending)
             await _kill(client)
 
         pending = asyncio.create_task(finish())
@@ -192,7 +184,7 @@ def runtime(*, image: str | None = None) -> Runtime:
             await asyncio.shield(pending)
         except asyncio.CancelledError:
             with suppress(Exception):
-                await _settle(pending)
+                await execution.settle(pending)
             raise
 
     return Runtime(create=allocate, cleanup=cleanup)

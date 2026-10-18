@@ -1,7 +1,6 @@
 """Scripted agents for offline framework tests, never for measuring Genius."""
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from typing import Literal, cast
 
 from inspect_ai.agent import Agent, AgentState, agent
@@ -70,42 +69,32 @@ async def exit_early(case: Reference) -> None:
         await sandbox().write_file(path, "import os\nos._exit(0)\n" + source)
 
 
-@dataclass(frozen=True)
-class Scenario:
-    steps: tuple[Step, ...]
-    reply: str | None = None  # None sends the reference answer.
-
-
-SCENARIOS: dict[Mode, Scenario] = {
-    "pass": Scenario((apply_solution,)),
-    "untouched": Scenario(()),
-    "extra": Scenario((apply_solution, write_extra)),
-    "committed-extra": Scenario((apply_solution, write_extra, commit)),
-    "instructions": Scenario((apply_solution, corrupt_instructions)),
-    "bad-answer": Scenario((apply_solution,), reply="invalid JSON"),
-    "tampered-checks": Scenario((tamper_runner,)),
-    "early-exit": Scenario((exit_early,)),
+SCENARIOS: dict[Mode, tuple[Step, ...]] = {
+    "pass": (apply_solution,),
+    "untouched": (),
+    "extra": (apply_solution, write_extra),
+    "committed-extra": (apply_solution, write_extra, commit),
+    "instructions": (apply_solution, corrupt_instructions),
+    "bad-answer": (apply_solution,),
+    "tampered-checks": (tamper_runner,),
+    "early-exit": (exit_early,),
 }
-
-
-@dataclass
-class Scripted:
-    scenario: Scenario
-
-    async def __call__(self, state: TaskState, generate: Generate) -> TaskState:  # noqa: PLR0917 - Inspect calls solvers positionally
-        case = reference(
-            str(state.metadata["case_id"]),
-            selection=cast(str, state.metadata.get("dataset", "smoke")),
-        )
-        for step in self.scenario.steps:
-            await step(case)
-        state.messages.append(ChatMessageUser(content=self.scenario.reply or _reference_text(case)))
-        return await generate(state)
 
 
 @solver
 def scripted(mode: Mode = "pass") -> Solver:
-    return Scripted(SCENARIOS[mode])
+    async def execute(state: TaskState, generate: Generate) -> TaskState:  # noqa: PLR0917 - Inspect calls solvers positionally
+        case = reference(
+            str(state.metadata["case_id"]),
+            selection=cast(str, state.metadata.get("dataset", "smoke")),
+        )
+        for step in SCENARIOS[mode]:
+            await step(case)
+        reply = "invalid JSON" if mode == "bad-answer" else _reference_text(case)
+        state.messages.append(ChatMessageUser(content=reply))
+        return await generate(state)
+
+    return execute
 
 
 @agent

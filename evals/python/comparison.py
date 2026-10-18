@@ -6,8 +6,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, InstanceOf, model_validator, validate_call
 
+from evals.python import FROZEN, Identifier
 from evals.python.evaluation import EvaluationSettings, VariantSettings
-from evals.python.schema import FROZEN, Identifier
 
 __all__ = [
     "ComparisonReport",

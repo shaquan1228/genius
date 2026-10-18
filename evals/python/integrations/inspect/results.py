@@ -16,11 +16,10 @@ from inspect_ai.scorer import CORRECT, SampleScore, Score, accuracy, stderr
 
 import evals.python.integrations.inspect.pricing as pricing_adapter
 import evals.python.integrations.inspect.profiles as profiles_adapter
-from evals.python import evaluation
+from evals.python import EVALS_ROOT, evaluation
 from evals.python.comparison import RunSummary
 from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.inspect import completeness
-from evals.python.paths import EVALS_ROOT
 from kernel import Experiment, Task
 
 _ACCURACY = cast(Callable[[list[SampleScore]], float], accuracy())

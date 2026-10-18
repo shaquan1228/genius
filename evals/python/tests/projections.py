@@ -8,11 +8,11 @@ __test__ = False
 
 
 def verifier(case_id: str, *, selection: Selection = "smoke") -> Verifier | None:
-    return Task.verifier(task=datasets.record(case_id, selection=selection))
+    return Task.verifier(task=datasets.load_dataset(selection=selection).records[case_id])
 
 
 def reference(case_id: str, *, selection: Selection = "smoke") -> Reference:
-    return (datasets.record(case_id, selection=selection)).reference
+    return (datasets.load_dataset(selection=selection).records[case_id]).reference
 
 
 def public_case(case_id: str, *, selection: Selection = "smoke") -> Case:

@@ -11,7 +11,7 @@ import evals.python.integrations.inspect.results as results_adapter
 import evals.python.integrations.inspect.scoring as scoring_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import datasets, evaluation
-from evals.python.datasets import Dataset, DatasetProvenance
+from evals.python.datasets import Dataset
 from evals.python.evaluation import InstructionDelivery
 from kernel import Experiment, Profile
 
@@ -22,7 +22,6 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
     spec: Experiment,
     catalog: Dataset,
     documents: Mapping[str, bytes],
-    provenance: DatasetProvenance,
     agent: str,
     version: str = "",
     dataset: str = "smoke",
@@ -60,7 +59,7 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
             "profile": profile.name,
             "harness_sha256": harness_sha256 or results_adapter.harness_hash(),
             "dataset": dataset,
-            "benchmark": provenance.info.model_dump() if provenance.info else {},
+            "benchmark": catalog.info.model_dump() if catalog.info else {},
             "agent": agent,
             "agent_version": agent_version,
             "agent_options_sha256": sha256(
@@ -77,8 +76,8 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
                     documents=documents,
                 )
             ),
-            "fixtures_sha256": provenance.source_hash,
-            "cases_sha256": provenance.cases_hash,
+            "fixtures_sha256": catalog.source_hash,
+            "cases_sha256": catalog.cases_hash,
         },
     )
 
@@ -91,7 +90,6 @@ def _task(profile: str, *, agent: str, version: str, dataset: str) -> Task:
         spec=spec,
         catalog=catalog,
         documents=profile_adapter.load_documents(spec),
-        provenance=datasets.get_provenance(selection=catalog),
         agent=agent,
         version=version,
         dataset=dataset,

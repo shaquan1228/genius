@@ -14,14 +14,14 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from evals.python import EVALS_ROOT
 from evals.python.integrations.evalplus import verifier as driver
 from evals.python.integrations.evalplus.benchmarks import benchmark_info
-from evals.python.paths import EVALS_ROOT
 from evals.python.tests.humaneval import _record
 
 
 def _payload() -> driver.Payload:
-    return {"manifest": cast(driver.Manifest, benchmark_info().model_dump()), "record": _record()}
+    return {"manifest": cast(driver.Manifest, benchmark_info()), "record": _record()}
 
 
 @pytest.mark.parametrize("memory_limit", [None, "1"])
@@ -63,7 +63,7 @@ def official_checker(*, tmp_path: Path, source: str, status: str, memory_limit: 
     evidence = json.loads(result.stdout.splitlines()[-1])
     assert evidence["status"] == status, evidence
     assert evidence["marker"] == "private"
-    assert evidence["metadata"]["dataset"]["sha256"] == benchmark_info().sha256
+    assert evidence["metadata"]["dataset"]["sha256"] == benchmark_info()["sha256"]
 
 
 def installed_revision() -> None:
@@ -85,13 +85,11 @@ def dependency_bootstrap_uses_private_target() -> None:
         patch.object(subprocess, "run") as install,
         patch.object(sys, "path", []),
     ):
-        driver.dependencies(
-            request=driver.Dependencies(manifest=manifest, destination="private-target")
-        )
+        driver.dependencies(manifest=manifest, destination="private-target")
         assert sys.path == ["private-target"]
     command = install.call_args.args[0]
     assert command[-3:] == [
-        "git+https://github.com/evalplus/evalplus.git@" + benchmark_info().evaluator_commit,
+        "git+https://github.com/evalplus/evalplus.git@" + str(benchmark_info()["evaluator_commit"]),
         "numpy==2.5.4",
         "psutil==7.2.2",
     ]
@@ -100,7 +98,7 @@ def dependency_bootstrap_uses_private_target() -> None:
         patch.object(driver, "installed", return_value=True),
         patch.object(subprocess, "run") as install,
     ):
-        driver.dependencies(request=driver.Dependencies(manifest=manifest, destination="unused"))
+        driver.dependencies(manifest=manifest, destination="unused")
     install.assert_not_called()
 
 
@@ -125,9 +123,7 @@ def unknown_upstream_status_rejected() -> None:
         pytest.raises(RuntimeError, match="Unexpected EvalPlus"),
     ):
         driver.phase(
-            request=driver.Phase(
-                record=cast(driver.Problem, json.loads(_record())), name="base", code="candidate"
-            )
+            record=cast(driver.Problem, json.loads(_record())), name="base", code="candidate"
         )
     reference.trusted_exec.assert_called_once()
     assert evaluator.untrusted_check.call_args.kwargs["fast_check"] is True
@@ -162,11 +158,7 @@ def phase_exception_retains_provenance() -> None:
     metadata: dict[str, object] = {"dataset": {"sha256": "digest"}}
     with patch.object(driver, "phase", side_effect=["pass", RuntimeError("reference failed")]):
         evidence = driver.evaluate_phases(
-            request=driver.Evaluation(
-                record=cast(driver.Problem, json.loads(_record())),
-                code="candidate",
-                metadata=metadata,
-            )
+            record=cast(driver.Problem, json.loads(_record())), code="candidate", metadata=metadata
         )
     assert evidence["status"] == "harness_error"
     assert evidence["detail"] == "EvalPlus plus phase: reference failed"
@@ -198,7 +190,7 @@ def evaluate_preserves_upstream_evidence(
     (tmp_path / "solution.py").write_text("def identity(x):\n    return x\n")
     evidence = driver.evaluate(_payload())
     assert evidence["status"] == "passed", evidence["detail"]
-    assert evidence["metadata"]["dataset"] == benchmark_info().model_dump()
+    assert evidence["metadata"]["dataset"] == benchmark_info()
     assert evidence["metadata"]["task_id"] == "HumanEval/0"
     assert (
         json.loads(evidence["detail"])
@@ -215,7 +207,7 @@ def syntax_error_retains_provenance(*, tmp_path: Path, monkeypatch: pytest.Monke
     assert evidence["status"] == "invalid_submission"
     assert "invalid syntax" in evidence["detail"]
     assert evidence["metadata"] == {
-        "dataset": benchmark_info().model_dump(),
+        "dataset": benchmark_info(),
         "task_id": "HumanEval/0",
     }
 
@@ -238,7 +230,7 @@ def invalid_phase_inputs_are_harness_errors(
     if missing:
         cast(dict[str, object], data).pop("plus_input", None)
     evidence = driver.evaluate_phases(
-        request=driver.Evaluation(record=data, code="def identity(x):\n    return x\n", metadata={})
+        record=data, code="def identity(x):\n    return x\n", metadata={}
     )
     assert evidence["status"] == "harness_error"
     assert evidence["detail"].startswith("EvalPlus plus phase:")
@@ -256,7 +248,7 @@ def execute_cleans_private_dependencies(*, tmp_path: Path, monkeypatch: pytest.M
         evidence = driver.execute()
     assert evidence["status"] == "passed", evidence["detail"]
     assert evidence["metadata"]["phases"] == {"base": "pass", "plus": "pass"}
-    destination = Path(dependencies.call_args.kwargs["request"].destination)
+    destination = Path(dependencies.call_args.kwargs["destination"])
     assert (destination.parent, destination.exists(), tuple(tmp_path.iterdir())) == (
         tmp_path,
         False,

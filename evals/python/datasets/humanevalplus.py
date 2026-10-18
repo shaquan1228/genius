@@ -10,8 +10,8 @@ from tempfile import NamedTemporaryFile
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from evals.python.dataset import DatasetInfo
 from evals.python.integrations.evalplus import checks
-from evals.python.schema import DatasetInfo
 from kernel import Completion, File, Fixture, Instruction, Reference, Task
 
 info = DatasetInfo(
