@@ -1,0 +1,18 @@
+(library
+ (name genius_evals_kernel)
+ (public_name genius_evals_kernel)
+ (modules validation_code validation_issue validation_failure file fixture response_value response_field response resource_binding content artifact instruction text_rule rubric verifier criterion completion reference verification outcome grading_failure score task profile experiment case kernel validation text build_info genius_evals_kernel))
+
+(rule
+ (targets build_info.ml)
+ (deps validation_code.ml validation_code.mli validation_issue.ml validation_issue.mli validation_failure.ml validation_failure.mli file.ml file.mli fixture.ml fixture.mli response_value.ml response_value.mli response_field.ml response_field.mli response.ml response.mli resource_binding.ml resource_binding.mli content.ml content.mli artifact.ml artifact.mli instruction.ml instruction.mli text_rule.ml text_rule.mli rubric.ml rubric.mli verifier.ml verifier.mli criterion.ml criterion.mli completion.ml completion.mli reference.ml reference.mli verification.ml verification.mli outcome.ml outcome.mli grading_failure.ml grading_failure.mli score.ml score.mli task.ml task.mli profile.ml profile.mli experiment.ml experiment.mli case.ml case.mli kernel.ml kernel.mli validation.ml validation.mli text.ml text.mli genius_evals_kernel.ml dune)
+ (action
+  (with-stdout-to %{targets}
+   (run %{exe:tools/embed_sources.exe} %{deps}))))
+
+(rule
+ (targets genius_evals_kernel.mli)
+ (deps .genius_evals_kernel.objs/byte/genius_evals_kernel__Validation_code.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Validation_issue.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Validation_failure.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__File.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Fixture.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Response_value.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Response_field.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Response.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Resource_binding.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Content.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Artifact.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Instruction.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Text_rule.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Rubric.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Verifier.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Criterion.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Completion.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Reference.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Verification.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Outcome.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Grading_failure.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Score.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Task.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Profile.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Experiment.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Case.cmi .genius_evals_kernel.objs/byte/genius_evals_kernel__Kernel.cmi)
+ (action
+  (with-stdout-to %{targets}
+   (run %{exe:tools/bindings.exe} --interface %{deps}))))

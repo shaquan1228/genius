@@ -1,0 +1,80 @@
+--- a/ocaml/ocaml_in_python.ml
++++ b/ocaml/ocaml_in_python.ml
+@@ -145,8 +145,11 @@
+           Format.eprintf "%a@." Pprintast.structure structure;
+         end;
+       Compilenv.reset module_name;
++      let cmi_file = Filename.temp_file "ocaml-in-python" ".cmi" in
++      let output_prefix = Filename.chop_extension cmi_file in
+       let impl =
+-        Typemod.type_implementation "" "" module_name ocaml_env structure in
++        Fun.protect ~finally:(fun () -> Sys.remove cmi_file) (fun () ->
++          Typemod.type_implementation "" output_prefix module_name ocaml_env structure) in
+       let transl_implementation =
+         if Config.flambda then
+           Translmod.transl_implementation_flambda
+@@ -482,6 +485,7 @@
+ let rec wake_up_modules (p : Path.t) =
+   match Path.Map.find p !Ocaml_in_python_api.pending_module_table with
+-  | l -> ignore (Lazy.force l)
++  | l ->
++      if Option.is_none (Ocaml_in_python_api.Paths.find_opt p) then ignore (Lazy.force l)
+   | exception Not_found ->
+       match p with
+       | Pdot (p, _) -> wake_up_modules p
+@@ -549,10 +552,10 @@
+       index
+ 
+     let bind (vars : t) (ty : Types.type_expr) ty' =
+-      Ocaml_in_python_api.IntHashtbl.add vars.table (Metapp.Types.get_id ty) ty'
++      Ocaml_in_python_api.IntHashtbl.add vars.table (Types.get_id ty) ty'
+ 
+     let find (vars : t) (ty : Types.type_expr) =
+-      let id = Metapp.Types.get_id ty in
++      let id = Types.get_id ty in
+       try
+         Ocaml_in_python_api.IntHashtbl.find vars.table id
+       with Not_found ->
+@@ -1599,7 +1602,7 @@
+                        (List.map Ocaml_in_python_api.Type.to_core_type params)))]
+                   given))] in
+             match type_info.kind with
+-            | Record labels -> [%expr
++            | Record labels when type_info.type_declaration.type_private = Public -> [%expr
+                 if Py.Type.get v = Dict then [%e
+                   let vars = Type.Vars.create () in
+                   List.iter2 (Type.Vars.bind vars)
+@@ -1621,11 +1624,12 @@
+       let ocaml_of_python = get_variable_ident ocaml_of_python converter_index in
+       Metapp.Exp.ident ocaml_of_python)}
+ 
+-let add_type_converter (type_info : type_info) =
++let add_type_converter ocaml_env expansions (type_info : type_info) =
+   let class_ = get_variable_expression type_info.class_var in
+   Types.Uid.Tbl.add type_constr_converter_tbl
+     type_info.type_declaration.type_uid {
+-      converter = make_type_converter type_info;
++      converter = (fun _caller_env _caller_expansions params ->
++        make_type_converter type_info ocaml_env expansions params);
+       class_;
+     }
+ 
+@@ -2550,7 +2554,7 @@
+               | Some manifest -> Right (ident, decl, manifest)) type_declarations in
+           let type_infos =
+             List.map (add_class_prototype longident) type_declarations in
+-          List.iter add_type_converter type_infos;
++          List.iter (add_type_converter ocaml_env expansions) type_infos;
+           List.iter (add_type_info ~target_top_module ocaml_env expansions python_module) type_infos;
+           List.iter (add_type_manifest ~target_top_module ocaml_env expansions python_module) type_manifests;
+       end;
+--- a/ocaml/__init__.py
++++ b/ocaml/__init__.py
+@@ -70,6 +70,7 @@
+                 self._length = length
+             elif nb_params == 0 and self._field_names != None:
+                 self._items = [kw[field] for field in self._field_names]
++                self._length = len(self._items)
+             else:
+                 if length not in (None, nb_params):
+                     raise IndexError(

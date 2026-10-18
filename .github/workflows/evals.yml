@@ -1,0 +1,40 @@
+name: Evals
+
+on:
+  push:
+    branches: [main]
+    paths: ["evals/**", "docs/**", "skills/**", ".github/workflows/evals.yml"]
+  pull_request:
+    paths: ["evals/**", "docs/**", "skills/**", ".github/workflows/evals.yml"]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check on the hosted runtime (OCaml 4.14)
+    runs-on: ubuntu-24.04
+    # The Hugging Face Job image, so compiler and Python versions match hosted runs.
+    container: ghcr.io/astral-sh/uv:python3.12-bookworm
+    steps:
+      - name: Install OCaml and build tools
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends git make opam build-essential pkg-config ocaml-nox rsync
+      - uses: actions/checkout@v4
+      - name: Check setup, generated bindings, and Python
+        run: make -C evals check-scaffolding check-python
+      - name: Check the kernel with the pinned compiler
+        run: opam exec --switch=genius-kernel-414 -- make -C evals lint-ocaml test-ocaml
+
+  format:
+    name: OCaml format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "5.3"
+      - run: opam install -y ocamlformat.0.29.0
+      - run: opam exec -- make -C evals check-ocaml-format

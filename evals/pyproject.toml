@@ -1,0 +1,83 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "genius-evals"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "evalplus @ git+https://github.com/evalplus/evalplus.git@6eb1e199c2e370518e7bf3e8eee6322c2b23c89c",
+  "numpy==2.5.4",
+  "psutil==7.2.2",
+  "huggingface-hub==2.2.0",
+  "inspect-ai==0.3.278",
+  "inspect-swe==0.2.71",
+  "openai>=3.4,<4",
+]
+
+[tool.setuptools]
+packages = ["kernel"]
+package-dir = {kernel = "python/kernel"}
+
+[project.optional-dependencies]
+dev = [
+  "mypy==1.19.1",
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "radon==6.0.1",
+  "ruff==0.17.0",
+  "xenon==0.9.3",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "PL", "FBT", "SIM", "C4", "RUF", "PT", "PIE", "RET", "N"]
+# Literal values in comparisons read clearly in tests and protocol checks.
+ignore = ["PLR2004"]
+
+[tool.ruff.lint.per-file-ignores]
+"python/assessment.py" = ["PLR0913"]
+"python/tests/conftest.py" = ["PLR0917"]
+"python/kernel/*.pyi" = ["F401", "N801", "N818", "N999"]
+
+[tool.ruff.lint.pylint]
+# Only the first parameter may be positional, so callers name every other argument.
+# Pytest passes fixtures by name, so tests follow the same rule.
+max-positional-args = 1
+
+[tool.ruff.lint.isort]
+known-first-party = ["evals", "kernel"]
+
+[tool.mypy]
+strict = true
+enable_error_code = ["exhaustive-match"]
+files = ["python"]
+mypy_path = ["..", "python"]
+# Check bindings through their top-level kernel imports, avoiding a second module identity.
+exclude = ["^python/kernel/"]
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
+python_files = ["*.py"]
+python_functions = ["[a-z]*"]
+addopts = "-q"
+pythonpath = [".."]
+
+[tool.coverage.run]
+branch = true
+source = ["python"]
+omit = ["python/kernel/generate.py", "python/tests/conftest.py"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+exclude_also = ["case _ as unreachable:"]
+
+[[tool.uv.dependency-metadata]]
+name = "evalplus"
+version = "0.4.0.dev13"
+requires-dist = ["numpy", "psutil"]
