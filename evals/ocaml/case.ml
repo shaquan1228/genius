@@ -1,3 +1,4 @@
+(* Public case inputs exclude private verifier and reference material. *)
 type t = { id : string; skill : string; prompt : string; files : Artifact.t list }
 
 let create ~(task : Task.t) : t =

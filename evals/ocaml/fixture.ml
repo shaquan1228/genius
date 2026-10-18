@@ -1,3 +1,6 @@
+(* Fixture: immutable initial files. The map implementation belongs to Fixture.
+   https://inspect.aisi.org.uk/datasets.html#sample-files
+   https://docs.harborframework.com/tasks/environment *)
 module Files = Map.Make (String)
 
 type t = File.t Files.t

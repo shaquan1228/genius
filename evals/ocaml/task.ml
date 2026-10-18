@@ -1,3 +1,8 @@
+(* Task: one test specification combining instruction, initial state, criteria, and reference.
+   Anthropic defines a task as a single test with inputs and success criteria; Hugging Face
+   represents a benchmark sample with its query, expected outputs, and task metadata.
+   https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
+   https://huggingface.co/docs/lighteval/v0.13.0/package_reference/doc *)
 type t = {
   id : string;
   fixture : Fixture.t;
@@ -106,5 +111,9 @@ let grade_report ~(task : t) ~response ~(outcome : Outcome.t) =
 
 let required_scores = [ "correctness"; "scope" ]
 
+(* Grader: pure logic applying criteria to responses and observed outcomes.
+   IO, execution, and presentation remain harness responsibilities.
+   https://developers.openai.com/api/docs/guides/graders
+   https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
 let grade ~task ~response ~outcome =
   Result.map (fun (report : Task_grade.t) -> report.scores) (grade_report ~task ~response ~outcome)

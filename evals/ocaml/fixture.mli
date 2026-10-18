@@ -1,3 +1,6 @@
+(* Fixture: immutable initial files. The map implementation belongs to Fixture.
+   https://inspect.aisi.org.uk/datasets.html#sample-files
+   https://docs.harborframework.com/tasks/environment *)
 type t
 
 val create : files:File.t list -> (t, Validation_failure.t) result

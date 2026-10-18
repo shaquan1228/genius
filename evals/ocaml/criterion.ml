@@ -1,3 +1,7 @@
+(* Criterion: a declarative success condition, applied by a grader rather than by
+   the candidate. The code/structured-response distinction is this repository's design.
+   https://developers.openai.com/api/docs/guides/evals
+   https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
 type t = Code of { verifier : Verifier.t } | Answer of { rubric : Rubric.t }
 
 let create ?code ?answer () =
