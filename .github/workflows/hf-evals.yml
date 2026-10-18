@@ -168,18 +168,19 @@ jobs:
             const root = 'evals/reports/comparison';
             const report = fs.existsSync(`${root}/comparison.json`)
               ? JSON.parse(fs.readFileSync(`${root}/comparison.json`, 'utf8'))
-              : { verdict: 'failed' };
+              : {};
+            const verdict = report.comparisons?.treatment?.verdict || 'failed';
             const summary = fs.existsSync(`${root}/summary.md`)
               ? fs.readFileSync(`${root}/summary.md`, 'utf8')
               : 'Comparison did not complete. See the workflow logs.';
             const conclusion = {
               improved: 'success', inconclusive: 'neutral', regressed: 'failure'
-            }[report.verdict] || 'failure';
+            }[verdict] || 'failure';
             await github.rest.checks.create({
               owner: context.repo.owner, repo: context.repo.repo,
               name: 'Benchmark comparison',
               head_sha: context.payload.pull_request.head.sha,
               status: 'completed', conclusion,
               details_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              output: { title: `Benchmark: ${report.verdict}`, summary: summary.slice(0, 60000) }
+              output: { title: `Benchmark: ${verdict}`, summary: summary.slice(0, 60000) }
             });

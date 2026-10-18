@@ -1,9 +1,17 @@
 # Genius evals
 
-Compare baseline and Genius agents with [Inspect AI](https://inspect.aisi.org.uk/)
+Evaluate instruction variants with [Inspect AI](https://inspect.aisi.org.uk/)
 and [Inspect SWE](https://meridianlabs-ai.github.io/inspect_swe/).
 The bundled datasets are a four-case smoke suite and the 164-problem HumanEval+ benchmark.
 Use `python -m evals.python.integrations.hugging_face.compare --help` to compare variants or reuse saved runs.
+
+Comparison requests use schema 2: `variants` contains two or more uniquely named
+`VariantRequest` values; `baseline` selects one name. A variant's `result_ref` reuses
+compatible saved evidence. Pass request JSON as `COMPARISON_REQUEST` or a CLI file argument.
+Reports expose `runs` and per-variant `comparisons`. `compare_summaries` accepts numeric
+`RunSummary` values from other runners; `compare_runs` reads compatible native logs.
+Single-run preparation and validation use `evaluation.prepare_run` and `evaluation.validate_run`.
+Accuracy/time verdicts require an explicit accuracy tolerance and describe observed means.
 The `benchmark` PR label launches independent HF jobs and reports accuracy and mean task time.
 
 ## Source layout

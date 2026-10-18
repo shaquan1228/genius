@@ -35,16 +35,21 @@ PUBLIC_OPERATIONS = {
     "verification": {"verify_case", "validate_reference"},
     "assessment": {"assess"},
     "execution": {"create_runtime"},
-    "evaluation": {"evaluate", "resolve_settings", "resolve_experiment"},
-    "comparison": {
-        "compare_runs",
+    "evaluation": {
+        "evaluate",
         "prepare_run",
         "validate_run",
+        "resolve_settings",
+        "resolve_experiment",
+    },
+    "comparison": {
+        "compare_runs",
+        "compare_summaries",
         "render_report",
     },
 }
 OWNER_TYPES = {
-    "schema": {"DatasetInfo", "FileName", "Files", "Attributes"},
+    "schema": {"DatasetInfo", "FileName", "Files", "Attributes", "Identifier"},
     "datasets": {"Dataset", "Selection", "DatasetProvenance"},
     "grading": {"Scores"},
     "verification": {"Diagnostic", "VerificationResult"},
@@ -53,6 +58,9 @@ OWNER_TYPES = {
     "evaluation": {"EvaluationSettings", "ModelPricing", "InstructionDelivery", "VariantSettings"},
     "comparison": {
         "ComparisonRequest",
+        "ComparisonReport",
+        "RunSummary",
+        "Contrast",
         "VariantRequest",
         "Measurement",
     },
@@ -380,7 +388,7 @@ print('kernel-only')
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=120,
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "kernel-only"

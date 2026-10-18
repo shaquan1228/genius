@@ -113,10 +113,53 @@ def binding_workspace(tmp_path: Path) -> Path:
             tmp_path / name,
             ignore=shutil.ignore_patterns("tests", "__pycache__", "*.pyi"),
         )
-    for name in ("dune-project", "pyproject.toml"):
+    for name in ("dune-project", "pyproject.toml", "uv.lock"):
         shutil.copyfile(EVALS / name, tmp_path / name)
     _build_bindings(tmp_path)
     return tmp_path
+
+
+def base_dependencies_can_generate_bindings(binding_workspace: Path) -> None:
+    subprocess.run(
+        [
+            "uv",
+            "sync",
+            "--project",
+            str(binding_workspace),
+            "--python",
+            "3.12",
+            "--locked",
+            "--inexact",
+        ],
+        env=os.environ | {"UV_PROJECT_ENVIRONMENT": str(binding_workspace / ".venv")},
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    dune = shutil.which("dune")
+    assert dune is not None
+    environment = os.environ | {
+        "PATH": os.pathsep.join(
+            (str(binding_workspace / ".venv/bin"), str(Path(dune).parent), os.defpath)
+        )
+    }
+    result = subprocess.run(
+        [
+            dune,
+            "build",
+            "--root",
+            str(binding_workspace),
+            "--build-dir",
+            "_build-base",
+            "@python-bindings",
+        ],
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def dune_binding_builds_are_incremental(binding_workspace: Path) -> None:

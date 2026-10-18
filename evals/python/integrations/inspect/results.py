@@ -1,7 +1,7 @@
 """Compare native Inspect logs using their recorded inputs and completeness checks."""
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from itertools import chain, groupby, product
 from math import inf
 from pathlib import Path
@@ -13,12 +13,11 @@ from inspect_ai import Task
 from inspect_ai.log import EvalLog, EvalSample, list_eval_logs, read_eval_log
 from inspect_ai.model import get_model_info
 from inspect_ai.scorer import CORRECT, SampleScore, Score, accuracy, stderr
-from pydantic import JsonValue
 
 import evals.python.integrations.inspect.pricing as pricing_adapter
 import evals.python.integrations.inspect.profiles as profiles_adapter
 from evals.python import evaluation
-from evals.python.comparison import Measurement
+from evals.python.comparison import RunSummary
 from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.inspect import completeness
 from evals.python.paths import EVALS_ROOT
@@ -174,22 +173,6 @@ def case_metrics(log: EvalLog) -> dict[str, dict[str, float]]:
     }
 
 
-def differences(before: dict[str, float], *, after: dict[str, float]) -> dict[str, JsonValue]:
-    return {key: after[key] - value for key, value in before.items()}
-
-
-def verdict(delta: dict[str, JsonValue], *, baseline: float, measurement: Measurement) -> str:
-    if measurement.accuracy_tolerance is None:
-        return "inconclusive"
-    if cast(float, delta["accuracy"]) < -measurement.accuracy_tolerance:
-        return "regressed"
-    if cast(float, delta["mean_seconds"]) > 0:
-        return "regressed"
-    if cast(float, delta["mean_seconds"]) < -baseline * measurement.minimum_time_gain:
-        return "improved"
-    return "inconclusive"
-
-
 def signature(log: EvalLog) -> tuple[object, ...]:
     return (
         identity(log.eval.metadata or {}, instructions=False),
@@ -202,48 +185,17 @@ def signature(log: EvalLog) -> tuple[object, ...]:
     )
 
 
-def compare_runs(
-    control: Path, *, treatment: Path, measurement: Measurement
-) -> dict[str, JsonValue]:
-    before, after = read_run(control), read_run(treatment)
-    if signature(before) != signature(after):
-        raise ValueError("Incompatible measurement conditions")
-    a, b = metrics(before.samples or []), metrics(after.samples or [])
-    delta = differences(a, after=b)
-    cases_a, cases_b = case_metrics(before), case_metrics(after)
-    return {
-        "control": cast(dict[str, JsonValue], a),
-        "treatment": cast(dict[str, JsonValue], b),
-        "differences": delta,
-        "verdict": verdict(delta, baseline=a["mean_seconds"], measurement=measurement),
-        "cases": {
-            case: differences(values, after=cases_b[case]) for case, values in cases_a.items()
-        },
-        "control_created_at": before.eval.created,
-        "treatment_created_at": after.eval.created,
-        "analysis": "Observed means with Inspect standard errors clustered by case.",
-    }
-
-
-def markdown(report: dict[str, JsonValue]) -> str:
-    a, b = cast(dict[str, float], report["control"]), cast(dict[str, float], report["treatment"])
-    rows = [
-        f"## Benchmark: {report['verdict']}",
-        "",
-        "| Metric | Control | Treatment | Difference |",
-        "| --- | ---: | ---: | ---: |",
-    ]
-    rows.extend(
-        f"| {key} | {value:.4g} | {b[key]:.4g} | {b[key] - value:+.4g} |"
-        for key, value in a.items()
-    )
-    rows.extend(
-        [
-            "",
-            str(report["analysis"]),
-            "",
-            f"Control acquired: {report['control_created_at']}",
-            f"Treatment acquired: {report['treatment_created_at']}",
-        ]
-    )
-    return "\n".join(rows) + "\n"
+def summaries(runs: Mapping[str, Path]) -> dict[str, RunSummary]:
+    summaries: dict[str, RunSummary] = {}
+    reference: tuple[object, ...] | None = None
+    for name, directory in runs.items():
+        log = read_run(directory)
+        current = signature(log)
+        if reference is not None and current != reference:
+            raise ValueError("Incompatible measurement conditions")
+        reference = current
+        summaries[name] = RunSummary(
+            metrics=metrics(log.samples or []), cases=case_metrics(log), created_at=log.eval.created
+        )
+        del log
+    return summaries

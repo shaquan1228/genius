@@ -14,6 +14,7 @@ dependencies = [
   "inspect-ai==0.3.278",
   "inspect-swe==0.2.71",
   "openai>=3.4,<4",
+  "ruff==0.17.0",
 ]
 
 [tool.setuptools]
@@ -26,7 +27,6 @@ dev = [
   "pytest==9.1.1",
   "pytest-cov==7.1.0",
   "radon==6.0.1",
-  "ruff==0.17.0",
   "xenon==0.9.3",
 ]
 
