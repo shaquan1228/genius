@@ -50,7 +50,9 @@ class Runtime:
 
 
 @validate_call(config=FROZEN)
-def create_runtime(*, provider: Literal["local", "hf"] = "local") -> Runtime:
+def create_runtime(
+    *, provider: Literal["local", "hf"] = "local", image: str | None = None
+) -> Runtime:
     match provider:
         case "local":
             from evals.python.integrations.inspect import environments  # noqa: PLC0415 - lazy local SDK composition
@@ -59,6 +61,6 @@ def create_runtime(*, provider: Literal["local", "hf"] = "local") -> Runtime:
         case "hf":
             from evals.python.integrations.hugging_face import sandbox  # noqa: PLC0415 - lazy HF SDK composition
 
-            return sandbox.runtime()
+            return sandbox.runtime(image=image)
         case _ as unreachable:
             assert_never(unreachable)

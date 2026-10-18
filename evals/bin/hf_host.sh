@@ -28,17 +28,16 @@ if [ -n "$provider_key" ] && [ -z "$(printenv "$provider_key")" ]; then
 fi
 
 hf() { uvx --from huggingface_hub==2.2.0 hf "$@"; }
-source_repo="$HF_NAMESPACE/genius-evals"
+source_repo="$HF_NAMESPACE/genius-evals-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 results_bucket="$HF_NAMESPACE/genius-eval-results"
 snapshot_dir=$(mktemp -d)
 trap 'rm -rf "$snapshot_dir"' EXIT HUP INT TERM
 git -c safe.directory="$(pwd)" archive HEAD README.md docs skills evals | tar -x -C "$snapshot_dir"
 
-hf repos create "$source_repo" --repo-type dataset --private --exist-ok
+hf repos create "$source_repo" --repo-type dataset --private
 hf buckets create "$results_bucket" --private --exist-ok
 hf upload "$source_repo" "$snapshot_dir" . --repo-type dataset \
-  --delete '*' \
-  --commit-message 'Update Genius evaluation source'
+  --commit-message 'Immutable Genius evaluation source'
 
 set -- --secrets HF_TOKEN
 if [ -n "$provider_key" ]; then
@@ -51,6 +50,7 @@ hf jobs run --name genius-evals --namespace "$HF_NAMESPACE" --timeout "${EVAL_JO
   "$@" \
   --env "EVAL_AGENT=$EVAL_AGENT" --env "EVAL_MODEL=$EVAL_MODEL" \
   --env "EVAL_VERSION=${EVAL_VERSION:-}" \
+  --env "EVAL_VARIANT=${EVAL_VARIANT:-}" \
   --env "HF_NAMESPACE=$HF_NAMESPACE" \
   --env "EVAL_SANDBOX_IMAGE=${EVAL_SANDBOX_IMAGE:-}" \
   --env "EVAL_RUN_ID=${EVAL_RUN_ID:-}" \
@@ -58,6 +58,9 @@ hf jobs run --name genius-evals --namespace "$HF_NAMESPACE" --timeout "${EVAL_JO
   --env "EVAL_EPOCHS=$EVAL_EPOCHS" \
   --env "EVAL_DATASET=${EVAL_DATASET:-smoke}" --env "EVAL_LIMIT=${EVAL_LIMIT:-}" \
   --env "EVAL_SAMPLE_IDS=${EVAL_SAMPLE_IDS:-}" --env "EVAL_COST_LIMIT=${EVAL_COST_LIMIT:-0.25}" \
+  --env "EVAL_TIME_LIMIT=${EVAL_TIME_LIMIT:-}" \
+  --env "EVAL_MESSAGE_LIMIT=${EVAL_MESSAGE_LIMIT:-}" \
+  --env "EVAL_CACHE=${EVAL_CACHE:-}" \
   --env "EVAL_MODEL_COST=${EVAL_MODEL_COST:-}" \
   --env "EVAL_INSTRUCTION_DELIVERY=${EVAL_INSTRUCTION_DELIVERY:-files}" \
   --env "EVAL_DELIVERIES=${EVAL_DELIVERIES:-}" \

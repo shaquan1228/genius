@@ -45,9 +45,9 @@ def provision(image: str) -> Sandbox:
     )
 
 
-def create() -> Sandbox:
+def create(*, image: str | None = None) -> Sandbox:
     event("vm_provisioning")
-    image = os.environ.get("EVAL_SANDBOX_IMAGE", "")
+    image = os.environ.get("EVAL_SANDBOX_IMAGE", "") if image is None else image
     client = provision(image)
     try:
         setup = prepared_check() if image else INSTALL_TOOLS
@@ -161,11 +161,11 @@ async def _kill(client: Sandbox) -> None:
     await effect(lambda: destroy(client))
 
 
-def runtime() -> Runtime:
+def runtime(*, image: str | None = None) -> Runtime:
     owned: dict[Environment, tuple[Sandbox, set[asyncio.Task[object]]]] = {}
 
     async def allocate() -> Environment:
-        pending = asyncio.create_task(asyncio.to_thread(create))
+        pending = asyncio.create_task(asyncio.to_thread(create, image=image))
         try:
             client = await asyncio.shield(pending)
         except asyncio.CancelledError:

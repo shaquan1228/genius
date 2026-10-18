@@ -84,8 +84,10 @@ def query_concerns_expose_only_their_own_operations() -> None:
         "EvaluationSettings",
         "InstructionDelivery",
         "ModelPricing",
+        "VariantSettings",
         "evaluate",
         "resolve_settings",
+        "resolve_experiment",
     }
 
 

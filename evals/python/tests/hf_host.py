@@ -226,10 +226,10 @@ def host_script_launches_job_without_exposing_key(
     commands = calls.read_text()
     assert (result.returncode, commands.count("--from huggingface_hub==2.2.0 hf")) == (job_exit, 4)
     assert (
-        "hf://datasets/example/genius-evals:/source:ro" in commands,
+        "hf://datasets/example/genius-evals-" in commands,
         "hf://buckets/example/genius-eval-results:/results:rw" in commands,
         "sh /source/evals/bin/hf_bootstrap.sh" in commands,
-        "--repo-type dataset --delete * --commit-message" in commands,
+        "--repo-type dataset --commit-message Immutable Genius evaluation source" in commands,
     ) == (True, True, True, True)
     assert (
         "private-test-key" in commands,

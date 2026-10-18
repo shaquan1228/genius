@@ -5,7 +5,7 @@ import hashlib
 import json
 from collections.abc import Mapping
 from itertools import chain
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 
 from inspect_ai.dataset import Sample
@@ -23,15 +23,31 @@ REASONING_DOCUMENTS = (
 )
 
 
-def load_documents(spec: Experiment) -> Mapping[str, bytes]:
+def load_documents(spec: Experiment, *, source_dir: str | None = None) -> Mapping[str, bytes]:
+    root = Path(source_dir).resolve() if source_dir is not None else REPO_ROOT
     return MappingProxyType(
         {
-            f"instructions/{path.relative_to(REPO_ROOT).as_posix()}": path.read_bytes()
+            f"instructions/{path.relative_to(root).as_posix()}": path.read_bytes()
             for folder in sorted(set(chain.from_iterable(p.instructions for p in spec.profiles)))
-            for path in sorted((REPO_ROOT / folder).rglob("*"))
-            if path.is_file()
+            for path in instruction_files(root, folder=folder)
         }
     )
+
+
+def instruction_files(root: Path, *, folder: str) -> list[Path]:
+    selected = root / folder
+    safe_instruction(selected, root=root)
+    paths = [selected] if selected.is_file() else sorted(selected.rglob("*"))
+    for path in paths:
+        safe_instruction(path, root=root)
+    return [path for path in paths if path.is_file()]
+
+
+def safe_instruction(path: Path, *, root: Path) -> None:
+    if not path.exists():
+        raise ValueError(f"Missing instruction source: {path.name}")
+    if path.is_symlink() or not path.resolve().is_relative_to(root):
+        raise ValueError("Instruction sources must not contain links or escape their root")
 
 
 def document_envelope(
@@ -71,8 +87,17 @@ def content_hash(files: Mapping[str, bytes]) -> str:
 
 
 def document_files(profile: Profile, *, documents: Mapping[str, bytes]) -> dict[str, bytes]:
-    prefixes = tuple(f"instructions/{folder}/" for folder in profile.instructions)
-    return {name: contents for name, contents in documents.items() if name.startswith(prefixes)}
+    selected = tuple(f"instructions/{folder}" for folder in profile.instructions)
+    prefixes = tuple(f"{name}/" for name in selected)
+    return {
+        name: contents
+        for name, contents in documents.items()
+        if document_selected(name, selected=selected, prefixes=prefixes)
+    }
+
+
+def document_selected(name: str, *, selected: tuple[str, ...], prefixes: tuple[str, ...]) -> bool:
+    return name in selected or name.startswith(prefixes)
 
 
 def prompt(
@@ -122,6 +147,7 @@ def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery optio
     dataset: str = "smoke",
     delivery: InstructionDelivery = "files",
     instruction_root: str = "../instructions",
+    sandbox_image: str | None = None,
 ) -> list[Sample]:
     return [
         Sample(
@@ -134,7 +160,12 @@ def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery optio
                 instruction_root=instruction_root,
             ),
             files=files(profile, case=case, documents=documents),
-            metadata={"case_id": case.id, "profile": profile.name, "dataset": dataset},
+            metadata={
+                "case_id": case.id,
+                "profile": profile.name,
+                "dataset": dataset,
+                **({"sandbox_image": sandbox_image} if sandbox_image is not None else {}),
+            },
         )
         for case in cases
     ]
