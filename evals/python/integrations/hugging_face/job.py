@@ -33,7 +33,8 @@ def configuration(environment: Mapping[str, str]) -> EvaluationSettings:
         {
             "model": environment["EVAL_MODEL"],
             "run_id": environment.get("EVAL_RUN_ID") or None,
-            "agent": environment.get("EVAL_AGENT", "claude"),
+            "agent": environment.get("EVAL_AGENT")
+            or ("claude" if environment["EVAL_MODEL"].startswith("anthropic/") else "codex"),
             "version": environment.get("EVAL_VERSION", ""),
             "variant": optional_cost(environment.get("EVAL_VARIANT")),
             "dataset": environment.get("EVAL_DATASET", "smoke"),

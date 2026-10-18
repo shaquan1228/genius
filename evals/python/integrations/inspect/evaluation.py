@@ -146,6 +146,8 @@ async def evaluate_async(request: EvaluationSettings) -> int:
         model = get_model(request.model)
     pricing = pricing_adapter.configure(model, request=request)
     request = request.model_copy(update={"model_cost": ModelPricing.model_validate(pricing)})
+    if request.variant is not None:
+        request = results_adapter.record(tasks[0], request=request, spec=spec)
     state = progress_adapter.Progress(run=request.run_id or uuid4().hex)
     token = progress_adapter.current.set(state)
     heartbeat = asyncio.create_task(state.heartbeat())
@@ -198,8 +200,4 @@ async def execute(
     summary["telemetry_errors"] = state.telemetry_errors
     summary["lifecycle_missing"] = len(expected) - state.completed
     state.emit("completeness", **summary)
-    if request.variant is not None:
-        results_adapter.persist(
-            logs, tasks=tasks, request=request, spec=spec, run_id=state.run, summary=summary
-        )
     return int(completeness_adapter.failed(summary))

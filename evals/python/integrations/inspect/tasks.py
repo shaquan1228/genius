@@ -1,3 +1,4 @@
+import json
 from collections.abc import Mapping
 from hashlib import sha256
 
@@ -9,7 +10,7 @@ import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.results as results_adapter
 import evals.python.integrations.inspect.scoring as scoring_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import comparison, datasets, evaluation
+from evals.python import datasets, evaluation
 from evals.python.datasets import Dataset, DatasetProvenance
 from evals.python.evaluation import InstructionDelivery
 from kernel import Experiment, Profile
@@ -62,9 +63,9 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
             "benchmark": provenance.info.model_dump() if provenance.info else {},
             "agent": agent,
             "agent_version": agent_version,
-            "agent_options_sha256": comparison.fingerprint(
-                agent_adapter.AGENT_REGISTRY[agent].options
-            ),
+            "agent_options_sha256": sha256(
+                json.dumps(agent_adapter.AGENT_REGISTRY[agent].options, sort_keys=True).encode()
+            ).hexdigest(),
             "agent_system_prompt_sha256": sha256(
                 agent_adapter.AGENT_REGISTRY[agent].system_prompt.encode()
             ).hexdigest(),

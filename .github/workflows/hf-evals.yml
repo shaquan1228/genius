@@ -145,13 +145,7 @@ jobs:
           COMPARISON_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
           COMPARISON_REQUEST: ${{ inputs.comparison_request }}
         run: |
-          mkdir -p evals/reports/comparison
-          if [ -n "$COMPARISON_REQUEST" ]; then
-            printf '%s' "$COMPARISON_REQUEST" > evals/reports/comparison/request.json
-          else
-            opam exec --switch=genius-kernel-414 -- uv run --project evals --no-sync python -m evals.python.integrations.hugging_face.compare prepare --output evals/reports/comparison
-          fi
-          opam exec --switch=genius-kernel-414 -- uv run --project evals --no-sync python -m evals.python.integrations.hugging_face.compare run evals/reports/comparison/request.json --output evals/reports/comparison
+          opam exec --switch=genius-kernel-414 -- uv run --project evals --no-sync python -m evals.python.integrations.hugging_face.compare --output evals/reports/comparison
       - name: Publish job summary
         if: always()
         run: |

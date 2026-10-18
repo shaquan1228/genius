@@ -1,58 +1,78 @@
-"""Persist native logs and validate their provenance before comparing runs."""
+"""Compare native Inspect logs using their recorded inputs and completeness checks."""
 
-import hashlib
 import json
-from collections.abc import Mapping
-from datetime import UTC, datetime
-from itertools import chain, product
+from collections.abc import Callable
+from itertools import chain, groupby, product
+from math import inf
 from pathlib import Path
-from typing import cast
+from statistics import mean
+from typing import Any, cast
+from uuid import uuid4
 
 from inspect_ai import Task
-from inspect_ai.log import EvalLog, EvalSample, read_eval_log
+from inspect_ai.log import EvalLog, EvalSample, list_eval_logs, read_eval_log
 from inspect_ai.model import get_model_info
-from inspect_ai.scorer import CORRECT, Score
+from inspect_ai.scorer import CORRECT, SampleScore, Score, accuracy, stderr
 from pydantic import JsonValue
 
 import evals.python.integrations.inspect.pricing as pricing_adapter
-from evals.python import comparison, evaluation
-from evals.python.comparison import Measurement, Observation, PreparedRun, RunRecord
+import evals.python.integrations.inspect.profiles as profiles_adapter
+from evals.python import evaluation
+from evals.python.comparison import Measurement
 from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.inspect import completeness
 from evals.python.paths import EVALS_ROOT
 from kernel import Experiment
 from kernel import Task as NativeTask
 
-
-def harness_source(path: Path) -> bool:
-    return path.suffix in (".py", ".ml", ".mli", ".sh") and "tests" not in path.parts
+_ACCURACY = cast(Callable[[list[SampleScore]], float], accuracy())
+_STDERR = cast(Callable[[list[SampleScore]], float], stderr(cluster="case_id"))
 
 
 def harness_hash() -> str:
     files = {
-        path.relative_to(EVALS_ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        path.relative_to(EVALS_ROOT).as_posix(): path.read_bytes()
         for path in chain.from_iterable(
             (EVALS_ROOT / folder).rglob("*") for folder in ("python", "ocaml", "bin")
         )
-        if harness_source(path)
+        if path.suffix in (".py", ".ml", ".mli", ".sh") and "tests" not in path.parts
     }
-    for name in ("pyproject.toml", "uv.lock"):
-        files[name] = hashlib.sha256((EVALS_ROOT / name).read_bytes()).hexdigest()
-    return comparison.fingerprint(files)
+    files["pyproject.toml"] = (EVALS_ROOT / "pyproject.toml").read_bytes()
+    files["uv.lock"] = (EVALS_ROOT / "uv.lock").read_bytes()
+    return profiles_adapter.content_hash(files)
 
 
-def identities(task: Task, *, request: EvaluationSettings, spec: Experiment) -> tuple[str, str]:
+def record(task: Task, *, request: EvaluationSettings, spec: Experiment) -> EvaluationSettings:
     metadata = dict(task.metadata or {})
-    measured = measurement_definition(
-        metadata,
-        request=request,
-        spec=spec,
-        case_ids=completeness.selected_ids(task, request=request),
+    if metadata["agent_version"] in {"", "latest", "stable", "next"}:
+        raise ValueError("Use an exact agent version")
+    rates = request.model_cost or pricing_adapter.known_prices(
+        get_model_info(request.model), request=request
     )
-    return variant_identity(metadata), comparison.fingerprint(measured)
+    resolved = request.model_copy(
+        update={
+            "run_id": request.run_id or uuid4().hex,
+            "version": metadata["agent_version"],
+            "epochs": spec.epochs,
+            "cost_limit": spec.cost_limit,
+            "time_limit": spec.time_limit,
+            "message_limit": spec.message_limit,
+            "cache": spec.cache,
+            "model_cost": rates,
+            "sample_ids": tuple(completeness.selected_ids(task, request=request)),
+            "limit": None,
+        }
+    )
+    metadata.update(
+        execution=resolved.model_dump(mode="json", exclude={"variant", "run_id", "log_dir"}),
+        run_id=resolved.run_id,
+        source_ref=getattr(request.variant, "source_ref", None),
+    )
+    task.metadata = metadata
+    return resolved
 
 
-def prepare_run(settings: EvaluationSettings) -> PreparedRun:
+def _prepare(settings: EvaluationSettings) -> tuple[Task, EvaluationSettings]:
     from evals.python.integrations.inspect import evaluation as runner  # noqa: PLC0415
 
     if settings.variant is None:
@@ -60,261 +80,170 @@ def prepare_run(settings: EvaluationSettings) -> PreparedRun:
     spec = evaluation.resolve_experiment(settings)
     task = runner.evaluation_tasks(spec, request=settings)[0]
     runner.selected_samples(task, request=settings)
-    resolved = resolved_settings(settings, spec=spec, metadata=dict(task.metadata or {}))
-    rates = settings.model_cost
-    if rates is None:
-        rates = pricing_adapter.known_prices(get_model_info(settings.model), request=settings)
-    resolved = resolved.model_copy(
-        update={
-            "sample_ids": tuple(completeness.selected_ids(task, request=settings)),
-            "limit": None,
-            "model_cost": rates,
-        }
+    return task, record(task, request=settings, spec=spec)
+
+
+def prepare_run(settings: EvaluationSettings) -> EvaluationSettings:
+    return _prepare(settings)[1]
+
+
+def identity(metadata: dict[str, Any], *, instructions: bool) -> dict[str, Any]:
+    excluded = {"profile", "run_id", "source_ref", "diagnostic_epoch"}
+    if not instructions:
+        excluded.update(("instructions_sha256", "preamble_sha256"))
+    return {key: value for key, value in metadata.items() if key not in excluded}
+
+
+def read_run(directory: Path) -> EvalLog:
+    files = list_eval_logs(str(directory))
+    if len(files) != 1:
+        raise ValueError("Expected one native evaluation log per variant")
+    log = read_eval_log(files[0])
+    metadata = log.eval.metadata or {}
+    required = (
+        "execution",
+        "harness_sha256",
+        "instructions_sha256",
+        "preamble_sha256",
+        "cases_sha256",
     )
-    variant, measured = identities(task, request=resolved, spec=spec)
-    return PreparedRun(settings=resolved, variant_sha256=variant, measurement_sha256=measured)
-
-
-def validate_run(directory: Path, *, settings: EvaluationSettings) -> None:
-    record, expected = read_record(directory), prepare_run(settings)
-    if (expected.variant_sha256, expected.measurement_sha256) != (
-        record.variant_sha256,
-        record.measurement_sha256,
-    ):
-        raise ValueError("Saved run does not match the requested variant and measurement")
-    if record.run_id != settings.run_id:
-        raise ValueError("Saved run ID does not match its reference")
-    observations(directory, record=record)
-
-
-def variant_identity(metadata: dict[str, JsonValue]) -> str:
-    return comparison.fingerprint(
-        {key: metadata[key] for key in ("instructions_sha256", "preamble_sha256")}
-    )
-
-
-def resolved_settings(
-    request: EvaluationSettings, *, spec: Experiment, metadata: dict[str, JsonValue]
-) -> EvaluationSettings:
-    return request.model_copy(
-        update={
-            "epochs": spec.epochs,
-            "cost_limit": spec.cost_limit,
-            "cache": spec.cache,
-            "time_limit": spec.time_limit,
-            "message_limit": spec.message_limit,
-            "version": metadata["agent_version"],
-        }
-    )
-
-
-def measurement_definition(
-    metadata: dict[str, JsonValue],
-    *,
-    request: EvaluationSettings,
-    spec: Experiment,
-    case_ids: list[str],
-) -> dict[str, JsonValue]:
-    settings = resolved_settings(request, spec=spec, metadata=metadata).model_dump(
-        mode="json",
-        exclude={"variant", "run_id", "log_dir", "limit", "sample_ids", "instruction_root"},
-    )
-    common = dict(metadata)
-    for key in ("instructions_sha256", "preamble_sha256", "profile"):
-        common.pop(key)
-    return {"settings": settings, "metadata": common, "case_ids": cast(list[JsonValue], case_ids)}
-
-
-def persist(  # noqa: PLR0913 - explicit native log, task and execution provenance
-    logs: list[EvalLog],
-    *,
-    tasks: list[Task],
-    request: EvaluationSettings,
-    spec: Experiment,
-    run_id: str,
-    summary: dict[str, object],
-) -> None:
-    root = Path(request.log_dir) / run_id
-    root.mkdir(parents=True, exist_ok=True)
-    variant, measured = identities(tasks[0], request=request, spec=spec)
-    paths = [Path(str(log.location)).resolve() for log in logs]
-    metadata = cast(dict[str, JsonValue], tasks[0].metadata)
-    record = RunRecord(
-        run_id=run_id,
-        created_at=datetime.now(UTC).isoformat(),
-        source_ref=request.variant.source_ref if request.variant else None,
-        variant_sha256=variant,
-        measurement_sha256=measured,
-        settings=resolved_settings(request, spec=spec, metadata=metadata),
-        metadata=metadata,
-        measurement=measurement_definition(
-            metadata,
-            request=request,
-            spec=spec,
-            case_ids=completeness.selected_ids(tasks[0], request=request),
-        ),
-        case_ids=tuple(completeness.selected_ids(tasks[0], request=request)),
-        epochs=spec.epochs,
-        complete=not completeness.failed(summary),
-        completeness=cast(dict[str, JsonValue], summary),
-        logs={
-            path.relative_to(root.resolve()).as_posix(): hashlib.sha256(
-                path.read_bytes()
-            ).hexdigest()
-            for path in paths
-        },
-    )
-    with (root / "run.json").open("x") as output:
-        output.write(record.model_dump_json(indent=2))
-
-
-def read_record(directory: Path) -> RunRecord:
-    record = RunRecord.model_validate_json((directory / "run.json").read_text())
-    if not record.complete or not record.logs:
-        raise ValueError(f"Incomplete run: {record.run_id}")
-    if variant_identity(record.metadata) != record.variant_sha256:
-        raise ValueError("Variant identity does not match run metadata")
-    if comparison.fingerprint(record.measurement) != record.measurement_sha256:
-        raise ValueError("Measurement identity does not match run metadata")
-    verify_measurement(record)
-    return record
-
-
-def verify_measurement(record: RunRecord) -> None:
-    settings = record.settings
-    spec = evaluation.resolve_experiment(settings)
-    expected = measurement_definition(
-        record.metadata, request=settings, spec=spec, case_ids=list(record.case_ids)
-    )
-    if expected != record.measurement:
-        raise ValueError("Run settings differ from recorded measurement")
-
-
-def observations(directory: Path, *, record: RunRecord) -> list[Observation]:
-    samples = [
-        observation(sample)
-        for name in record.logs
-        for sample in checked_log(directory, name=name, record=record).samples or []
-    ]
-    verify_coverage(samples, record=record)
-    return samples
-
-
-def checked_log(directory: Path, *, name: str, record: RunRecord) -> EvalLog:
-    path = log_path(directory, name=name)
-    if hashlib.sha256(path.read_bytes()).hexdigest() != record.logs[name]:
-        raise ValueError(f"Log checksum mismatch: {name}")
-    log = read_eval_log(str(path))
-    if log.eval.metadata != record.metadata:
-        raise ValueError("Native log provenance differs from run metadata")
-    if log.eval.model != record.settings.model.replace("hf-inference-providers/", "genius-hf/", 1):
-        raise ValueError("Native log model differs from run settings")
-    if log.status != "success":
-        raise ValueError("Run contains a failed task")
+    if not all(map(metadata.get, required)):
+        raise ValueError("Missing comparison provenance")
+    settings = EvaluationSettings.model_validate_json(json.dumps(metadata["execution"]))
+    if not settings.sample_ids:
+        raise ValueError("Run has no recorded case selection")
+    _complete(log, settings=settings)
     return log
 
 
-def log_path(directory: Path, *, name: str) -> Path:
-    original = directory / name
-    path = original.resolve()
-    if not path.is_relative_to(directory.resolve()) or original.is_symlink():
-        raise ValueError("Log reference escapes the run directory")
-    return path
+def _complete(log: EvalLog, *, settings: EvaluationSettings) -> None:
+    spec = evaluation.resolve_experiment(settings)
+    expected = set(product([log.eval.task], settings.sample_ids or (), range(1, spec.epochs + 1)))
+    if completeness.failed(completeness.report([log], expected=expected)):
+        raise ValueError("Incomplete evaluation evidence")
+    for sample in log.samples or []:
+        elapsed(sample)
 
 
-def verify_coverage(samples: list[Observation], *, record: RunRecord) -> None:
-    expected = set(product(record.case_ids, range(1, record.epochs + 1)))
-    seen = {(sample.case_id, sample.epoch) for sample in samples}
-    if seen != expected or len(seen) != len(samples):
-        raise ValueError("Run does not contain its declared case/epoch coverage")
+def validate_run(directory: Path, *, settings: EvaluationSettings) -> None:
+    log = read_run(directory)
+    task, resolved = _prepare(settings)
+    metadata = log.eval.metadata or {}
+    if identity(metadata, instructions=True) != identity(task.metadata or {}, instructions=True):
+        raise ValueError("Saved run does not match the requested variant and measurement")
+    model = resolved.model.replace("hf-inference-providers/", "genius-hf/", 1)
+    if (log.eval.model, metadata.get("run_id")) != (model, settings.run_id):
+        raise ValueError("Saved run model or ID differs from its reference")
 
 
-def correct(values: Mapping[str, object], *, crashed: bool, cutoff: bool) -> bool:
+def elapsed(sample: EvalSample) -> float:
+    value = sample.total_time
+    if value is None or not 0 <= value < inf:
+        raise ValueError("Missing or invalid sample elapsed time")
+    return value
+
+
+def correct(sample: EvalSample) -> bool:
+    value = cast(dict[str, str], (sample.scores or {})["evaluation"].value)
     return (
-        not crashed
-        and not cutoff
-        and all(values[name] == CORRECT for name in NativeTask.required_scores)
+        not sample.limit
+        and not completeness.crashed(sample)
+        and all(value[name] == CORRECT for name in NativeTask.required_scores)
     )
 
 
-def observation(sample: EvalSample) -> Observation:
-    if sample.error is not None or sample.total_time is None:
-        raise ValueError("Sample has a harness error or missing elapsed time")
-    values = evaluation_score(sample)
-    crashed, cutoff = completeness.crashed(sample), sample.limit is not None
-    assert isinstance(values.value, dict)
-    return Observation(
-        case_id=str(sample.id),
-        epoch=sample.epoch,
-        correct=correct(values.value, crashed=crashed, cutoff=cutoff),
-        elapsed_seconds=sample.total_time,
-        crashed=crashed,
-        cutoff=cutoff,
+def metrics(samples: list[EvalSample]) -> dict[str, float]:
+    scores = [
+        SampleScore(score=Score(value=correct(s)), sample_metadata={"case_id": str(s.id)})
+        for s in samples
+    ]
+    return {
+        "accuracy": _ACCURACY(scores),
+        "accuracy_stderr": _STDERR(scores),
+        "mean_seconds": mean(elapsed(s) for s in samples),
+        "crashes": sum(completeness.crashed(s) for s in samples),
+        "cutoffs": sum(s.limit is not None for s in samples),
+    }
+
+
+def case_metrics(log: EvalLog) -> dict[str, dict[str, float]]:
+    ordered = sorted(log.samples or [], key=lambda sample: str(sample.id))
+    return {
+        case: metrics(list(group))
+        for case, group in groupby(ordered, key=lambda sample: str(sample.id))
+    }
+
+
+def differences(before: dict[str, float], *, after: dict[str, float]) -> dict[str, JsonValue]:
+    return {key: after[key] - value for key, value in before.items()}
+
+
+def verdict(delta: dict[str, JsonValue], *, baseline: float, measurement: Measurement) -> str:
+    if measurement.accuracy_tolerance is None:
+        return "inconclusive"
+    if cast(float, delta["accuracy"]) < -measurement.accuracy_tolerance:
+        return "regressed"
+    if cast(float, delta["mean_seconds"]) > 0:
+        return "regressed"
+    if cast(float, delta["mean_seconds"]) < -baseline * measurement.minimum_time_gain:
+        return "improved"
+    return "inconclusive"
+
+
+def signature(log: EvalLog) -> tuple[object, ...]:
+    return (
+        identity(log.eval.metadata or {}, instructions=False),
+        log.eval.model,
+        log.eval.model_base_url,
+        log.eval.model_args,
+        log.eval.model_roles,
+        log.eval.config,
+        log.eval.model_generate_config,
     )
-
-
-def evaluation_score(sample: EvalSample) -> Score:
-    values = (sample.scores or {}).get("evaluation")
-    if values is None or not completeness.complete_value(values.value):
-        raise ValueError("Sample has no complete evaluation score")
-    return values
 
 
 def compare_runs(
     control: Path, *, treatment: Path, measurement: Measurement
 ) -> dict[str, JsonValue]:
-    before, after = read_record(control), read_record(treatment)
-    if before.measurement_sha256 != after.measurement_sha256:
+    before, after = read_run(control), read_run(treatment)
+    if signature(before) != signature(after):
         raise ValueError("Incompatible measurement conditions")
-    report = comparison.compare_observations(
-        observations(control, record=before),
-        treatment=observations(treatment, record=after),
-        measurement=measurement,
-    )
-    report.update(
-        control_run=before.run_id,
-        treatment_run=after.run_id,
-        control_created_at=before.created_at,
-        treatment_created_at=after.created_at,
-        control_source=before.source_ref,
-        treatment_source=after.source_ref,
-        measurement_sha256=before.measurement_sha256,
-    )
-    return report
+    a, b = metrics(before.samples or []), metrics(after.samples or [])
+    delta = differences(a, after=b)
+    cases_a, cases_b = case_metrics(before), case_metrics(after)
+    return {
+        "control": cast(dict[str, JsonValue], a),
+        "treatment": cast(dict[str, JsonValue], b),
+        "differences": delta,
+        "verdict": verdict(delta, baseline=a["mean_seconds"], measurement=measurement),
+        "cases": {
+            case: differences(values, after=cases_b[case]) for case, values in cases_a.items()
+        },
+        "control_created_at": before.eval.created,
+        "treatment_created_at": after.eval.created,
+        "analysis": "Observed means with Inspect standard errors clustered by case.",
+    }
 
 
 def markdown(report: dict[str, JsonValue]) -> str:
-    control, treatment = report["control"], report["treatment"]
-    assert isinstance(control, dict)
-    assert isinstance(treatment, dict)
+    a, b = cast(dict[str, float], report["control"]), cast(dict[str, float], report["treatment"])
     rows = [
-        "## Benchmark comparison",
-        "",
-        f"Verdict: **{report['verdict']}**",
+        f"## Benchmark: {report['verdict']}",
         "",
         "| Metric | Control | Treatment | Difference |",
         "| --- | ---: | ---: | ---: |",
     ]
-    for key in control:
-        before, after = float(str(control[key])), float(str(treatment[key]))
-        rows.append(f"| {key} | {before:.4g} | {after:.4g} | {after - before:+.4g} |")
+    rows.extend(
+        f"| {key} | {value:.4g} | {b[key]:.4g} | {b[key] - value:+.4g} |"
+        for key, value in a.items()
+    )
     rows.extend(
         [
             "",
-            "Effects and uncertainty:",
-            "",
-            "```json",
-            json.dumps(report["effects"], indent=2),
-            "```",
+            str(report["analysis"]),
             "",
             f"Control acquired: {report['control_created_at']}",
             f"Treatment acquired: {report['treatment_created_at']}",
-            "",
-            "Historical runs may differ in provider load. "
-            "Repeated epochs do not add case diversity.",
         ]
     )
-    change = report.get("mean_time_change_fraction")
-    if change is not None:
-        rows.append(f"\nMean task time change: {float(str(change)):+.1%}")
     return "\n".join(rows) + "\n"

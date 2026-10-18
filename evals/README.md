@@ -3,6 +3,8 @@
 Compare baseline and Genius agents with [Inspect AI](https://inspect.aisi.org.uk/)
 and [Inspect SWE](https://meridianlabs-ai.github.io/inspect_swe/).
 The bundled datasets are a four-case smoke suite and the 164-problem HumanEval+ benchmark.
+Use `python -m evals.python.integrations.hugging_face.compare --help` to compare variants or reuse saved runs.
+The `benchmark` PR label launches independent HF jobs and reports accuracy and mean task time.
 
 ## Source layout
 
@@ -87,134 +89,6 @@ Delivery diagnostics currently support reasoning cases.
 
 Inspect logs retain scores, verifier evidence, crashes, and cutoffs. Parent logs
 include sample lifecycle events and a final completeness report.
-
-## Compare instruction variants
-
-A comparison fixes the harness, model, case selection, execution limits and measurements,
-then runs two instruction variants independently. Each variant can use instructions from
-any committed revision or an empty instruction set. No scenario registry is required.
-
-Commit the harness before submitting paid work. The launcher rejects uncommitted runtime
-changes so the local compatibility check and uploaded harness use the same code. Unrelated
-reports and ideation documents do not prevent submission.
-
-Prepare a request without contacting HF or making model calls:
-
-```sh
-export EVAL_MODEL='openai/<pinned-model-id>'
-export CONTROL_REF='<control-commit>'
-export TREATMENT_REF='<treatment-commit>'
-export EVAL_DATASET=smoke
-export EVAL_EPOCHS=5
-opam exec --switch=genius-kernel-414 -- uv run --project evals --no-sync \
-  python -m evals.python.integrations.hugging_face.compare prepare \
-  --output evals/results/comparison
-```
-
-Edit `evals/results/comparison/request.json` before submitting:
-
-| Field | Meaning |
-| --- | --- |
-| `comparison_id` | Unique identifier for this request; use a new ID and output directory for a new comparison |
-| `shared` | Existing evaluation settings: model, agent/version, dataset/cases, delivery, budgets, concurrency and epochs |
-| `control.variant`, `treatment.variant` | Each variant's name, instruction paths, source revision and preamble |
-| `control.result_ref`, `treatment.result_ref` | Existing run ID to reuse; `null` requests a new job |
-| `measurement.accuracy_tolerance` | Maximum acceptable accuracy loss, as a fraction; `0.01` means one percentage point |
-| `measurement.minimum_time_gain` | Required fractional reduction in mean task time; `0.1` means 10% |
-
-The prepared request leaves accuracy tolerance unset. Reports show measured differences,
-but the verdict remains inconclusive until a tolerance is explicitly chosen. For a PR
-skill change, use its base instructions as control and head instructions as treatment;
-the trusted harness stays fixed. Include referenced documents in the instruction paths.
-For a skillless variant, set `instructions` to `[]` and `preamble` to `""`.
-
-Submit the request with HF and provider credentials configured as above:
-
-```sh
-opam exec --switch=genius-kernel-414 -- uv run --project evals --no-sync \
-  python -m evals.python.integrations.hugging_face.compare run \
-  evals/results/comparison/request.json --output evals/results/comparison
-```
-
-Both new jobs are submitted before waiting. `max_samples` is per job, so a fresh pair can
-use twice that sample concurrency. Each job has its own result volume and pinned source
-revision. PR instruction files are exported as data; PR harness and bootstrap code are
-not executed. Candidate work continues to use the existing isolated sample sandboxes.
-
-To skip control execution, set `control.result_ref` to a previously completed run ID.
-The saved run must match the requested control's delivered instruction bytes and preamble,
-plus shared cases, grader/harness, model, agent/options, delivery, sandbox image and budgets.
-The launcher verifies manifest identities, native log metadata, checksums and exact
-case/epoch coverage before spending on the other variant. Runs from the earlier launcher
-without a `run.json` manifest cannot be reused automatically.
-
-The HF result bucket contains:
-
-```text
-comparisons/<comparison-id>/
-  request.json       # Resolved commits, cases and settings
-  jobs.json          # HF job IDs, run IDs and source revision
-  comparison.json    # Metrics, uncertainty, per-case changes and verdict
-  summary.md
-runs/<run-id>/
-  run.json           # Resolved settings, identities, completeness and log checksums
-  *.eval             # Native Inspect evidence
-```
-
-Failures preserve job IDs. Ordinary interruption cancels outstanding jobs; if the host is
-killed or loses its network, reconcile the recorded jobs explicitly:
-
-```sh
-opam exec --switch=genius-kernel-414 -- uv run --project evals --no-sync \
-  python -m evals.python.integrations.hugging_face.compare cancel \
-  --output evals/results/comparison
-```
-
-The library can also compare downloaded run directories without HF credentials:
-
-```python
-from pathlib import Path
-from evals.python import comparison
-from evals.python.comparison import Measurement
-
-report = comparison.compare_runs(
-    Path("control-run"),
-    treatment=Path("treatment-run"),
-    measurement=Measurement(accuracy_tolerance=0.01),
-)
-print(comparison.render_report(report))
-```
-
-Accuracy requires every required score to pass, with no agent crash or cutoff. Mean elapsed
-time includes all scored attempts, including unsuccessful attempts and timeouts; harness
-errors or missing evidence invalidate comparison. HF job queue and bootstrap time are
-outside sample timing. Time intervals use a paired bootstrap over cases, grouping epochs;
-accuracy uses a conservative bounded interval. These are separate 95% intervals, not a
-joint guarantee. Four cases repeated many times provide narrow evidence, and exact zero
-accuracy loss generally cannot be established from finite observations. Historical control
-timestamps remain visible because matching configuration cannot establish matching provider
-load or unchanged hosted model behavior.
-
-### GitHub activation
-
-Apply the `benchmark` label to request a comparison of a PR's base and head instructions.
-The label remains an opt-in for subsequent commits, but each triggering actor must have
-repository write access. A contributor without that access needs a maintainer to reapply
-the label after their update. The workflow checks out trusted base code, fetches PR objects
-as data, runs offline checks, and then launches the comparison. It becomes available after
-this workflow is merged into the default branch.
-
-Manual dispatch also accepts a complete comparison request JSON, allowing skillless
-controls and saved run references. Label runs use repository variables `EVAL_MODEL` and
-`EVAL_MODEL_COST` plus the existing secrets and default smoke settings. Explicit provider
-prices remain required for HF inference routes.
-
-GitHub publishes the resolved request, job IDs, native evidence and comparison report as
-Actions artifacts, and puts the metric table and verdict in the job summary. Workflow
-success means the comparison completed; the report's verdict describes the measured result.
-Labeled PRs also receive a check on the exact head commit: improved results succeed,
-inconclusive results are neutral, and regressions or invalid comparisons fail.
-GitHub serializes comparison requests; the two HF jobs within a request run independently.
 
 ## Use from Python
 

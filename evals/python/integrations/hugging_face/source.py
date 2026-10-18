@@ -12,7 +12,8 @@ def git(*arguments: str, repository: Path) -> bytes:
     return subprocess.check_output(["git", "-C", str(repository), *arguments])
 
 
-def resolve(ref: str, *, repository: Path) -> str:
+def resolve(ref: str | None, *, repository: Path) -> str:
+    ref = ref or "HEAD"
     if ref.startswith("-"):
         raise ValueError("Invalid source reference")
     return git("rev-parse", "--verify", f"{ref}^{{commit}}", repository=repository).decode().strip()
@@ -28,16 +29,12 @@ def trusted_snapshot(destination: Path, *, repository: Path) -> str:
     return revision
 
 
-def variant_revision(variant: VariantSettings, *, repository: Path) -> str:
-    return resolve(variant.source_ref or "HEAD", repository=repository)
-
-
 def instructions(
     variant: VariantSettings, *, destination: Path, repository: Path
 ) -> VariantSettings:
     if variant.source_dir is not None:
         raise ValueError("Hosted variants must use source_ref, never a local source_dir")
-    revision = variant_revision(variant, repository=repository)
+    revision = resolve(variant.source_ref, repository=repository)
     destination.mkdir(parents=True, exist_ok=True)
     for selected in variant.instructions:
         entries = git("ls-tree", "-r", "-z", revision, "--", selected, repository=repository)

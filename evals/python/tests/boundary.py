@@ -37,9 +37,7 @@ PUBLIC_OPERATIONS = {
     "execution": {"create_runtime"},
     "evaluation": {"evaluate", "resolve_settings", "resolve_experiment"},
     "comparison": {
-        "compare_observations",
         "compare_runs",
-        "fingerprint",
         "prepare_run",
         "validate_run",
         "render_report",
@@ -57,9 +55,6 @@ OWNER_TYPES = {
         "ComparisonRequest",
         "VariantRequest",
         "Measurement",
-        "RunRecord",
-        "Observation",
-        "PreparedRun",
     },
 }
 PUBLIC_NAMES = {
