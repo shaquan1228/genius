@@ -17,10 +17,11 @@ import evals.python.integrations.inspect.pricing as pricing_adapter
 import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.progress as progress_adapter
 import evals.python.integrations.inspect.remote  # noqa: F401 - register the HF sandbox
+import evals.python.integrations.inspect.results as results_adapter
 import evals.python.integrations.inspect.tasks as task_adapter
 from evals.python import datasets, evaluation
-from evals.python.evaluation import EvaluationSettings
-from kernel import Experiment
+from evals.python.evaluation import EvaluationSettings, ModelPricing
+from kernel import Experiment, Profile
 
 
 @modelapi(name="genius-hf")
@@ -52,9 +53,36 @@ def selected_samples(task: Task, *, request: EvaluationSettings) -> list[str] | 
     return list(selected)
 
 
+def variant_experiment(spec: Experiment, *, request: EvaluationSettings) -> Experiment:
+    if variant := request.variant:
+        if request.deliveries:
+            raise ValueError("Choose a variant or delivery diagnostics")
+        spec = Experiment.create(
+            profiles=[
+                Profile.create(
+                    name=variant.name,
+                    preamble=variant.preamble,
+                    instructions=list(variant.instructions),
+                )
+            ],
+            epochs=spec.epochs,
+            message_limit=spec.message_limit,
+            cost_limit=spec.cost_limit,
+            time_limit=spec.time_limit,
+            cache=spec.cache,
+        )
+    return spec
+
+
 def evaluation_tasks(spec: Experiment, *, request: EvaluationSettings) -> list[Task]:
+    spec = variant_experiment(spec, request=request)
+    source_dir = request.variant.source_dir if request.variant else None
     catalog = datasets.load_dataset(selection=request.dataset)
-    documents = profile_adapter.load_documents(spec)
+    documents = (
+        profile_adapter.load_documents(spec)
+        if source_dir is None
+        else profile_adapter.load_documents(spec, source_dir=source_dir)
+    )
     provenance = datasets.get_provenance(selection=catalog)
     build = partial(
         task_adapter.build_task,
@@ -67,6 +95,8 @@ def evaluation_tasks(spec: Experiment, *, request: EvaluationSettings) -> list[T
         dataset=request.dataset,
         sandbox=request.sandbox,
         instruction_root=request.instruction_root,
+        harness_sha256=results_adapter.harness_hash(),
+        sandbox_image=request.sandbox_image,
     )
     if request.deliveries:
         return diagnostic_tasks(spec, request=request, build=build)
@@ -103,7 +133,7 @@ def diagnostic_tasks(
 
 
 async def evaluate_async(request: EvaluationSettings) -> int:
-    spec = evaluation.resolve_settings(epochs=request.epochs, cost_limit=request.cost_limit)
+    spec = evaluation.resolve_experiment(request)
     tasks = evaluation_tasks(spec, request=request)
     selected_samples(tasks[0], request=request)
     if request.model.startswith("hf-inference-providers/"):
@@ -115,6 +145,9 @@ async def evaluate_async(request: EvaluationSettings) -> int:
     else:
         model = get_model(request.model)
     pricing = pricing_adapter.configure(model, request=request)
+    request = request.model_copy(update={"model_cost": ModelPricing.model_validate(pricing)})
+    if request.variant is not None:
+        request = results_adapter.record(tasks[0], request=request, spec=spec)
     state = progress_adapter.Progress(run=request.run_id or uuid4().hex)
     token = progress_adapter.current.set(state)
     heartbeat = asyncio.create_task(state.heartbeat())

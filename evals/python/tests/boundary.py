@@ -35,7 +35,13 @@ PUBLIC_OPERATIONS = {
     "verification": {"verify_case", "validate_reference"},
     "assessment": {"assess"},
     "execution": {"create_runtime"},
-    "evaluation": {"evaluate", "resolve_settings"},
+    "evaluation": {"evaluate", "resolve_settings", "resolve_experiment"},
+    "comparison": {
+        "compare_runs",
+        "prepare_run",
+        "validate_run",
+        "render_report",
+    },
 }
 OWNER_TYPES = {
     "schema": {"DatasetInfo", "FileName", "Files", "Attributes"},
@@ -44,7 +50,12 @@ OWNER_TYPES = {
     "verification": {"Diagnostic", "VerificationResult"},
     "assessment": {"Assessment"},
     "execution": {"Execution", "Completion", "Environment", "Runtime", "Cleanup"},
-    "evaluation": {"EvaluationSettings", "ModelPricing", "InstructionDelivery"},
+    "evaluation": {"EvaluationSettings", "ModelPricing", "InstructionDelivery", "VariantSettings"},
+    "comparison": {
+        "ComparisonRequest",
+        "VariantRequest",
+        "Measurement",
+    },
 }
 PUBLIC_NAMES = {
     owner: names | PUBLIC_OPERATIONS.get(owner, set()) for owner, names in OWNER_TYPES.items()
@@ -78,6 +89,7 @@ def only_standalone_drivers_use_subprocess() -> None:
     assert callers == {
         "integrations/evalplus/verifier.py",
         "integrations/smoke/verifier.py",
+        "integrations/hugging_face/source.py",
     }
 
 

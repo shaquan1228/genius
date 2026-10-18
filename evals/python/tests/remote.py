@@ -360,3 +360,20 @@ def prepared_check_requires_every_tool(missing: str | None, *, tmp_path: Path) -
         check=False,
     )
     assert (checked.returncode == 0) == (missing is None)
+
+
+@pytest.mark.parametrize("image", ["", "chosen/prepared:fixed"])
+def request_image_overrides_host_environment(
+    image: str, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EVAL_SANDBOX_IMAGE", "unrelated/environment:other")
+    with patch.object(Sandbox, "create", wraps=Sandbox.create) as create:
+        environment = asyncio.run(
+            HfSandboxEnvironment.sample_init("eval", None, {"sandbox_image": image})
+        )["default"]
+        assert create.call_args.kwargs["image"] == (image or backend.IMAGE)
+        asyncio.run(
+            HfSandboxEnvironment.sample_cleanup(
+                "eval", None, {"default": environment}, interrupted=False
+            )
+        )

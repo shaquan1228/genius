@@ -24,7 +24,7 @@ class HfSandboxEnvironment(SandboxEnvironment):
     async def sample_init(
         cls, task_name: str, config: object, metadata: dict[str, str]
     ) -> dict[str, SandboxEnvironment]:
-        runtime = execution.create_runtime(provider="hf")
+        runtime = execution.create_runtime(provider="hf", image=metadata.get("sandbox_image"))
         environment = await runtime.create()
         return {"default": cls(environment, runtime)}
 

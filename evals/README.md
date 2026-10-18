@@ -3,6 +3,8 @@
 Compare baseline and Genius agents with [Inspect AI](https://inspect.aisi.org.uk/)
 and [Inspect SWE](https://meridianlabs-ai.github.io/inspect_swe/).
 The bundled datasets are a four-case smoke suite and the 164-problem HumanEval+ benchmark.
+Use `python -m evals.python.integrations.hugging_face.compare --help` to compare variants or reuse saved runs.
+The `benchmark` PR label launches independent HF jobs and reports accuracy and mean task time.
 
 ## Source layout
 

@@ -103,7 +103,7 @@ def evaluation_prepares_once_for_all_tasks(
         read.call_count,
         provenance.call_count,
         len(hashes),
-    ) == (4 if deliveries else 2, 1, 1, 1, 1)
+    ) == (4 if deliveries else 2, 1, 1, 1, 1 if deliveries else 2)
 
 
 @pytest.fixture
