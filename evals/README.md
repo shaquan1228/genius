@@ -1,6 +1,6 @@
 # Genius evals
 
-Compare baseline and Genius agents with [Inspect AI](https://inspect.aisi.org.uk/)
+Define tasks, evaluate named instruction variants, and compare results with [Inspect AI](https://inspect.aisi.org.uk/)
 and [Inspect SWE](https://meridianlabs-ai.github.io/inspect_swe/).
 The bundled datasets are a four-case smoke suite and the 164-problem HumanEval+ benchmark.
 Use `python -m evals.python.integrations.hugging_face.compare --help` to compare variants or reuse saved runs.
@@ -154,3 +154,65 @@ Runtime JSON decoding remains at external text boundaries such as candidate resp
 
 The pinned bridge patch preserves private-record construction restrictions, distinct
 polymorphic result parameters, and domain type context while adapting result payloads.
+
+## Named variants and analysis
+
+A variant names an instruction configuration; its baseline role belongs to a comparison.
+This follows [Amplitude's variant model](https://www.amplitude.com/docs/feature-experiment/data-model),
+where control/treatment are defaults and variants carry configuration. Here a variant's
+payload is the typed `VariantSettings`, rather than arbitrary feature flag JSON.
+
+Single-run preparation and evidence validation live at `evaluation.prepare_run` and
+`evaluation.validate_run` (moved from `comparison`).
+
+`ComparisonRequest` schema 2 replaces schema 1's `control` and `treatment` fields with
+`variants` (two or more unique names) and an explicit `baseline` name. For example:
+
+```python
+from evals.python.comparison import ComparisonRequest, VariantRequest
+from evals.python.evaluation import EvaluationSettings, VariantSettings
+
+request = ComparisonRequest(
+    comparison_id="instruction-study",
+    shared=EvaluationSettings(model="openai/<pinned-model-id>"),
+    baseline="plain",
+    variants=(
+        VariantRequest(variant=VariantSettings(name="plain", instructions=(), preamble="")),
+        VariantRequest(variant=VariantSettings(name="current", source_ref="origin/main")),
+        VariantRequest(variant=VariantSettings(name="edited", source_ref="HEAD")),
+    ),
+)
+```
+
+Pass `request.model_dump_json()` as `COMPARISON_REQUEST`, or save it and pass its path
+as the hosted comparison CLI's positional argument. `result_ref` on any `VariantRequest`
+reuses a compatible complete run; every requested reuse is validated before job submission.
+The environment-only launcher still constructs `control`/`treatment` from their existing refs.
+
+For analysis of existing native logs, call
+`comparison.compare_runs({"plain": plain_dir, "current": current_dir, "edited": edited_dir},
+baseline="plain", measurement=Measurement())`. It returns a typed `ComparisonReport`:
+`runs` contains summaries and `comparisons` contains each non-baseline variant's differences,
+per-case differences, and verdict. JSON reports use these same names; there is no single
+winner or overall verdict. The PR check reads the default `treatment` contrast.
+
+Other runners can supply `RunSummary(metrics=..., cases=..., created_at=...)` directly to
+`comparison.compare_summaries`. Numeric metric names are open; matching metric and case sets
+are required. `Measurement` is the optional accuracy/time policy: without an accuracy tolerance,
+or without both `accuracy` and `mean_seconds`, verdicts are inconclusive. An improvement
+requires an acceptable accuracy delta and a strictly greater time gain than the configured
+minimum. This describes observed averages, not statistical noninferiority.
+
+| Concern | Owner |
+| --- | --- |
+| Case declarations, validation and grading | Existing OCaml primitives |
+| Instruction configuration, single-run preparation and validation | `python/evaluation.py` |
+| Comparison declarations, numeric summaries, pure contrasts and rendering | `python/comparison.py` |
+| Native log validation, measurement compatibility and Inspect metrics | `python/integrations/inspect/results.py` |
+| Instruction snapshots and regular-file export | `python/integrations/hugging_face/source.py` |
+| Hosted jobs, credentials, buckets and cancellation | `python/integrations/hugging_face/compare.py` |
+
+[Inspect](https://inspect.aisi.org.uk/metrics.html) supplies accuracy and standard errors clustered
+by case for native logs. Keep repeated attempts within their case when interpreting uncertainty.
+[Eval sets](https://inspect.aisi.org.uk/eval-sets.html) describe execution/reuse separately from
+analysis; [HF jobs](https://huggingface.co/docs/hub/jobs-manage) own hosted execution.

@@ -3,6 +3,7 @@
 import json
 import runpy
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
@@ -12,24 +13,29 @@ from unittest.mock import MagicMock, patch
 import pytest
 from huggingface_hub import HfApi
 
-from evals.python import comparison
-from evals.python.comparison import ComparisonRequest, VariantRequest
+from evals.python import comparison, evaluation
+from evals.python.comparison import (
+    ComparisonReport,
+    ComparisonRequest,
+    Measurement,
+    RunSummary,
+    VariantRequest,
+)
 from evals.python.evaluation import EvaluationSettings, ModelPricing, VariantSettings
 from evals.python.integrations.hugging_face import compare, source
 
 
-def _request() -> ComparisonRequest:
+def _request(names: tuple[str, ...] = ("control", "treatment")) -> ComparisonRequest:
     return ComparisonRequest(
         comparison_id="request",
         shared=EvaluationSettings(
             model="openai/test",
             model_cost=ModelPricing(input=0, output=0, input_cache_write=0, input_cache_read=0),
         ),
-        control=VariantRequest(
-            variant=VariantSettings(name="control", instructions=(), preamble="")
-        ),
-        treatment=VariantRequest(
-            variant=VariantSettings(name="treatment", instructions=(), preamble="")
+        baseline=names[0],
+        variants=tuple(
+            VariantRequest(variant=VariantSettings(name=name, instructions=(), preamble=""))
+            for name in names
         ),
     )
 
@@ -41,6 +47,16 @@ def _prepared(settings: EvaluationSettings) -> EvaluationSettings:
             "version": "pinned",
             "epochs": 1,
         }
+    )
+
+
+def _report(
+    runs: Mapping[str, Path], *, baseline: str, measurement: Measurement
+) -> ComparisonReport:
+    return comparison.compare_summaries(
+        {name: RunSummary(metrics={}, created_at="test") for name in runs},
+        baseline=baseline,
+        measurement=measurement,
     )
 
 
@@ -57,11 +73,9 @@ def api(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     monkeypatch.setattr(compare, "committed_harness", lambda: None)
     monkeypatch.setattr(source, "trusted_snapshot", lambda *args, **kwargs: "trusted")
     monkeypatch.setattr(source, "instructions", lambda variant, **kwargs: variant)
-    monkeypatch.setattr(comparison, "prepare_run", _prepared)
-    monkeypatch.setattr(comparison, "validate_run", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        comparison, "compare_runs", lambda *args, **kwargs: {"verdict": "inconclusive"}
-    )
+    monkeypatch.setattr(evaluation, "prepare_run", _prepared)
+    monkeypatch.setattr(evaluation, "validate_run", lambda *args, **kwargs: None)
+    monkeypatch.setattr(comparison, "compare_runs", _report)
     monkeypatch.setattr(comparison, "render_report", lambda report: "summary")
     monkeypatch.setenv("HF_TOKEN", "private-token")
     monkeypatch.setenv("OPENAI_API_KEY", "private-key")
@@ -91,20 +105,29 @@ def saved_runs_skip_only_the_requested_jobs(
     api: MagicMock, *, tmp_path: Path, roles: tuple[str, ...]
 ) -> None:
     request = _request()
-    updated = {
-        role: getattr(request, role).model_copy(update={"result_ref": f"prior-{role}"})
-        for role in roles
-    }
-    compare.execute(request.model_copy(update=updated), output=tmp_path, namespace="owner")
+    variants = tuple(
+        selected.model_copy(update={"result_ref": f"prior-{selected.variant.name}"})
+        if selected.variant.name in roles
+        else selected
+        for selected in request.variants
+    )
+    compare.execute(
+        request.model_copy(update={"variants": variants}), output=tmp_path, namespace="owner"
+    )
     assert api.run_job.call_count == 2 - len(roles)
 
 
 def incompatible_control_prevents_paid_dispatch(api: MagicMock, *, tmp_path: Path) -> None:
     request = _request().model_copy(
-        update={"control": _request().control.model_copy(update={"result_ref": "prior"})}
+        update={
+            "variants": (
+                _request().variants[0].model_copy(update={"result_ref": "prior"}),
+                _request().variants[1],
+            )
+        }
     )
     with (
-        patch.object(comparison, "validate_run", side_effect=ValueError("wrong control")),
+        patch.object(evaluation, "validate_run", side_effect=ValueError("wrong control")),
         pytest.raises(ValueError, match="wrong control"),
     ):
         compare.execute(request, output=tmp_path, namespace="owner")
@@ -152,7 +175,7 @@ def request_uses_existing_environment_configuration(provider: str) -> None:
         clear=True,
     ):
         request = compare.request_from_environment()
-    assert (request.control.variant.source_ref, request.treatment.variant.source_ref) == (
+    assert tuple(v.variant.source_ref for v in request.variants) == (
         "base",
         "head",
     )
@@ -292,3 +315,48 @@ def hosted_sources_require_committed_instruction_paths(
     _repository(tmp_path / "repo")
     with pytest.raises(ValueError, match=r"source_ref|not found"):
         source.instructions(variant, destination=tmp_path / "output", repository=tmp_path / "repo")
+
+
+@pytest.mark.parametrize("reuse", [False, True])
+def three_variants_share_one_execution_path(api: MagicMock, *, tmp_path: Path, reuse: bool) -> None:
+    request = _request(("plain", "concise", "detailed"))
+    selections = list(request.variants)
+    if reuse:
+        selections[1] = selections[1].model_copy(update={"result_ref": "saved"})
+    request = request.model_copy(update={"variants": tuple(selections), "baseline": "concise"})
+    api.run_job.side_effect = [SimpleNamespace(id=f"job-{index}") for index in range(3)]
+    compare.execute(request, output=tmp_path, namespace="owner")
+    state = json.loads((tmp_path / "jobs.json").read_text())
+    _assert_three_variant_state(state, reused=reuse)
+    assert api.run_job.call_count == len(state["jobs"])
+    persisted = ComparisonRequest.model_validate_json((tmp_path / "request.json").read_text())
+    _assert_persisted_baseline(persisted, output=tmp_path)
+    _assert_volumes(api)
+
+
+def _assert_persisted_baseline(request: ComparisonRequest, *, output: Path) -> None:
+    assert (request.baseline, tuple(v.variant.name for v in request.variants)) == (
+        "concise",
+        ("plain", "concise", "detailed"),
+    )
+    assert json.loads((output / "comparison.json").read_text())["baseline"] == "concise"
+
+
+def _assert_three_variant_state(state: dict[str, dict[str, str]], *, reused: bool) -> None:
+    assert set(state["runs"]) == {"plain", "concise", "detailed"}
+    assert set(state["jobs"]) == ({"plain", "detailed"} if reused else set(state["runs"]))
+
+
+def third_submission_failure_cancels_every_started_variant(
+    api: MagicMock, *, tmp_path: Path
+) -> None:
+    api.run_job.side_effect = [
+        SimpleNamespace(id="first"),
+        SimpleNamespace(id="second"),
+        RuntimeError("third"),
+    ]
+    with pytest.raises(RuntimeError, match="third"):
+        compare.execute(
+            _request(("plain", "concise", "detailed")), output=tmp_path, namespace="owner"
+        )
+    assert {call.kwargs["job_id"] for call in api.cancel_job.call_args_list} == {"first", "second"}

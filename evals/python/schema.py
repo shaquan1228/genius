@@ -17,6 +17,7 @@ def _file_name(value: str) -> str:
     return value
 
 
+Identifier = Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")]
 FileName = Annotated[str, AfterValidator(_file_name)]
 Files = Annotated[Mapping[FileName, str], AfterValidator(MappingProxyType), PlainSerializer(dict)]
 Attributes = Annotated[Mapping[str, str], AfterValidator(MappingProxyType), PlainSerializer(dict)]
