@@ -36,23 +36,14 @@ def complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
     assert [(log.status, sorted(_results(log))) for log in logs] == [
         ("success", sorted(expected))
     ] * 2
-
-
-def logs_reopen_with_scores_and_model_calls(tmp_path: Path) -> None:
-    log = _offline_run([baseline()], mode="pass", directory=tmp_path)[0]
-    saved = read_eval_log(str(log.location))
+    saved = read_eval_log(str(logs[0].location))
     assert saved.results is not None
     assert {score.name for score in saved.results.scores} == {"correctness", "scope"}
     assert (saved.status, len(saved.samples or []), set(saved.stats.model_usage)) == (
         "success",
-        4,
+        len(expected),
         {"mockllm/model"},
     )
-
-
-def reopened_log_preserves_native_answer_judgments(tmp_path: Path) -> None:
-    log = _offline_run([baseline()], mode="pass", directory=tmp_path)[0]
-    saved = read_eval_log(str(log.location))
     assert saved.samples is not None
     cases = {str(sample.id): sample for sample in saved.samples}
     _assert_answer_judgments(cases["small-decision"])
