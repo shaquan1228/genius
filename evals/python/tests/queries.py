@@ -86,6 +86,8 @@ def query_concerns_expose_only_their_own_operations() -> None:
         "ModelPricing",
         "VariantSettings",
         "evaluate",
+        "prepare_run",
+        "validate_run",
         "resolve_settings",
         "resolve_experiment",
     }

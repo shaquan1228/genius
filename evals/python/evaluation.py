@@ -1,11 +1,11 @@
 """Resolve experiment settings and launch evaluations through the runner adapter."""
 
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal, cast
 
 from pydantic import AfterValidator, BaseModel, Field, InstanceOf, validate_call
 
-from evals.python.schema import FROZEN
+from evals.python.schema import FROZEN, Identifier
 from kernel import Experiment
 
 __all__ = [
@@ -14,8 +14,10 @@ __all__ = [
     "ModelPricing",
     "VariantSettings",
     "evaluate",
+    "prepare_run",
     "resolve_experiment",
     "resolve_settings",
+    "validate_run",
 ]
 
 
@@ -55,7 +57,7 @@ class VariantSettings(BaseModel):
     """One instruction intervention, independent of its comparison role."""
 
     model_config = FROZEN
-    name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    name: Identifier
     instructions: Annotated[tuple[str, ...], AfterValidator(_instruction_paths)] = (
         "docs",
         "skills",
@@ -138,3 +140,17 @@ async def evaluate(settings: InstanceOf[EvaluationSettings]) -> int:
     from evals.python.integrations.inspect import evaluation  # noqa: PLC0415 - lazy SDK composition
 
     return await evaluation.evaluate_async(settings)
+
+
+@validate_call(config=FROZEN)
+def prepare_run(settings: InstanceOf[EvaluationSettings]) -> EvaluationSettings:
+    from evals.python.integrations.inspect import results  # noqa: PLC0415 - lazy SDK composition
+
+    return results.prepare_run(settings)
+
+
+@validate_call(config=FROZEN)
+def validate_run(directory: Path, *, settings: InstanceOf[EvaluationSettings]) -> None:
+    from evals.python.integrations.inspect import results  # noqa: PLC0415 - lazy SDK composition
+
+    results.validate_run(directory, settings=settings)

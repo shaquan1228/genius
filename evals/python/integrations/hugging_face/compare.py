@@ -6,21 +6,25 @@ import os
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager, suppress
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import cast
 from uuid import uuid4
 
 from huggingface_hub import HfApi, Volume
 
-from evals.python import comparison
+from evals.python import comparison, evaluation
 from evals.python.comparison import ComparisonRequest, VariantRequest
 from evals.python.evaluation import EvaluationSettings, VariantSettings
 from evals.python.integrations.hugging_face import source
 from evals.python.integrations.hugging_face.job import configuration
 from evals.python.paths import REPO_ROOT
 
-ROLES = ("control", "treatment")
+
+@dataclass(frozen=True, kw_only=True)
+class PreparedVariant:
+    selection: VariantRequest
+    settings: EvaluationSettings
 
 
 def save(path: Path, *, value: object) -> None:
@@ -31,20 +35,20 @@ def save(path: Path, *, value: object) -> None:
 def request_from_environment() -> ComparisonRequest:
     if os.environ.get("COMPARISON_REQUEST"):
         return ComparisonRequest.model_validate_json(os.environ["COMPARISON_REQUEST"])
-    variants = {
-        role: VariantRequest(
+    variants = tuple(
+        VariantRequest(
             variant=VariantSettings(
                 name=role, source_ref=os.environ.get(f"{role.upper()}_REF", "HEAD")
             ),
             result_ref=os.environ.get(f"{role.upper()}_RESULT_REF") or None,
         )
-        for role in ROLES
-    }
+        for role in ("control", "treatment")
+    )
     return ComparisonRequest(
         comparison_id=os.environ.get("COMPARISON_ID", f"comparison-{uuid4().hex}"),
         shared=configuration(os.environ),
-        control=variants["control"],
-        treatment=variants["treatment"],
+        variants=variants,
+        baseline="control",
     )
 
 
@@ -73,11 +77,20 @@ def credentials(settings: EvaluationSettings) -> dict[str, str]:
     return secrets
 
 
-def download(api: HfApi, *, settings: EvaluationSettings, destination: Path, bucket: str) -> None:
-    api.sync_bucket(
-        f"hf://buckets/{bucket}/runs/{settings.run_id}", str(destination), delete=False, quiet=True
-    )
-    comparison.validate_run(destination, settings=settings)
+def download(
+    api: HfApi, *, plans: tuple[PreparedVariant, ...], output: Path, bucket: str, reused: bool
+) -> None:
+    for plan in plans:
+        if (plan.selection.result_ref is not None) != reused:
+            continue
+        directory = output / "runs" / str(plan.settings.run_id)
+        api.sync_bucket(
+            f"hf://buckets/{bucket}/runs/{plan.settings.run_id}",
+            str(directory),
+            delete=False,
+            quiet=True,
+        )
+        evaluation.validate_run(directory, settings=plan.settings)
 
 
 def publish(api: HfApi, *, request: ComparisonRequest, output: Path, bucket: str) -> None:
@@ -112,30 +125,25 @@ def committed_harness() -> None:
         raise ValueError("Commit the trusted evaluation harness before dispatch")
 
 
-def prepare_variants(
-    request: ComparisonRequest, *, snapshot: Path
-) -> tuple[ComparisonRequest, dict[str, EvaluationSettings]]:
-    plans, variants = {}, {}
-    for role in ROLES:
-        selected = getattr(request, role)
-        destination = snapshot / ".variants" / role
-        variant = source.instructions(
-            selected.variant, destination=destination, repository=REPO_ROOT
+def prepare_variant(
+    selected: VariantRequest, *, shared: EvaluationSettings, snapshot: Path
+) -> PreparedVariant:
+    destination = snapshot / ".variants" / selected.variant.name
+    variant = source.instructions(selected.variant, destination=destination, repository=REPO_ROOT)
+    settings = evaluation.prepare_run(
+        shared.model_copy(
+            update={
+                "sandbox": "hf",
+                "log_dir": "/results",
+                "instruction_root": "/eval/instructions",
+                "variant": variant.model_copy(update={"source_dir": str(destination)}),
+                "run_id": selected.result_ref,
+            }
         )
-        plans[role] = comparison.prepare_run(
-            request.shared.model_copy(
-                update={
-                    "sandbox": "hf",
-                    "log_dir": "/results",
-                    "instruction_root": "/eval/instructions",
-                    "variant": variant.model_copy(update={"source_dir": str(destination)}),
-                    "run_id": selected.result_ref,
-                }
-            )
-        )
-        variants[role] = selected.model_copy(update={"variant": variant})
-    variants["shared"] = plans["control"].model_copy(update={"variant": None, "run_id": None})
-    return request.model_copy(update=variants), plans
+    )
+    return PreparedVariant(
+        selection=selected.model_copy(update={"variant": variant}), settings=settings
+    )
 
 
 def upload(api: HfApi, *, snapshot: Path, namespace: str) -> Volume:
@@ -149,12 +157,15 @@ def upload(api: HfApi, *, snapshot: Path, namespace: str) -> Volume:
     )
 
 
-def launch(api: HfApi, *, settings: EvaluationSettings, source_volume: Volume, timeout: str) -> str:
+def launch(api: HfApi, *, plan: PreparedVariant, source_volume: Volume, timeout: str) -> str:
     namespace = source_volume.source.split("/", 1)[0]
-    variant = cast(VariantSettings, settings.variant)
-    role = Path(str(variant.source_dir)).name
+    settings = plan.settings
     remote = settings.model_copy(
-        update={"variant": variant.model_copy(update={"source_dir": f"/source/.variants/{role}"})}
+        update={
+            "variant": plan.selection.variant.model_copy(
+                update={"source_dir": f"/source/.variants/{plan.selection.variant.name}"}
+            )
+        }
     )
     job = api.run_job(
         image="ghcr.io/astral-sh/uv:python3.12-bookworm",
@@ -188,26 +199,27 @@ def jobs(  # noqa: PLR0913 - dispatch lifecycle shares explicit immutable inputs
     api: HfApi,
     *,
     request: ComparisonRequest,
-    plans: dict[str, EvaluationSettings],
+    plans: tuple[PreparedVariant, ...],
     source_volume: Volume,
     output: Path,
     timeout: str,
 ) -> Iterator[dict[str, str]]:
     submitted: dict[str, str] = {}
+    runs = {plan.selection.variant.name: plan.settings.run_id for plan in plans}
     namespace = source_volume.source.split("/", 1)[0]
     try:
-        for role in ROLES:
-            if getattr(request, role).result_ref is not None:
+        for plan in plans:
+            if plan.selection.result_ref is not None:
                 continue
-            submitted[role] = launch(
-                api, settings=plans[role], source_volume=source_volume, timeout=timeout
+            submitted[plan.selection.variant.name] = launch(
+                api, plan=plan, source_volume=source_volume, timeout=timeout
             )
             save(
                 output / "jobs.json",
                 value={
                     "namespace": namespace,
                     "jobs": submitted,
-                    "runs": {name: plan.run_id for name, plan in plans.items()},
+                    "runs": runs,
                 },
             )
             publish(api, request=request, output=output, bucket=f"{namespace}/genius-eval-results")
@@ -235,24 +247,6 @@ def wait(api: HfApi, *, submitted: dict[str, str], namespace: str) -> None:
         executor.shutdown(wait=False, cancel_futures=True)
 
 
-def reuse(
-    api: HfApi,
-    *,
-    request: ComparisonRequest,
-    plans: dict[str, EvaluationSettings],
-    output: Path,
-    bucket: str,
-) -> None:
-    for role in ROLES:
-        if getattr(request, role).result_ref:
-            download(
-                api,
-                settings=plans[role],
-                destination=output / "runs" / str(plans[role].run_id),
-                bucket=bucket,
-            )
-
-
 def execute(
     request: ComparisonRequest, *, output: Path, namespace: str, timeout: str = "4h"
 ) -> None:
@@ -264,8 +258,17 @@ def execute(
     with TemporaryDirectory() as temporary:
         snapshot = Path(temporary)
         source.trusted_snapshot(snapshot, repository=REPO_ROOT)
-        request, plans = prepare_variants(request, snapshot=snapshot)
-        reuse(api, request=request, plans=plans, output=output, bucket=bucket)
+        plans = tuple(
+            prepare_variant(selected, shared=request.shared, snapshot=snapshot)
+            for selected in request.variants
+        )
+        request = request.model_copy(
+            update={
+                "variants": tuple(plan.selection for plan in plans),
+                "shared": plans[0].settings.model_copy(update={"variant": None, "run_id": None}),
+            }
+        )
+        download(api, plans=plans, output=output, bucket=bucket, reused=True)
         save(output / "request.json", value=request.model_dump(mode="json"))
         api.create_bucket(bucket, private=True, exist_ok=True)
         publish(api, request=request, output=output, bucket=bucket)
@@ -279,19 +282,16 @@ def execute(
             timeout=timeout,
         ) as submitted:
             wait(api, submitted=submitted, namespace=namespace)
-            for role in ROLES:
-                download(
-                    api,
-                    settings=plans[role],
-                    destination=output / "runs" / str(plans[role].run_id),
-                    bucket=bucket,
-                )
+            download(api, plans=plans, output=output, bucket=bucket, reused=False)
             result = comparison.compare_runs(
-                output / "runs" / str(plans["control"].run_id),
-                treatment=output / "runs" / str(plans["treatment"].run_id),
+                {
+                    plan.selection.variant.name: output / "runs" / str(plan.settings.run_id)
+                    for plan in plans
+                },
+                baseline=request.baseline,
                 measurement=request.measurement,
             )
-            save(output / "comparison.json", value=result)
+            save(output / "comparison.json", value=result.model_dump(mode="json"))
             (output / "summary.md").write_text(comparison.render_report(result))
             publish(api, request=request, output=output, bucket=bucket)
 

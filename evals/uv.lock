@@ -733,6 +733,7 @@ dependencies = [
     { name = "numpy" },
     { name = "openai" },
     { name = "psutil" },
+    { name = "ruff" },
 ]
 
 [package.optional-dependencies]
@@ -741,7 +742,6 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "radon" },
-    { name = "ruff" },
     { name = "xenon" },
 ]
 
@@ -758,7 +758,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.1.1" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = "==7.1.0" },
     { name = "radon", marker = "extra == 'dev'", specifier = "==6.0.1" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = "==0.17.0" },
+    { name = "ruff", specifier = "==0.17.0" },
     { name = "xenon", marker = "extra == 'dev'", specifier = "==0.9.3" },
 ]
 provides-extras = ["dev"]
