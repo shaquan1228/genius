@@ -17,7 +17,8 @@ from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvid
 from inspect_ai.scorer import Score
 
 from evals.python import datasets, evaluation
-from evals.python.evaluation import EvaluationSettings, ModelPricing
+from evals.python.evaluation import EvaluationSettings, ModelPricing, VariantSettings
+from evals.python.integrations.hugging_face import compare
 from evals.python.integrations.hugging_face.job import configuration, run
 from evals.python.integrations.inspect.evaluation import HfChatAPI
 from evals.python.paths import REPO_ROOT
@@ -60,6 +61,41 @@ def hf_job_calls_evaluation_with_validated_settings(monkeypatch: pytest.MonkeyPa
         "/eval/instructions",
         before,
     )
+
+
+@pytest.mark.parametrize(
+    "variant",
+    [
+        VariantSettings(name="instructions"),
+        VariantSettings(name="plain", instructions=(), preamble=""),
+        None,
+    ],
+)
+def hosted_variant_settings_survive_environment_transport(variant: VariantSettings | None) -> None:
+    settings = EvaluationSettings(
+        model="hf-inference-providers/test-model",
+        agent="codex",
+        variant=variant,
+        sandbox="hf",
+        instruction_root="/eval/instructions",
+        sample_ids=("clear-task",),
+    )
+    assert configuration(compare.environment(settings)) == settings
+
+
+@pytest.mark.parametrize("value", ["", "null"])
+def empty_variant_environment_preserves_default_profiles(value: str) -> None:
+    settings = configuration({"EVAL_MODEL": "openai/test-model", "EVAL_VARIANT": value})
+    assert settings.variant is None
+
+
+@pytest.mark.parametrize(
+    "variant",
+    ['{"name":1,"instructions":[]}', '{"name":"invalid","instructions":["../secret"]}'],
+)
+def hosted_variant_transport_retains_validation(variant: str) -> None:
+    with pytest.raises(ValueError, match=r"name|Instruction paths"):
+        configuration({"EVAL_MODEL": "openai/test-model", "EVAL_VARIANT": variant})
 
 
 def inspect_evaluation_uses_request_without_reading_job_environment(
