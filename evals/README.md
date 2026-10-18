@@ -114,6 +114,13 @@ Use `datasets.compile_dataset(cases=...)` to work with your own declarations.
 
 Each domain component owns its type and constructors in its OCaml `.ml` and `.mli` files.
 The public binding interface is generated from those compiled owner contracts.
+`ocaml/genius_evals_kernel.ml` is the sole list of public modules; Dune derives compiled
+interface dependencies from its module aliases and discovers library sources automatically.
+The binding tools resolve compiler type paths and render supported declarations independently
+of the kernel's owner conventions, which are checked in the kernel tests. The build supplies
+the library identity, Python package, and exception exports; `_bridge.py` owns error conversion.
+When rendering multiple interfaces, the adapter supplies their compiled modules under its
+`native` namespace. A single interface binds directly against that namespace.
 Constrained records and alternatives are private:
 Python authors use `Task.create(...)`, `Verifier.create(...)`, `Instruction.create(...)`,
 `TextRule.create(...)`, and `Rubric.create(...)`. These factories return immutable native

@@ -8,6 +8,10 @@ let () =
   print_endline "let sources = [";
   Array.iteri
     (fun index path ->
-      if index > 0 then Printf.printf "  (%S, %S);\n" (Filename.basename path) (read path))
+      if
+        index > 0
+        && Filename.dirname path = "."
+        && (Filename.check_suffix path ".ml" || Filename.check_suffix path ".mli" || path = "dune")
+      then Printf.printf "  (%S, %S);\n" (Filename.basename path) (read path))
     Sys.argv;
   print_endline "]"

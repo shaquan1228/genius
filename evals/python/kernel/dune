@@ -12,7 +12,7 @@
   (deps ../generate.py ../schema.json ../../../pyproject.toml)
   (action
    (progn
-    (run %{bin:python} %{dep:../generate.py} %{dep:../schema.json} .)
+    (run %{bin:python} %{dep:../generate.py} %{dep:../schema.json} . --package kernel --exception ValidationError --exception GradingError)
     (run %{bin:ruff} check --select I --fix --no-cache --no-respect-gitignore --config %{dep:../../../pyproject.toml} .)
     (run %{bin:ruff} format --no-cache --no-respect-gitignore --config %{dep:../../../pyproject.toml} .)))))
 

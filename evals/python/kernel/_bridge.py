@@ -77,11 +77,13 @@ def named(*, constructor: type[Any]) -> type[Any]:
     return constructor
 
 
+errors = {"validation_failure": ValidationError, "grading_failure": GradingError}
+
+
 def bind(
     *, operation: Callable[..., Any], arguments: Mapping[str, bool], failure: str | None
 ) -> Callable[..., Any]:
     contract = signature(arguments)
-    error = ValidationError if failure == "validation_failure" else GradingError
 
     @wraps(operation)
     def call(**kwargs: Any) -> Any:
@@ -91,7 +93,7 @@ def bind(
             return result
         if isinstance(result, _ocaml.Ok):
             return result[0]
-        raise error(failure=result[0])
+        raise errors[failure](failure=result[0])
 
     cast(Any, call).__signature__ = contract
     return call
