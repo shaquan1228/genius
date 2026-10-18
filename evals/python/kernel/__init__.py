@@ -6,13 +6,18 @@ from ._bridge import named as _named
 from ._bridge import native as _native
 
 Artifact = _named(constructor=_native.Artifact.t)
+Assessment = _native.Assessment.t
 Case = _named(constructor=_native.Case.t)
+Comparison = _named(constructor=_native.Comparison.t)
 Completion = _native.Completion.t
 Content = _native.Content.t
 Criterion = _native.Criterion.t
+Evidence = _native.Assessment.evidence
 Experiment = _named(constructor=_native.Experiment.t)
+FieldComparison = _named(constructor=_native.Response.Comparison.field_comparison)
 File = _named(constructor=_native.File.t)
 Fixture = _native.Fixture.t
+FixtureComparison = _named(constructor=_native.Fixture_comparison.t)
 GradingFailure = _native.Grading_failure.t
 Instruction = _named(constructor=_native.Instruction.t)
 Kernel = _named(constructor=_native.Kernel.t)
@@ -21,17 +26,48 @@ Profile = _named(constructor=_native.Profile.t)
 Reference = _named(constructor=_native.Reference.t)
 ResourceBinding = _named(constructor=_native.Resource_binding.t)
 Response = _named(constructor=_native.Response.t)
+ResponseComparison = _named(constructor=_native.Response.Comparison.t)
 ResponseField = _named(constructor=_native.Response_field.t)
 ResponseValue = _native.Response_value.t
 Rubric = _named(constructor=_native.Rubric.t)
 Score = _native.Score.t
 Task = _named(constructor=_native.Task.t)
+TaskComparison = _named(constructor=_native.Task.Comparison.t)
 TextRule = _named(constructor=_native.Text_rule.t)
 ValidationCode = _native.Validation_code.t
 ValidationFailure = _named(constructor=_native.Validation_failure.t)
 ValidationIssue = _named(constructor=_native.Validation_issue.t)
 Verification = _native.Verification.t
 Verifier = _named(constructor=_native.Verifier.t)
+Comparison.create = staticmethod(
+    _bind(operation=_native.Comparison.create, arguments={"fields": False}, failure=None)
+)
+Comparison.combine = staticmethod(
+    _bind(operation=_native.Comparison.combine, arguments={"comparisons": False}, failure=None)
+)
+GradingFailure.Value = GradingFailure
+GradingFailure.VerificationHarnessError = _named(
+    constructor=_native.Grading_failure.Verification_harness_error
+)
+Profile.create = staticmethod(
+    _bind(
+        operation=_native.Profile.create,
+        arguments={"name": False, "preamble": False, "instructions": False},
+        failure=None,
+    )
+)
+Profile.compare = staticmethod(
+    _bind(
+        operation=_native.Profile.compare, arguments={"before": False, "after": False}, failure=None
+    )
+)
+ResourceBinding.create = staticmethod(
+    _bind(
+        operation=_native.Resource_binding.create,
+        arguments={"key": False, "contents": False},
+        failure=None,
+    )
+)
 ValidationCode.Value = ValidationCode
 ValidationCode.InvalidIdentity = _named(constructor=_native.Validation_code.Invalid_identity)
 ValidationCode.InvalidPath = _named(constructor=_native.Validation_code.Invalid_path)
@@ -60,44 +96,13 @@ ValidationCode.InvalidExperimentSetting = _named(
 )
 ValidationCode.MissingResource = _named(constructor=_native.Validation_code.Missing_resource)
 ValidationCode.InvalidAlternative = _named(constructor=_native.Validation_code.Invalid_alternative)
-File.create = staticmethod(
-    _bind(
-        operation=_native.File.create,
-        arguments={"path": False, "contents": False},
-        failure="validation_failure",
-    )
-)
-File.valid_path = staticmethod(
-    _bind(operation=_native.File.valid_path, arguments={"path": False}, failure=None)
-)
-File.path_issues = staticmethod(
-    _bind(
-        operation=_native.File.path_issues, arguments={"field": False, "paths": False}, failure=None
-    )
-)
-Fixture.create = staticmethod(
-    _bind(
-        operation=_native.Fixture.create, arguments={"files": False}, failure="validation_failure"
-    )
-)
-Fixture.empty = _native.Fixture.empty
-Fixture.add = staticmethod(
-    _bind(
-        operation=_native.Fixture.add,
-        arguments={"fixture": False, "file": False},
-        failure="validation_failure",
-    )
-)
-Fixture.overlay = staticmethod(
-    _bind(
-        operation=_native.Fixture.overlay,
-        arguments={"base": False, "overrides": False},
-        failure=None,
-    )
-)
-Fixture.files = staticmethod(
-    _bind(operation=_native.Fixture.files, arguments={"fixture": False}, failure=None)
-)
+Verification.Value = Verification
+Verification.Unchecked = _named(constructor=_native.Verification.Unchecked)
+Verification.Passed = _named(constructor=_native.Verification.Passed)
+Verification.Failed = _named(constructor=_native.Verification.Failed)
+Verification.InvalidSubmission = _named(constructor=_native.Verification.Invalid_submission)
+Verification.TimedOut = _named(constructor=_native.Verification.Timed_out)
+Verification.HarnessError = _named(constructor=_native.Verification.Harness_error)
 ResponseValue.Value = ResponseValue
 ResponseValue.String = _named(constructor=_native.Response_value.String)
 ResponseValue.String._default_type = ()
@@ -123,11 +128,86 @@ Response.create = staticmethod(
     )
 )
 Response.empty = _native.Response.empty
-ResourceBinding.create = staticmethod(
+Response.compare = staticmethod(
     _bind(
-        operation=_native.Resource_binding.create,
-        arguments={"key": False, "contents": False},
+        operation=_native.Response.compare,
+        arguments={"before": False, "after": False},
         failure=None,
+    )
+)
+ResponseComparison.create = staticmethod(
+    _bind(
+        operation=_native.Response.Comparison.create,
+        arguments={"before": False, "after": False},
+        failure=None,
+    )
+)
+Outcome.create = staticmethod(
+    _bind(
+        operation=_native.Outcome.create,
+        arguments={"changed_files": False, "verification": False},
+        failure=None,
+    )
+)
+Instruction.create = staticmethod(
+    _bind(
+        operation=_native.Instruction.create,
+        arguments={"skill": False, "prompt": False},
+        failure="validation_failure",
+    )
+)
+Instruction.valid_name = staticmethod(
+    _bind(operation=_native.Instruction.valid_name, arguments={"name": False}, failure=None)
+)
+Instruction.compare = staticmethod(
+    _bind(
+        operation=_native.Instruction.compare,
+        arguments={"before": False, "after": False},
+        failure=None,
+    )
+)
+File.create = staticmethod(
+    _bind(
+        operation=_native.File.create,
+        arguments={"path": False, "contents": False},
+        failure="validation_failure",
+    )
+)
+File.valid_path = staticmethod(
+    _bind(operation=_native.File.valid_path, arguments={"path": False}, failure=None)
+)
+File.path_issues = staticmethod(
+    _bind(
+        operation=_native.File.path_issues, arguments={"field": False, "paths": False}, failure=None
+    )
+)
+Experiment.default = _native.Experiment.default
+Experiment.resolve = staticmethod(
+    _bind(
+        operation=_native.Experiment.resolve,
+        arguments={
+            "profiles": True,
+            "epochs": True,
+            "message_limit": True,
+            "cost_limit": True,
+            "time_limit": True,
+            "cache": True,
+        },
+        failure="validation_failure",
+    )
+)
+Experiment.create = staticmethod(
+    _bind(
+        operation=_native.Experiment.create,
+        arguments={
+            "profiles": False,
+            "epochs": False,
+            "message_limit": False,
+            "cost_limit": False,
+            "time_limit": False,
+            "cache": False,
+        },
+        failure="validation_failure",
     )
 )
 Content.Value = Content
@@ -140,6 +220,28 @@ Content.create = staticmethod(
         operation=_native.Content.create,
         arguments={"inline": True, "resource": True},
         failure="validation_failure",
+    )
+)
+Completion.Value = Completion
+Completion.Plain = _named(constructor=_native.Completion.Plain)
+Completion.Plain._default_type = ()
+Completion.Structured = _named(constructor=_native.Completion.Structured)
+Completion.Structured._default_type = ()
+Completion.create = staticmethod(
+    _bind(
+        operation=_native.Completion.create,
+        arguments={"plain": True, "structured": True},
+        failure="validation_failure",
+    )
+)
+Completion.trim = staticmethod(
+    _bind(operation=_native.Completion.trim, arguments={"text": False}, failure=None)
+)
+Completion.compare = staticmethod(
+    _bind(
+        operation=_native.Completion.compare,
+        arguments={"before": False, "after": False},
+        failure=None,
     )
 )
 Artifact.create = staticmethod(
@@ -156,16 +258,14 @@ Artifact.resolve = staticmethod(
         failure="validation_failure",
     )
 )
-Instruction.create = staticmethod(
+FixtureComparison.create = staticmethod(
     _bind(
-        operation=_native.Instruction.create,
-        arguments={"skill": False, "prompt": False},
-        failure="validation_failure",
+        operation=_native.Fixture_comparison.create,
+        arguments={"before": False, "after": False},
+        failure=None,
     )
 )
-Instruction.valid_name = staticmethod(
-    _bind(operation=_native.Instruction.valid_name, arguments={"name": False}, failure=None)
-)
+Kernel.current = _native.Kernel.current
 TextRule.create = staticmethod(
     _bind(
         operation=_native.Text_rule.create,
@@ -175,13 +275,6 @@ TextRule.create = staticmethod(
 )
 TextRule.word_count = staticmethod(
     _bind(operation=_native.Text_rule.word_count, arguments={"text": False}, failure=None)
-)
-Rubric.create = staticmethod(
-    _bind(
-        operation=_native.Rubric.create,
-        arguments={"expected": False, "text_rule": False},
-        failure="validation_failure",
-    )
 )
 Verifier.create = staticmethod(
     _bind(
@@ -204,6 +297,53 @@ Verifier.resolve_resources = staticmethod(
         failure="validation_failure",
     )
 )
+Verifier.compare = staticmethod(
+    _bind(
+        operation=_native.Verifier.compare,
+        arguments={"before": False, "after": False},
+        failure=None,
+    )
+)
+Rubric.create = staticmethod(
+    _bind(
+        operation=_native.Rubric.create,
+        arguments={"expected": False, "text_rule": False},
+        failure="validation_failure",
+    )
+)
+Rubric.compare = staticmethod(
+    _bind(
+        operation=_native.Rubric.compare, arguments={"before": False, "after": False}, failure=None
+    )
+)
+Fixture.create = staticmethod(
+    _bind(
+        operation=_native.Fixture.create, arguments={"files": False}, failure="validation_failure"
+    )
+)
+Fixture.empty = _native.Fixture.empty
+Fixture.add = staticmethod(
+    _bind(
+        operation=_native.Fixture.add,
+        arguments={"fixture": False, "file": False},
+        failure="validation_failure",
+    )
+)
+Fixture.overlay = staticmethod(
+    _bind(
+        operation=_native.Fixture.overlay,
+        arguments={"base": False, "overrides": False},
+        failure=None,
+    )
+)
+Fixture.files = staticmethod(
+    _bind(operation=_native.Fixture.files, arguments={"fixture": False}, failure=None)
+)
+Fixture.compare = staticmethod(
+    _bind(
+        operation=_native.Fixture.compare, arguments={"before": False, "after": False}, failure=None
+    )
+)
 Criterion.Value = Criterion
 Criterion.Code = _named(constructor=_native.Criterion.Code)
 Criterion.Code._default_type = ()
@@ -216,20 +356,12 @@ Criterion.create = staticmethod(
         failure="validation_failure",
     )
 )
-Completion.Value = Completion
-Completion.Plain = _named(constructor=_native.Completion.Plain)
-Completion.Plain._default_type = ()
-Completion.Structured = _named(constructor=_native.Completion.Structured)
-Completion.Structured._default_type = ()
-Completion.create = staticmethod(
+Criterion.compare = staticmethod(
     _bind(
-        operation=_native.Completion.create,
-        arguments={"plain": True, "structured": True},
-        failure="validation_failure",
+        operation=_native.Criterion.compare,
+        arguments={"before": False, "after": False},
+        failure=None,
     )
-)
-Completion.trim = staticmethod(
-    _bind(operation=_native.Completion.trim, arguments={"text": False}, failure=None)
 )
 Reference.create = staticmethod(
     _bind(
@@ -238,23 +370,86 @@ Reference.create = staticmethod(
         failure=None,
     )
 )
-Verification.Value = Verification
-Verification.Unchecked = _named(constructor=_native.Verification.Unchecked)
-Verification.Passed = _named(constructor=_native.Verification.Passed)
-Verification.Failed = _named(constructor=_native.Verification.Failed)
-Verification.InvalidSubmission = _named(constructor=_native.Verification.Invalid_submission)
-Verification.TimedOut = _named(constructor=_native.Verification.Timed_out)
-Verification.HarnessError = _named(constructor=_native.Verification.Harness_error)
-Outcome.create = staticmethod(
+Reference.compare = staticmethod(
     _bind(
-        operation=_native.Outcome.create,
-        arguments={"changed_files": False, "verification": False},
+        operation=_native.Reference.compare,
+        arguments={"before": False, "after": False},
         failure=None,
     )
 )
-GradingFailure.Value = GradingFailure
-GradingFailure.VerificationHarnessError = _named(
-    constructor=_native.Grading_failure.Verification_harness_error
+Evidence.Value = Evidence
+Evidence.Present = _named(constructor=_native.Assessment.Present)
+Evidence.Present._default_type = ()
+Evidence.Field = _named(constructor=_native.Assessment.Field)
+Evidence.Field._default_type = ()
+Evidence.Text = _named(constructor=_native.Assessment.Text)
+Evidence.Text._default_type = ()
+Evidence.Verified = _named(constructor=_native.Assessment.Verified)
+Evidence.Verified._default_type = ()
+Evidence.Scope = _named(constructor=_native.Assessment.Scope)
+Evidence.Scope._default_type = ()
+Assessment.Value = Assessment
+Assessment.Check = _named(constructor=_native.Assessment.Check)
+Assessment.Check._default_type = ()
+Assessment.All = _named(constructor=_native.Assessment.All)
+Assessment.All._default_type = ()
+Assessment.present = staticmethod(
+    _bind(operation=_native.Assessment.present, arguments={"response": False}, failure=None)
+)
+Assessment.field = staticmethod(
+    _bind(operation=_native.Assessment.field, arguments={"comparison": False}, failure=None)
+)
+Assessment.text = staticmethod(
+    _bind(
+        operation=_native.Assessment.text, arguments={"rule": False, "value": False}, failure=None
+    )
+)
+Assessment.verified = staticmethod(
+    _bind(
+        operation=_native.Assessment.verified,
+        arguments={"verification": False},
+        failure="grading_failure",
+    )
+)
+Assessment.scope = staticmethod(
+    _bind(
+        operation=_native.Assessment.scope,
+        arguments={"allowed_files": False, "changed_files": False},
+        failure=None,
+    )
+)
+Assessment.all = staticmethod(
+    _bind(
+        operation=_native.Assessment.all, arguments={"checks": False}, failure="validation_failure"
+    )
+)
+Assessment.rubric = staticmethod(
+    _bind(
+        operation=_native.Assessment.rubric,
+        arguments={"rubric": False, "response": False},
+        failure=None,
+    )
+)
+Assessment.criterion = staticmethod(
+    _bind(
+        operation=_native.Assessment.criterion,
+        arguments={"criterion": False, "response": False, "verification": False},
+        failure="grading_failure",
+    )
+)
+Assessment.passed = staticmethod(
+    _bind(operation=_native.Assessment.passed, arguments={"assessment": False}, failure=None)
+)
+Assessment.word_count = staticmethod(
+    _bind(operation=_native.Assessment.word_count, arguments={"value": False}, failure=None)
+)
+Assessment.unexpected_files = staticmethod(
+    _bind(
+        operation=_native.Assessment.unexpected_files, arguments={"assessment": False}, failure=None
+    )
+)
+Assessment.scores = staticmethod(
+    _bind(operation=_native.Assessment.scores, arguments={"assessment": False}, failure=None)
 )
 Task.create = staticmethod(
     _bind(
@@ -288,56 +483,48 @@ Task.grade = staticmethod(
 Task.verifier = staticmethod(
     _bind(operation=_native.Task.verifier, arguments={"task": False}, failure=None)
 )
-Profile.create = staticmethod(
+Task.compare = staticmethod(
+    _bind(operation=_native.Task.compare, arguments={"before": False, "after": False}, failure=None)
+)
+Task.assess = staticmethod(
     _bind(
-        operation=_native.Profile.create,
-        arguments={"name": False, "preamble": False, "instructions": False},
+        operation=_native.Task.assess,
+        arguments={"task": False, "response": False, "outcome": False},
+        failure="grading_failure",
+    )
+)
+TaskComparison.create = staticmethod(
+    _bind(
+        operation=_native.Task.Comparison.create,
+        arguments={
+            "id": False,
+            "fixture": False,
+            "instruction": False,
+            "criterion": False,
+            "allowed_files": False,
+            "reference": False,
+        },
         failure=None,
-    )
-)
-Experiment.default = _native.Experiment.default
-Experiment.resolve = staticmethod(
-    _bind(
-        operation=_native.Experiment.resolve,
-        arguments={
-            "profiles": True,
-            "epochs": True,
-            "message_limit": True,
-            "cost_limit": True,
-            "time_limit": True,
-            "cache": True,
-        },
-        failure="validation_failure",
-    )
-)
-Experiment.create = staticmethod(
-    _bind(
-        operation=_native.Experiment.create,
-        arguments={
-            "profiles": False,
-            "epochs": False,
-            "message_limit": False,
-            "cost_limit": False,
-            "time_limit": False,
-            "cache": False,
-        },
-        failure="validation_failure",
     )
 )
 Case.create = staticmethod(
     _bind(operation=_native.Case.create, arguments={"task": False}, failure=None)
 )
-Kernel.current = _native.Kernel.current
 
 __all__ = [
     "Artifact",
+    "Assessment",
     "Case",
+    "Comparison",
     "Completion",
     "Content",
     "Criterion",
+    "Evidence",
     "Experiment",
+    "FieldComparison",
     "File",
     "Fixture",
+    "FixtureComparison",
     "GradingError",
     "GradingFailure",
     "Instruction",
@@ -347,11 +534,13 @@ __all__ = [
     "Reference",
     "ResourceBinding",
     "Response",
+    "ResponseComparison",
     "ResponseField",
     "ResponseValue",
     "Rubric",
     "Score",
     "Task",
+    "TaskComparison",
     "TextRule",
     "ValidationCode",
     "ValidationError",

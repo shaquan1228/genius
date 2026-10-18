@@ -503,3 +503,18 @@ def native_type_and_value_names_cannot_silently_collide(tmp_path: Path) -> None:
     path = _compile(tmp_path / "native_collision", text="type foo = { value : int }\nval foo : int")
     with pytest.raises(ValueError, match="Native names collide"):
         generate.render(_schema((path,)), package="kernel")
+
+
+def nested_modules_keep_references_to_the_outer_namesake(tmp_path: Path) -> None:
+    path = _compile(
+        tmp_path / "shadowed",
+        text="module Comparison : sig type t = { equal : bool } end\n"
+        "module Task : sig module Comparison : sig\n"
+        "type t = { id : Comparison.t }\n"
+        "val create : id:Comparison.t -> t end\n"
+        "val compare : before:string -> after:string -> Comparison.t end",
+    )
+    stub = generate.render(_schema((path,)), package="kernel")["__init__.pyi"]
+    assert "def id(self) -> Comparison:" in stub
+    assert "def create(*, id: _types.Comparison) -> _types.TaskComparison:" in stub
+    assert "def compare(*, before: str, after: str) -> _types.TaskComparison:" in stub

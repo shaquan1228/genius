@@ -3,12 +3,11 @@
 from collections.abc import Callable
 from inspect import Parameter, signature, unwrap
 from typing import cast
-from unittest.mock import patch
 
 import pytest
 
 import kernel as domain
-from evals.python import datasets, grading
+from evals.python import datasets
 from evals.python.tests.support import choice_case
 from kernel import (
     Criterion,
@@ -77,26 +76,16 @@ def validation_errors_retain_native_issues() -> None:
 
 def harness_failures_have_a_distinct_error_contract() -> None:
     with pytest.raises(GradingError) as caught:
-        grading.score_case(
-            case_id="clear-task",
-            response="",
-            changed_files=(),
-            verification=Verification.HarnessError(detail="verifier unavailable"),
+        Task.grade(
+            task=datasets.record("clear-task", selection="smoke"),
+            response=None,
+            outcome=Outcome.create(
+                changed_files=(),
+                verification=Verification.HarnessError(detail="verifier unavailable"),
+            ),
         )
     assert "verifier unavailable" in str(caught.value)
     assert caught.value.error.detail == "verifier unavailable"
-
-
-def construction_and_grading_do_not_serialize_domain_values() -> None:
-    task = choice_case(case_id="native-only", a=1, b=2)
-    with patch("json.dumps", side_effect=AssertionError("Unexpected domain serialization")):
-        dataset = datasets.compile_dataset(cases=(task,))
-        assert grading.score_case(
-            case_id=task.id,
-            selection=dataset,
-            response='{"choice":"A","reason":"Less"}',
-            changed_files=(),
-        )["correctness"]
 
 
 @pytest.mark.parametrize("consumer", ["grader", "task", "criterion", "response"])

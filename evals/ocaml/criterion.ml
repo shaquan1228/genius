@@ -1,3 +1,7 @@
+(* Criterion: a declarative success condition, applied by a grader rather than by
+   the candidate. The code/structured-response distinction is this repository's design.
+   https://developers.openai.com/api/docs/guides/evals
+   https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
 type t = Code of { verifier : Verifier.t } | Answer of { rubric : Rubric.t }
 
 let create ?code ?answer () =
@@ -17,3 +21,13 @@ let create ?code ?answer () =
                 [ "code"; "answer" ];
             ];
         }
+
+let compare ~before ~after =
+  match (before, after) with
+  | Code a, Code b ->
+      Comparison.combine
+        ~comparisons:[ ("verifier", Verifier.compare ~before:a.verifier ~after:b.verifier) ]
+  | Answer a, Answer b ->
+      Comparison.combine
+        ~comparisons:[ ("rubric", Rubric.compare ~before:a.rubric ~after:b.rubric) ]
+  | Code _, Answer _ | Answer _, Code _ -> Comparison.create ~fields:[ ("kind", false) ]

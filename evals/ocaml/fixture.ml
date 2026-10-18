@@ -1,3 +1,6 @@
+(* Fixture: immutable initial files. The map implementation belongs to Fixture.
+   https://inspect.aisi.org.uk/datasets.html#sample-files
+   https://docs.harborframework.com/tasks/environment *)
 module Files = Map.Make (String)
 
 type t = File.t Files.t
@@ -23,3 +26,6 @@ let create ~files =
     files
 
 let overlay ~base ~overrides = Files.union (fun _ _ replacement -> Some replacement) base overrides
+
+let compare ~before ~after =
+  Fixture_comparison.create ~before:(files ~fixture:before) ~after:(files ~fixture:after)

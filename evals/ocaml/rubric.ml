@@ -1,3 +1,7 @@
+(* Rubric: requirements used to grade a response. Eval rubrics specify criteria;
+   exact scalar expectations and a bounded-text rule are our deterministic subset.
+   https://github.com/openai/evals/blob/main/docs/eval-templates.md#example-model-graded-evals
+   https://teaching.cornell.edu/teaching-resources/assessing-student-learning/using-rubrics *)
 type t = { expected : Response.t; text_rule : Text_rule.t option }
 
 let create ~(expected : Response.t) ~(text_rule : Text_rule.t option) =
@@ -25,3 +29,11 @@ let create ~(expected : Response.t) ~(text_rule : Text_rule.t option) =
              [ rule.field ])
   in
   Validation.checked problems { expected; text_rule }
+
+let compare ~(before : t) ~(after : t) =
+  Comparison.create
+    ~fields:
+      [
+        ("expected", (Response.compare ~before:before.expected ~after:after.expected).equal);
+        ("text_rule", before.text_rule = after.text_rule);
+      ]

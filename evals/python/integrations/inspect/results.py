@@ -9,7 +9,7 @@ from statistics import mean
 from typing import Any, cast
 from uuid import uuid4
 
-from inspect_ai import Task
+from inspect_ai import Task as InspectTask
 from inspect_ai.log import EvalLog, EvalSample, list_eval_logs, read_eval_log
 from inspect_ai.model import get_model_info
 from inspect_ai.scorer import CORRECT, SampleScore, Score, accuracy, stderr
@@ -21,8 +21,7 @@ from evals.python.comparison import RunSummary
 from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.inspect import completeness
 from evals.python.paths import EVALS_ROOT
-from kernel import Experiment
-from kernel import Task as NativeTask
+from kernel import Experiment, Task
 
 _ACCURACY = cast(Callable[[list[SampleScore]], float], accuracy())
 _STDERR = cast(Callable[[list[SampleScore]], float], stderr(cluster="case_id"))
@@ -41,7 +40,9 @@ def harness_hash() -> str:
     return profiles_adapter.content_hash(files)
 
 
-def record(task: Task, *, request: EvaluationSettings, spec: Experiment) -> EvaluationSettings:
+def record(
+    task: InspectTask, *, request: EvaluationSettings, spec: Experiment
+) -> EvaluationSettings:
     metadata = dict(task.metadata or {})
     if metadata["agent_version"] in {"", "latest", "stable", "next"}:
         raise ValueError("Use an exact agent version")
@@ -71,7 +72,7 @@ def record(task: Task, *, request: EvaluationSettings, spec: Experiment) -> Eval
     return resolved
 
 
-def _prepare(settings: EvaluationSettings) -> tuple[Task, EvaluationSettings]:
+def _prepare(settings: EvaluationSettings) -> tuple[InspectTask, EvaluationSettings]:
     from evals.python.integrations.inspect import evaluation as runner  # noqa: PLC0415
 
     if settings.variant is None:
@@ -147,7 +148,7 @@ def correct(sample: EvalSample) -> bool:
     return (
         not sample.limit
         and not completeness.crashed(sample)
-        and all(value[name] == CORRECT for name in NativeTask.required_scores)
+        and all(value[name] == CORRECT for name in Task.required_scores)
     )
 
 

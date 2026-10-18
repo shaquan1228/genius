@@ -18,7 +18,7 @@ from inspect_ai.scorer import Score
 
 from evals.python import datasets, evaluation
 from evals.python.evaluation import EvaluationSettings, ModelPricing, VariantSettings
-from evals.python.integrations.hugging_face import compare
+from evals.python.integrations.hugging_face import dispatch
 from evals.python.integrations.hugging_face.job import configuration, run
 from evals.python.integrations.inspect.evaluation import HfChatAPI
 from evals.python.paths import REPO_ROOT
@@ -80,7 +80,7 @@ def hosted_variant_settings_survive_environment_transport(variant: VariantSettin
         instruction_root="/eval/instructions",
         sample_ids=("clear-task",),
     )
-    assert configuration(compare.environment(settings)) == settings
+    assert configuration(dispatch.environment(settings)) == settings
 
 
 @pytest.mark.parametrize("value", ["", "null"])

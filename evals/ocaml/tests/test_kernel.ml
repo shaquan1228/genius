@@ -75,6 +75,111 @@ let decision =
 
 let no_changes = { Outcome.changed_files = []; verification = Verification.Unchecked }
 
+let () =
+  let all checks = Result.get_ok (Assessment.all ~checks) in
+  let check value = Result.get_ok (Assessment.verified ~verification:value) in
+  let values = [ Verification.Passed; Verification.Failed ] in
+  List.iter
+    (fun a ->
+      List.iter
+        (fun b ->
+          List.iter
+            (fun c ->
+              let a = check a and b = check b and c = check c in
+              let left = all [ ("pair", all [ ("a", a); ("b", b) ]); ("c", c) ] in
+              let right = all [ ("a", a); ("pair", all [ ("b", b); ("c", c) ]) ] in
+              assert (Assessment.passed ~assessment:left = Assessment.passed ~assessment:right);
+              assert (
+                Assessment.passed ~assessment:left
+                = (Assessment.passed ~assessment:a && Assessment.passed ~assessment:b
+                 && Assessment.passed ~assessment:c)))
+            values)
+        values)
+    values;
+  assert (Assessment.passed ~assessment:(all []));
+  let scope = Assessment.scope ~allowed_files:[] ~changed_files:[ "b"; "a"; "b" ] in
+  assert (
+    Assessment.unexpected_files ~assessment:(all [ ("one", scope); ("two", scope) ]) = [ "a"; "b" ]);
+  assert (Result.is_error (Assessment.all ~checks:[ ("same", scope); ("same", scope) ]));
+  assert (Result.is_error (Assessment.all ~checks:[ ("", scope) ]))
+
+let () =
+  let same = Result.get_ok (code ()) in
+  assert (Task.compare ~before:code_case ~after:same).equal;
+  let reordered = fixture ~files:(List.rev (Fixture.files ~fixture:code_case.fixture)) in
+  assert (Fixture.compare ~before:code_case.fixture ~after:reordered).equal;
+  let same_scope = Result.get_ok (code ~allowed_files:[ "source.txt"; "visible.txt" ] ()) in
+  let reordered_scope = Result.get_ok (code ~allowed_files:[ "visible.txt"; "source.txt" ] ()) in
+  assert (Task.compare ~before:same_scope ~after:reordered_scope).equal;
+  let changed =
+    Result.get_ok
+      (code
+         ~initial:
+           (fixture
+              ~files:
+                [
+                  file ~path:"source.txt" ~contents:"changed";
+                  file ~path:"added.txt" ~contents:"new";
+                ])
+         ())
+  in
+  let difference = Task.compare ~before:code_case ~after:changed in
+  assert (not difference.equal);
+  assert (List.map (fun (f : File.t) -> f.path) difference.fixture.added = [ "added.txt" ]);
+  assert (List.map (fun (f : File.t) -> f.path) difference.fixture.removed = [ "visible.txt" ]);
+  assert (List.length difference.fixture.modified = 1);
+  assert difference.instruction.equal;
+  assert difference.criterion.equal;
+  let report =
+    Result.get_ok
+      (Task.assess
+         ~task:decision
+         ~response:
+           (Some
+              (response
+                 ~fields:
+                   [
+                     field
+                       ~name:"choice"
+                       ~value:(Result.get_ok (Response_value.create ~string:"A" ()));
+                     field
+                       ~name:"reason"
+                       ~value:(Result.get_ok (Response_value.create ~string:"Cheaper" ()));
+                   ]))
+         ~outcome:{ no_changes with changed_files = [ "workspace/unexpected.txt" ] })
+  in
+  assert (not (Assessment.passed ~assessment:report));
+  assert (Assessment.unexpected_files ~assessment:report = [ "workspace/unexpected.txt" ]);
+  assert (Assessment.scores ~assessment:report = [ ("correctness", false); ("scope", false) ]);
+  match report with
+  | Assessment.All { checks } ->
+      assert (not (Assessment.passed ~assessment:(List.assoc "correctness" checks)))
+  | _ -> assert false
+
+let () =
+  let command values =
+    Result.get_ok
+      (Verifier.create
+         ~inputs:checks.inputs
+         ~files:checks.files
+         ~tools:checks.tools
+         ~command:values
+         ~stdin:checks.stdin
+         ~timeout_seconds:checks.timeout_seconds)
+  in
+  let before = Result.get_ok (Criterion.create ~code:(command [ "checker"; "flag" ]) ()) in
+  let after = Result.get_ok (Criterion.create ~code:(command [ "flag"; "checker" ]) ()) in
+  assert ((Criterion.compare ~before ~after).changed_fields = [ "verifier.command" ]);
+  assert ((Criterion.compare ~before ~after:decision.criterion).changed_fields = [ "kind" ]);
+  let changed =
+    {
+      Reference.edits = code_case.reference.edits;
+      completion = Result.get_ok (Completion.create ~plain:"different" ());
+    }
+  in
+  assert (
+    (Reference.compare ~before:code_case.reference ~after:changed).changed_fields = [ "completion" ])
+
 let scores ?(outcome = no_changes) ~response ~task () =
   Result.get_ok (Task.grade ~task ~response ~outcome)
 

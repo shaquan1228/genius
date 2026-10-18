@@ -1,20 +1,15 @@
 """Public compilation retains trusted declarations and canonical dataset identity."""
 
-import asyncio
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError, replace
 from typing import assert_type, cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
 
-from evals.python import assessment as assessment_api
-from evals.python import datasets, grading, verification
-from evals.python.assessment import Assessment
+from evals.python import datasets
 from evals.python.datasets import Dataset, Sources
-from evals.python.execution import Environment, Runtime
-from evals.python.grading import Scores
 from evals.python.schema import DatasetInfo
 from evals.python.tests.declarations import (
     _copy_case,
@@ -25,7 +20,6 @@ from evals.python.tests.declarations import (
     _reference_files,
 )
 from evals.python.tests.projections import reference, verifier
-from evals.python.verification import VerificationResult
 from kernel import (
     Artifact,
     Case,
@@ -36,7 +30,6 @@ from kernel import (
     Fixture,
     Reference,
     Task,
-    Verification,
     Verifier,
 )
 from kernel import (
@@ -193,35 +186,6 @@ def compilation_hashes_include_trusted_source_changes() -> None:
     assert original.cases_hash != updated.cases_hash
 
 
-def _grade(*, dataset: Dataset, verification: Verification.Value) -> Scores:
-    return grading.score_case(
-        case_id="external",
-        response="done",
-        changed_files=("workspace/main.py",),
-        verification=verification,
-        selection=dataset,
-    )
-
-
-def compiled_cases_use_existing_grading_policy() -> None:
-    dataset = datasets.compile_dataset(cases=(_declaration(),))
-    assert _grade(dataset=dataset, verification=Verification.Passed()) == {
-        "correctness": True,
-        "scope": True,
-    }
-
-
-def compiled_grading_preserves_canonical_inputs_and_results() -> None:
-    dataset = datasets.compile_dataset(cases=(_declaration(),))
-    verification = Verification.Passed()
-    with patch(
-        "kernel.Task.grade", return_value=[("correctness", True), ("scope", True)]
-    ) as kernel_grade:
-        assert _grade(dataset=dataset, verification=verification) == dict(kernel_grade.return_value)
-    assert kernel_grade.call_args.kwargs["task"] is dataset.records["external"]
-    assert isinstance(kernel_grade.call_args.kwargs["outcome"].verification, Verification.Passed)
-
-
 def compiled_dataset_is_immutable() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(),))
     with pytest.raises(FrozenInstanceError):
@@ -263,47 +227,6 @@ def unknown_case_in_compiled_dataset_fails_closed() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(),))
     with pytest.raises(KeyError):
         datasets.record("absent", selection=dataset)
-    with pytest.raises(KeyError):
-        grading.score_case(case_id="absent", response="", changed_files=(), selection=dataset)
-
-
-def compiled_selection_flows_through_all_verification_commands() -> None:
-    dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
-    agent = Environment(execute=AsyncMock(), read_bytes=AsyncMock(), write_bytes=AsyncMock())
-    runtime = Runtime(create=AsyncMock(), cleanup=AsyncMock())
-
-    async def execute() -> None:
-        result = assert_type(
-            await verification.verify_case(
-                case_id="external", selection=dataset, agent=agent, runtime=runtime
-            ),
-            VerificationResult,
-        )
-        assert isinstance(result.verification, Verification.Unchecked)
-        assessment = assert_type(
-            await assessment_api.assess(
-                case_id="external",
-                response='{"choice":"B","safe":true,"reason":"clear"}',
-                changed_files=("workspace/main.py",),
-                selection=dataset,
-                agent=agent,
-                runtime=runtime,
-            ),
-            Assessment,
-        )
-        assert assessment.scores == {"correctness": True, "scope": True}
-        assert isinstance(assessment.evidence.verification, Verification.Unchecked)
-        reference = assert_type(
-            await verification.validate_reference(
-                case_id="external", selection=dataset, runtime=runtime
-            ),
-            VerificationResult,
-        )
-        assert isinstance(reference.verification, Verification.Unchecked)
-
-    asyncio.run(execute())
-    cast(AsyncMock, runtime.create).assert_not_awaited()
-    cast(AsyncMock, runtime.cleanup).assert_not_awaited()
 
 
 def compilation_rejects_a_foreign_kernel_source_snapshot() -> None:

@@ -1,3 +1,36 @@
+(* Task: one test specification combining instruction, initial state, criteria, and reference.
+   Anthropic defines a task as a single test with inputs and success criteria; Hugging Face
+   represents a benchmark sample with its query, expected outputs, and task metadata.
+   https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
+   https://huggingface.co/docs/lighteval/v0.13.0/package_reference/doc *)
+module Component_comparison = Comparison
+
+module Comparison = struct
+  type t = {
+    equal : bool;
+    id : Comparison.t;
+    fixture : Fixture_comparison.t;
+    instruction : Comparison.t;
+    criterion : Comparison.t;
+    allowed_files : Comparison.t;
+    reference : Comparison.t;
+  }
+
+  let create ~(id : Comparison.t) ~(fixture : Fixture_comparison.t) ~(instruction : Comparison.t)
+      ~(criterion : Comparison.t) ~(allowed_files : Comparison.t) ~(reference : Comparison.t) =
+    {
+      equal =
+        id.equal && fixture.equal && instruction.equal && criterion.equal && allowed_files.equal
+        && reference.equal;
+      id;
+      fixture;
+      instruction;
+      criterion;
+      allowed_files;
+      reference;
+    }
+end
+
 type t = {
   id : string;
   fixture : Fixture.t;
@@ -72,59 +105,55 @@ let resolve_resources ~(task : t) ~resources =
     (fun failure -> { failure with Validation_failure.case_id = Some task.id })
     result
 
-let definitions = [ ("correctness", `Correctness); ("scope", `Scope) ]
-let required_scores = List.map fst definitions
-
-let answer (criterion : Rubric.t) response =
-  match response with
-  | None -> false
-  | Some (response : Response.t) ->
-      let exact, text_valid =
-        match criterion.text_rule with
-        | None -> (response.fields, true)
-        | Some rule ->
-            let valid =
-              match
-                List.find_opt
-                  (fun (field : Response_field.t) -> field.name = rule.field)
-                  response.fields
-              with
-              | Some { value = Response_value.String { value = text }; _ } ->
-                  let words = Text_rule.word_count ~text in
-                  rule.min_words <= words && words <= rule.max_words
-              | Some { value = Response_value.Bool _; _ } | None -> false
-            in
-            ( List.filter
-                (fun (field : Response_field.t) -> field.name <> rule.field)
-                response.fields,
-              valid )
-      in
-      text_valid && List.sort compare exact = List.sort compare criterion.expected.fields
-
-let grade ~(task : t) ~response ~(outcome : Outcome.t) =
-  let correctness =
-    match task.criterion with
-    | Criterion.Code _ -> (
-        match outcome.verification with
-        | Verification.Harness_error { detail } ->
-            Error (Grading_failure.Verification_harness_error { detail })
-        | Verification.Passed -> Ok true
-        | Verification.Unchecked | Verification.Failed | Verification.Invalid_submission
-        | Verification.Timed_out ->
-            Ok false)
-    | Criterion.Answer { rubric } -> Ok (answer rubric response)
-  in
-  Result.map
-    (fun correctness ->
-      let allowed = List.map (fun path -> "workspace/" ^ path) task.allowed_files in
-      let scope = List.for_all (fun path -> List.mem path allowed) outcome.changed_files in
-      List.map
-        (fun (name, criterion) ->
-          (name, match criterion with `Correctness -> correctness | `Scope -> scope))
-        definitions)
-    correctness
-
 let verifier ~(task : t) =
   match task.criterion with
   | Criterion.Code { verifier } -> Some verifier
   | Criterion.Answer _ -> None
+
+let compare ~(before : t) ~(after : t) =
+  Comparison.create
+    ~id:(Component_comparison.create ~fields:[ ("id", before.id = after.id) ])
+    ~fixture:(Fixture.compare ~before:before.fixture ~after:after.fixture)
+    ~instruction:(Instruction.compare ~before:before.instruction ~after:after.instruction)
+    ~criterion:(Criterion.compare ~before:before.criterion ~after:after.criterion)
+    ~allowed_files:
+      (Component_comparison.create
+         ~fields:
+           [
+             ( "allowed_files",
+               List.sort_uniq String.compare before.allowed_files
+               = List.sort_uniq String.compare after.allowed_files );
+           ])
+    ~reference:(Reference.compare ~before:before.reference ~after:after.reference)
+
+let assessors =
+  [
+    ( "correctness",
+      fun ~(task : t) ~response ~(outcome : Outcome.t) ->
+        Assessment.criterion ~criterion:task.criterion ~response ~verification:outcome.verification
+    );
+    ( "scope",
+      fun ~(task : t) ~response:_ ~(outcome : Outcome.t) ->
+        Ok
+          (Assessment.scope
+             ~allowed_files:(List.map (fun path -> "workspace/" ^ path) task.allowed_files)
+             ~changed_files:outcome.changed_files) );
+  ]
+
+let required_scores = List.map fst assessors
+
+let assess ~task ~response ~outcome =
+  List.fold_right
+    (fun (name, assessor) rest ->
+      Result.bind (assessor ~task ~response ~outcome) (fun assessment ->
+          Result.map (fun checks -> (name, assessment) :: checks) rest))
+    assessors
+    (Ok [])
+  |> Result.map (fun checks -> Result.get_ok (Assessment.all ~checks))
+
+(* Grader: pure logic applying criteria to responses and observed outcomes.
+   IO, execution, and presentation remain harness responsibilities.
+   https://developers.openai.com/api/docs/guides/graders
+   https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
+let grade ~task ~response ~outcome =
+  Result.map (fun assessment -> Assessment.scores ~assessment) (assess ~task ~response ~outcome)

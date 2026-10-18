@@ -40,7 +40,6 @@ select = ["E", "F", "I", "UP", "B", "PL", "FBT", "SIM", "C4", "RUF", "PT", "PIE"
 ignore = ["PLR2004"]
 
 [tool.ruff.lint.per-file-ignores]
-"python/assessment.py" = ["PLR0913"]
 "python/tests/conftest.py" = ["PLR0917"]
 "python/kernel/*.pyi" = ["F401", "N801", "N818", "N999"]
 

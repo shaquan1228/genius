@@ -10,13 +10,12 @@ from typing import Literal, cast
 
 from pydantic import BaseModel, InstanceOf, JsonValue, ValidationError, validate_call
 
-from evals.python import datasets, execution
-from evals.python.datasets import Selection
+from evals.python import execution
 from evals.python.execution import Completion, Environment, Execution, Runtime
 from evals.python.schema import FROZEN
 from kernel import Content, Fixture, Task, Verification, Verifier
 
-__all__ = ["Diagnostic", "VerificationResult", "validate_reference", "verify_case"]
+__all__ = ["Diagnostic", "VerificationResult", "validate_reference", "verify"]
 
 VerificationStatus = Literal[
     "unchecked", "passed", "failed", "invalid_submission", "timed_out", "harness_error"
@@ -203,7 +202,15 @@ async def allocated(
         await _cleanup(runtime, grader=grader, interrupted=interrupted)
 
 
-async def verify(checks: Verifier, *, agent: Environment, runtime: Runtime) -> VerificationResult:
+@validate_call(config=FROZEN)
+async def verify(
+    checks: InstanceOf[Verifier] | None,
+    *,
+    agent: InstanceOf[Environment],
+    runtime: InstanceOf[Runtime],
+) -> VerificationResult:
+    if checks is None:
+        return VerificationResult(verification=Verification.Unchecked())
     try:
         try:
             inputs = await _inputs(checks, agent=agent)
@@ -227,42 +234,21 @@ async def stage_reference(files: Mapping[str, str], *, agent: Environment) -> No
 
 
 @validate_call(config=FROZEN)
-async def verify_case(
-    *,
-    case_id: str,
-    selection: Selection = "smoke",
-    agent: InstanceOf[Environment],
-    runtime: InstanceOf[Runtime],
-) -> VerificationResult:
-    checks = Task.verifier(task=datasets.record(case_id, selection=selection))
-    if checks is None:
-        return VerificationResult(verification=Verification.Unchecked())
-    return await verify(checks, agent=agent, runtime=runtime)
-
-
-@validate_call(config=FROZEN)
 async def validate_reference(
+    task: InstanceOf[Task],
     *,
-    case_id: str,
-    selection: Selection = "smoke",
     runtime: InstanceOf[Runtime] | None = None,
 ) -> VerificationResult:
-    selection = datasets.load_dataset(selection=selection)
-    record = datasets.record(case_id, selection=selection)
-    if Task.verifier(task=record) is None:
+    checks = Task.verifier(task=task)
+    if checks is None:
         return VerificationResult(verification=Verification.Unchecked())
     runtime = runtime or execution.create_runtime()
     try:
         async with allocated(runtime) as agent:
             await stage_reference(
-                {
-                    file.path: file.contents
-                    for file in Fixture.files(fixture=(record).reference.edits)
-                },
+                {file.path: file.contents for file in Fixture.files(fixture=task.reference.edits)},
                 agent=agent,
             )
-            return await verify_case(
-                case_id=case_id, selection=selection, agent=agent, runtime=runtime
-            )
+            return await verify(checks, agent=agent, runtime=runtime)
     except Exception as error:
         return VerificationResult(verification=Verification.HarnessError(detail=str(error)))

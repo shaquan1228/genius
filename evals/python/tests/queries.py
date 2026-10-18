@@ -7,11 +7,10 @@ from unittest.mock import PropertyMock, patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import datasets, evaluation, grading
+from evals.python import datasets, evaluation
 from evals.python.datasets import Dataset, DatasetProvenance
-from evals.python.grading import Scores
 from evals.python.schema import DatasetInfo
-from kernel import Case, Experiment, Task, Verification
+from kernel import Case, Experiment, Task
 
 
 def public_queries_preserve_canonical_objects() -> None:
@@ -43,23 +42,6 @@ def public_hashes_match_existing_provenance() -> None:
     assert provenance.cases_hash == datasets.cases_hash(datasets.load_dataset())
 
 
-def public_grade_preserves_input_and_result() -> None:
-    verification = Verification.Passed()
-    with patch("kernel.Task.grade", return_value=[("correctness", True), ("scope", True)]) as grade:
-        result = assert_type(
-            grading.score_case(
-                case_id="clear-task",
-                response="answer",
-                changed_files=("receipt.py",),
-                verification=verification,
-            ),
-            Scores,
-        )
-    assert grade.call_args.kwargs["task"] is datasets.load_dataset().records["clear-task"]
-    assert isinstance(grade.call_args.kwargs["outcome"].verification, Verification.Passed)
-    assert result == dict(grade.return_value)
-
-
 @pytest.mark.parametrize(
     "operation",
     [
@@ -75,28 +57,6 @@ def query_arguments_are_strict(
 ) -> None:
     with pytest.raises(ValidationError):
         operation(**arguments)
-
-
-def query_concerns_expose_only_their_own_operations() -> None:
-    assert not {"create_runtime", "assess", "verify_case", "evaluate"} & set(datasets.__all__)
-    assert grading.__all__ == ["Scores", "score_case"]
-    assert set(evaluation.__all__) == {
-        "EvaluationSettings",
-        "InstructionDelivery",
-        "ModelPricing",
-        "VariantSettings",
-        "evaluate",
-        "prepare_run",
-        "validate_run",
-        "resolve_settings",
-        "resolve_experiment",
-    }
-
-
-@pytest.mark.parametrize("response", ['{"":"x"}', '{"answer": 1}', "not json"])
-def malformed_candidates_receive_incorrect_scores(response: str) -> None:
-    scores = grading.score_case(case_id="small-decision", response=response, changed_files=())
-    assert not scores["correctness"]
 
 
 def reference_query_returns_canonical_reference() -> None:

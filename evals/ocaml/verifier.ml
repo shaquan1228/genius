@@ -52,3 +52,17 @@ let resolve_resources ~(verifier : t) ~resources =
   in
   Result.bind (resolve_all verifier.files) (fun files ->
       Result.map (fun tools -> { verifier with files; tools }) (resolve_all verifier.tools))
+
+let compare ~(before : t) ~(after : t) =
+  Comparison.create
+    ~fields:
+      [
+        ( "inputs",
+          List.sort_uniq String.compare before.inputs = List.sort_uniq String.compare after.inputs
+        );
+        ("files", List.sort Stdlib.compare before.files = List.sort Stdlib.compare after.files);
+        ("tools", List.sort Stdlib.compare before.tools = List.sort Stdlib.compare after.tools);
+        ("command", before.command = after.command);
+        ("stdin", before.stdin = after.stdin);
+        ("timeout_seconds", before.timeout_seconds = after.timeout_seconds);
+      ]

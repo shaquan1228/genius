@@ -10,7 +10,6 @@ from pydantic import ValidationError
 
 from evals.python import datasets, evaluation
 from evals.python.datasets import cases_hash, humanevalplus
-from evals.python.grading import score_case
 from evals.python.integrations import evalplus
 from evals.python.integrations.evalplus.benchmarks import (
     benchmark_info,
@@ -30,7 +29,7 @@ from evals.python.tests.support import (
 from evals.python.tests.support import (
     imported_verifier as _imported_verifier,
 )
-from kernel import Verification, Verifier
+from kernel import Verifier
 
 
 def _record(**updates: object) -> str:
@@ -106,20 +105,13 @@ def malformed_import_rejected(records: tuple[str, ...]) -> None:
         _import_records(records)
 
 
-def dataset_selector_grades_one_trusted_record() -> None:
+def dataset_selector_preserves_trusted_records() -> None:
     raw = _record()
     case = _import_records((raw,))[0]
     compiled = _import_dataset((raw,))
     with patch("evals.python.datasets.load_dataset", return_value=compiled):
         assert public_case(case.id, selection="humanevalplus") == case
         assert datasets.list_cases(selection="humanevalplus") == (case,)
-        assert score_case(
-            case_id=case.id,
-            response="",
-            changed_files=("workspace/solution.py",),
-            verification=Verification.Passed(),
-            selection="humanevalplus",
-        ) == {"correctness": True, "scope": True}
         samples = profiles.samples(
             load_profile(name="baseline", spec=evaluation.resolve_settings()),
             cases=datasets.list_cases(),
@@ -214,14 +206,7 @@ def case_hash_tracks_private_records_without_changing_public_cases() -> None:
         assert datasets.get_provenance(selection="humanevalplus").cases_hash != before
 
 
-def imported_dataset_grade_uses_cached_record(synthetic_dataset: None) -> None:
+def imported_dataset_keeps_benchmark_metadata(synthetic_dataset: None) -> None:
     task = baseline(dataset="humanevalplus")
     assert task.metadata is not None
     assert task.metadata["benchmark"]["count"] == len(task.dataset) == 164
-    assert score_case(
-        case_id="humaneval-0",
-        response="",
-        changed_files=(),
-        verification=Verification.Passed(),
-        selection="humanevalplus",
-    ) == {"correctness": True, "scope": True}

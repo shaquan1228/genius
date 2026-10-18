@@ -10,9 +10,8 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import datasets, evaluation
-from evals.python.datasets import Dataset
+from evals.python.datasets import Dataset, Sources
 from evals.python.evaluation import InstructionDelivery
-from evals.python.grading import score_case
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import (
     REASONING_DOCUMENTS,
@@ -39,10 +38,10 @@ from kernel import (
     File,
     Fixture,
     Instruction,
+    Kernel,
     Profile,
     Reference,
     Task,
-    Verification,
     Verifier,
 )
 from kernel import (
@@ -69,16 +68,6 @@ def generated_paths_are_validated(path: str) -> None:
         _copy_case(
             declaration, fixture=Fixture.create(files=[File.create(path=path, contents="bad")])
         )
-
-
-def _grade(case_id: str, *, text: str) -> bool:
-    return score_case(
-        case_id=case_id,
-        response=text,
-        changed_files=(),
-        verification=Verification.Unchecked(),
-        selection="smoke",
-    )["correctness"]
 
 
 def profiles_share_fixture_files() -> None:
@@ -153,14 +142,6 @@ def hash_tracks_contents_and_ignores_mapping_order() -> None:
     before = content_hash({"a": b"before", "b": b"before"})
     assert content_hash({"b": b"before", "a": b"before"}) == before
     assert content_hash({"a": b"after", "b": b"before"}) != before
-
-
-@pytest.mark.parametrize(
-    "text",
-    ['  {"choice":"B","reason":"Cheap"}  ', '```json\n{"choice":"B","reason":"Cheap"}\n```'],
-)
-def json_fences(text: str) -> None:
-    assert _grade("small-decision", text=text)
 
 
 def cases_200_cases_are_python_values() -> None:
@@ -355,3 +336,16 @@ def delivery_rejects_unimplemented_skill_instead_of_silently_changing_it() -> No
             delivery="inline",
             documents=profiles.load_documents(evaluation.resolve_settings()),
         )
+
+
+@pytest.mark.parametrize("source", [file.path for file in Kernel.current.sources])
+def kernel_fingerprint_tracks_every_trusted_source(source: str) -> None:
+    original = datasets.kernel_sources()
+    changed = Sources(
+        modules=tuple(
+            (name, contents + "\n" if name == source else contents)
+            for name, contents in original.modules
+        ),
+        resources=original.resources,
+    )
+    assert datasets.fingerprint(changed) != datasets.fingerprint(original)
