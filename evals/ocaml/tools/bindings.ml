@@ -103,13 +103,15 @@ let signature path =
   let cmi = Cmi_format.read_cmi path in
   object_ [ ("module", quote cmi.cmi_name); ("items", array (items cmi.cmi_sign)) ]
 
-let export_interface paths =
+let export_interface library paths =
   if paths = [] then invalid_arg "Expected compiled owner interfaces";
-  let prefix = "Genius_evals_kernel__" in
+  let prefix = library ^ "__" in
   let modules =
     List.map
       (fun path ->
         let cmi = Cmi_format.read_cmi path in
+        if not (String.starts_with ~prefix cmi.cmi_name) then
+          unsupported ("interface outside library " ^ library ^ ": " ^ cmi.cmi_name);
         let name =
           String.sub
             cmi.cmi_name
@@ -148,10 +150,38 @@ let export_interface paths =
       Format.printf "end@.")
     modules
 
+let interface_dependencies source library =
+  let channel = open_in source in
+  let structure =
+    Fun.protect
+      ~finally:(fun () -> close_in channel)
+      (fun () -> Parse.implementation (Lexing.from_channel channel))
+  in
+  let modules =
+    List.map
+      (fun item ->
+        match item.Parsetree.pstr_desc with
+        | Parsetree.Pstr_module
+            {
+              pmb_name = { txt = Some exported; _ };
+              pmb_expr = { pmod_desc = Parsetree.Pmod_ident { txt = Longident.Lident name; _ }; _ };
+              _;
+            }
+          when exported = name ->
+            name
+        | _ -> unsupported "public exports must be direct module aliases")
+      structure
+  in
+  let filename = String.uncapitalize_ascii library in
+  print_string "(";
+  List.iter (fun name -> Printf.printf " .%s.objs/byte/%s__%s.cmi" filename filename name) modules;
+  print_endline ")"
+
 let () =
   try
     match Array.to_list Sys.argv |> List.tl with
-    | "--interface" :: paths -> export_interface paths
+    | [ "--dependencies"; source; library ] -> interface_dependencies source library
+    | "--interface" :: library :: paths -> export_interface library paths
     | paths -> print_endline (array (List.map signature paths))
   with Failure message ->
     prerr_endline message;

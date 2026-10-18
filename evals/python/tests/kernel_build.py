@@ -43,7 +43,7 @@ def compiled_includes_and_inference_drive_bindings(tmp_path: Path) -> None:
     )
     (tmp_path / "sample.mli").unlink()
     items = _schema((path,))[0]["items"]
-    stub = generate.domain_bindings(items[:-1])
+    stub = generate.domain_bindings(items[:-1], package="kernel")
     assert (
         "class A(_types.Token):" in stub,
         "class B(_types.Token):" in stub,
@@ -255,7 +255,7 @@ def missing_installed_package_reports_setup_command() -> None:
 def incompatible_python_identifiers_fail_loudly(tmp_path: Path) -> None:
     path = _compile(tmp_path / "keywords", text="type state = None | Value")
     with pytest.raises(ValueError, match="Unsupported Python identifier: None"):
-        generate.domain_bindings(_schema((path,))[0]["items"])
+        generate.domain_bindings(_schema((path,))[0]["items"], package="kernel")
 
 
 @pytest.mark.parametrize(
@@ -265,14 +265,14 @@ def capitalized_binding_names_cannot_silently_collide(tmp_path: Path, *, text: s
     path = _compile(tmp_path / "collision", text=text)
     items = _schema((path,))[0]["items"]
     with pytest.raises(ValueError, match="names collide"):
-        generate.runtime_types(items)
+        generate.runtime_types(items, exceptions=("GradingError",))
 
 
 def constructor_names_can_match_their_owner(tmp_path: Path) -> None:
     path = _compile(tmp_path / "owned", text="type entry = Entry")
     items = _schema((path,))[0]["items"]
     assert "Entry.Entry = _named(constructor=_native.Entry)" in generate.runtime_types(items)
-    assert "class Entry(_types.Entry):" in generate.domain_bindings(items)
+    assert "class Entry(_types.Entry):" in generate.domain_bindings(items, package="kernel")
 
 
 @pytest.mark.parametrize("text", ["type state = Value", "type state = Foo_bar | FooBar"])
@@ -315,14 +315,13 @@ def unnamed_operation_inputs_fail_generation(tmp_path: Path, *, text: str) -> No
         generate.operation(item)
 
 
-def factories_must_return_their_owner_type(tmp_path: Path) -> None:
+def factories_can_return_other_types(tmp_path: Path) -> None:
     path = _compile(
         tmp_path / "mismatch",
         text="module Response : sig type t = { fields : string list }\n"
         "val create : fields:string list -> string end",
     )
-    with pytest.raises(ValueError, match="owner type"):
-        generate.owner_declarations(_schema((path,))[0]["items"])
+    assert "-> str" in generate.render(_schema((path,)), package="kernel")["__init__.pyi"]
 
 
 @pytest.mark.parametrize(
@@ -383,26 +382,124 @@ def compiled_private_nullary_constructors_retain_their_boundary(tmp_path: Path) 
     path = _compile(
         tmp_path / "private_sum", text="type state = private Ready | Set of { value : string }"
     )
-    stub = generate.domain_bindings(_schema((path,))[0]["items"])
+    stub = generate.domain_bindings(_schema((path,))[0]["items"], package="kernel")
     assert "class Ready(_types.State):\n        def __init__(self, *, _token: Never)" in stub
     assert "class Set(_types.State):\n        def __init__(self, *, _token: Never)" in stub
 
 
 @pytest.mark.parametrize(
-    "text",
+    ("text", "expected"),
     [
-        "val root_function : unit -> bool",
-        "module Service : sig val run : unit -> int end",
-        "module Values : sig type t = int list val create : values:int list -> t end",
+        ("val root_function : unit -> bool", "def root_function() -> bool"),
+        ("module Service : sig val run : unit -> int end", "class Service:"),
+        (
+            "module Values : sig type t = int list val create : values:int list -> t end",
+            "type Value = Sequence[int]",
+        ),
     ],
 )
-def only_nominal_owners_can_export_type_methods(tmp_path: Path, *, text: str) -> None:
+def modules_and_functions_do_not_require_nominal_owners(
+    tmp_path: Path, *, text: str, expected: str
+) -> None:
     path = _compile(tmp_path / "nonowner", text=text)
-    with pytest.raises(ValueError, match=r"Public kernel|Public owner|Native aliases"):
-        generate.render(_schema((path,)))
+    assert expected in generate.render(_schema((path,)), package="kernel")["__init__.pyi"]
 
 
-def bindings_publish_only_the_type_interface() -> None:
-    root = EVALS / "python/kernel"
-    assert {path.name for path in root.glob("*.py")} == {"__init__.py", "_bridge.py", "generate.py"}
-    assert {path.name for path in root.glob("*.pyi")} == {"__init__.pyi"}
+def multiple_compiled_interfaces_can_be_rendered(tmp_path: Path) -> None:
+    first = _compile(tmp_path / "first", text="type first = { value : string }")
+    second = _compile(tmp_path / "second", text="type second = { value : First.first }")
+    rendered = generate.render(_schema((first, second)), package="kernel")
+    stub = rendered["__init__.pyi"]
+    assert "_native.First.first" in rendered["__init__.py"]
+    assert "_native.Second.second" in rendered["__init__.py"]
+    assert "class First:" in stub
+    assert "def value(self) -> First:" in stub
+
+
+def unresolved_module_paths_are_rejected(tmp_path: Path) -> None:
+    path = _compile(tmp_path / "external", text="type value = String.t")
+    with pytest.raises(ValueError, match="Unresolved type reference"):
+        generate.render(_schema((path,)), package="kernel")
+
+
+def a_new_public_module_needs_only_its_contract_and_export(binding_workspace: Path) -> None:
+    root = binding_workspace / "ocaml"
+    (root / "probe.ml").write_text("type t = { value : string }\n")
+    (root / "probe.mli").write_text("type t = { value : string }\n")
+    facade = root / "genius_evals_kernel.ml"
+    facade.write_text(facade.read_text() + "module Probe = Probe\n")
+    result = _build_bindings(binding_workspace, check=False)
+    assert result.returncode != 0
+    assert "Probe" in result.stdout + result.stderr
+    _promote_bindings(binding_workspace)
+    assert "class Probe:" in (binding_workspace / "python/kernel/__init__.pyi").read_text()
+
+
+def compiled_library_identity_is_an_input(tmp_path: Path) -> None:
+    path = _compile(tmp_path / "other__Item", text="type t = { value : string }")
+    exported = subprocess.run(
+        [str(READER), "--interface", "Other", str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "module Item : sig" in exported.stdout
+    wrong = subprocess.run(
+        [str(READER), "--interface", "Unrelated", str(path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert wrong.returncode != 0
+    assert "interface outside library" in wrong.stderr
+
+
+def result_failures_and_exception_exports_are_adapter_inputs(tmp_path: Path) -> None:
+    path = _compile(
+        tmp_path / "custom",
+        text="type rejection = { detail : string }\nval run : unit -> (int, rejection) result",
+    )
+    rendered = generate.render(_schema((path,)), package="custom", exceptions=("Rejected",))
+    assert (
+        "import custom as _types" in rendered["__init__.pyi"],
+        "def run() -> int" in rendered["__init__.pyi"],
+        "failure='rejection'" in rendered["__init__.py"],
+        "from ._bridge import Rejected as Rejected" in rendered["__init__.py"],
+        "ValidationError" not in rendered["__init__.py"],
+    ) == (True, True, True, True, True)
+
+
+def kernel_public_contracts_follow_owner_conventions() -> None:
+    schema = json.loads((EVALS / "_build/default/python/kernel/schema.json").read_text())
+    assert all(module["kind"] == "module" for module in schema[0]["items"])
+    assert all(
+        item["kind"] not in {"value", "namespace", "namespace_alias"}
+        for item in generate.declarations(schema)
+    )
+
+
+def _factory_returns_owner(factory: generate.Node, *, owner: str) -> bool:
+    _, returned = generate.named_arguments(factory)
+    payload = generate.result_payload(returned)
+    return str((returned if payload is None else payload[0])["name"]) == owner
+
+
+def kernel_factories_return_their_owner_type() -> None:
+    schema = json.loads((EVALS / "_build/default/python/kernel/schema.json").read_text())
+    for owner in generate.declarations(schema):
+        for method in owner.get("methods", []):
+            if method["name"] == "create":
+                assert _factory_returns_owner(method, owner=owner["name"])
+
+
+@pytest.mark.parametrize("name", ["_bind", "_named", "_native", "_types", "__all__", "overload"])
+def generated_helpers_cannot_be_shadowed(tmp_path: Path, *, name: str) -> None:
+    path = _compile(tmp_path / "helper", text=f"val {name} : int\nval run : unit -> int")
+    with pytest.raises(ValueError, match="names collide"):
+        generate.render(_schema((path,)), package="kernel")
+
+
+def native_type_and_value_names_cannot_silently_collide(tmp_path: Path) -> None:
+    path = _compile(tmp_path / "native_collision", text="type foo = { value : int }\nval foo : int")
+    with pytest.raises(ValueError, match="Native names collide"):
+        generate.render(_schema((path,)), package="kernel")
