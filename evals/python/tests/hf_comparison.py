@@ -22,7 +22,7 @@ from evals.python.comparison import (
     VariantRequest,
 )
 from evals.python.evaluation import EvaluationSettings, ModelPricing, VariantSettings
-from evals.python.integrations.hugging_face import compare, source
+from evals.python.integrations.hugging_face import compare, dispatch, source
 
 
 def _request(names: tuple[str, ...] = ("control", "treatment")) -> ComparisonRequest:
@@ -69,8 +69,8 @@ def api(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         SimpleNamespace(id="treatment-job"),
     ]
     client.wait_for_job.return_value = SimpleNamespace(status=SimpleNamespace(stage="COMPLETED"))
-    monkeypatch.setattr(compare, "HfApi", lambda: client)
-    monkeypatch.setattr(compare, "committed_harness", lambda: None)
+    monkeypatch.setattr(dispatch, "HfApi", lambda: client)
+    monkeypatch.setattr(dispatch, "committed_harness", lambda: None)
     monkeypatch.setattr(source, "trusted_snapshot", lambda *args, **kwargs: "trusted")
     monkeypatch.setattr(source, "instructions", lambda variant, **kwargs: variant)
     monkeypatch.setattr(evaluation, "prepare_run", _prepared)
@@ -262,7 +262,7 @@ def invalid_credentials_fail_before_dispatch(provider: str) -> None:
         patch.dict("os.environ", {"HF_TOKEN": "", "OPENAI_API_KEY": ""}, clear=True),
         pytest.raises(ValueError, match=r"model|credentials"),
     ):
-        compare.credentials(EvaluationSettings(model=f"{provider}/test"))
+        dispatch.credentials(EvaluationSettings(model=f"{provider}/test"))
 
 
 @pytest.mark.parametrize("changed", [b"", b" M evals/python/evaluation.py"])
@@ -270,9 +270,9 @@ def dispatch_requires_a_committed_harness(changed: bytes) -> None:
     with patch.object(source, "git", return_value=changed):
         if changed:
             with pytest.raises(ValueError, match="Commit the trusted"):
-                compare.committed_harness()
+                dispatch.committed_harness()
         else:
-            compare.committed_harness()
+            dispatch.committed_harness()
 
 
 @pytest.mark.parametrize("from_file", [False, True])

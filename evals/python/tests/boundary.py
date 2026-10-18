@@ -31,7 +31,7 @@ PUBLIC_OPERATIONS = {
         "list_cases",
         "load_dataset",
     },
-    "grading": {"score_case"},
+    "grading": {"grade_case", "score_case"},
     "verification": {"verify_case", "validate_reference"},
     "assessment": {"assess"},
     "execution": {"create_runtime"},

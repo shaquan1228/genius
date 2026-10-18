@@ -16,3 +16,6 @@ let create ~(fields : Response_field.t list) =
         @ collect (field.name :: seen) rest
   in
   Validation.checked (collect [] fields) { fields }
+
+let compare ~(before : t) ~(after : t) =
+  Response_comparison.create ~before:before.fields ~after:after.fields

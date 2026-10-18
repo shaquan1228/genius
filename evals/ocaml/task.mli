@@ -25,3 +25,11 @@ val grade :
   task:t -> response:Response.t option -> outcome:Outcome.t -> (Score.t, Grading_failure.t) result
 
 val verifier : task:t -> Verifier.t option
+val compare : before:t -> after:t -> Task_comparison.t
+val grade_scope : task:t -> changed_files:string list -> Scope_grade.t
+
+val grade_report :
+  task:t ->
+  response:Response.t option ->
+  outcome:Outcome.t ->
+  (Task_grade.t, Grading_failure.t) result

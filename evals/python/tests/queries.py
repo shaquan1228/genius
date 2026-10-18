@@ -79,7 +79,7 @@ def query_arguments_are_strict(
 
 def query_concerns_expose_only_their_own_operations() -> None:
     assert not {"create_runtime", "assess", "verify_case", "evaluate"} & set(datasets.__all__)
-    assert grading.__all__ == ["Scores", "score_case"]
+    assert grading.__all__ == ["Scores", "grade_case", "score_case"]
     assert set(evaluation.__all__) == {
         "EvaluationSettings",
         "InstructionDelivery",

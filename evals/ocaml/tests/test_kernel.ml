@@ -75,6 +75,82 @@ let decision =
 
 let no_changes = { Outcome.changed_files = []; verification = Verification.Unchecked }
 
+let () =
+  let same = Result.get_ok (code ()) in
+  assert (Task.compare ~before:code_case ~after:same).equal;
+  let reordered = fixture ~files:(List.rev (Fixture.files ~fixture:code_case.fixture)) in
+  assert (Fixture.compare ~before:code_case.fixture ~after:reordered).equal;
+  let same_scope = Result.get_ok (code ~allowed_files:[ "source.txt"; "visible.txt" ] ()) in
+  let reordered_scope = Result.get_ok (code ~allowed_files:[ "visible.txt"; "source.txt" ] ()) in
+  assert (Task.compare ~before:same_scope ~after:reordered_scope).equal;
+  let changed =
+    Result.get_ok
+      (code
+         ~initial:
+           (fixture
+              ~files:
+                [
+                  file ~path:"source.txt" ~contents:"changed";
+                  file ~path:"added.txt" ~contents:"new";
+                ])
+         ())
+  in
+  let difference = Task.compare ~before:code_case ~after:changed in
+  assert (not difference.equal);
+  assert (List.map (fun (f : File.t) -> f.path) difference.fixture.added = [ "added.txt" ]);
+  assert (List.map (fun (f : File.t) -> f.path) difference.fixture.removed = [ "visible.txt" ]);
+  assert (List.length difference.fixture.modified = 1);
+  assert difference.instruction.equal;
+  assert difference.criterion.equal;
+  let report =
+    Result.get_ok
+      (Task.grade_report
+         ~task:decision
+         ~response:
+           (Some
+              (response
+                 ~fields:
+                   [
+                     field
+                       ~name:"choice"
+                       ~value:(Result.get_ok (Response_value.create ~string:"A" ()));
+                     field
+                       ~name:"reason"
+                       ~value:(Result.get_ok (Response_value.create ~string:"Cheaper" ()));
+                   ]))
+         ~outcome:{ no_changes with changed_files = [ "workspace/unexpected.txt" ] })
+  in
+  assert (not report.correctness.passed);
+  assert (report.scope.unexpected_files = [ "workspace/unexpected.txt" ]);
+  let answer = Option.get report.correctness.answer in
+  assert answer.response_present;
+  assert (not answer.fields.equal);
+  assert (Option.get answer.text_rule).passed
+
+let () =
+  let command values =
+    Result.get_ok
+      (Verifier.create
+         ~inputs:checks.inputs
+         ~files:checks.files
+         ~tools:checks.tools
+         ~command:values
+         ~stdin:checks.stdin
+         ~timeout_seconds:checks.timeout_seconds)
+  in
+  let before = Result.get_ok (Criterion.create ~code:(command [ "checker"; "flag" ]) ()) in
+  let after = Result.get_ok (Criterion.create ~code:(command [ "flag"; "checker" ]) ()) in
+  assert ((Criterion.compare ~before ~after).changed_fields = [ "verifier.command" ]);
+  assert ((Criterion.compare ~before ~after:decision.criterion).changed_fields = [ "kind" ]);
+  let changed =
+    {
+      Reference.edits = code_case.reference.edits;
+      completion = Result.get_ok (Completion.create ~plain:"different" ());
+    }
+  in
+  assert (
+    (Reference.compare ~before:code_case.reference ~after:changed).changed_fields = [ "completion" ])
+
 let scores ?(outcome = no_changes) ~response ~task () =
   Result.get_ok (Task.grade ~task ~response ~outcome)
 

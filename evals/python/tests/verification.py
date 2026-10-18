@@ -424,6 +424,8 @@ def assessment_grades_canonical_observation_and_freezes_scores() -> None:
         assert result.evidence is evidence
         assert not isinstance(result, VerificationResult)
         assert result.scores == expected
+        assert result.grade is not None
+        assert dict(result.grade.scores) == expected
         with pytest.raises(TypeError):
             result.scores["correctness"] = True  # type: ignore[index]
 

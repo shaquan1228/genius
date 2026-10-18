@@ -18,3 +18,5 @@ val create :
 
 val resolve_resources :
   verifier:t -> resources:Resource_binding.t list -> (t, Validation_failure.t) result
+
+val compare : before:t -> after:t -> Comparison.t

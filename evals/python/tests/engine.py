@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-from inspect_ai.log import read_eval_log
+from inspect_ai.log import EvalSample, read_eval_log
 from inspect_ai.model import ModelName, ModelOutput
 from inspect_ai.scorer import CORRECT, INCORRECT, Target
 from inspect_ai.solver import TaskState
@@ -35,7 +35,7 @@ from kernel import Task, Verification
 
 
 def complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
-    with patch("kernel.Task.grade", wraps=Task.grade) as grading:
+    with patch("kernel.Task.grade_report", wraps=Task.grade_report) as grading:
         logs = _offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
     assert grading.call_count == 16
     expected = [
@@ -57,6 +57,22 @@ def logs_reopen_with_scores_and_model_calls(tmp_path: Path) -> None:
         4,
         {"mockllm/model"},
     )
+
+
+def reopened_log_preserves_native_answer_judgments(tmp_path: Path) -> None:
+    log = _offline_run([baseline()], mode="pass", directory=tmp_path)[0]
+    saved = read_eval_log(str(log.location))
+    assert saved.samples is not None
+    cases = {str(sample.id): sample for sample in saved.samples}
+    _assert_answer_judgments(cases["small-decision"])
+
+
+def _assert_answer_judgments(sample: EvalSample) -> None:
+    assert sample.scores is not None
+    metadata = sample.scores["evaluation"].metadata
+    assert metadata is not None
+    assert metadata["grade"]["answer"]["fields"] == [{"name": "choice", "passed": True}]
+    assert metadata["grade"]["answer"]["text_rule"]["passed"] is True
 
 
 @pytest.mark.parametrize("mode", ["extra", "committed-extra", "instructions", "tampered-checks"])

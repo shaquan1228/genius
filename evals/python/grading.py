@@ -10,9 +10,18 @@ from pydantic import TypeAdapter, validate_call
 from evals.python import datasets
 from evals.python.datasets import Selection
 from evals.python.schema import FROZEN
-from kernel import Completion, Outcome, Response, ResponseField, ResponseValue, Task, Verification
+from kernel import (
+    Completion,
+    Outcome,
+    Response,
+    ResponseField,
+    ResponseValue,
+    Task,
+    TaskGrade,
+    Verification,
+)
 
-__all__ = ["Scores", "score_case"]
+__all__ = ["Scores", "grade_case", "score_case"]
 
 type Scores = Mapping[str, bool]
 UNCHECKED = Verification.Unchecked()
@@ -56,3 +65,20 @@ def score_case(
         outcome=Outcome.create(changed_files=changed_files, verification=verification),
     )
     return MappingProxyType(dict(pairs))
+
+
+@validate_call(config=FROZEN)
+def grade_case(
+    *,
+    case_id: str,
+    response: str,
+    changed_files: tuple[str, ...],
+    verification: Verification.Value = UNCHECKED,
+    selection: Selection = "smoke",
+) -> TaskGrade:
+    """Return native field-level judgments alongside the canonical boolean scores."""
+    return Task.grade_report(
+        task=datasets.record(case_id, selection=selection),
+        response=_parse_response(response),
+        outcome=Outcome.create(changed_files=changed_files, verification=verification),
+    )

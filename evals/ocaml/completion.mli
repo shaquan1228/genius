@@ -4,3 +4,4 @@ val create : ?plain:string -> ?structured:Response.t -> unit -> (t, Validation_f
 [@@python.exclusive]
 
 val trim : text:string -> string
+val compare : before:t -> after:t -> Comparison.t

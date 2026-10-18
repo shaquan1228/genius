@@ -11,7 +11,7 @@ from evals.python.execution import Environment, Runtime
 from evals.python.grading import Scores
 from evals.python.schema import FROZEN
 from evals.python.verification import VerificationResult
-from kernel import Verification
+from kernel import TaskGrade, Verification
 
 __all__ = ["Assessment", "assess"]
 
@@ -20,6 +20,7 @@ __all__ = ["Assessment", "assess"]
 class Assessment:
     evidence: VerificationResult
     scores: Scores
+    grade: TaskGrade | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "scores", MappingProxyType(dict(self.scores)))
@@ -41,13 +42,11 @@ async def assess(
     )
     if isinstance(result.verification, Verification.HarnessError):
         raise RuntimeError(f"Verification harness error: {result.verification.detail}")
-    return Assessment(
-        evidence=result,
-        scores=grading.score_case(
-            case_id=case_id,
-            response=response,
-            changed_files=changed_files,
-            verification=result.verification,
-            selection=selection,
-        ),
+    grade = grading.grade_case(
+        case_id=case_id,
+        response=response,
+        changed_files=changed_files,
+        verification=result.verification,
+        selection=selection,
     )
+    return Assessment(evidence=result, scores=dict(grade.scores), grade=grade)

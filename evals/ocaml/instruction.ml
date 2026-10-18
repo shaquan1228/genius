@@ -15,3 +15,7 @@ let create ~skill ~prompt =
           "Invalid instruction skill"
           [ skill ]))
     { skill; prompt }
+
+let compare ~(before : t) ~(after : t) =
+  Comparison.create
+    ~fields:[ ("skill", before.skill = after.skill); ("prompt", before.prompt = after.prompt) ]

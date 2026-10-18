@@ -10,7 +10,35 @@ import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import assessment
 from evals.python.datasets import Dataset
-from kernel import Task, Verification
+from kernel import RubricGrade, Task, TaskGrade, Verification
+
+
+def answer_details(answer: RubricGrade) -> dict[str, object]:
+    rule = answer.text_rule
+    return {
+        "response_present": answer.response_present,
+        "fields": [{"name": field.name, "passed": field.equal} for field in answer.fields.fields],
+        "text_rule": None
+        if rule is None
+        else {
+            "field": rule.field,
+            "passed": rule.passed,
+            "word_count": rule.word_count,
+            "min_words": rule.min_words,
+            "max_words": rule.max_words,
+        },
+    }
+
+
+def grade_details(grade: TaskGrade | None) -> dict[str, object] | None:
+    if grade is None:
+        return None
+    answer = grade.correctness.answer
+    return {
+        "correctness": grade.correctness.passed,
+        "unexpected_files": list(grade.scope.unexpected_files),
+        "answer": None if answer is None else answer_details(answer),
+    }
 
 
 def score_values(scores: Mapping[str, bool]) -> dict[str, str]:
@@ -55,6 +83,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
             "verifier_metadata": evidence.metadata_json(),
             "changed_files": changed,
             "agent_failure": failure,
+            "grade": grade_details(result.grade),
         },
     )
 

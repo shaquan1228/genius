@@ -19,3 +19,13 @@ let create ?plain ?structured () =
         }
 
 let trim = Text.trim
+
+let compare ~before ~after =
+  let field, equal =
+    match (before, after) with
+    | Plain a, Plain b -> ("text", a.text = b.text)
+    | Structured a, Structured b ->
+        ("response", (Response.compare ~before:a.response ~after:b.response).equal)
+    | Plain _, Structured _ | Structured _, Plain _ -> ("kind", false)
+  in
+  Comparison.create ~fields:[ (field, equal) ]

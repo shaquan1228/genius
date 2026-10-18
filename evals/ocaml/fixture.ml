@@ -23,3 +23,6 @@ let create ~files =
     files
 
 let overlay ~base ~overrides = Files.union (fun _ _ replacement -> Some replacement) base overrides
+
+let compare ~before ~after =
+  Fixture_comparison.create ~before:(files ~fixture:before) ~after:(files ~fixture:after)
