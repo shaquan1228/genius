@@ -5,7 +5,7 @@ from collections.abc import Callable, Sequence
 
 import pytest
 
-from evals.python import datasets, grading
+from evals.python import datasets
 from evals.python.tests.projections import reference as private_reference
 from evals.python.tests.projections import verifier
 from kernel import (
@@ -24,7 +24,6 @@ from kernel import (
     Rubric,
     Task,
     TextRule,
-    Verification,
     Verifier,
 )
 from kernel import (
@@ -203,18 +202,6 @@ def answer_declarations_preserve_typed_completion_fields() -> None:
 def answer_declarations_do_not_supply_executable_checks() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
     assert verifier("external", selection=dataset) is None
-
-
-@pytest.mark.parametrize("code", [True, False])
-def imported_declarations_use_existing_grading(*, code: bool) -> None:
-    dataset = datasets.compile_dataset(cases=(_declaration(code=code),))
-    assert grading.score_case(
-        selection=dataset,
-        case_id="external",
-        response='{"choice":"B","safe":true,"reason":"clear"}',
-        changed_files=("workspace/main.py",),
-        verification=Verification.Passed(),
-    ) == {"correctness": True, "scope": True}
 
 
 def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:

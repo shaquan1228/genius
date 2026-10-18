@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import ValidationError
 
-from evals.python import assessment, evaluation, execution, verification
+from evals.python import evaluation, execution, verification
 from evals.python.evaluation import EvaluationSettings
 from evals.python.execution import Runtime
 from evals.python.paths import EVALS_ROOT
@@ -34,18 +34,8 @@ def runner_entrypoint_validates_before_allocating_sandboxes(
 @pytest.mark.parametrize(
     ("operation", "arguments"),
     [
-        (verification.verify_case, {"case_id": "case", "agent": object(), "runtime": object()}),
-        (
-            assessment.assess,
-            {
-                "case_id": "case",
-                "response": "",
-                "changed_files": (),
-                "agent": object(),
-                "runtime": object(),
-            },
-        ),
-        (verification.validate_reference, {"case_id": "case", "runtime": object()}),
+        (verification.verify, {"checks": None, "agent": object(), "runtime": object()}),
+        (verification.validate_reference, {"task": object(), "runtime": object()}),
         (evaluation.evaluate, {"settings": object()}),
         (evaluation.evaluate, {"settings": {"model": "openai/test"}}),
     ],
@@ -94,22 +84,6 @@ def direct_evaluation_validates_before_sdk_execution(arguments: dict[str, object
     ):
         asyncio.run(execute())
     evaluate.assert_not_called()
-
-
-def public_surface_has_no_legacy_function_aliases() -> None:
-    for name in (
-        "GradeRequest",
-        "RunOverrides",
-        "load_cases",
-        "grade",
-        "VerifyCase",
-        "AssessCase",
-        "ValidateReference",
-        "Evaluate",
-    ):
-        assert not any(
-            hasattr(module, name) for module in (assessment, evaluation, execution, verification)
-        )
 
 
 @pytest.mark.parametrize("provider", ["hf", "local"])

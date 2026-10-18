@@ -1,46 +1,40 @@
 import asyncio
 import json
 import sys
-from typing import assert_never
 
-from evals.python import datasets, grading, verification
-from evals.python.datasets import Dataset
-from evals.python.grading import Scores
-from kernel import Case, Completion, Fixture, Verification
+from evals.python import datasets, verification
+from kernel import Completion, Fixture, Outcome, Task, Verification
 
 
-def response(completion: Completion.Value) -> str:
-    match completion:
-        case Completion.Plain():
-            return completion.text
-        case Completion.Structured():
-            return json.dumps(
-                {field.name: field.value.value for field in completion.response.fields}
-            )
-        case _ as unreachable:
-            assert_never(unreachable)
-
-
-async def validate(case: Case, *, dataset: Dataset) -> bool:
-    reference = datasets.get_reference(case_id=case.id, selection=dataset)
-    result = await verification.validate_reference(case_id=case.id, selection=dataset)
-    scores: Scores = {}
+async def validate(task: Task) -> bool:
+    reference = task.reference
+    result = await verification.validate_reference(task)
+    scores: dict[str, bool] = {}
     if not isinstance(result.verification, Verification.HarnessError):
-        scores = grading.score_case(
-            case_id=case.id,
-            response=response(reference.completion),
-            changed_files=tuple(
-                f"workspace/{file.path}" for file in Fixture.files(fixture=reference.edits)
-            ),
-            verification=result.verification,
-            selection=dataset,
+        candidate = (
+            reference.completion.response
+            if isinstance(reference.completion, Completion.Structured)
+            else None
         )
+        scores = dict(
+            Task.grade(
+                task=task,
+                response=candidate,
+                outcome=Outcome.create(
+                    changed_files=[
+                        f"workspace/{file.path}" for file in Fixture.files(fixture=reference.edits)
+                    ],
+                    verification=result.verification,
+                ),
+            )
+        )
+
     print(
         json.dumps(
             {
-                "id": case.id,
+                "id": task.id,
                 "verification": type(result.verification).__name__.lower(),
-                "scores": dict(scores),
+                "scores": scores,
             }
         )
     )
@@ -51,9 +45,7 @@ async def validate(case: Case, *, dataset: Dataset) -> bool:
 
 async def main() -> int:
     dataset = datasets.load_dataset()
-    results = [
-        await validate(case, dataset=dataset) for case in datasets.list_cases(selection=dataset)
-    ]
+    results = [await validate(task) for task in dataset.records.values()]
     return int(not all(results))
 
 

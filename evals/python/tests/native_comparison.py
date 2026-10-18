@@ -2,7 +2,7 @@ from typing import cast
 
 import pytest
 
-from evals.python import grading
+from evals.python import datasets
 from evals.python.integrations.inspect import scoring
 from evals.python.tests.native_kernel import _answer
 from kernel import Assessment as NativeAssessment
@@ -183,24 +183,15 @@ def named_composition_rejects_ambiguous_checks(names: tuple[str, ...]) -> None:
         NativeAssessment.all(checks=[(name, yes) for name in names])
 
 
-def decoding_boundary_returns_one_native_assessment() -> None:
-    response = '{"choice":"A","reason":"Cheap"}'
-    changed = ("workspace/unexpected.txt",)
-    result = grading.assess_case(case_id="small-decision", response=response, changed_files=changed)
-    assert dict(NativeAssessment.scores(assessment=result)) == grading.score_case(
-        case_id="small-decision", response=response, changed_files=changed
-    )
-    assert not NativeAssessment.passed(assessment=result)
-
-
 @pytest.mark.parametrize("case_id", ["clear-task", "small-decision"])
 def harness_failures_are_errors_for_every_criterion(case_id: str) -> None:
     with pytest.raises(GradingError, match="offline"):
-        grading.assess_case(
-            case_id=case_id,
-            response="",
-            changed_files=(),
-            verification=Verification.HarnessError(detail="offline"),
+        Task.assess(
+            task=datasets.record(case_id, selection="smoke"),
+            response=None,
+            outcome=Outcome.create(
+                changed_files=(), verification=Verification.HarnessError(detail="offline")
+            ),
         )
 
 

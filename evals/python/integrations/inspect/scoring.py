@@ -1,17 +1,53 @@
-from collections.abc import Mapping
+import json
+from collections.abc import Sequence
+from contextlib import suppress
 from functools import partial, wraps
 from typing import assert_never, cast
 
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer, stderr
 from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
+from pydantic import ConfigDict, TypeAdapter
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import assessment
+from evals.python import datasets, verification
 from evals.python.datasets import Dataset
 from kernel import Assessment as NativeAssessment
-from kernel import Evidence, ResponseValue, Task, Verification
+from kernel import (
+    Completion,
+    Evidence,
+    Outcome,
+    Response,
+    ResponseField,
+    ResponseValue,
+    Task,
+    Verification,
+)
+
+_RESPONSE_FIELDS = TypeAdapter(dict[str, str | bool], config=ConfigDict(strict=True))
+
+
+def decode_response(text: str) -> Response | None:
+    text = Completion.trim(text=text)
+    if text.startswith("```json\n") and text.endswith("\n```"):
+        text = text[8:-4]
+    with suppress(ValueError, RecursionError):
+        fields = _RESPONSE_FIELDS.validate_python(json.loads(text))
+        return Response.create(
+            fields=[
+                ResponseField.create(
+                    name=name,
+                    value=(
+                        ResponseValue.create(bool=value)
+                        if isinstance(value, bool)
+                        else ResponseValue.create(string=value)
+                    ),
+                )
+                for name, value in fields.items()
+            ]
+        )
+    return None
 
 
 def response_value(value: ResponseValue.Value | None) -> str | bool | None:
@@ -61,8 +97,8 @@ def assessment_details(value: NativeAssessment.Value) -> dict[str, object]:
     return result
 
 
-def score_values(scores: Mapping[str, bool]) -> dict[str, str]:
-    return {name: CORRECT if passed else INCORRECT for name, passed in scores.items()}
+def score_values(scores: Sequence[tuple[str, bool]]) -> dict[str, str]:
+    return {name: CORRECT if passed else INCORRECT for name, passed in scores}
 
 
 def with_failure(explanation: str, *, failure: str | None) -> str:
@@ -78,22 +114,27 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
     completion = state.output.completion
     changed = tuple(sorted(await workspace_adapter.changed_files(state)))
     current = sandbox()
-    result = await assessment.assess(
-        case_id=str(state.metadata["case_id"]),
-        response=completion,
-        changed_files=changed,
+    selected = datasets.load_dataset(
         selection=dataset
         if dataset is not None
-        else cast(str, state.metadata.get("dataset", "smoke")),
+        else cast(str, state.metadata.get("dataset", "smoke"))
+    )
+    task = selected.records[str(state.metadata["case_id"])]
+    evidence = await verification.verify(
+        Task.verifier(task=task),
         agent=environments_adapter.environment(current),
         runtime=environments_adapter.runtime(current),
     )
-    evidence = result.evidence
+    result = Task.assess(
+        task=task,
+        response=decode_response(completion),
+        outcome=Outcome.create(changed_files=changed, verification=evidence.verification),
+    )
     explanation = (
         completion if isinstance(evidence.verification, Verification.Unchecked) else evidence.detail
     )
     return Score(
-        value=score_values(result.scores),
+        value=score_values(NativeAssessment.scores(assessment=result)),
         explanation=with_failure(explanation, failure=failure),
         metadata={
             "verification": {
@@ -103,7 +144,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
             "verifier_metadata": evidence.metadata_json(),
             "changed_files": changed,
             "agent_failure": failure,
-            "assessment": assessment_details(result.assessment),
+            "assessment": assessment_details(result),
         },
     )
 

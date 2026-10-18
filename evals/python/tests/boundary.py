@@ -1,7 +1,6 @@
 """Enforce the concern and integration dependency seams."""
 
 import ast
-import inspect
 import os
 import re
 import subprocess
@@ -31,9 +30,7 @@ PUBLIC_OPERATIONS = {
         "list_cases",
         "load_dataset",
     },
-    "grading": {"assess_case", "score_case"},
-    "verification": {"verify_case", "validate_reference"},
-    "assessment": {"assess"},
+    "verification": {"verify", "validate_reference"},
     "execution": {"create_runtime"},
     "evaluation": {
         "evaluate",
@@ -51,9 +48,7 @@ PUBLIC_OPERATIONS = {
 OWNER_TYPES = {
     "schema": {"DatasetInfo", "FileName", "Files", "Attributes", "Identifier"},
     "datasets": {"Dataset", "Selection", "DatasetProvenance"},
-    "grading": {"Scores"},
     "verification": {"Diagnostic", "VerificationResult"},
-    "assessment": {"AssessmentResult"},
     "execution": {"Execution", "Completion", "Environment", "Runtime", "Cleanup"},
     "evaluation": {"EvaluationSettings", "ModelPricing", "InstructionDelivery", "VariantSettings"},
     "comparison": {
@@ -107,9 +102,7 @@ def core_cannot_import_integrations_or_sdks() -> None:
         for file in (
             "schema.py",
             "datasets/__init__.py",
-            "grading.py",
             "verification.py",
-            "assessment.py",
         )
         for name in _imported(PYTHON_ROOT / file)
     }
@@ -162,22 +155,6 @@ def public_operations_use_native_calls_without_a_transport_layer(owner: str) -> 
     assert "subprocess" not in _imported(path)
     assert not (PYTHON_ROOT / "kernel/build.py").exists()
     assert "subprocess" not in _imported(PYTHON_ROOT / "kernel/__init__.py")
-
-
-@pytest.mark.parametrize(
-    ("owner", "name"),
-    [
-        ("datasets", "list_cases"),
-        ("grading", "score_case"),
-        ("verification", "verify_case"),
-        ("verification", "validate_reference"),
-        ("assessment", "assess"),
-    ],
-)
-def public_operations_carry_dataset_selection(owner: str, *, name: str) -> None:
-    operation = getattr(import_module(f"evals.python.{owner}"), name)
-    parameter = inspect.signature(operation).parameters["selection"]
-    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
 
 
 @pytest.mark.parametrize("path", sorted(OCAML_ROOT.glob("*.mli")))
@@ -287,13 +264,10 @@ def _check_owner_access(path: Path) -> None:
 @pytest.mark.parametrize(
     ("source", "accepted"),
     [
-        ("import evals.python.verification as v\nv.verify_case()", False),
-        ("from evals.python import verification as v\nv.verify()", False),
-        ("from evals.python import verification as v\nv.verify_case()", True),
+        ("import evals.python.verification as v\nv.verify()", False),
+        ("from evals.python import verification as v\nv.verify()", True),
         ("from evals.python import execution as e\ne.Runtime()", False),
         ("from evals.python.execution import Runtime", True),
-        ("from evals.python import grading as g\ng.score()", False),
-        ("from evals.python import grading as g\ng.score_case()", True),
         ("from evals.python import datasets as d\nd.record()", False),
     ],
 )
@@ -323,15 +297,12 @@ def public_concerns_export_only_their_operations_and_types(owner: str) -> None:
     assert set(module.__all__) == PUBLIC_NAMES[owner]
 
 
-@pytest.mark.parametrize("filename", ["schema.py", "datasets/__init__.py", "grading.py"])
+@pytest.mark.parametrize("filename", ["schema.py", "datasets/__init__.py"])
 def query_concerns_do_not_import_execution_workflows(filename: str) -> None:
     imports = _imported(PYTHON_ROOT / filename)
     assert not any(
         name.startswith(
-            tuple(
-                f"evals.python.{owner}"
-                for owner in ("assessment", "execution", "evaluation", "verification")
-            )
+            tuple(f"evals.python.{owner}" for owner in ("execution", "evaluation", "verification"))
         )
         for name in imports
     )
@@ -353,7 +324,7 @@ def public_concerns_have_no_direct_sdk_imports() -> None:
 def query_concerns_do_not_compose_execution_adapters() -> None:
     assert not any(
         name.startswith("evals.python.integrations")
-        for filename in ("datasets/__init__.py", "grading.py")
+        for filename in ("datasets/__init__.py",)
         for name in _imported(PYTHON_ROOT / filename)
     )
 
@@ -375,8 +346,8 @@ def integrations_import_public_namespaces_or_owned_types(path: Path) -> None:
 
 
 def case_query_does_not_load_runner_sdks() -> None:
-    script = """from evals.python import assessment, datasets, evaluation
-from evals.python import execution, grading, verification
+    script = """from evals.python import datasets, evaluation
+from evals.python import execution, verification
 import sys
 assert datasets.list_cases()
 assert not {'inspect_ai', 'inspect_swe', 'huggingface_hub'}.intersection(sys.modules)

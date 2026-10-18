@@ -1,7 +1,6 @@
 """Exercise stable values across new datasets and interchangeable execution adapters."""
 
 from collections.abc import Callable
-from functools import partial
 from pathlib import Path
 from typing import cast
 from unittest.mock import patch
@@ -12,14 +11,12 @@ from pydantic import ValidationError
 from evals.python import datasets, evaluation
 from evals.python.datasets import Dataset
 from evals.python.evaluation import resolve_settings
-from evals.python.grading import Scores, score_case
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.tasks import build_task
-from evals.python.tests.declarations import _reference_text
-from evals.python.tests.projections import reference, verifier
+from evals.python.tests.projections import reference
 from evals.python.tests.support import choice_case as _choice_case
-from kernel import Case, Experiment, File, Fixture, Task, Verification
+from kernel import Case, Experiment, File, Fixture
 from kernel import ValidationError as DomainValidationError
 
 
@@ -31,16 +28,6 @@ def third_dataset(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Dataset
     )
     monkeypatch.setattr(datasets, "__path__", [str(tmp_path), *datasets.__path__])
     return datasets.load_dataset(selection="third")
-
-
-def _third_grade(*, case_id: str = "third-case", selection: Dataset) -> Scores:
-    return score_case(
-        case_id=case_id,
-        selection=selection,
-        response='{"choice":"A","reason":"Less"}',
-        changed_files=(),
-        verification=Verification.Unchecked(),
-    )
 
 
 def third_dataset_requires_only_python_declarations(third_dataset: Dataset) -> None:
@@ -56,10 +43,6 @@ def third_dataset_requires_only_python_declarations(third_dataset: Dataset) -> N
         provenance=datasets.get_provenance(selection=third_dataset),
     )
     assert task.dataset[0].id == "third-case"
-    assert _third_grade(selection=third_dataset) == {
-        "correctness": True,
-        "scope": True,
-    }
 
 
 def default_sandbox_is_local() -> None:
@@ -73,14 +56,6 @@ def default_sandbox_is_local() -> None:
     )
     assert task.sandbox is not None
     assert task.sandbox.type == "local"
-
-
-def third_dataset_imports_and_grades_records(third_dataset: Dataset) -> None:
-    imported = datasets.compile_dataset(cases=(_choice_case(case_id="new-case", a=1, b=2),))
-    with patch.object(datasets, "load_dataset", return_value=imported):
-        assert _third_grade(case_id="new-case", selection=third_dataset)["correctness"]
-        assert _reference_text(reference("new-case", selection=imported))
-        assert verifier("new-case", selection=imported) is None
 
 
 def public_projection_contains_no_private_material() -> None:
@@ -166,25 +141,3 @@ def typed_dataset_compilation_rejects_duplicate_ids() -> None:
     records = (_choice_case(case_id="duplicate", a=1, b=2),) * 2
     with pytest.raises(ValueError, match="unique"):
         datasets.compile_dataset(cases=records)
-
-
-def verifier_projection_and_grading_use_native_values() -> None:
-    case_id = "clear-task"
-    checks = verifier(case_id)
-    grade = partial(
-        score_case,
-        case_id=case_id,
-        response="",
-        changed_files=(),
-        verification=Verification.Passed(),
-    )
-    with (
-        patch.object(Task, "verifier", wraps=Task.verifier) as projection,
-        patch.object(Task, "assess", wraps=Task.assess) as kernel_grade,
-    ):
-        projected = verifier(case_id)
-        assert projected is not None
-        assert checks is not None
-        projection.assert_called_once_with(task=datasets.record(case_id, selection="smoke"))
-        assert (grade()["correctness"], grade()["correctness"]) == (True, True)
-        assert (projected.stdin, kernel_grade.call_count) == (checks.stdin, 2)

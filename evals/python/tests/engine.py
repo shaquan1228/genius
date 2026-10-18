@@ -1,6 +1,5 @@
 """Check Inspect scoring, repeated runs, and saved logs."""
 
-import asyncio
 import subprocess
 import sys
 from dataclasses import replace
@@ -9,14 +8,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 from inspect_ai.log import EvalSample, read_eval_log
-from inspect_ai.model import ModelName, ModelOutput
-from inspect_ai.scorer import CORRECT, INCORRECT, Target
-from inspect_ai.solver import TaskState
+from inspect_ai.scorer import CORRECT, INCORRECT
 
-from evals.python import assessment as assessment_api
-from evals.python import grading as grading_api
-from evals.python.assessment import AssessmentResult
-from evals.python.integrations.inspect import environments, scoring, workspace
 from evals.python.integrations.inspect.agents import AGENT_REGISTRY
 from evals.python.integrations.inspect.tasks import baseline, genius
 from evals.python.tests.scenarios import Mode
@@ -30,15 +23,12 @@ from evals.python.tests.support import (
 from evals.python.tests.support import (
     results as _results,
 )
-from evals.python.tests.verification import _agent_port, _grader_port, _runtime_port
 from evals.python.verification import VerificationResult
-from kernel import Task, Verification
+from kernel import Verification
 
 
 def complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
-    with patch("kernel.Task.assess", wraps=Task.assess) as grading:
-        logs = _offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
-    assert grading.call_count == 16
+    logs = _offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
     expected = [
         (case, CORRECT, CORRECT)
         for case in ["clear-task", "known-preflight", "small-decision", "decision-review"]
@@ -158,62 +148,6 @@ def verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
     assert "grader failed to import" in log.error.message
 
 
-def scorer_maps_sdk_observation_to_public_assessment() -> None:
-
-    state = TaskState(
-        model=ModelName("mockllm/model"),
-        sample_id="sdk-id",
-        epoch=1,
-        input="task",
-        messages=[],
-        metadata={"case_id": "clear-task", "dataset": "smoke"},
-    )
-    state.output = ModelOutput.from_content("mockllm/model", "observed answer")
-    agent, runtime = _agent_port(), _runtime_port(_grader_port())
-    assessment = AssessmentResult(
-        evidence=VerificationResult(
-            verification=Verification.Passed(),
-            detail="canonical evidence",
-            metadata={"nested": {"items": (True, None, 4.2)}},
-        ),
-        assessment=grading_api.assess_case(
-            case_id="clear-task",
-            response="",
-            changed_files=("workspace/unexpected.txt",),
-            verification=Verification.Passed(),
-        ),
-    )
-    with (
-        patch.object(workspace, "changed_files", return_value={"b.ml", "a.ml"}),
-        patch.object(scoring, "sandbox"),
-        patch.object(environments, "environment", return_value=agent),
-        patch.object(environments, "runtime", return_value=runtime),
-        patch.object(assessment_api, "assess", return_value=assessment) as execute,
-    ):
-        score = asyncio.run(scoring.score_sample(state, Target([""])))
-    assert score.metadata is not None
-    assert (
-        execute.call_args.kwargs,
-        score.value,
-        score.explanation,
-        score.metadata["verifier_metadata"],
-        assessment.evidence.metadata,
-    ) == (
-        {
-            "case_id": "clear-task",
-            "response": "observed answer",
-            "changed_files": ("a.ml", "b.ml"),
-            "selection": "smoke",
-            "agent": agent,
-            "runtime": runtime,
-        },
-        {"correctness": CORRECT, "scope": INCORRECT},
-        "canonical evidence",
-        {"nested": {"items": [True, None, 4.2]}},
-        {"nested": {"items": (True, None, 4.2)}},
-    )
-
-
 def extended_native_contract_drives_fresh_inspect_registration() -> None:
     result = subprocess.run(
         [
@@ -223,7 +157,6 @@ def extended_native_contract_drives_fresh_inspect_registration() -> None:
 from unittest.mock import patch
 from kernel import Assessment, Response, Task
 with patch.object(Task, "required_scores", ["correctness", "scope", "extension"]):
-    from evals.python import grading
     from evals.python.integrations.inspect import completeness, scoring
     from inspect_ai.scorer._scorer import scorer_metrics
     from inspect_ai.scorer import CORRECT, INCORRECT
@@ -237,8 +170,7 @@ with patch.object(Task, "required_scores", ["correctness", "scope", "extension"]
     yes = Assessment.present(response=Response.empty)
     no = Assessment.present(response=None)
     result = Assessment.all(checks=[("correctness", yes), ("scope", no), ("extension", yes)])
-    with patch.object(Task, "assess", return_value=result):
-        scores = grading.score_case(case_id="small-decision", response="{}", changed_files=())
+    scores = Assessment.scores(assessment=result)
     assert scoring.score_values(scores) == encoded
 """,
         ],

@@ -9,8 +9,7 @@ from typing import Literal, assert_never
 from pydantic import BaseModel, ConfigDict
 
 from evals.python import datasets, verification
-from evals.python.datasets import Dataset
-from kernel import Case
+from kernel import Task
 
 
 class BenchmarkInfo(BaseModel):
@@ -33,10 +32,10 @@ def benchmark_info() -> BenchmarkInfo:
     )
 
 
-async def validate_case(case: Case, *, dataset: Dataset) -> dict[str, object]:
-    result = await verification.validate_reference(case_id=case.id, selection=dataset)
+async def validate_case(task: Task) -> dict[str, object]:
+    result = await verification.validate_reference(task)
     return {
-        "case_id": case.id,
+        "case_id": task.id,
         "status": type(result.verification).__name__.lower(),
         "detail": result.detail,
         "metadata": result.metadata_json(),
@@ -62,8 +61,8 @@ def validate(arguments: Options) -> int:
         raise ValueError("--limit must be positive")
     dataset = datasets.load_dataset(selection="humanevalplus")
     results = [
-        asyncio.run(validate_case(case=case, dataset=dataset))
-        for case in datasets.list_cases(selection=dataset)[: arguments.limit]
+        asyncio.run(validate_case(task))
+        for task in list(dataset.records.values())[: arguments.limit]
     ]
     print(json.dumps({"provenance": benchmark_info().model_dump(), "results": results}, indent=2))
     return int(any(result["status"] != "passed" for result in results))
