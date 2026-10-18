@@ -5,8 +5,8 @@ import pytest
 from evals.python import datasets
 from evals.python.integrations.inspect import scoring
 from evals.python.tests.native_kernel import _answer
-from kernel import Assessment as NativeAssessment
 from kernel import (
+    Assessment,
     Completion,
     Criterion,
     Fixture,
@@ -22,9 +22,9 @@ from kernel import (
     Task,
     TaskComparison,
     TextRule,
+    ValidationError,
     Verification,
 )
-from kernel import ValidationError as NativeValidationError
 
 
 def _response(*, choice: str = "B", reason: str = "One reason") -> Response:
@@ -127,7 +127,7 @@ def composed_answer_retains_field_and_text_evidence(
     rubric = Rubric.create(
         expected=expected, text_rule=TextRule.create(field="reason", min_words=1, max_words=3)
     )
-    result = NativeAssessment.criterion(
+    result = Assessment.criterion(
         criterion=Criterion.create(answer=rubric),
         response=response,
         verification=Verification.Unchecked(),
@@ -135,7 +135,7 @@ def composed_answer_retains_field_and_text_evidence(
     details = scoring.assessment_details(result)
     checks = cast(dict[str, dict[str, object]], details["checks"])
     assert (
-        NativeAssessment.passed(assessment=result),
+        Assessment.passed(assessment=result),
         checks["response"]["response_present"],
         checks["text"]["word_count"],
     ) == (passed, present, words)
@@ -147,40 +147,38 @@ def assessment_and_legacy_scores_agree() -> None:
         changed_files=["workspace/unexpected.txt"], verification=Verification.Unchecked()
     )
     result = Task.assess(task=task, response=expected, outcome=outcome)
-    assert isinstance(result, NativeAssessment.All)
-    assert tuple(NativeAssessment.unexpected_files(assessment=result)) == (
-        "workspace/unexpected.txt",
-    )
+    assert isinstance(result, Assessment.All)
+    assert tuple(Assessment.unexpected_files(assessment=result)) == ("workspace/unexpected.txt",)
     assert (
-        dict(NativeAssessment.scores(assessment=result))
+        dict(Assessment.scores(assessment=result))
         == dict(Task.grade(task=task, response=expected, outcome=outcome))
         == {"correctness": True, "scope": False}
     )
 
 
 def nested_assessments_retain_both_success_and_failure() -> None:
-    yes = NativeAssessment.present(response=Response.empty)
-    no = NativeAssessment.present(response=None)
-    child = NativeAssessment.all(checks=[("bad", no), ("good", yes)])
-    root = NativeAssessment.all(checks=[("correctness", child), ("scope", yes)])
-    assert isinstance(child, NativeAssessment.All)
+    yes = Assessment.present(response=Response.empty)
+    no = Assessment.present(response=None)
+    child = Assessment.all(checks=[("bad", no), ("good", yes)])
+    root = Assessment.all(checks=[("correctness", child), ("scope", yes)])
+    assert isinstance(child, Assessment.All)
     assert [name for name, _ in child.checks] == ["bad", "good"]
-    assert dict(NativeAssessment.scores(assessment=root)) == {"correctness": False, "scope": True}
+    assert dict(Assessment.scores(assessment=root)) == {"correctness": False, "scope": True}
 
 
 def conjunction_identity_and_single_check_projection() -> None:
-    empty = NativeAssessment.all(checks=[])
-    yes = NativeAssessment.present(response=Response.empty)
-    assert NativeAssessment.passed(assessment=empty)
-    assert tuple(NativeAssessment.scores(assessment=empty)) == ()
-    assert dict(NativeAssessment.scores(assessment=yes)) == {"passed": True}
+    empty = Assessment.all(checks=[])
+    yes = Assessment.present(response=Response.empty)
+    assert Assessment.passed(assessment=empty)
+    assert tuple(Assessment.scores(assessment=empty)) == ()
+    assert dict(Assessment.scores(assessment=yes)) == {"passed": True}
 
 
 @pytest.mark.parametrize("names", [("",), ("same", "same")])
 def named_composition_rejects_ambiguous_checks(names: tuple[str, ...]) -> None:
-    yes = NativeAssessment.present(response=Response.empty)
-    with pytest.raises(NativeValidationError, match="unique, nonempty"):
-        NativeAssessment.all(checks=[(name, yes) for name in names])
+    yes = Assessment.present(response=Response.empty)
+    with pytest.raises(ValidationError, match="unique, nonempty"):
+        Assessment.all(checks=[(name, yes) for name in names])
 
 
 @pytest.mark.parametrize("case_id", ["clear-task", "small-decision"])
@@ -197,10 +195,10 @@ def harness_failures_are_errors_for_every_criterion(case_id: str) -> None:
 
 def text_assessment_preserves_wrong_value_type() -> None:
     value = ResponseValue.create(bool=True)
-    result = NativeAssessment.text(
+    result = Assessment.text(
         rule=TextRule.create(field="reason", min_words=0, max_words=3), value=value
     )
-    assert not NativeAssessment.passed(assessment=result)
+    assert not Assessment.passed(assessment=result)
     assert scoring.assessment_details(result) == {
         "passed": False,
         "field": "reason",
@@ -212,12 +210,12 @@ def text_assessment_preserves_wrong_value_type() -> None:
 
 
 def scope_evidence_is_derived_from_the_same_composition() -> None:
-    first = NativeAssessment.scope(allowed_files=[], changed_files=["a", "a"])
-    root = NativeAssessment.all(checks=[("first", first), ("second", first)])
-    assert tuple(NativeAssessment.unexpected_files(assessment=root)) == ("a",)
+    first = Assessment.scope(allowed_files=[], changed_files=["a", "a"])
+    root = Assessment.all(checks=[("first", first), ("second", first)])
+    assert tuple(Assessment.unexpected_files(assessment=root)) == ("a",)
     assert scoring.assessment_details(first) == {"passed": False, "unexpected_files": ["a"]}
 
 
 def code_assessment_serializes_the_verified_outcome() -> None:
-    result = NativeAssessment.verified(verification=Verification.Passed())
+    result = Assessment.verified(verification=Verification.Passed())
     assert scoring.assessment_details(result) == {"passed": True, "verification": "passed"}

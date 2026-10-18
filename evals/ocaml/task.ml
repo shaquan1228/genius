@@ -3,6 +3,34 @@
    represents a benchmark sample with its query, expected outputs, and task metadata.
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
    https://huggingface.co/docs/lighteval/v0.13.0/package_reference/doc *)
+module Component_comparison = Comparison
+
+module Comparison = struct
+  type t = {
+    equal : bool;
+    id : Comparison.t;
+    fixture : Fixture_comparison.t;
+    instruction : Comparison.t;
+    criterion : Comparison.t;
+    allowed_files : Comparison.t;
+    reference : Comparison.t;
+  }
+
+  let create ~(id : Comparison.t) ~(fixture : Fixture_comparison.t) ~(instruction : Comparison.t)
+      ~(criterion : Comparison.t) ~(allowed_files : Comparison.t) ~(reference : Comparison.t) =
+    {
+      equal =
+        id.equal && fixture.equal && instruction.equal && criterion.equal && allowed_files.equal
+        && reference.equal;
+      id;
+      fixture;
+      instruction;
+      criterion;
+      allowed_files;
+      reference;
+    }
+end
+
 type t = {
   id : string;
   fixture : Fixture.t;
@@ -83,13 +111,13 @@ let verifier ~(task : t) =
   | Criterion.Answer _ -> None
 
 let compare ~(before : t) ~(after : t) =
-  Task_comparison.create
-    ~id:(Comparison.create ~fields:[ ("id", before.id = after.id) ])
+  Comparison.create
+    ~id:(Component_comparison.create ~fields:[ ("id", before.id = after.id) ])
     ~fixture:(Fixture.compare ~before:before.fixture ~after:after.fixture)
     ~instruction:(Instruction.compare ~before:before.instruction ~after:after.instruction)
     ~criterion:(Criterion.compare ~before:before.criterion ~after:after.criterion)
     ~allowed_files:
-      (Comparison.create
+      (Component_comparison.create
          ~fields:
            [
              ( "allowed_files",

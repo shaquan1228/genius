@@ -14,7 +14,7 @@ Content = _native.Content.t
 Criterion = _native.Criterion.t
 Evidence = _native.Assessment.evidence
 Experiment = _named(constructor=_native.Experiment.t)
-FieldComparison = _named(constructor=_native.Response_comparison.field_comparison)
+FieldComparison = _named(constructor=_native.Response.Comparison.field_comparison)
 File = _named(constructor=_native.File.t)
 Fixture = _native.Fixture.t
 FixtureComparison = _named(constructor=_native.Fixture_comparison.t)
@@ -26,13 +26,13 @@ Profile = _named(constructor=_native.Profile.t)
 Reference = _named(constructor=_native.Reference.t)
 ResourceBinding = _named(constructor=_native.Resource_binding.t)
 Response = _named(constructor=_native.Response.t)
-ResponseComparison = _named(constructor=_native.Response_comparison.t)
+ResponseComparison = _named(constructor=_native.Response.Comparison.t)
 ResponseField = _named(constructor=_native.Response_field.t)
 ResponseValue = _native.Response_value.t
 Rubric = _named(constructor=_native.Rubric.t)
 Score = _native.Score.t
 Task = _named(constructor=_native.Task.t)
-TaskComparison = _named(constructor=_native.Task_comparison.t)
+TaskComparison = _named(constructor=_native.Task.Comparison.t)
 TextRule = _named(constructor=_native.Text_rule.t)
 ValidationCode = _native.Validation_code.t
 ValidationFailure = _named(constructor=_native.Validation_failure.t)
@@ -122,13 +122,6 @@ ResponseField.create = staticmethod(
         failure="validation_failure",
     )
 )
-ResponseComparison.create = staticmethod(
-    _bind(
-        operation=_native.Response_comparison.create,
-        arguments={"before": False, "after": False},
-        failure=None,
-    )
-)
 Response.create = staticmethod(
     _bind(
         operation=_native.Response.create, arguments={"fields": False}, failure="validation_failure"
@@ -138,6 +131,13 @@ Response.empty = _native.Response.empty
 Response.compare = staticmethod(
     _bind(
         operation=_native.Response.compare,
+        arguments={"before": False, "after": False},
+        failure=None,
+    )
+)
+ResponseComparison.create = staticmethod(
+    _bind(
+        operation=_native.Response.Comparison.create,
         arguments={"before": False, "after": False},
         failure=None,
     )
@@ -266,20 +266,6 @@ FixtureComparison.create = staticmethod(
     )
 )
 Kernel.current = _native.Kernel.current
-TaskComparison.create = staticmethod(
-    _bind(
-        operation=_native.Task_comparison.create,
-        arguments={
-            "id": False,
-            "fixture": False,
-            "instruction": False,
-            "criterion": False,
-            "allowed_files": False,
-            "reference": False,
-        },
-        failure=None,
-    )
-)
 TextRule.create = staticmethod(
     _bind(
         operation=_native.Text_rule.create,
@@ -505,6 +491,20 @@ Task.assess = staticmethod(
         operation=_native.Task.assess,
         arguments={"task": False, "response": False, "outcome": False},
         failure="grading_failure",
+    )
+)
+TaskComparison.create = staticmethod(
+    _bind(
+        operation=_native.Task.Comparison.create,
+        arguments={
+            "id": False,
+            "fixture": False,
+            "instruction": False,
+            "criterion": False,
+            "allowed_files": False,
+            "reference": False,
+        },
+        failure=None,
     )
 )
 Case.create = staticmethod(

@@ -13,8 +13,8 @@ import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import datasets, verification
 from evals.python.datasets import Dataset
-from kernel import Assessment as NativeAssessment
 from kernel import (
+    Assessment,
     Completion,
     Evidence,
     Outcome,
@@ -54,7 +54,7 @@ def response_value(value: ResponseValue.Value | None) -> str | bool | None:
     return None if value is None else value.value
 
 
-def evidence_details(check: NativeAssessment.Check) -> dict[str, object]:
+def evidence_details(check: Assessment.Check) -> dict[str, object]:
     evidence = check.evidence
     match evidence:
         case Evidence.Present():
@@ -68,7 +68,7 @@ def evidence_details(check: NativeAssessment.Check) -> dict[str, object]:
             return {
                 "field": evidence.rule.field,
                 "actual": response_value(evidence.value),
-                "word_count": NativeAssessment.word_count(value=evidence.value),
+                "word_count": Assessment.word_count(value=evidence.value),
                 "min_words": evidence.rule.min_words,
                 "max_words": evidence.rule.max_words,
             }
@@ -77,20 +77,20 @@ def evidence_details(check: NativeAssessment.Check) -> dict[str, object]:
 
 
 def execution_details(
-    evidence: Evidence.Verified | Evidence.Scope, *, check: NativeAssessment.Check
+    evidence: Evidence.Verified | Evidence.Scope, *, check: Assessment.Check
 ) -> dict[str, object]:
     match evidence:
         case Evidence.Verified():
             return {"verification": type(evidence.verification).__name__.lower()}
         case Evidence.Scope():
-            return {"unexpected_files": list(NativeAssessment.unexpected_files(assessment=check))}
+            return {"unexpected_files": list(Assessment.unexpected_files(assessment=check))}
         case _ as unreachable:
             assert_never(unreachable)
 
 
-def assessment_details(value: NativeAssessment.Value) -> dict[str, object]:
-    result: dict[str, object] = {"passed": NativeAssessment.passed(assessment=value)}
-    if isinstance(value, NativeAssessment.All):
+def assessment_details(value: Assessment.Value) -> dict[str, object]:
+    result: dict[str, object] = {"passed": Assessment.passed(assessment=value)}
+    if isinstance(value, Assessment.All):
         result["checks"] = {name: assessment_details(check) for name, check in value.checks}
     else:
         result.update(evidence_details(value))
@@ -134,7 +134,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
         completion if isinstance(evidence.verification, Verification.Unchecked) else evidence.detail
     )
     return Score(
-        value=score_values(NativeAssessment.scores(assessment=result)),
+        value=score_values(Assessment.scores(assessment=result)),
         explanation=with_failure(explanation, failure=failure),
         metadata={
             "verification": {

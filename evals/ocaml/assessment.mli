@@ -5,7 +5,7 @@
    https://developers.openai.com/api/docs/guides/graders *)
 type evidence = private
   | Present of { response : Response.t option }
-  | Field of { comparison : Response_comparison.field_comparison }
+  | Field of { comparison : Response.Comparison.field_comparison }
   | Text of { rule : Text_rule.t; value : Response_value.t option }
   | Verified of { verification : Verification.t }
   | Scope of { allowed_files : string list; changed_files : string list }
@@ -13,7 +13,7 @@ type evidence = private
 type t = private Check of { evidence : evidence } | All of { checks : (string * t) list }
 
 val present : response:Response.t option -> t
-val field : comparison:Response_comparison.field_comparison -> t
+val field : comparison:Response.Comparison.field_comparison -> t
 val text : rule:Text_rule.t -> value:Response_value.t option -> t
 val verified : verification:Verification.t -> (t, Grading_failure.t) result
 val scope : allowed_files:string list -> changed_files:string list -> t

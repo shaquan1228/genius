@@ -5,7 +5,7 @@
    https://developers.openai.com/api/docs/guides/graders *)
 type evidence =
   | Present of { response : Response.t option }
-  | Field of { comparison : Response_comparison.field_comparison }
+  | Field of { comparison : Response.Comparison.field_comparison }
   | Text of { rule : Text_rule.t; value : Response_value.t option }
   | Verified of { verification : Verification.t }
   | Scope of { allowed_files : string list; changed_files : string list }
@@ -90,10 +90,10 @@ let rubric ~(rubric : Rubric.t) ~(response : Response.t option) =
         ( List.filter (fun (field : Response_field.t) -> field.name <> rule.field) actual,
           [ ("text", text ~rule ~value) ] )
   in
-  let comparison = Response_comparison.create ~before:rubric.expected.fields ~after:exact in
+  let comparison = Response.Comparison.create ~before:rubric.expected.fields ~after:exact in
   let fields =
     List.map
-      (fun (comparison : Response_comparison.field_comparison) ->
+      (fun (comparison : Response.Comparison.field_comparison) ->
         (comparison.name, field ~comparison))
       comparison.fields
   in

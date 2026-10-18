@@ -349,7 +349,12 @@ def declarations(modules: list[Node]) -> list[Node]:
         if result.get("kind") == "name":
             name = str(result["name"])
             parts = tuple(name.split("."))
-            candidates = [(root, *path[:length], *parts) for length in range(len(path), -1, -1)]
+            # A module's own name still refers to its outer namesake inside its body.
+            candidates = [
+                (root, *path[:length], *parts)
+                for length in range(len(path), -1, -1)
+                if length == len(path) or parts[0] != path[length]
+            ]
             candidates.append(parts)
             resolved = next((symbols[key] for key in candidates if key in symbols), None)
             if resolved is not None:

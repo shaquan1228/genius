@@ -3,6 +3,27 @@
    represents a benchmark sample with its query, expected outputs, and task metadata.
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
    https://huggingface.co/docs/lighteval/v0.13.0/package_reference/doc *)
+module Comparison : sig
+  type t = private {
+    equal : bool;
+    id : Comparison.t;
+    fixture : Fixture_comparison.t;
+    instruction : Comparison.t;
+    criterion : Comparison.t;
+    allowed_files : Comparison.t;
+    reference : Comparison.t;
+  }
+
+  val create :
+    id:Comparison.t ->
+    fixture:Fixture_comparison.t ->
+    instruction:Comparison.t ->
+    criterion:Comparison.t ->
+    allowed_files:Comparison.t ->
+    reference:Comparison.t ->
+    t
+end
+
 type t = private {
   id : string;
   fixture : Fixture.t;
@@ -34,7 +55,7 @@ val grade :
   task:t -> response:Response.t option -> outcome:Outcome.t -> (Score.t, Grading_failure.t) result
 
 val verifier : task:t -> Verifier.t option
-val compare : before:t -> after:t -> Task_comparison.t
+val compare : before:t -> after:t -> Comparison.t
 
 val assess :
   task:t ->
