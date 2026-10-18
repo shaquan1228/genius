@@ -62,6 +62,9 @@ class _Evidence(BaseModel):
     detail: str
     metadata: dict[str, JsonValue] | None = None
 
+    def authenticates(self, result: Completion, *, marker: str) -> bool:
+        return self.marker == marker and result.returncode == 0 and self.status != "unchecked"
+
 
 _STATUSES: Mapping[str, Callable[[], Verification.Value]] = {
     "passed": Verification.Passed,
@@ -78,18 +81,19 @@ def completion(result: Completion, *, marker: str) -> VerificationResult:
         return VerificationResult(
             verification=Verification.HarnessError(detail=f"Invalid verifier evidence: {error}")
         )
-    if not all((evidence.marker == marker, result.returncode == 0, evidence.status != "unchecked")):
+    if not evidence.authenticates(result, marker=marker):
         return VerificationResult(
             verification=Verification.HarnessError(
                 detail="Verifier completion was not authenticated"
             )
         )
+    verification = (
+        Verification.HarnessError(detail=evidence.detail)
+        if evidence.status == "harness_error"
+        else _STATUSES[evidence.status]()
+    )
     return VerificationResult(
-        verification=(
-            Verification.HarnessError(detail=evidence.detail)
-            if evidence.status == "harness_error"
-            else _STATUSES[evidence.status]()
-        ),
+        verification=verification,
         detail=evidence.detail,
         metadata=cast(Mapping[str, Diagnostic], evidence.metadata or {}),
     )

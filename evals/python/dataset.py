@@ -46,19 +46,17 @@ class Dataset:
 
     @cached_property
     def source_hash(self) -> str:
-        return fingerprint(
-            Kernel.current.sources, resources=tuple((r.key, r.contents) for r in self.resources)
-        )
+        resources = tuple((resource.key, resource.contents) for resource in self.resources)
+        return fingerprint(Kernel.current.sources, resources=resources)
 
     @cached_property
     def cases_hash(self) -> str:
+        resources = tuple((resource.key, resource.contents) for resource in self.resources)
+        records = tuple((name, value_fingerprint(task)) for name, task in self.records.items())
+        metadata = self.info.model_dump_json() if self.info else "null"
         return fingerprint(
             Kernel.current.sources,
-            resources=(
-                *((r.key, r.contents) for r in self.resources),
-                *((name, value_fingerprint(value)) for name, value in self.records.items()),
-                ("dataset-info", self.info.model_dump_json() if self.info else "null"),
-            ),
+            resources=(*resources, *records, ("dataset-info", metadata)),
         )
 
 
