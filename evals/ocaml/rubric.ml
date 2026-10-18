@@ -37,16 +37,3 @@ let compare ~(before : t) ~(after : t) =
         ("expected", (Response.compare ~before:before.expected ~after:after.expected).equal);
         ("text_rule", before.text_rule = after.text_rule);
       ]
-
-let grade ~(rubric : t) ~(response : Response.t option) =
-  let actual = match response with None -> [] | Some response -> response.fields in
-  let text_rule = Option.map (fun rule -> Text_rule.grade ~rule ~response) rubric.text_rule in
-  let actual =
-    match rubric.text_rule with
-    | None -> actual
-    | Some rule -> List.filter (fun (field : Response_field.t) -> field.name <> rule.field) actual
-  in
-  Rubric_grade.create
-    ~response_present:(Option.is_some response)
-    ~fields:(Response_comparison.create ~before:rubric.expected.fields ~after:actual)
-    ~text_rule

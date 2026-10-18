@@ -45,7 +45,7 @@ def public_hashes_match_existing_provenance() -> None:
 
 def public_grade_preserves_input_and_result() -> None:
     verification = Verification.Passed()
-    with patch("kernel.Task.grade", return_value=[("correctness", True), ("scope", True)]) as grade:
+    with patch("kernel.Task.assess", wraps=Task.assess) as grade:
         result = assert_type(
             grading.score_case(
                 case_id="clear-task",
@@ -57,7 +57,7 @@ def public_grade_preserves_input_and_result() -> None:
         )
     assert grade.call_args.kwargs["task"] is datasets.load_dataset().records["clear-task"]
     assert isinstance(grade.call_args.kwargs["outcome"].verification, Verification.Passed)
-    assert result == dict(grade.return_value)
+    assert result == {"correctness": True, "scope": False}
 
 
 @pytest.mark.parametrize(
@@ -79,7 +79,7 @@ def query_arguments_are_strict(
 
 def query_concerns_expose_only_their_own_operations() -> None:
     assert not {"create_runtime", "assess", "verify_case", "evaluate"} & set(datasets.__all__)
-    assert grading.__all__ == ["Scores", "grade_case", "score_case"]
+    assert grading.__all__ == ["Scores", "assess_case", "score_case"]
     assert set(evaluation.__all__) == {
         "EvaluationSettings",
         "InstructionDelivery",

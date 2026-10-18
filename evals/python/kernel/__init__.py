@@ -6,12 +6,13 @@ from ._bridge import named as _named
 from ._bridge import native as _native
 
 Artifact = _named(constructor=_native.Artifact.t)
+Assessment = _native.Assessment.t
 Case = _named(constructor=_native.Case.t)
 Comparison = _named(constructor=_native.Comparison.t)
 Completion = _native.Completion.t
 Content = _native.Content.t
-CorrectnessGrade = _named(constructor=_native.Correctness_grade.t)
 Criterion = _native.Criterion.t
+Evidence = _native.Assessment.evidence
 Experiment = _named(constructor=_native.Experiment.t)
 FieldComparison = _named(constructor=_native.Response_comparison.field_comparison)
 File = _named(constructor=_native.File.t)
@@ -29,14 +30,10 @@ ResponseComparison = _named(constructor=_native.Response_comparison.t)
 ResponseField = _named(constructor=_native.Response_field.t)
 ResponseValue = _native.Response_value.t
 Rubric = _named(constructor=_native.Rubric.t)
-RubricGrade = _named(constructor=_native.Rubric_grade.t)
-ScopeGrade = _named(constructor=_native.Scope_grade.t)
 Score = _native.Score.t
 Task = _named(constructor=_native.Task.t)
 TaskComparison = _named(constructor=_native.Task_comparison.t)
-TaskGrade = _named(constructor=_native.Task_grade.t)
 TextRule = _named(constructor=_native.Text_rule.t)
-TextRuleGrade = _named(constructor=_native.Text_rule_grade.t)
 ValidationCode = _native.Validation_code.t
 ValidationFailure = _named(constructor=_native.Validation_failure.t)
 ValidationIssue = _named(constructor=_native.Validation_issue.t)
@@ -68,20 +65,6 @@ ResourceBinding.create = staticmethod(
     _bind(
         operation=_native.Resource_binding.create,
         arguments={"key": False, "contents": False},
-        failure=None,
-    )
-)
-ScopeGrade.create = staticmethod(
-    _bind(
-        operation=_native.Scope_grade.create,
-        arguments={"allowed_files": False, "changed_files": False},
-        failure=None,
-    )
-)
-TextRuleGrade.create = staticmethod(
-    _bind(
-        operation=_native.Text_rule_grade.create,
-        arguments={"field": False, "word_count": False, "min_words": False, "max_words": False},
         failure=None,
     )
 )
@@ -283,13 +266,6 @@ FixtureComparison.create = staticmethod(
     )
 )
 Kernel.current = _native.Kernel.current
-RubricGrade.create = staticmethod(
-    _bind(
-        operation=_native.Rubric_grade.create,
-        arguments={"response_present": False, "fields": False, "text_rule": False},
-        failure=None,
-    )
-)
 TaskComparison.create = staticmethod(
     _bind(
         operation=_native.Task_comparison.create,
@@ -313,13 +289,6 @@ TextRule.create = staticmethod(
 )
 TextRule.word_count = staticmethod(
     _bind(operation=_native.Text_rule.word_count, arguments={"text": False}, failure=None)
-)
-TextRule.grade = staticmethod(
-    _bind(
-        operation=_native.Text_rule.grade,
-        arguments={"rule": False, "response": False},
-        failure=None,
-    )
 )
 Verifier.create = staticmethod(
     _bind(
@@ -361,11 +330,6 @@ Rubric.compare = staticmethod(
         operation=_native.Rubric.compare, arguments={"before": False, "after": False}, failure=None
     )
 )
-Rubric.grade = staticmethod(
-    _bind(
-        operation=_native.Rubric.grade, arguments={"rubric": False, "response": False}, failure=None
-    )
-)
 Fixture.create = staticmethod(
     _bind(
         operation=_native.Fixture.create, arguments={"files": False}, failure="validation_failure"
@@ -394,13 +358,6 @@ Fixture.compare = staticmethod(
         operation=_native.Fixture.compare, arguments={"before": False, "after": False}, failure=None
     )
 )
-CorrectnessGrade.create = staticmethod(
-    _bind(
-        operation=_native.Correctness_grade.create,
-        arguments={"answer": False, "verification": False},
-        failure="grading_failure",
-    )
-)
 Criterion.Value = Criterion
 Criterion.Code = _named(constructor=_native.Criterion.Code)
 Criterion.Code._default_type = ()
@@ -420,13 +377,6 @@ Criterion.compare = staticmethod(
         failure=None,
     )
 )
-Criterion.grade = staticmethod(
-    _bind(
-        operation=_native.Criterion.grade,
-        arguments={"criterion": False, "response": False, "verification": False},
-        failure="grading_failure",
-    )
-)
 Reference.create = staticmethod(
     _bind(
         operation=_native.Reference.create,
@@ -441,12 +391,79 @@ Reference.compare = staticmethod(
         failure=None,
     )
 )
-TaskGrade.create = staticmethod(
+Evidence.Value = Evidence
+Evidence.Present = _named(constructor=_native.Assessment.Present)
+Evidence.Present._default_type = ()
+Evidence.Field = _named(constructor=_native.Assessment.Field)
+Evidence.Field._default_type = ()
+Evidence.Text = _named(constructor=_native.Assessment.Text)
+Evidence.Text._default_type = ()
+Evidence.Verified = _named(constructor=_native.Assessment.Verified)
+Evidence.Verified._default_type = ()
+Evidence.Scope = _named(constructor=_native.Assessment.Scope)
+Evidence.Scope._default_type = ()
+Assessment.Value = Assessment
+Assessment.Check = _named(constructor=_native.Assessment.Check)
+Assessment.Check._default_type = ()
+Assessment.All = _named(constructor=_native.Assessment.All)
+Assessment.All._default_type = ()
+Assessment.present = staticmethod(
+    _bind(operation=_native.Assessment.present, arguments={"response": False}, failure=None)
+)
+Assessment.field = staticmethod(
+    _bind(operation=_native.Assessment.field, arguments={"comparison": False}, failure=None)
+)
+Assessment.text = staticmethod(
     _bind(
-        operation=_native.Task_grade.create,
-        arguments={"correctness": False, "scope": False},
+        operation=_native.Assessment.text, arguments={"rule": False, "value": False}, failure=None
+    )
+)
+Assessment.verified = staticmethod(
+    _bind(
+        operation=_native.Assessment.verified,
+        arguments={"verification": False},
+        failure="grading_failure",
+    )
+)
+Assessment.scope = staticmethod(
+    _bind(
+        operation=_native.Assessment.scope,
+        arguments={"allowed_files": False, "changed_files": False},
         failure=None,
     )
+)
+Assessment.all = staticmethod(
+    _bind(
+        operation=_native.Assessment.all, arguments={"checks": False}, failure="validation_failure"
+    )
+)
+Assessment.rubric = staticmethod(
+    _bind(
+        operation=_native.Assessment.rubric,
+        arguments={"rubric": False, "response": False},
+        failure=None,
+    )
+)
+Assessment.criterion = staticmethod(
+    _bind(
+        operation=_native.Assessment.criterion,
+        arguments={"criterion": False, "response": False, "verification": False},
+        failure="grading_failure",
+    )
+)
+Assessment.passed = staticmethod(
+    _bind(operation=_native.Assessment.passed, arguments={"assessment": False}, failure=None)
+)
+Assessment.word_count = staticmethod(
+    _bind(operation=_native.Assessment.word_count, arguments={"value": False}, failure=None)
+)
+Assessment.unexpected_files = staticmethod(
+    _bind(
+        operation=_native.Assessment.unexpected_files, arguments={"assessment": False}, failure=None
+    )
+)
+Assessment.scores = staticmethod(
+    _bind(operation=_native.Assessment.scores, arguments={"assessment": False}, failure=None)
 )
 Task.create = staticmethod(
     _bind(
@@ -483,16 +500,9 @@ Task.verifier = staticmethod(
 Task.compare = staticmethod(
     _bind(operation=_native.Task.compare, arguments={"before": False, "after": False}, failure=None)
 )
-Task.grade_scope = staticmethod(
+Task.assess = staticmethod(
     _bind(
-        operation=_native.Task.grade_scope,
-        arguments={"task": False, "changed_files": False},
-        failure=None,
-    )
-)
-Task.grade_report = staticmethod(
-    _bind(
-        operation=_native.Task.grade_report,
+        operation=_native.Task.assess,
         arguments={"task": False, "response": False, "outcome": False},
         failure="grading_failure",
     )
@@ -503,12 +513,13 @@ Case.create = staticmethod(
 
 __all__ = [
     "Artifact",
+    "Assessment",
     "Case",
     "Comparison",
     "Completion",
     "Content",
-    "CorrectnessGrade",
     "Criterion",
+    "Evidence",
     "Experiment",
     "FieldComparison",
     "File",
@@ -527,14 +538,10 @@ __all__ = [
     "ResponseField",
     "ResponseValue",
     "Rubric",
-    "RubricGrade",
-    "ScopeGrade",
     "Score",
     "Task",
     "TaskComparison",
-    "TaskGrade",
     "TextRule",
-    "TextRuleGrade",
     "ValidationCode",
     "ValidationError",
     "ValidationFailure",

@@ -9,13 +9,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from evals.python import assessment, datasets, execution, grading, verification
-from evals.python.assessment import Assessment
+from evals.python.assessment import AssessmentResult
 from evals.python.datasets import Dataset
 from evals.python.datasets import smoke as declarations
 from evals.python.execution import Environment, Execution, Runtime
 from evals.python.integrations.smoke import __main__ as cli
 from evals.python.tests.declarations import _files, _reference_files
 from evals.python.verification import VerificationResult
+from kernel import Assessment as NativeAssessment
 from kernel import Case, Criterion, Verification
 
 
@@ -57,10 +58,10 @@ def python_smoke_keeps_checks_and_references_private() -> None:
     assert "verifier.py" not in _files(cases[0].files)
 
 
-async def _assess_code(*, dataset: Dataset, agent: Environment) -> tuple[Assessment, ...]:
+async def _assess_code(*, dataset: Dataset, agent: Environment) -> tuple[AssessmentResult, ...]:
     runtime = execution.create_runtime()
 
-    async def assess(changed_files: tuple[str, ...]) -> Assessment:
+    async def assess(changed_files: tuple[str, ...]) -> AssessmentResult:
         return await assessment.assess(
             case_id="clear-task",
             selection=dataset,
@@ -84,7 +85,7 @@ def external_seed_fails_reference_passes_and_scope_is_enforced() -> None:
     dataset = datasets.compile_dataset(cases=declarations.cases())
     runtime = execution.create_runtime()
 
-    async def execute() -> tuple[Assessment, ...]:
+    async def execute() -> tuple[AssessmentResult, ...]:
         agent = await runtime.create()
         try:
             await agent.execute(Execution(command=("mkdir", "workspace")))
@@ -111,7 +112,7 @@ def external_answer_uses_kernel_rules_without_allocating() -> None:
     agent = Environment(execute=AsyncMock(), read_bytes=AsyncMock(), write_bytes=AsyncMock())
     runtime = Runtime(create=AsyncMock(), cleanup=AsyncMock())
 
-    async def assess(response: str) -> Assessment:
+    async def assess(response: str) -> AssessmentResult:
         return await assessment.assess(
             case_id="decision-review",
             selection=dataset,
@@ -158,7 +159,13 @@ def offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[str])
 
 
 def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixture[str]) -> None:
-    with patch.object(grading, "score_case", return_value={"correctness": False, "scope": True}):
+    failed = NativeAssessment.all(
+        checks=[
+            ("correctness", NativeAssessment.present(response=None)),
+            ("scope", NativeAssessment.all(checks=[])),
+        ]
+    )
+    with patch.object(grading, "assess_case", return_value=failed):
         assert _run_cli() == 1
     assert all(
         not json.loads(line)["scores"]["correctness"]

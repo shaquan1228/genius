@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from functools import partial, wraps
-from typing import cast
+from typing import assert_never, cast
 
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer, stderr
 from inspect_ai.solver import TaskState
@@ -10,35 +10,55 @@ import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import assessment
 from evals.python.datasets import Dataset
-from kernel import RubricGrade, Task, TaskGrade, Verification
+from kernel import Assessment as NativeAssessment
+from kernel import Evidence, ResponseValue, Task, Verification
 
 
-def answer_details(answer: RubricGrade) -> dict[str, object]:
-    rule = answer.text_rule
-    return {
-        "response_present": answer.response_present,
-        "fields": [{"name": field.name, "passed": field.equal} for field in answer.fields.fields],
-        "text_rule": None
-        if rule is None
-        else {
-            "field": rule.field,
-            "passed": rule.passed,
-            "word_count": rule.word_count,
-            "min_words": rule.min_words,
-            "max_words": rule.max_words,
-        },
-    }
+def response_value(value: ResponseValue.Value | None) -> str | bool | None:
+    return None if value is None else value.value
 
 
-def grade_details(grade: TaskGrade | None) -> dict[str, object] | None:
-    if grade is None:
-        return None
-    answer = grade.correctness.answer
-    return {
-        "correctness": grade.correctness.passed,
-        "unexpected_files": list(grade.scope.unexpected_files),
-        "answer": None if answer is None else answer_details(answer),
-    }
+def evidence_details(check: NativeAssessment.Check) -> dict[str, object]:
+    evidence = check.evidence
+    match evidence:
+        case Evidence.Present():
+            return {"response_present": evidence.response is not None}
+        case Evidence.Field():
+            return {
+                "expected": response_value(evidence.comparison.before),
+                "actual": response_value(evidence.comparison.after),
+            }
+        case Evidence.Text():
+            return {
+                "field": evidence.rule.field,
+                "actual": response_value(evidence.value),
+                "word_count": NativeAssessment.word_count(value=evidence.value),
+                "min_words": evidence.rule.min_words,
+                "max_words": evidence.rule.max_words,
+            }
+        case _:
+            return execution_details(evidence, check=check)
+
+
+def execution_details(
+    evidence: Evidence.Verified | Evidence.Scope, *, check: NativeAssessment.Check
+) -> dict[str, object]:
+    match evidence:
+        case Evidence.Verified():
+            return {"verification": type(evidence.verification).__name__.lower()}
+        case Evidence.Scope():
+            return {"unexpected_files": list(NativeAssessment.unexpected_files(assessment=check))}
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+def assessment_details(value: NativeAssessment.Value) -> dict[str, object]:
+    result: dict[str, object] = {"passed": NativeAssessment.passed(assessment=value)}
+    if isinstance(value, NativeAssessment.All):
+        result["checks"] = {name: assessment_details(check) for name, check in value.checks}
+    else:
+        result.update(evidence_details(value))
+    return result
 
 
 def score_values(scores: Mapping[str, bool]) -> dict[str, str]:
@@ -83,7 +103,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
             "verifier_metadata": evidence.metadata_json(),
             "changed_files": changed,
             "agent_failure": failure,
-            "grade": grade_details(result.grade),
+            "assessment": assessment_details(result.assessment),
         },
     )
 

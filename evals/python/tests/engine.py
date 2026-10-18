@@ -14,7 +14,8 @@ from inspect_ai.scorer import CORRECT, INCORRECT, Target
 from inspect_ai.solver import TaskState
 
 from evals.python import assessment as assessment_api
-from evals.python.assessment import Assessment
+from evals.python import grading as grading_api
+from evals.python.assessment import AssessmentResult
 from evals.python.integrations.inspect import environments, scoring, workspace
 from evals.python.integrations.inspect.agents import AGENT_REGISTRY
 from evals.python.integrations.inspect.tasks import baseline, genius
@@ -35,7 +36,7 @@ from kernel import Task, Verification
 
 
 def complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
-    with patch("kernel.Task.grade_report", wraps=Task.grade_report) as grading:
+    with patch("kernel.Task.assess", wraps=Task.assess) as grading:
         logs = _offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
     assert grading.call_count == 16
     expected = [
@@ -71,8 +72,10 @@ def _assert_answer_judgments(sample: EvalSample) -> None:
     assert sample.scores is not None
     metadata = sample.scores["evaluation"].metadata
     assert metadata is not None
-    assert metadata["grade"]["answer"]["fields"] == [{"name": "choice", "passed": True}]
-    assert metadata["grade"]["answer"]["text_rule"]["passed"] is True
+    assert metadata["assessment"]["checks"]["correctness"]["checks"]["fields"]["checks"][
+        "choice"
+    ] == {"passed": True, "expected": "B", "actual": "B"}
+    assert metadata["assessment"]["checks"]["correctness"]["checks"]["text"]["passed"] is True
 
 
 @pytest.mark.parametrize("mode", ["extra", "committed-extra", "instructions", "tampered-checks"])
@@ -167,13 +170,18 @@ def scorer_maps_sdk_observation_to_public_assessment() -> None:
     )
     state.output = ModelOutput.from_content("mockllm/model", "observed answer")
     agent, runtime = _agent_port(), _runtime_port(_grader_port())
-    assessment = Assessment(
+    assessment = AssessmentResult(
         evidence=VerificationResult(
             verification=Verification.Passed(),
             detail="canonical evidence",
             metadata={"nested": {"items": (True, None, 4.2)}},
         ),
-        scores={"correctness": True, "scope": False},
+        assessment=grading_api.assess_case(
+            case_id="clear-task",
+            response="",
+            changed_files=("workspace/unexpected.txt",),
+            verification=Verification.Passed(),
+        ),
     )
     with (
         patch.object(workspace, "changed_files", return_value={"b.ml", "a.ml"}),
@@ -213,7 +221,7 @@ def extended_native_contract_drives_fresh_inspect_registration() -> None:
             "-c",
             """
 from unittest.mock import patch
-from kernel import Task
+from kernel import Assessment, Response, Task
 with patch.object(Task, "required_scores", ["correctness", "scope", "extension"]):
     from evals.python import grading
     from evals.python.integrations.inspect import completeness, scoring
@@ -226,8 +234,10 @@ with patch.object(Task, "required_scores", ["correctness", "scope", "extension"]
     assert not completeness.complete_value({"correctness": CORRECT, "scope": INCORRECT})
     encoded = {"correctness": CORRECT, "scope": INCORRECT, "extension": CORRECT}
     assert completeness.complete_value(encoded)
-    pairs = [("correctness", True), ("scope", False), ("extension", True)]
-    with patch.object(Task, "grade", return_value=pairs):
+    yes = Assessment.present(response=Response.empty)
+    no = Assessment.present(response=None)
+    result = Assessment.all(checks=[("correctness", yes), ("scope", no), ("extension", yes)])
+    with patch.object(Task, "assess", return_value=result):
         scores = grading.score_case(case_id="small-decision", response="{}", changed_files=())
     assert scoring.score_values(scores) == encoded
 """,

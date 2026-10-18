@@ -31,7 +31,7 @@ PUBLIC_OPERATIONS = {
         "list_cases",
         "load_dataset",
     },
-    "grading": {"grade_case", "score_case"},
+    "grading": {"assess_case", "score_case"},
     "verification": {"verify_case", "validate_reference"},
     "assessment": {"assess"},
     "execution": {"create_runtime"},
@@ -53,7 +53,7 @@ OWNER_TYPES = {
     "datasets": {"Dataset", "Selection", "DatasetProvenance"},
     "grading": {"Scores"},
     "verification": {"Diagnostic", "VerificationResult"},
-    "assessment": {"Assessment"},
+    "assessment": {"AssessmentResult"},
     "execution": {"Execution", "Completion", "Environment", "Runtime", "Cleanup"},
     "evaluation": {"EvaluationSettings", "ModelPricing", "InstructionDelivery", "VariantSettings"},
     "comparison": {

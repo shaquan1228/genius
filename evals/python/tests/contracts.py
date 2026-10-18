@@ -180,7 +180,7 @@ def verifier_projection_and_grading_use_native_values() -> None:
     )
     with (
         patch.object(Task, "verifier", wraps=Task.verifier) as projection,
-        patch.object(Task, "grade", wraps=Task.grade) as kernel_grade,
+        patch.object(Task, "assess", wraps=Task.assess) as kernel_grade,
     ):
         projected = verifier(case_id)
         assert projected is not None

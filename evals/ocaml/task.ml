@@ -98,22 +98,34 @@ let compare ~(before : t) ~(after : t) =
            ])
     ~reference:(Reference.compare ~before:before.reference ~after:after.reference)
 
-let grade_scope ~(task : t) ~changed_files =
-  Scope_grade.create
-    ~allowed_files:(List.map (fun path -> "workspace/" ^ path) task.allowed_files)
-    ~changed_files
+let assessors =
+  [
+    ( "correctness",
+      fun ~(task : t) ~response ~(outcome : Outcome.t) ->
+        Assessment.criterion ~criterion:task.criterion ~response ~verification:outcome.verification
+    );
+    ( "scope",
+      fun ~(task : t) ~response:_ ~(outcome : Outcome.t) ->
+        Ok
+          (Assessment.scope
+             ~allowed_files:(List.map (fun path -> "workspace/" ^ path) task.allowed_files)
+             ~changed_files:outcome.changed_files) );
+  ]
 
-let grade_report ~(task : t) ~response ~(outcome : Outcome.t) =
-  Result.map
-    (fun correctness ->
-      Task_grade.create ~correctness ~scope:(grade_scope ~task ~changed_files:outcome.changed_files))
-    (Criterion.grade ~criterion:task.criterion ~response ~verification:outcome.verification)
+let required_scores = List.map fst assessors
 
-let required_scores = [ "correctness"; "scope" ]
+let assess ~task ~response ~outcome =
+  List.fold_right
+    (fun (name, assessor) rest ->
+      Result.bind (assessor ~task ~response ~outcome) (fun assessment ->
+          Result.map (fun checks -> (name, assessment) :: checks) rest))
+    assessors
+    (Ok [])
+  |> Result.map (fun checks -> Result.get_ok (Assessment.all ~checks))
 
 (* Grader: pure logic applying criteria to responses and observed outcomes.
    IO, execution, and presentation remain harness responsibilities.
    https://developers.openai.com/api/docs/guides/graders
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
 let grade ~task ~response ~outcome =
-  Result.map (fun (report : Task_grade.t) -> report.scores) (grade_report ~task ~response ~outcome)
+  Result.map (fun assessment -> Assessment.scores ~assessment) (assess ~task ~response ~outcome)

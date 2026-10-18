@@ -8,9 +8,3 @@ val create : ?code:Verifier.t -> ?answer:Rubric.t -> unit -> (t, Validation_fail
 [@@python.exclusive]
 
 val compare : before:t -> after:t -> Comparison.t
-
-val grade :
-  criterion:t ->
-  response:Response.t option ->
-  verification:Verification.t ->
-  (Correctness_grade.t, Grading_failure.t) result

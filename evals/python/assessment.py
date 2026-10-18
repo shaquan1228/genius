@@ -11,19 +11,20 @@ from evals.python.execution import Environment, Runtime
 from evals.python.grading import Scores
 from evals.python.schema import FROZEN
 from evals.python.verification import VerificationResult
-from kernel import TaskGrade, Verification
+from kernel import Assessment as NativeAssessment
+from kernel import Verification
 
-__all__ = ["Assessment", "assess"]
+__all__ = ["AssessmentResult", "assess"]
 
 
 @dataclass(frozen=True, kw_only=True)
-class Assessment:
+class AssessmentResult:
     evidence: VerificationResult
-    scores: Scores
-    grade: TaskGrade | None = None
+    assessment: NativeAssessment.Value
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "scores", MappingProxyType(dict(self.scores)))
+    @property
+    def scores(self) -> Scores:
+        return MappingProxyType(dict(NativeAssessment.scores(assessment=self.assessment)))
 
 
 @validate_call(config=FROZEN)
@@ -35,18 +36,18 @@ async def assess(
     selection: Selection = "smoke",
     agent: InstanceOf[Environment],
     runtime: InstanceOf[Runtime],
-) -> Assessment:
+) -> AssessmentResult:
     selection = datasets.load_dataset(selection=selection)
     result = await verification.verify_case(
         case_id=case_id, selection=selection, agent=agent, runtime=runtime
     )
     if isinstance(result.verification, Verification.HarnessError):
         raise RuntimeError(f"Verification harness error: {result.verification.detail}")
-    grade = grading.grade_case(
+    assessment = grading.assess_case(
         case_id=case_id,
         response=response,
         changed_files=changed_files,
         verification=result.verification,
         selection=selection,
     )
-    return Assessment(evidence=result, scores=dict(grade.scores), grade=grade)
+    return AssessmentResult(evidence=result, assessment=assessment)

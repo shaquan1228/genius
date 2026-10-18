@@ -31,11 +31,3 @@ let compare ~before ~after =
       Comparison.combine
         ~comparisons:[ ("rubric", Rubric.compare ~before:a.rubric ~after:b.rubric) ]
   | Code _, Answer _ | Answer _, Code _ -> Comparison.create ~fields:[ ("kind", false) ]
-
-let grade ~criterion ~response ~verification =
-  let answer =
-    match criterion with
-    | Code _ -> None
-    | Answer { rubric } -> Some (Rubric.grade ~rubric ~response)
-  in
-  Correctness_grade.create ~answer ~verification

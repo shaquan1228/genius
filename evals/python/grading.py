@@ -11,17 +11,17 @@ from evals.python import datasets
 from evals.python.datasets import Selection
 from evals.python.schema import FROZEN
 from kernel import (
+    Assessment,
     Completion,
     Outcome,
     Response,
     ResponseField,
     ResponseValue,
     Task,
-    TaskGrade,
     Verification,
 )
 
-__all__ = ["Scores", "grade_case", "score_case"]
+__all__ = ["Scores", "assess_case", "score_case"]
 
 type Scores = Mapping[str, bool]
 UNCHECKED = Verification.Unchecked()
@@ -59,25 +59,27 @@ def score_case(
     verification: Verification.Value = UNCHECKED,
     selection: Selection = "smoke",
 ) -> Scores:
-    pairs = Task.grade(
-        task=datasets.record(case_id, selection=selection),
-        response=_parse_response(response),
-        outcome=Outcome.create(changed_files=changed_files, verification=verification),
+    assessment = assess_case(
+        case_id=case_id,
+        response=response,
+        changed_files=changed_files,
+        verification=verification,
+        selection=selection,
     )
-    return MappingProxyType(dict(pairs))
+    return MappingProxyType(dict(Assessment.scores(assessment=assessment)))
 
 
 @validate_call(config=FROZEN)
-def grade_case(
+def assess_case(
     *,
     case_id: str,
     response: str,
     changed_files: tuple[str, ...],
     verification: Verification.Value = UNCHECKED,
     selection: Selection = "smoke",
-) -> TaskGrade:
-    """Return native field-level judgments alongside the canonical boolean scores."""
-    return Task.grade_report(
+) -> Assessment.Value:
+    """Bind decoded candidate evidence to the native assessment composition."""
+    return Task.assess(
         task=datasets.record(case_id, selection=selection),
         response=_parse_response(response),
         outcome=Outcome.create(changed_files=changed_files, verification=verification),

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from evals.python import assessment as assessment_api
 from evals.python import datasets, grading, verification
-from evals.python.assessment import Assessment
+from evals.python.assessment import AssessmentResult
 from evals.python.datasets import Dataset, Sources
 from evals.python.execution import Environment, Runtime
 from evals.python.grading import Scores
@@ -214,10 +214,11 @@ def compiled_cases_use_existing_grading_policy() -> None:
 def compiled_grading_preserves_canonical_inputs_and_results() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(),))
     verification = Verification.Passed()
-    with patch(
-        "kernel.Task.grade", return_value=[("correctness", True), ("scope", True)]
-    ) as kernel_grade:
-        assert _grade(dataset=dataset, verification=verification) == dict(kernel_grade.return_value)
+    with patch("kernel.Task.assess", wraps=Task.assess) as kernel_grade:
+        assert _grade(dataset=dataset, verification=verification) == {
+            "correctness": True,
+            "scope": True,
+        }
     assert kernel_grade.call_args.kwargs["task"] is dataset.records["external"]
     assert isinstance(kernel_grade.call_args.kwargs["outcome"].verification, Verification.Passed)
 
@@ -289,7 +290,7 @@ def compiled_selection_flows_through_all_verification_commands() -> None:
                 agent=agent,
                 runtime=runtime,
             ),
-            Assessment,
+            AssessmentResult,
         )
         assert assessment.scores == {"correctness": True, "scope": True}
         assert isinstance(assessment.evidence.verification, Verification.Unchecked)

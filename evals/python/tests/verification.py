@@ -15,7 +15,7 @@ from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 from pydantic import ValidationError
 
 from evals.python import assessment, datasets, verification
-from evals.python.assessment import Assessment
+from evals.python.assessment import AssessmentResult
 from evals.python.execution import Completion as ProcessCompletion
 from evals.python.execution import Environment, Execution, Runtime
 from evals.python.grading import score_case
@@ -32,10 +32,12 @@ from kernel import (
     Fixture,
     GradingError,
     Reference,
+    Response,
     Task,
     Verification,
     Verifier,
 )
+from kernel import Assessment as NativeAssessment
 from kernel import (
     ValidationError as DomainValidationError,
 )
@@ -418,14 +420,13 @@ def assessment_grades_canonical_observation_and_freezes_scores() -> None:
                     agent=_agent_port(),
                     runtime=_runtime_port(_grader_port()),
                 ),
-                Assessment,
+                AssessmentResult,
             )
         assert isinstance(result.evidence.verification, Verification.Unchecked)
         assert result.evidence is evidence
         assert not isinstance(result, VerificationResult)
         assert result.scores == expected
-        assert result.grade is not None
-        assert dict(result.grade.scores) == expected
+        assert dict(NativeAssessment.scores(assessment=result.assessment)) == expected
         with pytest.raises(TypeError):
             result.scores["correctness"] = True  # type: ignore[index]
 
@@ -436,12 +437,14 @@ def assessment_owns_immutable_scores_and_retains_evidence() -> None:
     evidence = VerificationResult(
         verification=Verification.Passed(), metadata={"nested": {"items": (True,)}}
     )
-    scores = {"correctness": True}
-    result = Assessment(evidence=evidence, scores=scores)
-    scores["correctness"] = False
+    native = NativeAssessment.all(
+        checks=[("correctness", NativeAssessment.present(response=Response.empty))]
+    )
+    result = AssessmentResult(evidence=evidence, assessment=native)
     assert result.scores == {"correctness": True}
+    assert result.assessment is native
     assert result.evidence.metadata == {"nested": {"items": (True,)}}
-    for name in ("evidence", "scores"):
+    for name in ("evidence", "assessment"):
         with pytest.raises(FrozenInstanceError):
             setattr(result, name, None)
 
@@ -450,7 +453,7 @@ def assessment_refuses_harness_error_before_grading() -> None:
     async def execute() -> None:
         with (
             patch("kernel.Task.verifier", return_value=_checks()),
-            patch("kernel.Task.grade") as grading,
+            patch("kernel.Task.assess") as grading,
             pytest.raises(RuntimeError, match="Verification harness error"),
         ):
             await assessment.assess(

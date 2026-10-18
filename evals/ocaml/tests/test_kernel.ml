@@ -76,6 +76,34 @@ let decision =
 let no_changes = { Outcome.changed_files = []; verification = Verification.Unchecked }
 
 let () =
+  let all checks = Result.get_ok (Assessment.all ~checks) in
+  let check value = Result.get_ok (Assessment.verified ~verification:value) in
+  let values = [ Verification.Passed; Verification.Failed ] in
+  List.iter
+    (fun a ->
+      List.iter
+        (fun b ->
+          List.iter
+            (fun c ->
+              let a = check a and b = check b and c = check c in
+              let left = all [ ("pair", all [ ("a", a); ("b", b) ]); ("c", c) ] in
+              let right = all [ ("a", a); ("pair", all [ ("b", b); ("c", c) ]) ] in
+              assert (Assessment.passed ~assessment:left = Assessment.passed ~assessment:right);
+              assert (
+                Assessment.passed ~assessment:left
+                = (Assessment.passed ~assessment:a && Assessment.passed ~assessment:b
+                 && Assessment.passed ~assessment:c)))
+            values)
+        values)
+    values;
+  assert (Assessment.passed ~assessment:(all []));
+  let scope = Assessment.scope ~allowed_files:[] ~changed_files:[ "b"; "a"; "b" ] in
+  assert (
+    Assessment.unexpected_files ~assessment:(all [ ("one", scope); ("two", scope) ]) = [ "a"; "b" ]);
+  assert (Result.is_error (Assessment.all ~checks:[ ("same", scope); ("same", scope) ]));
+  assert (Result.is_error (Assessment.all ~checks:[ ("", scope) ]))
+
+let () =
   let same = Result.get_ok (code ()) in
   assert (Task.compare ~before:code_case ~after:same).equal;
   let reordered = fixture ~files:(List.rev (Fixture.files ~fixture:code_case.fixture)) in
@@ -104,7 +132,7 @@ let () =
   assert difference.criterion.equal;
   let report =
     Result.get_ok
-      (Task.grade_report
+      (Task.assess
          ~task:decision
          ~response:
            (Some
@@ -120,12 +148,13 @@ let () =
                    ]))
          ~outcome:{ no_changes with changed_files = [ "workspace/unexpected.txt" ] })
   in
-  assert (not report.correctness.passed);
-  assert (report.scope.unexpected_files = [ "workspace/unexpected.txt" ]);
-  let answer = Option.get report.correctness.answer in
-  assert answer.response_present;
-  assert (not answer.fields.equal);
-  assert (Option.get answer.text_rule).passed
+  assert (not (Assessment.passed ~assessment:report));
+  assert (Assessment.unexpected_files ~assessment:report = [ "workspace/unexpected.txt" ]);
+  assert (Assessment.scores ~assessment:report = [ ("correctness", false); ("scope", false) ]);
+  match report with
+  | Assessment.All { checks } ->
+      assert (not (Assessment.passed ~assessment:(List.assoc "correctness" checks)))
+  | _ -> assert false
 
 let () =
   let command values =

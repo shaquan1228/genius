@@ -11,6 +11,7 @@ from evals.python.datasets import Selection, Sources
 from evals.python.grading import score_case
 from evals.python.tests.declarations import _declaration, _reference_files, _reference_text
 from evals.python.tests.projections import reference, verifier
+from kernel import Assessment as NativeAssessment
 from kernel import (
     Completion,
     Criterion,
@@ -75,7 +76,7 @@ def unknown_case_is_a_harness_error() -> None:
 
 def native_kernel_errors_propagate() -> None:
     with (
-        patch.object(Task, "grade", side_effect=RuntimeError("kernel failed")),
+        patch.object(Task, "assess", side_effect=RuntimeError("kernel failed")),
         pytest.raises(RuntimeError, match="kernel failed"),
     ):
         _judgment(response="{}")
@@ -93,7 +94,7 @@ def grading_does_not_recompile_or_cache_results() -> None:
     responses = ("invalid", '{"choice":"B","reason":"Cheap"}', '{"choice":"A","reason":"Cheap"}')
     with (
         patch("subprocess.run", side_effect=AssertionError("Unexpected compilation")),
-        patch.object(Task, "grade", wraps=Task.grade) as grade,
+        patch.object(Task, "assess", wraps=Task.assess) as grade,
     ):
         assert [_judgment(response=response) for response in responses] == [False, True, False]
         assert grade.call_count == 3
@@ -134,11 +135,10 @@ def candidate_duplicate_keys_keep_last_value() -> None:
 
 
 def additional_named_scores_cross_bridge_without_decoder_changes() -> None:
-    with patch.object(
-        Task,
-        "grade",
-        return_value=[("correctness", True), ("scope", False), ("new_metric", True)],
-    ):
+    yes = NativeAssessment.verified(verification=Verification.Passed())
+    no = NativeAssessment.verified(verification=Verification.Failed())
+    result = NativeAssessment.all(checks=[("correctness", yes), ("scope", no), ("new_metric", yes)])
+    with patch.object(Task, "assess", return_value=result):
         scores = score_case(
             case_id="small-decision",
             response="{}",

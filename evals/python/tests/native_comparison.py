@@ -1,8 +1,11 @@
+from typing import cast
+
 import pytest
 
 from evals.python import grading
 from evals.python.integrations.inspect import scoring
 from evals.python.tests.native_kernel import _answer
+from kernel import Assessment as NativeAssessment
 from kernel import (
     Completion,
     Criterion,
@@ -18,10 +21,10 @@ from kernel import (
     Rubric,
     Task,
     TaskComparison,
-    TaskGrade,
     TextRule,
     Verification,
 )
+from kernel import ValidationError as NativeValidationError
 
 
 def _response(*, choice: str = "B", reason: str = "One reason") -> Response:
@@ -78,66 +81,6 @@ def response_comparison_is_keyed_and_preserves_native_values() -> None:
     ) == (True, True, None, None)
 
 
-@pytest.mark.parametrize(
-    ("response", "present", "passed", "words"),
-    [
-        (_response(), True, True, 2),
-        (_response(choice="A"), True, False, 2),
-        (_response(reason="long enough to fail"), True, False, 4),
-        (None, False, False, None),
-        (Response.empty, True, False, None),
-    ],
-)
-def detailed_answer_grade_retains_field_and_text_judgments(
-    response: Response | None, *, present: bool, passed: bool, words: int | None
-) -> None:
-    _, expected = _answer()
-    rubric = Rubric.create(
-        expected=expected,
-        text_rule=TextRule.create(field="reason", min_words=1, max_words=3),
-    )
-    grade = Criterion.grade(
-        criterion=Criterion.create(answer=rubric),
-        response=response,
-        verification=Verification.Unchecked(),
-    )
-    assert grade.answer is not None
-    assert grade.answer.text_rule is not None
-    assert (
-        grade.passed,
-        grade.answer.response_present,
-        grade.answer.text_rule.word_count,
-        grade.answer.fields.fields[0].name,
-    ) == (passed, present, words, "choice")
-
-
-def detailed_grade_and_legacy_scores_agree() -> None:
-    task, expected = _answer()
-    outcome = Outcome.create(
-        changed_files=["workspace/unexpected.txt"], verification=Verification.Unchecked()
-    )
-    report = Task.grade_report(task=task, response=expected, outcome=outcome)
-    assert isinstance(report, TaskGrade)
-    assert (
-        tuple(report.scope.unexpected_files),
-        dict(report.scores),
-        dict(Task.grade(task=task, response=expected, outcome=outcome)),
-    ) == (
-        ("workspace/unexpected.txt",),
-        {"correctness": True, "scope": False},
-        {"correctness": True, "scope": False},
-    )
-    assert scoring.grade_details(report) == {
-        "correctness": True,
-        "unexpected_files": ["workspace/unexpected.txt"],
-        "answer": {
-            "response_present": True,
-            "fields": [{"name": "choice", "passed": True}],
-            "text_rule": None,
-        },
-    }
-
-
 def profile_and_reference_comparison_follow_component_semantics() -> None:
     before = Profile.create(name="a", preamble="read", instructions=["docs", "skills"])
     after = Profile.create(name="a", preamble="read", instructions=["skills", "docs"])
@@ -167,39 +110,123 @@ def completion_comparison_names_the_changed_dimension(
     assert tuple(Completion.compare(before=before, after=after).changed_fields) == (field,)
 
 
-def grade_case_returns_native_report_for_decoded_candidate() -> None:
-    report = grading.grade_case(
-        case_id="small-decision",
-        response='{"choice":"A","reason":"Cheap"}',
-        changed_files=("workspace/unexpected.txt",),
+@pytest.mark.parametrize(
+    ("response", "present", "passed", "words"),
+    [
+        (_response(), True, True, 2),
+        (_response(choice="A"), True, False, 2),
+        (_response(reason="long enough to fail"), True, False, 4),
+        (None, False, False, None),
+        (Response.empty, True, False, None),
+    ],
+)
+def composed_answer_retains_field_and_text_evidence(
+    response: Response | None, *, present: bool, passed: bool, words: int | None
+) -> None:
+    _, expected = _answer()
+    rubric = Rubric.create(
+        expected=expected, text_rule=TextRule.create(field="reason", min_words=1, max_words=3)
     )
-    assert report.correctness.answer is not None
-    assert not report.correctness.passed
-    assert not report.scope.passed
-    assert dict(report.scores) == grading.score_case(
-        case_id="small-decision",
-        response='{"choice":"A","reason":"Cheap"}',
-        changed_files=("workspace/unexpected.txt",),
+    result = NativeAssessment.criterion(
+        criterion=Criterion.create(answer=rubric),
+        response=response,
+        verification=Verification.Unchecked(),
+    )
+    details = scoring.assessment_details(result)
+    checks = cast(dict[str, dict[str, object]], details["checks"])
+    assert (
+        NativeAssessment.passed(assessment=result),
+        checks["response"]["response_present"],
+        checks["text"]["word_count"],
+    ) == (passed, present, words)
+
+
+def assessment_and_legacy_scores_agree() -> None:
+    task, expected = _answer()
+    outcome = Outcome.create(
+        changed_files=["workspace/unexpected.txt"], verification=Verification.Unchecked()
+    )
+    result = Task.assess(task=task, response=expected, outcome=outcome)
+    assert isinstance(result, NativeAssessment.All)
+    assert tuple(NativeAssessment.unexpected_files(assessment=result)) == (
+        "workspace/unexpected.txt",
+    )
+    assert (
+        dict(NativeAssessment.scores(assessment=result))
+        == dict(Task.grade(task=task, response=expected, outcome=outcome))
+        == {"correctness": True, "scope": False}
     )
 
 
-def detailed_code_grade_preserves_harness_failure() -> None:
+def nested_assessments_retain_both_success_and_failure() -> None:
+    yes = NativeAssessment.present(response=Response.empty)
+    no = NativeAssessment.present(response=None)
+    child = NativeAssessment.all(checks=[("bad", no), ("good", yes)])
+    root = NativeAssessment.all(checks=[("correctness", child), ("scope", yes)])
+    assert isinstance(child, NativeAssessment.All)
+    assert [name for name, _ in child.checks] == ["bad", "good"]
+    assert dict(NativeAssessment.scores(assessment=root)) == {"correctness": False, "scope": True}
+
+
+def conjunction_identity_and_single_check_projection() -> None:
+    empty = NativeAssessment.all(checks=[])
+    yes = NativeAssessment.present(response=Response.empty)
+    assert NativeAssessment.passed(assessment=empty)
+    assert tuple(NativeAssessment.scores(assessment=empty)) == ()
+    assert dict(NativeAssessment.scores(assessment=yes)) == {"passed": True}
+
+
+@pytest.mark.parametrize("names", [("",), ("same", "same")])
+def named_composition_rejects_ambiguous_checks(names: tuple[str, ...]) -> None:
+    yes = NativeAssessment.present(response=Response.empty)
+    with pytest.raises(NativeValidationError, match="unique, nonempty"):
+        NativeAssessment.all(checks=[(name, yes) for name in names])
+
+
+def decoding_boundary_returns_one_native_assessment() -> None:
+    response = '{"choice":"A","reason":"Cheap"}'
+    changed = ("workspace/unexpected.txt",)
+    result = grading.assess_case(case_id="small-decision", response=response, changed_files=changed)
+    assert dict(NativeAssessment.scores(assessment=result)) == grading.score_case(
+        case_id="small-decision", response=response, changed_files=changed
+    )
+    assert not NativeAssessment.passed(assessment=result)
+
+
+@pytest.mark.parametrize("case_id", ["clear-task", "small-decision"])
+def harness_failures_are_errors_for_every_criterion(case_id: str) -> None:
     with pytest.raises(GradingError, match="offline"):
-        grading.grade_case(
-            case_id="clear-task",
+        grading.assess_case(
+            case_id=case_id,
             response="",
             changed_files=(),
             verification=Verification.HarnessError(detail="offline"),
         )
 
 
-def grade_metadata_retains_code_and_absent_reports() -> None:
-    report = grading.grade_case(
-        case_id="clear-task", response="", changed_files=(), verification=Verification.Passed()
+def text_assessment_preserves_wrong_value_type() -> None:
+    value = ResponseValue.create(bool=True)
+    result = NativeAssessment.text(
+        rule=TextRule.create(field="reason", min_words=0, max_words=3), value=value
     )
-    assert scoring.grade_details(report) == {
-        "correctness": True,
-        "unexpected_files": [],
-        "answer": None,
+    assert not NativeAssessment.passed(assessment=result)
+    assert scoring.assessment_details(result) == {
+        "passed": False,
+        "field": "reason",
+        "actual": True,
+        "word_count": None,
+        "min_words": 0,
+        "max_words": 3,
     }
-    assert scoring.grade_details(None) is None
+
+
+def scope_evidence_is_derived_from_the_same_composition() -> None:
+    first = NativeAssessment.scope(allowed_files=[], changed_files=["a", "a"])
+    root = NativeAssessment.all(checks=[("first", first), ("second", first)])
+    assert tuple(NativeAssessment.unexpected_files(assessment=root)) == ("a",)
+    assert scoring.assessment_details(first) == {"passed": False, "unexpected_files": ["a"]}
+
+
+def code_assessment_serializes_the_verified_outcome() -> None:
+    result = NativeAssessment.verified(verification=Verification.Passed())
+    assert scoring.assessment_details(result) == {"passed": True, "verification": "passed"}
