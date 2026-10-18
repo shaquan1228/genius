@@ -6,7 +6,7 @@ mkdir -p /work /results/live
 cp -R /source/. /work/
 cd /work
 apt-get update -qq
-apt-get install -y --no-install-recommends git opam build-essential pkg-config
+apt-get install -y --no-install-recommends git opam build-essential pkg-config rsync
 rm -rf /var/lib/apt/lists/*
 uv sync --project evals --python 3.12 --locked --inexact
 # Install the Dune/findlib kernel and compiler-derived bindings before starting Python.
