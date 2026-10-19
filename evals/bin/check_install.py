@@ -30,6 +30,8 @@ def main() -> None:
         requirements = subprocess.check_output(
             [
                 "uv",
+                "--color",
+                "never",
                 "export",
                 "--project",
                 str(ROOT),
