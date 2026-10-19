@@ -1,7 +1,7 @@
 .PHONY: check check-scaffolding check-ocaml-format check-python format format-ocaml format-python lint-ocaml setup setup-kernel test-ocaml check-install
 
 KERNEL_SWITCH ?= genius-kernel-414
-KERNEL_RUN = opam exec --switch=$(KERNEL_SWITCH) -- uv run --no-sync
+KERNEL_RUN = opam exec --switch="$(KERNEL_SWITCH)" -- uv run --no-sync
 
 # Every OCaml warning is an error, except type-directed disambiguation and open shadowing.
 OCAML_FLAGS = -strict-sequence -strict-formats -w +a-4-40-41-42-44-45-70 -warn-error +a
@@ -30,7 +30,7 @@ setup:
 
 # Sync Python dependencies first; the bridge is installed from the pinned opam package.
 setup-kernel:
-	KERNEL_SWITCH=$(KERNEL_SWITCH) sh bin/kernel_setup.sh
+	KERNEL_SWITCH="$(KERNEL_SWITCH)" sh bin/kernel_setup.sh
 
 format: format-ocaml format-python
 
