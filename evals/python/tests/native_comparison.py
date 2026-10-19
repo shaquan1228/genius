@@ -185,7 +185,7 @@ def named_composition_rejects_ambiguous_checks(names: tuple[str, ...]) -> None:
 def harness_failures_are_errors_for_every_criterion(case_id: str) -> None:
     with pytest.raises(GradingError, match="offline"):
         Task.assess(
-            task=datasets.record(case_id, selection="smoke"),
+            task=datasets.load_dataset(selection="smoke").records[case_id],
             response=None,
             outcome=Outcome.create(
                 changed_files=(), verification=Verification.HarnessError(detail="offline")

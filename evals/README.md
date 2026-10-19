@@ -26,28 +26,11 @@ The `benchmark` PR label launches independent HF jobs and reports accuracy and m
 
 The shared Makefile, Dune project, and Python package configuration live at this root.
 
-## Installation boundary
-
-The supported unit is `evals/` at one commit, its locked CPython 3.12 environment,
-and its native OCaml 4.14.2 opam switch. Use uv: the lock intentionally installs only EvalPlus's
-verifier dependencies; ordinary `pip install` resolves its much larger upstream dependency set.
-The wheel includes `evals.python` and `kernel`, but **does not bundle OCaml or its bridge**.
-Keep the switch available and run under `opam exec`; copying a wheel or virtualenv
-alone to another machine is unsupported. Build the native companion on each machine.
-CI exercises Ubuntu and macOS with opam, Git, Make, a C compiler and pkg-config.
-Windows requires WSL2; other Unix targets are unverified.
-Python 3.13+, PyPy and cross-platform native binaries are not supported.
-
-`UV_PROJECT_ENVIRONMENT` may select another virtualenv. `KERNEL_PYTHON` overrides its
-interpreter for native setup; `KERNEL_SWITCH` selects a switch and `KERNEL_JOBS`
-limits build parallelism (default 2). Use a separate switch for each Python installation.
-Initial setup needs network access; repeat checks use installed dependencies.
-`make -C evals check-install` builds a wheel, installs locked dependencies into a fresh
-external environment, and validates imports, provenance and smoke references with `python -I`.
-Instruction comparisons still need an explicit instruction source directory or this checkout;
-HF launchers need the Git checkout and upload committed files.
-
 ## Check the harness offline
+
+Run `make -C evals setup` for locked CPython 3.12 dependencies and the required OCaml 4.14.2 native switch.
+`make -C evals check-install` tests installation outside the checkout and measures import time, dataset loading, and memory.
+HumanEval+ loads eagerly and retains eight cached snapshots; release them with `datasets.clear_cache()`.
 
 Install opam, [uv](https://docs.astral.sh/uv/), Git, Make, and a C compiler.
 Run from the repository root:
@@ -72,20 +55,6 @@ opam exec --switch=genius-kernel-414 -- uv run --project evals python -m evals.p
 ```
 
 HumanEval+ downloads are pinned and checksum verified by `python/datasets/humanevalplus.py`.
-The uncompressed cache lives at `$XDG_CACHE_HOME/genius-evals` (default
-`~/.cache/genius-evals`). Warm loads verify the checksum without network access.
-Corrupt entries fail closed; delete the named cache file to fetch it again.
-Publication uses atomic rename; simultaneous cold loads may download twice.
-
-Dataset loads are eager: even `limit=3` loads all 164 records and their private tests.
-Peak memory includes uncompressed bytes, each decoded record, native records,
-and compiled snapshots. The process cache retains up to eight snapshots;
-`datasets.clear_cache()` releases cache references, while callers retain live snapshots.
-Repeated loads still parse and fingerprint declarations before reusing a compiled snapshot.
-`check-install` prints native/SDK import and cold/warm load timings, Python peak allocation, and peak RSS
-(including native memory). Set `INSTALL_DATASET=humanevalplus` to measure the full
-benchmark instead of smoke; a cold dataset cache requires network access. Load timings
-include `tracemalloc` overhead. No fixed memory or speed guarantee is made.
 Its `HumanEval/32` reference
 fails the pinned official evaluator; full reference validation therefore exits nonzero.
 

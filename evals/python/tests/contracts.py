@@ -40,7 +40,6 @@ def third_dataset_requires_only_python_declarations(third_dataset: Dataset) -> N
         dataset="third",
         catalog=datasets.load_dataset(selection=third_dataset),
         documents=profiles.load_documents(evaluation.resolve_settings()),
-        provenance=datasets.get_provenance(selection=third_dataset),
     )
     assert task.dataset[0].id == "third-case"
 
@@ -52,7 +51,6 @@ def default_sandbox_is_local() -> None:
         agent="codex",
         catalog=datasets.load_dataset(selection="smoke"),
         documents=profiles.load_documents(evaluation.resolve_settings()),
-        provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     assert task.sandbox is not None
     assert task.sandbox.type == "local"
@@ -75,7 +73,7 @@ def public_projection_includes_visible_tools() -> None:
 def all_contract_collections_are_immutable() -> None:
     case_id = "clear-task"
     expected = reference(case_id)
-    info = datasets.dataset_info("humanevalplus")
+    info = datasets.describe_dataset(selection="humanevalplus")
     assert info is not None
     with pytest.raises(TypeError):
         info.attributes["new"] = "value"  # type: ignore[index]
@@ -96,7 +94,6 @@ def run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
         agent="codex",
         catalog=datasets.load_dataset(selection="smoke"),
         documents=profiles.load_documents(spec),
-        provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     assert (task.epochs, task.cost_limit, task.time_limit, task.config.cache) == (
         2,
@@ -131,7 +128,7 @@ def unknown_or_unsafe_dataset_is_rejected() -> None:
 
 def benchmark_adapter_requires_provenance() -> None:
     with (
-        patch("evals.python.datasets.dataset_info", return_value=None),
+        patch("evals.python.datasets.describe_dataset", return_value=None),
         pytest.raises(ValueError, match="provenance"),
     ):
         benchmarks.benchmark_info()

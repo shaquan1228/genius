@@ -21,7 +21,7 @@ import evals.python.integrations.inspect.results as results_adapter
 import evals.python.integrations.inspect.tasks as task_adapter
 from evals.python import datasets, evaluation
 from evals.python.evaluation import EvaluationSettings, ModelPricing
-from kernel import Experiment, Profile
+from kernel import Experiment
 
 
 @modelapi(name="genius-hf")
@@ -58,13 +58,7 @@ def variant_experiment(spec: Experiment, *, request: EvaluationSettings) -> Expe
         if request.deliveries:
             raise ValueError("Choose a variant or delivery diagnostics")
         spec = Experiment.create(
-            profiles=[
-                Profile.create(
-                    name=variant.name,
-                    preamble=variant.preamble,
-                    instructions=list(variant.instructions),
-                )
-            ],
+            profiles=[variant.profile],
             epochs=spec.epochs,
             message_limit=spec.message_limit,
             cost_limit=spec.cost_limit,
@@ -83,13 +77,11 @@ def evaluation_tasks(spec: Experiment, *, request: EvaluationSettings) -> list[T
         if source_dir is None
         else profile_adapter.load_documents(spec, source_dir=source_dir)
     )
-    provenance = datasets.get_provenance(selection=catalog)
     build = partial(
         task_adapter.build_task,
         spec=spec,
         catalog=catalog,
         documents=documents,
-        provenance=provenance,
         agent=request.agent,
         version=request.version,
         dataset=request.dataset,

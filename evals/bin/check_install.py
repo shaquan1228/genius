@@ -17,7 +17,16 @@ def run(*args: str, cwd: Path) -> None:
 def main() -> None:
     with TemporaryDirectory(prefix="genius install ") as directory:
         work = Path(directory)
-        run("uv", "build", "--wheel", "--out-dir", str(work), str(ROOT), cwd=work)
+        run("uv", "build", "--sdist", "--out-dir", str(work), str(ROOT), cwd=work)
+        run(
+            "uv",
+            "build",
+            "--wheel",
+            "--out-dir",
+            str(work),
+            str(next(work.glob("*.tar.gz"))),
+            cwd=work,
+        )
         requirements = subprocess.check_output(
             [
                 "uv",

@@ -5,8 +5,8 @@ from typing import Annotated, Literal, cast
 
 from pydantic import AfterValidator, BaseModel, Field, InstanceOf, validate_call
 
-from evals.python.schema import FROZEN, Identifier
-from kernel import Experiment
+from evals.python import FROZEN, Identifier
+from kernel import Experiment, Profile
 
 __all__ = [
     "EvaluationSettings",
@@ -58,16 +58,18 @@ class VariantSettings(BaseModel):
 
     model_config = FROZEN
     name: Identifier
-    instructions: Annotated[tuple[str, ...], AfterValidator(_instruction_paths)] = (
-        "docs",
-        "skills",
+    instructions: Annotated[tuple[str, ...], AfterValidator(_instruction_paths)] = tuple(
+        Experiment.default.profiles[1].instructions
     )
-    preamble: str = (
-        "Read ../instructions/skills/{skill}/SKILL.md and its referenced files. "
-        "Apply that skill to this task.\n\n"
-    )
+    preamble: str = Experiment.default.profiles[1].preamble
     source_dir: str | None = None
     source_ref: str | None = None
+
+    @property
+    def profile(self) -> Profile:
+        return Profile.create(
+            name=self.name, preamble=self.preamble, instructions=self.instructions
+        )
 
 
 class EvaluationSettings(BaseModel):

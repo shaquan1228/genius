@@ -3,23 +3,17 @@ import os
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from huggingface_hub import HfApi, Volume
 
-from evals.python import evaluation
+from evals.python import REPO_ROOT, evaluation
 from evals.python.comparison import ComparisonRequest, VariantRequest
 from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.hugging_face import source
-from evals.python.paths import REPO_ROOT
 
-
-@dataclass(frozen=True, kw_only=True)
-class PreparedVariant:
-    selection: VariantRequest
-    settings: EvaluationSettings
+type Prepared = tuple[VariantRequest, EvaluationSettings]
 
 
 def save(path: Path, *, value: object) -> None:
@@ -53,19 +47,24 @@ def credentials(settings: EvaluationSettings) -> dict[str, str]:
 
 
 def download(
-    api: HfApi, *, plans: tuple[PreparedVariant, ...], output: Path, bucket: str, reused: bool
+    api: HfApi,
+    *,
+    plans: tuple[Prepared, ...],
+    output: Path,
+    bucket: str,
+    reused: bool,
 ) -> None:
-    for plan in plans:
-        if (plan.selection.result_ref is not None) != reused:
+    for selected, settings in plans:
+        if (selected.result_ref is not None) != reused:
             continue
-        directory = output / "runs" / str(plan.settings.run_id)
+        directory = output / "runs" / str(settings.run_id)
         api.sync_bucket(
-            f"hf://buckets/{bucket}/runs/{plan.settings.run_id}",
+            f"hf://buckets/{bucket}/runs/{settings.run_id}",
             str(directory),
             delete=False,
             quiet=True,
         )
-        evaluation.validate_run(directory, settings=plan.settings)
+        evaluation.validate_run(directory, settings=settings)
 
 
 def publish(api: HfApi, *, request: ComparisonRequest, output: Path, bucket: str) -> None:
@@ -102,7 +101,7 @@ def committed_harness() -> None:
 
 def prepare_variant(
     selected: VariantRequest, *, shared: EvaluationSettings, snapshot: Path
-) -> PreparedVariant:
+) -> Prepared:
     destination = snapshot / ".variants" / selected.variant.name
     variant = source.instructions(selected.variant, destination=destination, repository=REPO_ROOT)
     settings = evaluation.prepare_run(
@@ -116,9 +115,7 @@ def prepare_variant(
             }
         )
     )
-    return PreparedVariant(
-        selection=selected.model_copy(update={"variant": variant}), settings=settings
-    )
+    return selected.model_copy(update={"variant": variant}), settings
 
 
 def upload(api: HfApi, *, snapshot: Path, namespace: str) -> Volume:
@@ -132,13 +129,19 @@ def upload(api: HfApi, *, snapshot: Path, namespace: str) -> Volume:
     )
 
 
-def launch(api: HfApi, *, plan: PreparedVariant, source_volume: Volume, timeout: str) -> str:
+def launch(
+    api: HfApi,
+    *,
+    selected: VariantRequest,
+    settings: EvaluationSettings,
+    source_volume: Volume,
+    timeout: str,
+) -> str:
     namespace = source_volume.source.split("/", 1)[0]
-    settings = plan.settings
     remote = settings.model_copy(
         update={
-            "variant": plan.selection.variant.model_copy(
-                update={"source_dir": f"/source/.variants/{plan.selection.variant.name}"}
+            "variant": selected.variant.model_copy(
+                update={"source_dir": f"/source/.variants/{selected.variant.name}"}
             )
         }
     )
@@ -174,20 +177,24 @@ def jobs(  # noqa: PLR0913 - dispatch lifecycle shares explicit immutable inputs
     api: HfApi,
     *,
     request: ComparisonRequest,
-    plans: tuple[PreparedVariant, ...],
+    plans: tuple[Prepared, ...],
     source_volume: Volume,
     output: Path,
     timeout: str,
 ) -> Iterator[dict[str, str]]:
     submitted: dict[str, str] = {}
-    runs = {plan.selection.variant.name: plan.settings.run_id for plan in plans}
+    runs = {selected.variant.name: settings.run_id for selected, settings in plans}
     namespace = source_volume.source.split("/", 1)[0]
     try:
-        for plan in plans:
-            if plan.selection.result_ref is not None:
+        for selected, settings in plans:
+            if selected.result_ref is not None:
                 continue
-            submitted[plan.selection.variant.name] = launch(
-                api, plan=plan, source_volume=source_volume, timeout=timeout
+            submitted[selected.variant.name] = launch(
+                api,
+                selected=selected,
+                settings=settings,
+                source_volume=source_volume,
+                timeout=timeout,
             )
             save(
                 output / "jobs.json",
@@ -240,8 +247,8 @@ def acquire_runs(
         )
         request = request.model_copy(
             update={
-                "variants": tuple(plan.selection for plan in plans),
-                "shared": plans[0].settings.model_copy(update={"variant": None, "run_id": None}),
+                "variants": tuple(selected for selected, _ in plans),
+                "shared": plans[0][1].model_copy(update={"variant": None, "run_id": None}),
             }
         )
         download(api, plans=plans, output=output, bucket=bucket, reused=True)
@@ -262,8 +269,8 @@ def acquire_runs(
             yield (
                 request,
                 {
-                    plan.selection.variant.name: output / "runs" / str(plan.settings.run_id)
-                    for plan in plans
+                    selected.variant.name: output / "runs" / str(settings.run_id)
+                    for selected, settings in plans
                 },
             )
             publish(api, request=request, output=output, bucket=bucket)

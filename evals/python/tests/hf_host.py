@@ -16,12 +16,11 @@ from inspect_ai.model import GenerateConfig, get_model
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 from inspect_ai.scorer import Score
 
-from evals.python import datasets, evaluation
+from evals.python import REPO_ROOT, datasets, evaluation
 from evals.python.evaluation import EvaluationSettings, ModelPricing, VariantSettings
 from evals.python.integrations.hugging_face import dispatch
 from evals.python.integrations.hugging_face.job import configuration, run
 from evals.python.integrations.inspect.evaluation import HfChatAPI
-from evals.python.paths import REPO_ROOT
 
 
 @pytest.fixture(autouse=True)

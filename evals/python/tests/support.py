@@ -1,6 +1,5 @@
 """Run scripted agents through Inspect for integration tests."""
 
-import shutil
 from pathlib import Path
 
 from inspect_ai import Task as InspectTask
@@ -10,7 +9,6 @@ from inspect_ai.model import ModelCost, ModelInfo, get_model, set_model_info
 
 from evals.python import datasets
 from evals.python.datasets import Dataset, humanevalplus, smoke
-from evals.python.paths import EVALS_ROOT
 from evals.python.tests.declarations import _copy_case
 from evals.python.tests.projections import reference, verifier
 from evals.python.tests.scenarios import Mode
@@ -44,7 +42,7 @@ def offline_run(
         str(model),
         ModelInfo(cost=ModelCost(input=0, output=0, input_cache_write=0, input_cache_read=0)),
     )
-    logs = eval(
+    return eval(
         tasks,
         model=model,
         solver=None if mode is None else _scripted(mode),
@@ -56,11 +54,6 @@ def offline_run(
         log_format="json",
         ctl_server=False,
     )
-    archive = EVALS_ROOT / "results/offline"
-    archive.mkdir(parents=True, exist_ok=True)
-    for log in logs:
-        shutil.copy2(str(log.location), archive)
-    return logs
 
 
 def sample_result(sample: EvalSample) -> tuple[str, object, object]:
