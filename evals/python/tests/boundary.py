@@ -25,13 +25,12 @@ PUBLIC_OPERATIONS = {
     "datasets": {
         "compile_dataset",
         "describe_dataset",
-        "get_provenance",
         "get_reference",
         "list_cases",
         "load_dataset",
     },
     "verification": {"verify", "validate_reference"},
-    "execution": {"create_runtime"},
+    "execution": {"create_runtime", "allocated", "settle"},
     "evaluation": {
         "evaluate",
         "prepare_run",
@@ -46,8 +45,7 @@ PUBLIC_OPERATIONS = {
     },
 }
 OWNER_TYPES = {
-    "schema": {"DatasetInfo", "FileName", "Files", "Attributes", "Identifier"},
-    "datasets": {"Dataset", "Selection", "DatasetProvenance"},
+    "datasets": {"Dataset", "DatasetInfo", "Selection"},
     "verification": {"Diagnostic", "VerificationResult"},
     "execution": {"Execution", "Completion", "Environment", "Runtime", "Cleanup"},
     "evaluation": {"EvaluationSettings", "ModelPricing", "InstructionDelivery", "VariantSettings"},
@@ -100,7 +98,7 @@ def core_cannot_import_integrations_or_sdks() -> None:
     dependencies = {
         name
         for file in (
-            "schema.py",
+            "dataset.py",
             "datasets/__init__.py",
             "verification.py",
         )
@@ -297,7 +295,7 @@ def public_concerns_export_only_their_operations_and_types(owner: str) -> None:
     assert set(module.__all__) == PUBLIC_NAMES[owner]
 
 
-@pytest.mark.parametrize("filename", ["schema.py", "datasets/__init__.py"])
+@pytest.mark.parametrize("filename", ["dataset.py", "datasets/__init__.py"])
 def query_concerns_do_not_import_execution_workflows(filename: str) -> None:
     imports = _imported(PYTHON_ROOT / filename)
     assert not any(
@@ -337,7 +335,12 @@ def integrations_import_public_namespaces_or_owned_types(path: Path) -> None:
         if str(node.module).startswith("evals.python")
     ]
     allowed = {f"evals.python.{owner}": names for owner, names in OWNER_TYPES.items()}
-    allowed["evals.python"] = set(PUBLIC_NAMES)
+    allowed["evals.python"] = set(PUBLIC_NAMES) | {
+        "FROZEN",
+        "Identifier",
+        "EVALS_ROOT",
+        "REPO_ROOT",
+    }
     assert all(
         len(node.names) == 1
         or {name.name for name in node.names} <= allowed.get(str(node.module), set())

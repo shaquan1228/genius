@@ -93,7 +93,6 @@ def evaluation_prepares_once_for_all_tasks(
             "evals.python.datasets.smoke.cases", return_value=tuple(cohort.records.values())
         ) as load,
         patch.object(profiles, "load_documents", wraps=profiles.load_documents) as read,
-        patch.object(datasets, "get_provenance", wraps=datasets.get_provenance) as provenance,
     ):
         tasks = evaluation.evaluation_tasks(spec, request=request)
     hashes = {cast(Mapping[str, str], task.metadata)["instructions_sha256"] for task in tasks}
@@ -101,9 +100,8 @@ def evaluation_prepares_once_for_all_tasks(
         len(tasks),
         load.call_count,
         read.call_count,
-        provenance.call_count,
         len(hashes),
-    ) == (4 if deliveries else 2, 1, 1, 1, 1 if deliveries else 2)
+    ) == (4 if deliveries else 2, 1, 1, 1 if deliveries else 2)
 
 
 @pytest.fixture
@@ -151,7 +149,6 @@ def private_tasks() -> list[Task]:
             spec=spec,
             catalog=dataset,
             documents=documents,
-            provenance=datasets.get_provenance(selection=dataset),
             agent="codex",
             task_name=f"private-{index}",
         )
@@ -165,9 +162,7 @@ def private_tasks() -> list[Task]:
 def native_logs_keep_private_snapshots_out_and_score_each_dataset(
     private_tasks: list[Task], *, tmp_path: Path
 ) -> None:
-    with patch(
-        "evals.python.datasets.kernel_sources", side_effect=AssertionError("late source read")
-    ):
+    with patch("evals.python.datasets._module", side_effect=AssertionError("late dataset read")):
         logs = _offline_run(private_tasks, mode=None, directory=tmp_path)
     assert (
         [_results(read_eval_log(str(log.location))) for log in logs],
@@ -222,7 +217,6 @@ def native_profiles_share_fingerprinted_codex_guidance(
             agent="codex",
             catalog=dataset,
             documents=documents,
-            provenance=datasets.get_provenance(selection=dataset),
         )
         for profile in spec.profiles
     ]
@@ -253,4 +247,9 @@ def unresolved_public_resource_cannot_reach_agent_files() -> None:
     )
     case = Case.create(task=_copy_case(definition, criterion=Criterion.create(code=checks)))
     with pytest.raises(ValueError, match="Unresolved resource in public case external"):
-        profiles.files(profiles.load_profile("baseline", spec=spec), case=case, documents={})
+        cast(
+            Mapping[str, str],
+            profiles.samples(
+                profiles.load_profile("baseline", spec=spec), cases=(case,), documents={}
+            )[0].files,
+        )

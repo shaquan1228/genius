@@ -158,108 +158,69 @@ for value in (0, -1):
     )
 
 
+def answer(*, id: str, prompt: str, expected: dict[str, str | bool], reason: str) -> Task:
+    fields = [
+        ResponseField.create(
+            name=name,
+            value=ResponseValue.create(bool=value)
+            if isinstance(value, bool)
+            else ResponseValue.create(string=value),
+        )
+        for name, value in expected.items()
+    ]
+    return Task.create(
+        id=id,
+        fixture=Fixture.empty,
+        instruction=Instruction.create(skill="bayesian", prompt=prompt),
+        criterion=Criterion.create(
+            answer=Rubric.create(
+                expected=Response.create(fields=fields),
+                text_rule=TextRule.create(field="reason", min_words=1, max_words=40),
+            )
+        ),
+        allowed_files=(),
+        reference=Reference.create(
+            edits=Fixture.empty,
+            completion=Completion.create(
+                structured=Response.create(
+                    fields=[
+                        *fields,
+                        ResponseField.create(
+                            name="reason", value=ResponseValue.create(string=reason)
+                        ),
+                    ]
+                ),
+            ),
+        ),
+    )
+
+
 def cases() -> tuple[Task, ...]:
     return (
         receipt(),
         timeout(),
-        Task.create(
+        answer(
             id="small-decision",
-            fixture=Fixture.create(files=[]),
-            instruction=Instruction.create(
-                skill="bayesian",
-                prompt=(
-                    "Choose a service for a one-month trial. A costs $10 total; B costs $8 total. "
-                    "Features, reliability, cancellation terms, and all other costs are identical. "
-                    "Reply with JSON containing choice (A or B) and reason (one sentence). "
-                    "Do not change files."
-                ),
+            prompt=(
+                "Choose a service for a one-month trial. A costs $10 total; B costs $8 total. "
+                "Features, reliability, cancellation terms, and all other costs are identical. "
+                "Reply with JSON containing choice (A or B) and reason (one sentence). "
+                "Do not change files."
             ),
-            criterion=Criterion.create(
-                answer=Rubric.create(
-                    expected=Response.create(
-                        fields=[
-                            ResponseField.create(
-                                name="choice", value=ResponseValue.create(string="B")
-                            )
-                        ]
-                    ),
-                    text_rule=TextRule.create(
-                        field="reason",
-                        min_words=1,
-                        max_words=40,
-                    ),
-                )
-            ),
-            allowed_files=(),
-            reference=Reference.create(
-                edits=Fixture.create(files=[]),
-                completion=Completion.create(
-                    structured=Response.create(
-                        fields=[
-                            ResponseField.create(
-                                name="choice", value=ResponseValue.create(string="B")
-                            ),
-                            ResponseField.create(
-                                name="reason",
-                                value=ResponseValue.create(
-                                    string="B costs less for identical service."
-                                ),
-                            ),
-                        ]
-                    )
-                ),
-            ),
+            expected={"choice": "B"},
+            reason="B costs less for identical service.",
         ),
-        Task.create(
+        answer(
             id="decision-review",
-            fixture=Fixture.create(files=[]),
-            instruction=Instruction.create(
-                skill="bayesian",
-                prompt=(
-                    "I took a one-time $1 bet with a known 80% chance of winning $1 profit "
-                    "and 20% chance of losing $1. I could comfortably afford the loss. I lost. "
-                    "No new information about the odds appeared. Was the original decision "
-                    "supported, and should this loss alone "
-                    "change the rule? Reply with JSON containing decision_was_supported (boolean), "
-                    "change_rule (boolean), and reason (one sentence). Do not change files."
-                ),
+            prompt=(
+                "I took a one-time $1 bet with a known 80% chance of winning $1 profit "
+                "and 20% chance of losing $1. I could comfortably afford the loss. I lost. "
+                "No new information about the odds appeared. Was the original decision "
+                "supported, and should this loss alone "
+                "change the rule? Reply with JSON containing decision_was_supported (boolean), "
+                "change_rule (boolean), and reason (one sentence). Do not change files."
             ),
-            criterion=Criterion.create(
-                answer=Rubric.create(
-                    expected=Response.create(
-                        fields=[
-                            ResponseField.create(
-                                name="decision_was_supported", value=ResponseValue.create(bool=True)
-                            ),
-                            ResponseField.create(
-                                name="change_rule", value=ResponseValue.create(bool=False)
-                            ),
-                        ]
-                    ),
-                    text_rule=TextRule.create(field="reason", min_words=1, max_words=40),
-                )
-            ),
-            allowed_files=(),
-            reference=Reference.create(
-                edits=Fixture.create(files=[]),
-                completion=Completion.create(
-                    structured=Response.create(
-                        fields=[
-                            ResponseField.create(
-                                name="decision_was_supported", value=ResponseValue.create(bool=True)
-                            ),
-                            ResponseField.create(
-                                name="change_rule", value=ResponseValue.create(bool=False)
-                            ),
-                            ResponseField.create(
-                                name="reason",
-                                value=ResponseValue.create(
-                                    string="One loss did not change the known odds."
-                                ),
-                            ),
-                        ]
-                    )
-                ),
-            ),
+            expected={"decision_was_supported": True, "change_rule": False},
+            reason="One loss did not change the known odds.",
         ),
     )

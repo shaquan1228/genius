@@ -10,11 +10,10 @@ from types import MappingProxyType
 
 from inspect_ai.dataset import Sample
 
+from evals.python import REPO_ROOT
 from evals.python.evaluation import InstructionDelivery
-from evals.python.paths import REPO_ROOT
 from kernel import Case, Content, Experiment, Profile
 
-# A diagnostic treatment of reasoning's four required reads, without rewriting them.
 REASONING_DOCUMENTS = (
     "skills/reasoning/SKILL.md",
     "docs/identity.md",
@@ -117,26 +116,14 @@ def prompt(
     return (preamble + envelope if delivery == "manifest" else envelope) + case.prompt
 
 
-def files(
-    profile: Profile,
-    *,
-    case: Case,
-    documents: Mapping[str, bytes],
-) -> dict[str, str]:
-    workspace = {}
+def workspace_files(case: Case) -> dict[str, str]:
+    workspace = {"workspace/.gitkeep": inline_file(contents=b"")}
     for artifact in case.files:
         name, content = artifact.path, artifact.content
         if not isinstance(content, Content.Inline):
             raise ValueError(f"Unresolved resource in public case {case.id}: {name}")
         workspace[f"workspace/{name}"] = inline_file(contents=content.text.encode())
-    return {
-        "workspace/.gitkeep": inline_file(contents=b""),
-        **workspace,
-        **{
-            name: inline_file(contents=contents)
-            for name, contents in document_files(profile, documents=documents).items()
-        },
-    }
+    return workspace
 
 
 def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery options
@@ -149,6 +136,10 @@ def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery optio
     instruction_root: str = "../instructions",
     sandbox_image: str | None = None,
 ) -> list[Sample]:
+    instructions = {
+        name: inline_file(contents=contents)
+        for name, contents in document_files(profile, documents=documents).items()
+    }
     return [
         Sample(
             id=case.id,
@@ -159,7 +150,7 @@ def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery optio
                 delivery=delivery,
                 instruction_root=instruction_root,
             ),
-            files=files(profile, case=case, documents=documents),
+            files={**workspace_files(case), **instructions},
             metadata={
                 "case_id": case.id,
                 "profile": profile.name,

@@ -1,15 +1,26 @@
 """Execution capabilities and provider composition."""
 
-from collections.abc import Awaitable, Callable, Mapping
+import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Literal, Protocol, assert_never, runtime_checkable
 
 from pydantic import validate_call
 
-from evals.python.schema import FROZEN
+from evals.python import FROZEN
 
-__all__ = ["Cleanup", "Completion", "Environment", "Execution", "Runtime", "create_runtime"]
+__all__ = [
+    "Cleanup",
+    "Completion",
+    "Environment",
+    "Execution",
+    "Runtime",
+    "allocated",
+    "create_runtime",
+    "settle",
+]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -64,3 +75,54 @@ def create_runtime(
             return sandbox.runtime(image=image)
         case _ as unreachable:
             assert_never(unreachable)
+
+
+async def settle[T](task: asyncio.Future[T]) -> T:
+    while not task.done():
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            continue
+    return task.result()
+
+
+async def _cleanup(runtime: Runtime, *, grader: Environment, interrupted: bool) -> None:
+    task = asyncio.create_task(runtime.cleanup(grader, interrupted=interrupted))
+    try:
+        await asyncio.shield(task)
+    except asyncio.CancelledError:
+        with suppress(Exception):
+            await settle(task)
+        raise
+    except Exception:
+        if not interrupted:
+            raise
+
+
+async def _allocate(runtime: Runtime, *, candidate: Environment | None) -> Environment:
+    allocation = asyncio.ensure_future(runtime.create())
+    try:
+        return await asyncio.shield(allocation)
+    except asyncio.CancelledError:
+        with suppress(Exception):
+            grader = await settle(allocation)
+            if grader is not candidate:
+                await _cleanup(runtime, grader=grader, interrupted=True)
+        raise
+
+
+@asynccontextmanager
+async def allocated(
+    runtime: Runtime, *, candidate: Environment | None = None
+) -> AsyncIterator[Environment]:
+    grader = await _allocate(runtime, candidate=candidate)
+    if grader is candidate:
+        raise RuntimeError("Verification requires a fresh grader environment")
+    interrupted = False
+    try:
+        yield grader
+    except asyncio.CancelledError:
+        interrupted = True
+        raise
+    finally:
+        await _cleanup(runtime, grader=grader, interrupted=interrupted)

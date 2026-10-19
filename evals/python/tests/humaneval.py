@@ -1,6 +1,7 @@
 """Import benchmark definitions through the typed kernel without exposing private tests."""
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
 from unittest.mock import patch
@@ -9,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from evals.python import datasets, evaluation
-from evals.python.datasets import cases_hash, humanevalplus
+from evals.python.datasets import humanevalplus
 from evals.python.integrations import evalplus
 from evals.python.integrations.evalplus.benchmarks import (
     benchmark_info,
@@ -71,20 +72,29 @@ def imported_case_keeps_grader_private() -> None:
 def imported_profile_public_inputs_match() -> None:
     case = _import_records((_record(),))[0]
     assert {
-        name: profiles.files(
-            load_profile(name="genius", spec=evaluation.resolve_settings()),
-            case=case,
-            documents=profiles.load_documents(evaluation.resolve_settings()),
+        name: cast(
+            Mapping[str, str],
+            profiles.samples(
+                load_profile(name="genius", spec=evaluation.resolve_settings()),
+                cases=(case,),
+                documents=profiles.load_documents(evaluation.resolve_settings()),
+            )[0].files,
         )[name]
-        for name in profiles.files(
-            load_profile(name="baseline", spec=evaluation.resolve_settings()),
-            case=case,
-            documents=profiles.load_documents(evaluation.resolve_settings()),
+        for name in cast(
+            Mapping[str, str],
+            profiles.samples(
+                load_profile(name="baseline", spec=evaluation.resolve_settings()),
+                cases=(case,),
+                documents=profiles.load_documents(evaluation.resolve_settings()),
+            )[0].files,
         )
-    } == profiles.files(
-        load_profile(name="baseline", spec=evaluation.resolve_settings()),
-        case=case,
-        documents=profiles.load_documents(evaluation.resolve_settings()),
+    } == cast(
+        Mapping[str, str],
+        profiles.samples(
+            load_profile(name="baseline", spec=evaluation.resolve_settings()),
+            cases=(case,),
+            documents=profiles.load_documents(evaluation.resolve_settings()),
+        )[0].files,
     )
 
 
@@ -127,10 +137,10 @@ def dataset_selector_preserves_trusted_records() -> None:
 
 def pinned_manifest() -> None:
     info = benchmark_info()
-    assert info.count == 164
-    assert info.revision == "v0.1.10"
-    assert len(info.sha256) == 64
-    assert len(info.evaluator_commit) == 40
+    assert info["count"] == 164
+    assert info["revision"] == "v0.1.10"
+    assert len(cast(str, info["sha256"])) == 64
+    assert len(cast(str, info["evaluator_commit"])) == 40
 
 
 @pytest.fixture
@@ -161,7 +171,7 @@ def import_cache_tracks_verifier_source(
     assert _public_snapshot(datasets.list_cases(selection=first)) == _public_snapshot(
         datasets.list_cases(selection=second)
     )
-    assert (_files(checks.files)["verifier.py"], cases_hash(first) == cases_hash(second)) == (
+    assert (_files(checks.files)["verifier.py"], first.cases_hash == second.cases_hash) == (
         _files(before.files)["verifier.py"] + "\n",
         False,
     )
@@ -188,22 +198,22 @@ def duplicate_ids_across_import_batches() -> None:
 def unrelated_evaluator_does_not_change_smoke_provenance(
     *, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    before = datasets.get_provenance(selection="smoke")
+    before = datasets.load_dataset(selection="smoke")
     monkeypatch.setattr(evalplus, "__file__", str(tmp_path / "missing.py"))
-    assert datasets.get_provenance(selection="smoke") == before
+    assert datasets.load_dataset(selection="smoke") == before
 
 
 def case_hash_tracks_private_records_without_changing_public_cases() -> None:
     original = _import_dataset((_record(),))
     changed = _import_dataset((_record(plus_input=[[123]]),))
     with patch.object(datasets, "load_dataset", return_value=original):
-        before = datasets.get_provenance(selection="humanevalplus").cases_hash
+        before = datasets.load_dataset(selection="humanevalplus").cases_hash
         public = datasets.list_cases(selection="humanevalplus")
     with patch.object(datasets, "load_dataset", return_value=changed):
         assert _public_snapshot(datasets.list_cases(selection="humanevalplus")) == _public_snapshot(
             public
         )
-        assert datasets.get_provenance(selection="humanevalplus").cases_hash != before
+        assert datasets.load_dataset(selection="humanevalplus").cases_hash != before
 
 
 def imported_dataset_keeps_benchmark_metadata(synthetic_dataset: None) -> None:

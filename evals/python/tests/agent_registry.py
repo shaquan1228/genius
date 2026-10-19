@@ -159,7 +159,6 @@ def explicit_agent_version_is_logged() -> None:
         version="0.137.0",
         catalog=datasets.load_dataset(selection="smoke"),
         documents=profiles.load_documents(evaluation.resolve_settings()),
-        provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     spec = evaluation.resolve_settings()
     assert (task.epochs, task.message_limit, task.cost_limit, task.time_limit) == (
@@ -187,7 +186,6 @@ def custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
         agent=request.agent,
         catalog=datasets.load_dataset(selection="smoke"),
         documents=profiles.load_documents(spec),
-        provenance=datasets.get_provenance(selection=datasets.load_dataset(selection="smoke")),
     )
     assert task.metadata is not None
     assert (task.metadata["agent"], task.metadata["agent_version"]) == ("other", "custom-version")

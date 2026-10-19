@@ -77,7 +77,7 @@ def validation_errors_retain_native_issues() -> None:
 def harness_failures_have_a_distinct_error_contract() -> None:
     with pytest.raises(GradingError) as caught:
         Task.grade(
-            task=datasets.record("clear-task", selection="smoke"),
+            task=datasets.load_dataset(selection="smoke").records["clear-task"],
             response=None,
             outcome=Outcome.create(
                 changed_files=(),

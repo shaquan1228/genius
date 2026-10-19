@@ -395,7 +395,9 @@ def execution_environment_is_immutable_snapshot() -> None:
 def reference_uses_default_local_adapter_and_real_ocaml() -> None:
     async def execute() -> VerificationResult:
         return assert_type(
-            await verification.validate_reference(datasets.record("clear-task", selection="smoke")),
+            await verification.validate_reference(
+                datasets.load_dataset(selection="smoke").records["clear-task"]
+            ),
             VerificationResult,
         )
 
@@ -408,7 +410,7 @@ def answer_only_reference_never_allocates() -> None:
     with patch("kernel.Task.verifier", return_value=None):
         result = asyncio.run(
             verification.validate_reference(
-                datasets.record("small-decision", selection="smoke"), runtime=ports
+                datasets.load_dataset(selection="smoke").records["small-decision"], runtime=ports
             )
         )
     assert isinstance(result.verification, Verification.Unchecked)
@@ -436,7 +438,7 @@ def reference_candidate_and_grader_are_both_cleaned() -> None:
             patch("evals.python.verification.token_hex", return_value="secret"),
         ):
             result = await verification.validate_reference(
-                datasets.record("clear-task", selection="smoke"), runtime=ports
+                datasets.load_dataset(selection="smoke").records["clear-task"], runtime=ports
             )
         assert isinstance(result.verification, Verification.Passed)
         assert cast(AsyncMock, ports.cleanup).await_count == 2
@@ -476,11 +478,12 @@ def reference_setup_failures_preserve_lifecycle(stage: str) -> None:
             if stage == "cancel":
                 with pytest.raises(asyncio.CancelledError):
                     await verification.validate_reference(
-                        datasets.record("clear-task", selection="smoke"), runtime=ports
+                        datasets.load_dataset(selection="smoke").records["clear-task"],
+                        runtime=ports,
                     )
             else:
                 result = await verification.validate_reference(
-                    datasets.record("clear-task", selection="smoke"), runtime=ports
+                    datasets.load_dataset(selection="smoke").records["clear-task"], runtime=ports
                 )
                 assert isinstance(result.verification, Verification.HarnessError)
         assert cast(AsyncMock, ports.cleanup).await_count == (stage != "allocation")
@@ -508,7 +511,8 @@ def reference_nonzero_mkdir_is_harness_error() -> None:
             ),
         ):
             result = await verification.validate_reference(
-                datasets.record("clear-task", selection="smoke"), runtime=_runtime_port(agent)
+                datasets.load_dataset(selection="smoke").records["clear-task"],
+                runtime=_runtime_port(agent),
             )
         assert isinstance(result.verification, Verification.HarnessError)
         assert "create reference workspace" in result.detail
