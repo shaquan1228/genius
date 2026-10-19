@@ -147,7 +147,7 @@ def launch(
     )
     job = api.run_job(
         image="ghcr.io/astral-sh/uv:python3.12-bookworm",
-        command=["sh", "/source/evals/bin/hf_bootstrap.sh"],
+        command=["bash", "/source/evals/scripts/huggingface-bootstrap.sh"],
         namespace=namespace,
         timeout=timeout,
         env=environment(remote) | {"HF_NAMESPACE": namespace},

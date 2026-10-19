@@ -1,5 +1,7 @@
+#!/usr/bin/env python3
 """Exercise a wheel in a fresh environment, from a directory outside the source tree."""
 
+import argparse
 import json
 import os
 import subprocess
@@ -11,10 +13,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(*args: str, cwd: Path) -> None:
-    subprocess.run(args, cwd=cwd, check=True)
+    subprocess.run(args, cwd=cwd, check=True, stdout=sys.stderr)
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dataset",
+        choices=("smoke", "humanevalplus"),
+        help="Dataset to measure (default: INSTALL_DATASET or smoke).",
+    )
+    options = parser.parse_args()
+    selection = options.dataset or os.environ.get("INSTALL_DATASET", "smoke")
+    if selection not in ("smoke", "humanevalplus"):
+        parser.error("INSTALL_DATASET must be smoke or humanevalplus")
     with TemporaryDirectory(prefix="genius install ") as directory:
         work = Path(directory)
         run("uv", "build", "--sdist", "--out-dir", str(work), str(ROOT), cwd=work)
@@ -57,10 +69,11 @@ def main() -> None:
             cwd=work,
         )
         subprocess.run(
-            ["sh", str(ROOT / "bin/kernel_setup.sh")],
+            ["bash", str(ROOT / "scripts/kernel-setup.sh")],
             cwd=work,
             check=True,
             env=os.environ | {"KERNEL_PYTHON": str(python)},
+            stdout=sys.stderr,
         )
         expected_hash = subprocess.check_output(
             [
@@ -105,7 +118,12 @@ print(json.dumps(dict(dataset=selection, native_import_seconds=native_import,
 """
         code = code.replace("EXPECTED_HASH", repr(expected_hash))
         # -I drops PYTHONPATH and the working directory from import search paths.
-        run(str(python), "-I", "-c", code, cwd=work)
+        subprocess.run(
+            [str(python), "-I", "-c", code],
+            cwd=work,
+            check=True,
+            env=os.environ | {"INSTALL_DATASET": selection},
+        )
         run(str(python), "-I", "-m", "evals.python.integrations.smoke", cwd=work)
         print(json.dumps({"installation": "passed", "python": sys.version.split()[0]}))
 

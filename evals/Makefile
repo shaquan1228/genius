@@ -1,4 +1,4 @@
-.PHONY: check check-scaffolding check-ocaml-format check-python format format-ocaml format-python lint-ocaml setup setup-kernel test-ocaml check-install
+.PHONY: check-bin check check-scaffolding check-ocaml-format check-python format format-ocaml format-python lint-ocaml setup setup-kernel test-ocaml check-install
 
 KERNEL_SWITCH ?= genius-kernel-414
 KERNEL_RUN = opam exec --switch="$(KERNEL_SWITCH)" -- uv run --no-sync
@@ -17,8 +17,8 @@ check-python:
 	uv sync --python 3.12 --extra dev --locked --inexact
 	$(MAKE) setup-kernel
 	$(KERNEL_RUN) dune build @python-bindings
-	$(KERNEL_RUN) ruff format --check python bin/check_install.py
-	$(KERNEL_RUN) ruff check python bin/check_install.py
+	$(KERNEL_RUN) ruff format --check python scripts/check_installation.py
+	$(KERNEL_RUN) ruff check python scripts/check_installation.py
 	$(KERNEL_RUN) mypy
 	$(KERNEL_RUN) pytest --cov --cov-branch --cov-report=term-missing --cov-report=json:results/coverage.json --cov-report=xml:results/coverage.xml --junitxml=results/tests.xml
 	$(KERNEL_RUN) xenon --max-absolute A --max-modules A --max-average A --exclude python/kernel/generate.py,python/tests/conftest.py python
@@ -30,14 +30,14 @@ setup:
 
 # Sync Python dependencies first; the bridge is installed from the pinned opam package.
 setup-kernel:
-	KERNEL_SWITCH="$(KERNEL_SWITCH)" sh bin/kernel_setup.sh
+	KERNEL_SWITCH="$(KERNEL_SWITCH)" bash scripts/kernel-setup.sh
 
 format: format-ocaml format-python
 
 # pyproject.toml configures Ruff's style and lint rules.
 format-python:
-	uv run ruff format python bin/check_install.py
-	uv run ruff check --fix python bin/check_install.py
+	uv run ruff format python scripts/check_installation.py
+	uv run ruff check --fix python scripts/check_installation.py
 
 # ocaml/.ocamlformat pins the formatter version and style; `make format-ocaml` applies it.
 format-ocaml:
@@ -78,10 +78,17 @@ test-ocaml:
 	$(call ocaml_test,$(KERNEL) tests/test_kernel.ml)
 
 check-install:
-	$(KERNEL_RUN) python bin/check_install.py
+	$(KERNEL_RUN) python scripts/check_installation.py
 
 check-scaffolding:
-	sh -n bin/hf_host.sh
-	sh -n bin/hf_bootstrap.sh
-	sh -n bin/kernel_setup.sh
+	bash -n bin/huggingface-run
+	bash -n scripts/huggingface-bootstrap.sh
+	bash -n scripts/kernel-setup.sh
 	uv lock --check
+
+# CLI contracts use only the standard library; tools are pinned and isolated by uv.
+check-bin:
+	cd .. && for script in evals/bin/* evals/scripts/*.sh evals/lib/*.sh; do "$${BASH_BIN:-bash}" -n "$$script" || exit; done
+	cd .. && uvx --from shellcheck-py==0.11.0.1 shellcheck --external-sources --shell=bash evals/bin/* evals/scripts/*.sh evals/lib/*.sh
+	cd .. && uvx --from shfmt-py==4.2.0 shfmt -d -i 2 -ci -bn evals/bin/* evals/scripts/*.sh evals/lib/*.sh
+	cd .. && uv run --no-project --python 3.12 python -m unittest discover -s tests -v

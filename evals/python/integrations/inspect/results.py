@@ -28,8 +28,13 @@ _STDERR = cast(Callable[[list[SampleScore]], float], stderr(cluster="case_id"))
 
 
 def _harness_source(path: Path) -> bool:
-    return path.suffix in (".py", ".ml", ".mli", ".sh") and not {"tests", "kernel"}.intersection(
-        path.relative_to(EVALS_ROOT).parts
+    return (
+        path.is_file()
+        and (path.suffix in (".py", ".ml", ".mli", ".sh") or path.parent == EVALS_ROOT / "bin")
+        and not {
+            "tests",
+            "kernel",
+        }.intersection(path.relative_to(EVALS_ROOT).parts)
     )
 
 
@@ -37,7 +42,8 @@ def harness_hash() -> str:
     files = {
         path.relative_to(EVALS_ROOT).as_posix(): path.read_bytes()
         for path in chain.from_iterable(
-            (EVALS_ROOT / folder).rglob("*") for folder in ("python", "ocaml", "bin")
+            (EVALS_ROOT / folder).rglob("*")
+            for folder in ("python", "ocaml", "bin", "lib", "scripts")
         )
         if _harness_source(path)
     }
