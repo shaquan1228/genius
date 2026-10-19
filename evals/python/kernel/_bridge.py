@@ -32,7 +32,10 @@ finally:
 try:
     _ocaml.require("genius_evals_kernel")
 except ImportError as error:
-    raise ImportError("OCaml kernel is not installed; run make -C evals setup-kernel") from error
+    raise ImportError(
+        "OCaml kernel is not installed; run make -C evals setup-kernel "
+        "from the source checkout, using the matching opam switch"
+    ) from error
 
 native = cast(ModuleType, _ocaml.Genius_evals_kernel)
 

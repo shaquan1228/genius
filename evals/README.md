@@ -28,13 +28,15 @@ The shared Makefile, Dune project, and Python package configuration live at this
 
 ## Check the harness offline
 
+Run `make -C evals setup` for locked CPython 3.12 dependencies and the required OCaml 4.14.2 native switch.
+`make -C evals check-install` tests installation outside the checkout and measures import time, dataset loading, and memory.
+HumanEval+ loads eagerly and retains eight cached snapshots; release them with `datasets.clear_cache()`.
+
 Install opam, [uv](https://docs.astral.sh/uv/), Git, Make, and a C compiler.
 Run from the repository root:
 
 ```sh
-opam init --bare --no-setup
-uv sync --project evals --python 3.12 --extra dev --locked --inexact
-make -C evals setup-kernel
+make -C evals setup
 opam install --switch genius-kernel-414 --yes ocamlformat.0.29.0
 opam exec --switch=genius-kernel-414 -- make -C evals check
 ```

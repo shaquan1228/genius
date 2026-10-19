@@ -5,6 +5,7 @@ import hashlib
 import os
 import urllib.request
 from collections.abc import Iterable
+from io import BytesIO, TextIOWrapper
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -77,8 +78,11 @@ def _download(*, source: str, sha256: str, destination: Path) -> bytes:
     if destination.exists():
         data = destination.read_bytes()
     else:
-        with urllib.request.urlopen(source, timeout=60) as response:
-            data = gzip.decompress(response.read())
+        with (
+            urllib.request.urlopen(source, timeout=60) as response,
+            gzip.GzipFile(fileobj=response) as stream,
+        ):
+            data = stream.read()
     if hashlib.sha256(data).hexdigest() != sha256:
         raise ValueError("Dataset checksum mismatch")
     if not destination.exists():
@@ -96,4 +100,5 @@ def _download(*, source: str, sha256: str, destination: Path) -> bytes:
 
 def cases() -> tuple[Task, ...]:
     data = _download(source=info.source, sha256=info.sha256, destination=_cache_path(info.sha256))
-    return declarations(data.decode().splitlines())
+    with TextIOWrapper(BytesIO(data), encoding="utf-8") as records:
+        return declarations(records)

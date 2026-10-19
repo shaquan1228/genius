@@ -9,3 +9,6 @@ __pycache__/
 /python/kernel/*.pyi
 
 /_build/
+
+/build/
+/dist/

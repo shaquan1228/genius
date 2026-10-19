@@ -18,6 +18,7 @@ __all__ = [
     "Dataset",
     "DatasetInfo",
     "Selection",
+    "clear_cache",
     "compile_dataset",
     "describe_dataset",
     "get_reference",
@@ -27,6 +28,12 @@ __all__ = [
 
 _LOCK = RLock()
 _CACHE: OrderedDict[tuple[object, ...], Dataset] = OrderedDict()
+
+
+def clear_cache() -> None:
+    """Release cached snapshots without invalidating callers holding a dataset."""
+    with _LOCK:
+        _CACHE.clear()
 
 
 class DatasetModule(Protocol):

@@ -107,13 +107,13 @@ def _promote_bindings(workspace: Path) -> None:
 
 @pytest.fixture
 def binding_workspace(tmp_path: Path) -> Path:
-    for name in ("ocaml", "python/kernel"):
+    for name in ("ocaml", "python"):
         shutil.copytree(
             EVALS / name,
             tmp_path / name,
             ignore=shutil.ignore_patterns("tests", "__pycache__", "*.pyi"),
         )
-    for name in ("dune-project", "pyproject.toml", "uv.lock"):
+    for name in ("dune-project", "pyproject.toml", "uv.lock", "__init__.py", "py.typed"):
         shutil.copyfile(EVALS / name, tmp_path / name)
     _build_bindings(tmp_path)
     return tmp_path

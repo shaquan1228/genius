@@ -16,6 +16,7 @@ from inspect_ai.scorer import CORRECT, SampleScore, Score, accuracy, stderr
 
 import evals.python.integrations.inspect.pricing as pricing_adapter
 import evals.python.integrations.inspect.profiles as profiles_adapter
+import kernel
 from evals.python import EVALS_ROOT, evaluation
 from evals.python.comparison import RunSummary
 from evals.python.evaluation import EvaluationSettings
@@ -26,14 +27,26 @@ _ACCURACY = cast(Callable[[list[SampleScore]], float], accuracy())
 _STDERR = cast(Callable[[list[SampleScore]], float], stderr(cluster="case_id"))
 
 
+def _harness_source(path: Path) -> bool:
+    return path.suffix in (".py", ".ml", ".mli", ".sh") and not {"tests", "kernel"}.intersection(
+        path.relative_to(EVALS_ROOT).parts
+    )
+
+
 def harness_hash() -> str:
     files = {
         path.relative_to(EVALS_ROOT).as_posix(): path.read_bytes()
         for path in chain.from_iterable(
             (EVALS_ROOT / folder).rglob("*") for folder in ("python", "ocaml", "bin")
         )
-        if path.suffix in (".py", ".ml", ".mli", ".sh") and "tests" not in path.parts
+        if _harness_source(path)
     }
+    files.update(
+        {
+            "python/kernel/" + path.name: path.read_bytes()
+            for path in Path(kernel.__file__).parent.glob("*.py")
+        }
+    )
     files["pyproject.toml"] = (EVALS_ROOT / "pyproject.toml").read_bytes()
     files["uv.lock"] = (EVALS_ROOT / "uv.lock").read_bytes()
     return profiles_adapter.content_hash(files)
