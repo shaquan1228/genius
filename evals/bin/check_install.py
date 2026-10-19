@@ -81,8 +81,8 @@ start = time.perf_counter()
 from evals.python import datasets
 from evals.python.integrations.inspect.results import harness_hash
 sdk_import = time.perf_counter() - start
-assert Path(evals.__file__).is_relative_to(Path.cwd())
-assert Path(kernel.__file__).is_relative_to(Path.cwd())
+assert Path(evals.__file__).resolve().is_relative_to(Path.cwd().resolve())
+assert Path(kernel.__file__).resolve().is_relative_to(Path.cwd().resolve())
 assert Path(evals.__file__).with_name("py.typed").exists()
 assert Path(kernel.__file__).with_name("__init__.pyi").exists()
 assert harness_hash() == EXPECTED_HASH
