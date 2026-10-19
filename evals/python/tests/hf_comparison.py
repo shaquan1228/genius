@@ -93,6 +93,7 @@ def runs_independent_jobs_with_pinned_inputs(api: MagicMock, *, tmp_path: Path) 
 
 def _assert_volumes(api: MagicMock) -> None:
     for call in api.run_job.call_args_list:
+        assert call.kwargs["command"] == ["bash", "/source/evals/scripts/huggingface-bootstrap.sh"]
         assert call.kwargs["volumes"][0].revision == "immutable-revision"
         assert call.kwargs["volumes"][1].path.startswith("runs/")
         assert json.loads(call.kwargs["env"]["EVAL_VARIANT"])["source_dir"].startswith(

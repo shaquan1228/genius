@@ -3,18 +3,18 @@ set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 readonly SCRIPT_DIR
-# shellcheck source=evals/bin/lib/common.bash
-source "$SCRIPT_DIR/lib/common.bash"
+# shellcheck source=evals/lib/genius-evals/shell.sh
+source "$SCRIPT_DIR/../lib/genius-evals/shell.sh"
 
 usage() {
   cat <<'HELP'
-Usage: evals/bin/kernel_setup.sh
+Usage: evals/scripts/kernel-setup.sh
 Build the pinned OCaml kernel for an existing CPython 3.12 environment.
 Run `make -C evals setup` to create the Python environment as well.
 
 Examples:
-  evals/bin/kernel_setup.sh
-  KERNEL_PYTHON=/path/to/env/bin/python evals/bin/kernel_setup.sh
+  evals/scripts/kernel-setup.sh
+  KERNEL_PYTHON=/path/to/env/bin/python evals/scripts/kernel-setup.sh
 
 Options:
   -h, --help  Show help without requiring Python, opam, or network access.

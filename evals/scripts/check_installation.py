@@ -69,7 +69,7 @@ def main() -> None:
             cwd=work,
         )
         subprocess.run(
-            ["bash", str(ROOT / "bin/kernel_setup.sh")],
+            ["bash", str(ROOT / "scripts/kernel-setup.sh")],
             cwd=work,
             check=True,
             env=os.environ | {"KERNEL_PYTHON": str(python)},

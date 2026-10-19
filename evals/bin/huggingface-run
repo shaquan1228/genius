@@ -3,17 +3,17 @@ set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 readonly SCRIPT_DIR
-# shellcheck source=evals/bin/lib/common.bash
-source "$SCRIPT_DIR/lib/common.bash"
+# shellcheck source=evals/lib/genius-evals/shell.sh
+source "$SCRIPT_DIR/../lib/genius-evals/shell.sh"
 
 usage() {
   cat <<'HELP'
-Usage: evals/bin/hf_host.sh [--dry-run]
+Usage: evals/bin/huggingface-run [--dry-run]
 Upload committed sources and run a Hugging Face evaluation Job (charges apply).
 
 Examples:
-  HF_NAMESPACE=my-team EVAL_MODEL=openai/pinned-model evals/bin/hf_host.sh --dry-run
-  HF_NAMESPACE=my-team EVAL_MODEL=openai/pinned-model evals/bin/hf_host.sh
+  HF_NAMESPACE=my-team EVAL_MODEL=openai/pinned-model evals/bin/huggingface-run --dry-run
+  HF_NAMESPACE=my-team EVAL_MODEL=openai/pinned-model evals/bin/huggingface-run
 
 Options:
   -n, --dry-run  Validate configuration and show the plan without network access.
@@ -87,7 +87,7 @@ launch_job() {
     EVAL_CACHE EVAL_MODEL_COST EVAL_INSTRUCTION_DELIVERY EVAL_DELIVERIES; do
     arguments+=(--env "$name=${!name:-}")
   done
-  hf "${arguments[@]}" ghcr.io/astral-sh/uv:python3.12-bookworm bash /source/evals/bin/hf_bootstrap.sh
+  hf "${arguments[@]}" ghcr.io/astral-sh/uv:python3.12-bookworm bash /source/evals/scripts/huggingface-bootstrap.sh
 }
 
 main() {

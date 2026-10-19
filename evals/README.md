@@ -71,7 +71,7 @@ export EVAL_MODEL='openai/<pinned-model-id>'
 export EVAL_DATASET='humanevalplus'
 export EVAL_LIMIT=3
 export EVAL_EPOCHS=1
-bash evals/bin/hf_host.sh
+evals/bin/huggingface-run
 ```
 
 The launcher uploads committed files, streams Job logs, and saves results to the

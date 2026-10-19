@@ -3,18 +3,18 @@ set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 readonly SCRIPT_DIR
-# shellcheck source=evals/bin/lib/common.bash
-source "$SCRIPT_DIR/lib/common.bash"
+# shellcheck source=evals/lib/genius-evals/shell.sh
+source "$SCRIPT_DIR/../lib/genius-evals/shell.sh"
 
 usage() {
   cat <<'HELP'
-Usage: evals/bin/hf_bootstrap.sh [options]
+Usage: evals/scripts/huggingface-bootstrap.sh [options]
 Prepare a Hugging Face worker and replace this process with the evaluation runner.
-Defaults match the Debian Job image and volume mounts used by hf_host.sh.
+Defaults match the Debian Job image and volume mounts used by huggingface-run.
 Missing build tools are installed with apt-get, requiring root in that case.
 
 Example:
-  evals/bin/hf_bootstrap.sh --source-dir /source --work-dir /work --results-dir /results
+  evals/scripts/huggingface-bootstrap.sh --source-dir /source --work-dir /work --results-dir /results
 
 Options:
   --source-dir DIR   Committed source snapshot (default: /source).
@@ -78,7 +78,7 @@ main() {
   cp -R -- "$source_dir/." "$work_dir/"
   cd -- "$work_dir"
   uv sync --project evals --python 3.12 --locked --inexact >&2
-  bash evals/bin/kernel_setup.sh
+  bash evals/scripts/kernel-setup.sh
   cli_info 'Starting evaluation runner.'
   exec opam exec --switch="${KERNEL_SWITCH:-genius-kernel-414}" -- \
     uv run --project evals --no-sync python -m "${EVAL_RUNNER_MODULE:-evals.python.integrations.hugging_face.job}"

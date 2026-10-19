@@ -3,9 +3,9 @@ name: Bin contracts
 on:
   push:
     branches: [main]
-    paths: ["bin/**", "evals/bin/**", "tests/test_bin.py", ".github/workflows/bin.yml"]
+    paths: ["evals/bin/**", "evals/lib/**", "evals/scripts/**", "evals/Makefile", "tests/test_bin.py", ".github/workflows/bin.yml"]
   pull_request:
-    paths: ["bin/**", "evals/bin/**", "tests/test_bin.py", ".github/workflows/bin.yml"]
+    paths: ["evals/bin/**", "evals/lib/**", "evals/scripts/**", "evals/Makefile", "tests/test_bin.py", ".github/workflows/bin.yml"]
 
 permissions:
   contents: read

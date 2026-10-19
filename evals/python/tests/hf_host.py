@@ -254,7 +254,7 @@ def host_script_launches_job_without_exposing_key(
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     result = subprocess.run(
-        ["bash", str(REPO_ROOT / "evals/bin/hf_host.sh")],
+        ["bash", str(REPO_ROOT / "evals/bin/huggingface-run")],
         cwd={"repository": REPO_ROOT, "external": tmp_path}[working_directory],
         env=os.environ.copy(),
         capture_output=True,
@@ -265,7 +265,7 @@ def host_script_launches_job_without_exposing_key(
     assert (
         "hf://datasets/example/genius-evals-" in commands,
         "hf://buckets/example/genius-eval-results:/results:rw" in commands,
-        "bash /source/evals/bin/hf_bootstrap.sh" in commands,
+        "bash /source/evals/scripts/huggingface-bootstrap.sh" in commands,
         "--repo-type dataset --commit-message Immutable Genius evaluation source" in commands,
     ) == (True, True, True, True)
     assert (
@@ -277,7 +277,11 @@ def host_script_launches_job_without_exposing_key(
 
 @pytest.mark.parametrize(
     "path",
-    ["evals/bin/hf_bootstrap.sh", ".github/workflows/hf-evals.yml", ".github/workflows/evals.yml"],
+    [
+        "evals/scripts/huggingface-bootstrap.sh",
+        ".github/workflows/hf-evals.yml",
+        ".github/workflows/evals.yml",
+    ],
 )
 def hosted_setup_installs_opam_path_pin_dependency(path: str) -> None:
     source = (REPO_ROOT / path).read_text()
@@ -300,7 +304,7 @@ def host_script_uses_hf_model_without_provider_key(
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     result = subprocess.run(
-        ["bash", "evals/bin/hf_host.sh"],
+        ["bash", "evals/bin/huggingface-run"],
         cwd=REPO_ROOT,
         env=os.environ.copy(),
         capture_output=True,
@@ -329,7 +333,7 @@ def host_script_rejects_empty_provider_key(
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     result = subprocess.run(
-        ["bash", "evals/bin/hf_host.sh"],
+        ["bash", "evals/bin/huggingface-run"],
         cwd=REPO_ROOT,
         env=os.environ.copy(),
         capture_output=True,
@@ -494,7 +498,7 @@ def host_rejects_invalid_concurrency(value: str, *, monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("EVAL_MODEL", "mockllm/model")
     monkeypatch.setenv("EVAL_MAX_SAMPLES", value)
     result = subprocess.run(
-        ["bash", "evals/bin/hf_host.sh"],
+        ["bash", "evals/bin/huggingface-run"],
         cwd=REPO_ROOT,
         capture_output=True,
         check=False,
@@ -527,7 +531,7 @@ def host_requires_routed_prices_before_launch(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("EVAL_MODEL", "hf-inference-providers/vendor/model:provider")
     monkeypatch.delenv("EVAL_MODEL_COST")
     result = subprocess.run(
-        ["bash", "evals/bin/hf_host.sh"], cwd=REPO_ROOT, capture_output=True, check=False
+        ["bash", "evals/bin/huggingface-run"], cwd=REPO_ROOT, capture_output=True, check=False
     )
     assert result.returncode != 0
     assert b"Set EVAL_MODEL_COST" in result.stderr

@@ -37,19 +37,9 @@ codex plugin add genius@genius
 
 Start a new Codex thread, then invoke `$genius:reasoning` or describe the Genius reasoning framework in your prompt. Codex uses the shared skill package and does not automatically inject the identity into every session.
 
-**Manually:**
-
-```sh
-git clone git@github.com:shaquan1228/genius.git
-cd genius
-bin/setup
-```
-
-For Cursor: paste the printed snippet into **Cursor > Settings > Rules for AI**.
-
 ## How it works
 
-Claude Code and Codex install this repository as the plugin and read the same identity at `docs/identity.md`. The identity defines how the model should observe, decide, and act. Cursor gets the same context via `.cursor/rules/`. Codex activates the skill when it matches a request or when you invoke `$genius:reasoning`; `bin/setup` reads the same file for persistent Claude Code and Cursor injection.
+Claude Code and Codex install this repository as the plugin and read the same identity at `docs/identity.md`. The identity defines how the model should observe, decide, and act. Codex activates the skill when it matches a request or when you invoke `$genius:reasoning`.
 
 `docs/identity.md` is the only file you need to understand or customize. It links the postulate and the proofs in `docs/`, which ship with the plugin.
 
@@ -77,7 +67,7 @@ smoke test on Hugging Face Jobs after adding a positive credit balance:
 uvx --from huggingface_hub==2.2.0 hf auth whoami
 export HF_NAMESPACE='shaquan1228'
 export EVAL_MODEL='hf-inference-providers/openai/gpt-oss-20b'
-bash evals/bin/hf_host.sh
+evals/bin/huggingface-run
 ```
 
 See [evals/README.md](evals/README.md) for the full run, logs, and results.
@@ -91,5 +81,3 @@ See [evals/README.md](evals/README.md) for the full run, logs, and results.
 | `/genius:preflight [task]` | Bind a 5-field contract before non-trivial action (one field per proof) |
 | `/genius:tcrei [task]` | Compose a paste-ready TCREI prompt for dispatching to another agent |
 | `/genius:bayesian [decision]` | Analyze a decision under uncertainty — options, Bayesian update, bounded verdict, counter-math |
-| `bin/setup` | Manually inject identity into Claude Code and Cursor |
-| `bin/teardown [--confirm]` | Remove the injection (dry-run by default) |

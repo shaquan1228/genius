@@ -4,7 +4,6 @@ import json
 import os
 import shutil
 import signal
-import stat
 import subprocess
 import sys
 import tempfile
@@ -15,11 +14,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BASH = os.environ.get("BASH_BIN", "bash")
 SCRIPTS = (
-    "bin/setup",
-    "bin/teardown",
-    "evals/bin/kernel_setup.sh",
-    "evals/bin/hf_host.sh",
-    "evals/bin/hf_bootstrap.sh",
+    "evals/scripts/kernel-setup.sh",
+    "evals/bin/huggingface-run",
+    "evals/scripts/huggingface-bootstrap.sh",
 )
 
 
@@ -29,18 +26,14 @@ class BinContracts(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.work = Path(self.temporary.name).resolve()
         self.repo = self.work / "repo with spaces\\literal"
-        for folder in ("bin", "evals/bin"):
+        for folder in ("evals/bin", "evals/lib", "evals/scripts"):
             shutil.copytree(
                 ROOT / folder,
                 self.repo / folder,
                 ignore=shutil.ignore_patterns("__pycache__"),
             )
-        (self.repo / "docs").mkdir()
-        (self.repo / "docs/identity.md").write_text("An identity.\n")
         self.home = self.work / "home"
         self.home.mkdir()
-        self.claude = self.home / ".claude/CLAUDE.md"
-        self.cursor = self.repo / ".cursor/rules/genius.mdc"
         self.environment = os.environ | {
             "HOME": str(self.home),
             "CDPATH": str(self.work),
@@ -75,9 +68,22 @@ class BinContracts(unittest.TestCase):
         self.environment["PATH"] = str(directory) + os.pathsep + os.environ["PATH"]
         return executable
 
-    def seed(self, content):
-        self.claude.parent.mkdir(parents=True, exist_ok=True)
-        self.claude.write_text(content)
+    def test_public_commands_are_separate_from_non_executable_helpers(self):
+        self.assertEqual(
+            [path.name for path in (self.repo / "evals/bin").iterdir()],
+            ["huggingface-run"],
+        )
+        helper = self.repo / "evals/lib/genius-evals/shell.sh"
+        self.assertFalse(helper.stat().st_mode & 0o111)
+        result = subprocess.run(
+            [str(self.repo / "evals/bin/huggingface-run"), "--help"],
+            cwd=self.work,
+            env=self.environment,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("huggingface-run", result.stdout)
 
     def test_help_takes_precedence_and_has_no_side_effects(self):
         self.environment.pop("HOME")
@@ -87,8 +93,7 @@ class BinContracts(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("Usage:", result.stdout)
                 self.assertEqual(result.stderr, "")
-        self.assertFalse(self.cursor.exists())
-        self.assertFalse(self.claude.exists())
+        self.assertEqual(list(self.home.iterdir()), [])
 
     def test_bad_arguments_have_usage_status_and_stderr(self):
         for script in SCRIPTS:
@@ -104,90 +109,6 @@ class BinContracts(unittest.TestCase):
                 result = self.run_script(script, "--", "operand")
                 self.assertEqual(result.returncode, 2)
 
-    def test_identity_round_trip_is_idempotent_and_preserves_mode(self):
-        self.seed("before\n# BEGIN GENIUS\nold\n# END GENIUS\nafter\n")
-        self.claude.chmod(0o640)
-        result = self.run_script("bin/setup")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, "")
-        expected = f"before\n# BEGIN GENIUS\n@{self.repo}/docs/identity.md\n# END GENIUS\nafter\n"
-        self.assertEqual(self.claude.read_text(), expected)
-        self.assertEqual(stat.S_IMODE(self.claude.stat().st_mode), 0o640)
-        first_cursor = self.cursor.read_bytes()
-        result = self.run_script("bin/setup", "--quiet")
-        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
-        self.assertEqual(self.claude.read_text(), expected)
-        self.assertEqual(self.cursor.read_bytes(), first_cursor)
-        preview = self.run_script("bin/teardown")
-        self.assertEqual(preview.returncode, 0)
-        self.assertIn("Would remove", preview.stdout)
-        self.assertEqual(self.claude.read_text(), expected)
-        self.assertTrue(self.cursor.exists())
-        result = self.run_script("bin/teardown", "--confirm")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.claude.read_text(), "before\nafter\n")
-        self.assertFalse(self.cursor.exists())
-
-    def test_dry_run_never_creates_identity_files(self):
-        for script, flags in (
-            ("bin/setup", ("--dry-run",)),
-            ("bin/teardown", ("--yes", "--dry-run")),
-        ):
-            result = self.run_script(script, *flags)
-            self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse(self.claude.parent.exists())
-        self.assertFalse(self.cursor.parent.exists())
-
-    def test_malformed_markers_preserve_all_content(self):
-        contents = (
-            "before\n# BEGIN GENIUS\nafter\n",
-            "# END GENIUS\nafter\n",
-            "# BEGIN GENIUS\n# BEGIN GENIUS\n# END GENIUS\n",
-        )
-        for content in contents:
-            for script, flags in (("bin/setup", ()), ("bin/teardown", ("--yes",))):
-                with self.subTest(content=content, script=script):
-                    self.seed(content)
-                    result = self.run_script(script, *flags)
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual(self.claude.read_text(), content)
-                    self.assertEqual(list(self.claude.parent.glob(".genius.*")), [])
-                    self.assertFalse(self.cursor.exists())
-
-    def test_similar_marker_prefixes_are_not_deleted(self):
-        self.seed("# BEGIN GENIUS manual note\nkeep this\n")
-        result = self.run_script("bin/teardown", "--yes")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
-            self.claude.read_text(), "# BEGIN GENIUS manual note\nkeep this\n"
-        )
-
-    def test_removal_preserves_unmanaged_file_without_final_newline(self):
-        self.seed("unrelated text without a newline")
-        result = self.run_script("bin/teardown", "--yes")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.claude.read_bytes(), b"unrelated text without a newline")
-
-    def test_failed_mode_copy_preserves_file_in_guarded_update(self):
-        self.seed("keep me\n")
-        self.fake("cp", "exit 7\n")
-        result = self.run_script("bin/setup")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(self.claude.read_text(), "keep me\n")
-        self.assertEqual(list(self.claude.parent.glob(".genius.*")), [])
-        self.assertFalse(self.cursor.exists())
-
-    def test_symbolic_links_are_preserved(self):
-        target = self.work / "real instructions"
-        target.write_text("keep me\n")
-        self.claude.parent.mkdir()
-        self.claude.symlink_to(target)
-        result = self.run_script("bin/setup")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertTrue(self.claude.is_symlink())
-        self.assertEqual(target.read_text(), "keep me\n")
-        self.assertFalse(self.cursor.exists())
-
     def test_failed_producer_cannot_commit_partial_output(self):
         target = self.work / "file"
         target.write_text("original\n")
@@ -198,7 +119,7 @@ class BinContracts(unittest.TestCase):
                 "-c",
                 code,
                 "test",
-                str(self.repo / "evals/bin/lib/common.bash"),
+                str(self.repo / "evals/lib/genius-evals/shell.sh"),
                 str(target),
             ],
             capture_output=True,
@@ -212,7 +133,7 @@ class BinContracts(unittest.TestCase):
         calls = self.work / "calls"
         self.fake("uvx", 'touch "$CALLS"; exit 99\n')
         result = self.run_script(
-            "evals/bin/hf_host.sh",
+            "evals/bin/huggingface-run",
             "--dry-run",
             env={
                 "HF_NAMESPACE": "team",
@@ -228,7 +149,7 @@ class BinContracts(unittest.TestCase):
         calls = self.work / "calls"
         self.fake("uvx", 'touch "$CALLS"\n')
         result = self.run_script(
-            "evals/bin/hf_host.sh",
+            "evals/bin/huggingface-run",
             env={
                 "HF_NAMESPACE": "team",
                 "EVAL_MODEL": "openai/model",
@@ -246,7 +167,7 @@ class BinContracts(unittest.TestCase):
         self.fake("uvx", 'touch "$CALLS"\n')
         self.fake("git", "exit 7\n")
         result = self.run_script(
-            "evals/bin/hf_host.sh",
+            "evals/bin/huggingface-run",
             env={
                 "HF_NAMESPACE": "team",
                 "EVAL_MODEL": "openai/model",
@@ -264,7 +185,8 @@ class BinContracts(unittest.TestCase):
         calls = self.work / "calls"
         self.fake("opam", 'touch "$CALLS"\n')
         result = self.run_script(
-            "evals/bin/kernel_setup.sh", env={"KERNEL_JOBS": "0", "CALLS": str(calls)}
+            "evals/scripts/kernel-setup.sh",
+            env={"KERNEL_JOBS": "0", "CALLS": str(calls)},
         )
         self.assertEqual(result.returncode, 2)
         self.assertFalse(calls.exists())
@@ -300,28 +222,28 @@ class BinContracts(unittest.TestCase):
             "KERNEL_PYTHON": str(interpreter),
             "CALLS": str(calls),
         }
-        result = self.run_script("evals/bin/kernel_setup.sh", env=environment)
+        result = self.run_script("evals/scripts/kernel-setup.sh", env=environment)
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("cache is busy", result.stderr)
         self.assertTrue(lock.is_dir())
         self.assertFalse(calls.exists())
         lock.rmdir()
-        result = self.run_script("evals/bin/kernel_setup.sh", env=environment)
+        result = self.run_script("evals/scripts/kernel-setup.sh", env=environment)
         self.assertEqual(result.returncode, 7, result.stderr)
         self.assertTrue(calls.exists())
         self.assertEqual(sorted(path.name for path in root.iterdir()), ["config"])
 
     def test_bootstrap_rejects_missing_option_value(self):
         for option in ("--source-dir", "--work-dir", "--results-dir"):
-            result = self.run_script("evals/bin/hf_bootstrap.sh", option)
+            result = self.run_script("evals/scripts/huggingface-bootstrap.sh", option)
             self.assertEqual(result.returncode, 2)
             self.assertIn("requires a directory", result.stderr)
 
     def test_bootstrap_preserves_runner_exit_and_arguments(self):
         source = self.work / "source snapshot"
-        (source / "evals/bin").mkdir(parents=True)
+        (source / "evals/scripts").mkdir(parents=True)
         (source / "evals/pyproject.toml").touch()
-        (source / "evals/bin/kernel_setup.sh").write_text(
+        (source / "evals/scripts/kernel-setup.sh").write_text(
             '#!/usr/bin/env bash\nprintf "native\\n" >&2\n'
         )
         log = self.work / "runner.json"
@@ -335,7 +257,7 @@ class BinContracts(unittest.TestCase):
         work = self.work / "working copy"
         results = self.work / "result files"
         result = self.run_script(
-            "evals/bin/hf_bootstrap.sh",
+            "evals/scripts/huggingface-bootstrap.sh",
             "--source-dir",
             str(source),
             "--work-dir",
@@ -362,7 +284,7 @@ class BinContracts(unittest.TestCase):
                 "-c",
                 code,
                 "test",
-                str(self.repo / "evals/bin/lib/common.bash"),
+                str(self.repo / "evals/lib/genius-evals/shell.sh"),
                 str(self.work),
                 str(ready),
             ],
@@ -386,7 +308,7 @@ class BinContracts(unittest.TestCase):
                 process.communicate()
 
     def test_python_entry_point_has_help_and_rejects_bad_options(self):
-        script = self.repo / "evals/bin/check_install.py"
+        script = self.repo / "evals/scripts/check_installation.py"
         help_result = subprocess.run(
             [sys.executable, str(script), "--help"], capture_output=True, text=True
         )

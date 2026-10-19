@@ -1,6 +1,5 @@
 # Shared by executable entry points; sourcing this file performs no work.
 # Bash 3.2 is the minimum supported shell (the macOS system version).
-CLI_QUIET=0
 CLI_TEMP_PATHS=('')
 
 cli_init() {
@@ -46,7 +45,7 @@ cli_usage_error() {
 }
 
 cli_info() {
-  if [[ $CLI_QUIET == 0 ]]; then printf '%s\n' "$*" >&2; fi
+  printf '%s\n' "$*" >&2
 }
 
 cli_no_arguments() {
