@@ -1,4 +1,4 @@
-.PHONY: check check-scaffolding check-ocaml-format check-python format format-ocaml format-python lint-ocaml setup-kernel test-ocaml
+.PHONY: check check-scaffolding check-ocaml-format check-python format format-ocaml format-python lint-ocaml setup setup-kernel test-ocaml check-install
 
 KERNEL_SWITCH ?= genius-kernel-414
 KERNEL_RUN = opam exec --switch=$(KERNEL_SWITCH) -- uv run --no-sync
@@ -17,12 +17,16 @@ check-python:
 	uv sync --python 3.12 --extra dev --locked --inexact
 	$(MAKE) setup-kernel
 	$(KERNEL_RUN) dune build @python-bindings
-	$(KERNEL_RUN) ruff format --check python
-	$(KERNEL_RUN) ruff check python
+	$(KERNEL_RUN) ruff format --check python bin/check_install.py
+	$(KERNEL_RUN) ruff check python bin/check_install.py
 	$(KERNEL_RUN) mypy
 	$(KERNEL_RUN) pytest --cov --cov-branch --cov-report=term-missing --cov-report=json:results/coverage.json --cov-report=xml:results/coverage.xml --junitxml=results/tests.xml
 	$(KERNEL_RUN) xenon --max-absolute A --max-modules A --max-average A --exclude python/kernel/generate.py,python/tests/conftest.py python
 	$(KERNEL_RUN) radon cc --show-complexity --json --exclude python/kernel/generate.py,python/tests/conftest.py python > results/complexity.json
+
+setup:
+	uv sync --python 3.12 --extra dev --locked --inexact
+	$(MAKE) setup-kernel
 
 # Sync Python dependencies first; the bridge is installed from the pinned opam package.
 setup-kernel:
@@ -32,8 +36,8 @@ format: format-ocaml format-python
 
 # pyproject.toml configures Ruff's style and lint rules.
 format-python:
-	uv run ruff format python
-	uv run ruff check --fix python
+	uv run ruff format python bin/check_install.py
+	uv run ruff check --fix python bin/check_install.py
 
 # ocaml/.ocamlformat pins the formatter version and style; `make format-ocaml` applies it.
 format-ocaml:
@@ -72,6 +76,9 @@ test-ocaml:
 	$(call ocaml_test,$(RESPONSE) tests/test_criterion.ml)
 	$(call ocaml_test,$(KERNEL) tests/test_content.ml)
 	$(call ocaml_test,$(KERNEL) tests/test_kernel.ml)
+
+check-install:
+	$(KERNEL_RUN) python bin/check_install.py
 
 check-scaffolding:
 	sh -n bin/hf_host.sh

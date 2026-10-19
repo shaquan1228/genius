@@ -28,6 +28,23 @@ jobs:
       - name: Check the kernel with the pinned compiler
         run: opam exec --switch=genius-kernel-414 -- make -C evals lint-ocaml test-ocaml
 
+  installation:
+    name: External installation (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "4.14.2"
+      - run: uv sync --project evals --python 3.12 --locked --inexact
+      - run: KERNEL_SWITCH=default sh evals/bin/kernel_setup.sh
+      - run: KERNEL_SWITCH=default opam exec --switch=default -- make -C evals check-install
+
   format:
     name: OCaml format
     runs-on: ubuntu-24.04

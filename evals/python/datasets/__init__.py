@@ -17,6 +17,7 @@ __all__ = [
     "Dataset",
     "DatasetProvenance",
     "Selection",
+    "clear_cache",
     "compile_dataset",
     "describe_dataset",
     "get_provenance",
@@ -140,6 +141,11 @@ def _compile(
             raise ValueError("Dataset task IDs must be unique")
         private[record.value.id] = record.value
     return Dataset(sources=sources, records=private, info=info)
+
+
+def clear_cache() -> None:
+    """Release compiled snapshots retained by the process cache; live callers keep theirs."""
+    _compile.cache_clear()
 
 
 def compile_declarations(

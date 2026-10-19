@@ -27,6 +27,9 @@ if [ -n "$provider_key" ] && [ -z "$(printenv "$provider_key")" ]; then
   exit 2
 fi
 
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+cd "$repo_root"
+
 hf() { uvx --from huggingface_hub==2.2.0 hf "$@"; }
 source_repo="$HF_NAMESPACE/genius-evals-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 results_bucket="$HF_NAMESPACE/genius-eval-results"

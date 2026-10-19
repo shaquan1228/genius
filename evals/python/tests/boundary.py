@@ -23,6 +23,7 @@ LIBRARY = tuple(
 
 PUBLIC_OPERATIONS = {
     "datasets": {
+        "clear_cache",
         "compile_dataset",
         "describe_dataset",
         "get_provenance",

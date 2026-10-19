@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
+from evals.python import datasets
 from evals.python.datasets.humanevalplus import _cache_path, _download
 
 DATA = b'{"task_id":"HumanEval/0"}\n'
@@ -59,3 +60,11 @@ def cache_root(monkeypatch: pytest.MonkeyPatch) -> None:
     assert _cache_path("abc") == Path("/tmp/benchmark-cache/genius-evals/abc.jsonl")
     monkeypatch.delenv("XDG_CACHE_HOME")
     assert _cache_path("abc") == Path.home() / ".cache/genius-evals/abc.jsonl"
+
+
+def clear_compiled_cache_preserves_live_snapshots() -> None:
+    before = datasets.load_dataset()
+    datasets.clear_cache()
+    after = datasets.load_dataset()
+    assert after is not before
+    assert tuple(before.cases) == tuple(after.cases)

@@ -235,8 +235,9 @@ def hf_job_counts_crashed_samples(
 
 
 @pytest.mark.parametrize("job_exit", [0, 7])
+@pytest.mark.parametrize("working_directory", ["repository", "external"])
 def host_script_launches_job_without_exposing_key(
-    job_exit: int, *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    job_exit: int, *, working_directory: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     launcher = tmp_path / "uvx"
     launcher.write_text(
@@ -254,8 +255,8 @@ def host_script_launches_job_without_exposing_key(
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     result = subprocess.run(
-        ["sh", "evals/bin/hf_host.sh"],
-        cwd=REPO_ROOT,
+        ["sh", str(REPO_ROOT / "evals/bin/hf_host.sh")],
+        cwd={"repository": REPO_ROOT, "external": tmp_path}[working_directory],
         env=os.environ.copy(),
         capture_output=True,
         check=False,
