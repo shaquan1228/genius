@@ -77,7 +77,7 @@ smoke test on Hugging Face Jobs after adding a positive credit balance:
 uvx --from huggingface_hub==2.2.0 hf auth whoami
 export HF_NAMESPACE='shaquan1228'
 export EVAL_MODEL='hf-inference-providers/openai/gpt-oss-20b'
-sh evals/bin/hf_host.sh
+bash evals/bin/hf_host.sh
 ```
 
 See [evals/README.md](evals/README.md) for the full run, logs, and results.

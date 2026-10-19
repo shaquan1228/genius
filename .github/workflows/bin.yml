@@ -1,0 +1,27 @@
+name: Bin contracts
+
+on:
+  push:
+    branches: [main]
+    paths: ["bin/**", "evals/bin/**", "tests/test_bin.py", ".github/workflows/bin.yml"]
+  pull_request:
+    paths: ["bin/**", "evals/bin/**", "tests/test_bin.py", ".github/workflows/bin.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    name: Shell contracts (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Check formatting, ShellCheck, and system Bash contracts
+        env:
+          BASH_BIN: /bin/bash
+        run: make -C evals check-bin

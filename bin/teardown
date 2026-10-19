@@ -1,51 +1,67 @@
 #!/usr/bin/env bash
-# bin/teardown — remove genius identity injection.
-#
-# Usage: bin/teardown [--confirm]
-# Dry-run by default. Pass --confirm to execute.
-#
-# Removes the # BEGIN GENIUS ... # END GENIUS block from ~/.claude/CLAUDE.md
-# and removes .cursor/rules/genius.mdc. Leaves all other CLAUDE.md content intact.
-
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CLAUDE_MD="$HOME/.claude/CLAUDE.md"
-CURSOR_MDC="$ROOT_DIR/.cursor/rules/genius.mdc"
-BEGIN_MARKER="# BEGIN GENIUS"
-CONFIRM=false
+ROOT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+readonly ROOT_DIR
+# shellcheck source=evals/bin/lib/common.bash
+source "$ROOT_DIR/evals/bin/lib/common.bash"
+# shellcheck source=bin/lib/identity.bash
+source "$ROOT_DIR/bin/lib/identity.bash"
 
-for arg in "$@"; do
-  case $arg in
-    --confirm) CONFIRM=true ;;
-    --help|-h)
-      echo "Usage: bin/teardown [--confirm]"
-      echo "Removes genius identity injection. Dry-run by default."
-      exit 0
-      ;;
-    *) echo "Unknown argument: $arg" >&2; exit 1 ;;
-  esac
-done
+usage() {
+  cat <<'HELP'
+Usage: bin/teardown [--yes] [--quiet]
+Remove Genius identity from Claude Code and this checkout's Cursor rules.
+The default is a dry run; no interactive prompt is required.
 
-HAS_BLOCK=false
-grep -q "^$BEGIN_MARKER" "$CLAUDE_MD" 2>/dev/null && HAS_BLOCK=true
+Examples:
+  bin/teardown
+  bin/teardown --yes
 
-echo "Will remove:"
-$HAS_BLOCK && echo "  genius block from ~/.claude/CLAUDE.md" || echo "  genius block (not found in ~/.claude/CLAUDE.md — skip)"
-[ -f "$CURSOR_MDC" ] && echo "  .cursor/rules/genius.mdc" || echo "  .cursor/rules/genius.mdc (not found — skip)"
+Options:
+  -y, --yes      Apply the removal (--confirm remains an alias).
+  -n, --dry-run  Describe changes without writing files (default).
+  -q, --quiet    Suppress progress messages.
+  -h, --help     Show this help, without changing anything.
 
-if ! $CONFIRM; then
-  echo ""; echo "Dry run. Pass --confirm to execute."; exit 0
-fi
+Help: https://github.com/shaquan1228/genius#readme
+HELP
+}
 
-if $HAS_BLOCK; then
-  awk '/^# BEGIN GENIUS/{in_block=1; next} /^# END GENIUS/{in_block=0; next} !in_block{print}' \
-    "$CLAUDE_MD" > "$CLAUDE_MD.tmp" && mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"
-  echo "✓ Removed genius block from ~/.claude/CLAUDE.md"
-fi
+main() {
+  cli_help "$@"
+  local apply=0 dry_run=0
+  while (($#)); do
+    case $1 in
+      -y | --yes | --confirm) apply=1 ;;
+      -n | --dry-run) dry_run=1 ;;
+      -q | --quiet) CLI_QUIET=1 ;;
+      --)
+        shift
+        cli_no_arguments "$@"
+        break
+        ;;
+      *) cli_usage_error "Unexpected argument: $1" ;;
+    esac
+    shift
+  done
+  identity_preflight "$ROOT_DIR"
+  local claude=$HOME/.claude/CLAUDE.md cursor=$ROOT_DIR/.cursor/rules/genius.mdc
+  if ((! apply || dry_run)); then
+    printf 'Would remove GENIUS blocks from %s\nWould remove %s\n' "$claude" "$cursor"
+    cli_info 'Dry run. Pass --yes to apply.'
+    return
+  fi
+  if [[ -f $claude ]]; then
+    identity_claude "$claude" remove "$ROOT_DIR/docs/identity.md"
+    cli_info "Removed managed blocks from $claude"
+  fi
+  if [[ -f $cursor ]]; then
+    rm -- "$cursor"
+    cli_info "Removed $cursor"
+  fi
+  cli_info 'Restart Claude Code or Cursor to clear the identity.'
+}
 
-if [ -f "$CURSOR_MDC" ]; then
-  rm "$CURSOR_MDC" && echo "✓ Removed .cursor/rules/genius.mdc"
-fi
-
-echo ""; echo "Done. Restart Claude Code or Cursor to clear injected context."
+cli_init
+main "$@"

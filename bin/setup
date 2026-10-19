@@ -1,63 +1,64 @@
 #!/usr/bin/env bash
-# bin/setup — inject genius identity into Claude Code and Cursor.
-#
-# Appends a delimited block to ~/.claude/CLAUDE.md (preserving existing content)
-# and writes .cursor/rules/genius.mdc using the packaged identity.
-#
-# Safe to re-run (idempotent).
-
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-IDENTITY_DOC="$ROOT_DIR/docs/identity.md"
-CLAUDE_MD="$HOME/.claude/CLAUDE.md"
-CURSOR_MDC="$ROOT_DIR/.cursor/rules/genius.mdc"
-BEGIN_MARKER="# BEGIN GENIUS"
-END_MARKER="# END GENIUS"
+ROOT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+readonly ROOT_DIR
+# shellcheck source=evals/bin/lib/common.bash
+source "$ROOT_DIR/evals/bin/lib/common.bash"
+# shellcheck source=bin/lib/identity.bash
+source "$ROOT_DIR/bin/lib/identity.bash"
 
-for arg in "$@"; do
-  case $arg in
-    --help|-h)
-      echo "Usage: bin/setup"
-      echo "Injects genius identity into Claude Code and Cursor."
-      exit 0
-      ;;
-    *)
-      echo "Unknown argument: $arg" >&2
-      exit 1
-      ;;
-  esac
-done
+usage() {
+  cat <<'HELP'
+Usage: bin/setup [--dry-run] [--quiet]
+Install Genius identity in Claude Code and this checkout's Cursor rules.
 
-# ── Claude Code ────────────────────────────────────────────────────────────────
-mkdir -p "$HOME/.claude"
-touch "$CLAUDE_MD"
+Examples:
+  bin/setup --dry-run
+  bin/setup
 
-GENIUS_BLOCK="$BEGIN_MARKER
-@${IDENTITY_DOC}
-$END_MARKER"
+Options:
+  -n, --dry-run  Describe changes without writing files.
+  -q, --quiet    Suppress progress messages.
+  -h, --help     Show this help, without changing anything.
 
-if grep -q "^$BEGIN_MARKER" "$CLAUDE_MD" 2>/dev/null; then
-  # Replace existing block
-  awk -v begin="$BEGIN_MARKER" -v end="$END_MARKER" -v block="$GENIUS_BLOCK" '
-    $0 == begin { in_block=1; print block; next }
-    in_block && $0 == end { in_block=0; next }
-    !in_block { print }
-  ' "$CLAUDE_MD" > "$CLAUDE_MD.tmp" && mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"
-  echo "✓ Updated genius block in ~/.claude/CLAUDE.md"
-else
-  # Append block
-  printf '\n%s\n' "$GENIUS_BLOCK" >> "$CLAUDE_MD"
-  echo "✓ Appended genius block to ~/.claude/CLAUDE.md"
-fi
+Existing CLAUDE.md content is preserved; running again updates the managed block.
+Help: https://github.com/shaquan1228/genius#readme
+HELP
+}
 
-# ── Cursor ─────────────────────────────────────────────────────────────────────
-mkdir -p "$(dirname "$CURSOR_MDC")"
-printf -- '---\nalwaysApply: true\ndescription: Engineering identity and operating principles\n---\n\n@%s\n' "$IDENTITY_DOC" > "$CURSOR_MDC"
-echo "✓ Wrote .cursor/rules/genius.mdc"
+main() {
+  cli_help "$@"
+  local dry_run=0
+  while (($#)); do
+    case $1 in
+      -n | --dry-run) dry_run=1 ;;
+      -q | --quiet) CLI_QUIET=1 ;;
+      --)
+        shift
+        cli_no_arguments "$@"
+        break
+        ;;
+      *) cli_usage_error "Unexpected argument: $1" ;;
+    esac
+    shift
+  done
+  identity_preflight "$ROOT_DIR"
+  local identity=$ROOT_DIR/docs/identity.md
+  local claude=$HOME/.claude/CLAUDE.md cursor=$ROOT_DIR/.cursor/rules/genius.mdc
+  [[ -f $identity ]] || cli_die "Identity source not found: $identity"
+  [[ $identity != *$'\n'* ]] || cli_die 'Identity paths cannot contain newlines.'
+  if ((dry_run)); then
+    printf 'Would update %s\nWould write %s\n' "$claude" "$cursor"
+    return
+  fi
+  mkdir -p -- "$(dirname -- "$claude")" "$(dirname -- "$cursor")"
+  identity_claude "$claude" install "$identity"
+  cli_info "Updated $claude"
+  identity_cursor "$cursor" "$identity"
+  cli_info "Updated $cursor"
+  cli_info 'Restart Claude Code or Cursor to load the identity.'
+}
 
-echo ""
-echo "Done. Open a new Claude Code or Cursor session — genius identity is now active."
-echo ""
-echo "For global Cursor coverage, paste into Cursor > Settings > Rules for AI:"
-echo "  @${IDENTITY_DOC}"
+cli_init
+main "$@"

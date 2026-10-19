@@ -42,7 +42,7 @@ jobs:
         with:
           ocaml-compiler: "4.14.2"
       - run: uv sync --project evals --python 3.12 --locked --inexact
-      - run: KERNEL_SWITCH="$(opam switch show)" sh evals/bin/kernel_setup.sh
+      - run: KERNEL_SWITCH="$(opam switch show)" bash evals/bin/kernel_setup.sh
       - run: KERNEL_SWITCH="$(opam switch show)" opam exec -- make -C evals check-install
 
   format:

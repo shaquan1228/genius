@@ -1,4 +1,4 @@
-.PHONY: check check-scaffolding check-ocaml-format check-python format format-ocaml format-python lint-ocaml setup setup-kernel test-ocaml check-install
+.PHONY: check-bin check check-scaffolding check-ocaml-format check-python format format-ocaml format-python lint-ocaml setup setup-kernel test-ocaml check-install
 
 KERNEL_SWITCH ?= genius-kernel-414
 KERNEL_RUN = opam exec --switch="$(KERNEL_SWITCH)" -- uv run --no-sync
@@ -30,7 +30,7 @@ setup:
 
 # Sync Python dependencies first; the bridge is installed from the pinned opam package.
 setup-kernel:
-	KERNEL_SWITCH="$(KERNEL_SWITCH)" sh bin/kernel_setup.sh
+	KERNEL_SWITCH="$(KERNEL_SWITCH)" bash bin/kernel_setup.sh
 
 format: format-ocaml format-python
 
@@ -81,7 +81,14 @@ check-install:
 	$(KERNEL_RUN) python bin/check_install.py
 
 check-scaffolding:
-	sh -n bin/hf_host.sh
-	sh -n bin/hf_bootstrap.sh
-	sh -n bin/kernel_setup.sh
+	bash -n bin/hf_host.sh
+	bash -n bin/hf_bootstrap.sh
+	bash -n bin/kernel_setup.sh
 	uv lock --check
+
+# CLI contracts use only the standard library; tools are pinned and isolated by uv.
+check-bin:
+	cd .. && for script in bin/setup bin/teardown bin/lib/*.bash evals/bin/*.sh evals/bin/lib/*.bash; do "$${BASH_BIN:-bash}" -n "$$script" || exit; done
+	cd .. && uvx --from shellcheck-py==0.11.0.1 shellcheck --external-sources --shell=bash bin/setup bin/teardown bin/lib/*.bash evals/bin/*.sh evals/bin/lib/*.bash
+	cd .. && uvx --from shfmt-py==4.2.0 shfmt -d -i 2 -ci -bn bin/setup bin/teardown bin/lib/*.bash evals/bin/*.sh evals/bin/lib/*.bash
+	cd .. && uv run --no-project --python 3.12 python -m unittest discover -s tests -v

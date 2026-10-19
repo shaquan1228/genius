@@ -28,9 +28,10 @@ _STDERR = cast(Callable[[list[SampleScore]], float], stderr(cluster="case_id"))
 
 
 def _harness_source(path: Path) -> bool:
-    return path.suffix in (".py", ".ml", ".mli", ".sh") and not {"tests", "kernel"}.intersection(
-        path.relative_to(EVALS_ROOT).parts
-    )
+    return path.suffix in (".py", ".ml", ".mli", ".sh", ".bash") and not {
+        "tests",
+        "kernel",
+    }.intersection(path.relative_to(EVALS_ROOT).parts)
 
 
 def harness_hash() -> str:
