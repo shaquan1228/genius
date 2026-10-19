@@ -27,7 +27,7 @@ class BinContracts(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="genius cli ")
         self.addCleanup(self.temporary.cleanup)
-        self.work = Path(self.temporary.name)
+        self.work = Path(self.temporary.name).resolve()
         self.repo = self.work / "repo with spaces\\literal"
         for folder in ("bin", "evals/bin"):
             shutil.copytree(
