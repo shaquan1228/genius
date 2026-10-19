@@ -3,8 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 readonly SCRIPT_DIR
-# shellcheck source=evals/lib/genius-evals/shell.sh
-source "$SCRIPT_DIR/../lib/genius-evals/shell.sh"
+# shellcheck source=evals/lib/shell.sh
+source "$SCRIPT_DIR/../lib/shell.sh"
 
 usage() {
   cat <<'HELP'

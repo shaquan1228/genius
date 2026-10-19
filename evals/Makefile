@@ -88,7 +88,7 @@ check-scaffolding:
 
 # CLI contracts use only the standard library; tools are pinned and isolated by uv.
 check-bin:
-	cd .. && for script in evals/bin/* evals/scripts/*.sh evals/lib/genius-evals/*.sh; do "$${BASH_BIN:-bash}" -n "$$script" || exit; done
-	cd .. && uvx --from shellcheck-py==0.11.0.1 shellcheck --external-sources --shell=bash evals/bin/* evals/scripts/*.sh evals/lib/genius-evals/*.sh
-	cd .. && uvx --from shfmt-py==4.2.0 shfmt -d -i 2 -ci -bn evals/bin/* evals/scripts/*.sh evals/lib/genius-evals/*.sh
+	cd .. && for script in evals/bin/* evals/scripts/*.sh evals/lib/*.sh; do "$${BASH_BIN:-bash}" -n "$$script" || exit; done
+	cd .. && uvx --from shellcheck-py==0.11.0.1 shellcheck --external-sources --shell=bash evals/bin/* evals/scripts/*.sh evals/lib/*.sh
+	cd .. && uvx --from shfmt-py==4.2.0 shfmt -d -i 2 -ci -bn evals/bin/* evals/scripts/*.sh evals/lib/*.sh
 	cd .. && uv run --no-project --python 3.12 python -m unittest discover -s tests -v

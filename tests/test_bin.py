@@ -73,7 +73,7 @@ class BinContracts(unittest.TestCase):
             [path.name for path in (self.repo / "evals/bin").iterdir()],
             ["huggingface-run"],
         )
-        helper = self.repo / "evals/lib/genius-evals/shell.sh"
+        helper = self.repo / "evals/lib/shell.sh"
         self.assertFalse(helper.stat().st_mode & 0o111)
         result = subprocess.run(
             [str(self.repo / "evals/bin/huggingface-run"), "--help"],
@@ -119,7 +119,7 @@ class BinContracts(unittest.TestCase):
                 "-c",
                 code,
                 "test",
-                str(self.repo / "evals/lib/genius-evals/shell.sh"),
+                str(self.repo / "evals/lib/shell.sh"),
                 str(target),
             ],
             capture_output=True,
@@ -284,7 +284,7 @@ class BinContracts(unittest.TestCase):
                 "-c",
                 code,
                 "test",
-                str(self.repo / "evals/lib/genius-evals/shell.sh"),
+                str(self.repo / "evals/lib/shell.sh"),
                 str(self.work),
                 str(ready),
             ],
