@@ -12,7 +12,7 @@ from uuid import uuid4
 from inspect_ai import Task as InspectTask
 from inspect_ai.log import EvalLog, EvalSample, list_eval_logs, read_eval_log
 from inspect_ai.model import get_model_info
-from inspect_ai.scorer import CORRECT, SampleScore, Score, accuracy, stderr
+from inspect_ai.scorer import CORRECT, SampleScore, Score, accuracy
 
 import evals.python.integrations.inspect.pricing as pricing_adapter
 import evals.python.integrations.inspect.profiles as profiles_adapter
@@ -24,7 +24,6 @@ from evals.python.integrations.inspect import completeness
 from kernel import Experiment, Task
 
 _ACCURACY = cast(Callable[[list[SampleScore]], float], accuracy())
-_STDERR = cast(Callable[[list[SampleScore]], float], stderr(cluster="case_id"))
 
 
 def _harness_source(path: Path) -> bool:
@@ -177,19 +176,47 @@ def metrics(samples: list[EvalSample]) -> dict[str, float]:
     ]
     return {
         "accuracy": _ACCURACY(scores),
-        "accuracy_stderr": _STDERR(scores),
         "mean_seconds": mean(elapsed(s) for s in samples),
         "crashes": sum(completeness.crashed(s) for s in samples),
         "cutoffs": sum(s.limit is not None for s in samples),
     }
 
 
-def case_metrics(log: EvalLog) -> dict[str, dict[str, float]]:
-    ordered = sorted(log.samples or [], key=lambda sample: str(sample.id))
+def checks(details: dict[str, Any], *, prefix: str = "") -> list[tuple[str, bool]]:
+    """Every named check in recorded assessment details, by dotted path."""
+    return [
+        result
+        for name, check in details.get("checks", {}).items()
+        for result in ((prefix + name, check["passed"]), *checks(check, prefix=f"{prefix}{name}."))
+    ]
+
+
+def unit(sample: EvalSample) -> dict[str, float]:
+    """One graded attempt: success, elapsed time, failure indicators, and each check."""
+    details = ((sample.scores or {})["evaluation"].metadata or {}).get("assessment", {})
     return {
-        case: metrics(list(group))
-        for case, group in groupby(ordered, key=lambda sample: str(sample.id))
+        "accuracy": float(correct(sample)),
+        "seconds": elapsed(sample),
+        "crashed": float(completeness.crashed(sample)),
+        "cutoff": float(sample.limit is not None),
+        **{name: float(passed) for name, passed in checks(details)},
     }
+
+
+def _by_case(log: EvalLog) -> dict[str, list[EvalSample]]:
+    ordered = sorted(log.samples or [], key=lambda sample: (str(sample.id), sample.epoch))
+    return {
+        case: list(group) for case, group in groupby(ordered, key=lambda sample: str(sample.id))
+    }
+
+
+def case_metrics(log: EvalLog) -> dict[str, dict[str, float]]:
+    return {case: metrics(samples) for case, samples in _by_case(log).items()}
+
+
+def units(log: EvalLog) -> dict[str, tuple[dict[str, float], ...]]:
+    """The jagged matrix of graded attempts per case, in epoch order."""
+    return {case: tuple(map(unit, samples)) for case, samples in _by_case(log).items()}
 
 
 def signature(log: EvalLog) -> tuple[object, ...]:
@@ -214,7 +241,10 @@ def summaries(runs: Mapping[str, Path]) -> dict[str, RunSummary]:
             raise ValueError("Incompatible measurement conditions")
         reference = current
         summaries[name] = RunSummary(
-            metrics=metrics(log.samples or []), cases=case_metrics(log), created_at=log.eval.created
+            metrics=metrics(log.samples or []),
+            cases=case_metrics(log),
+            units=units(log),
+            created_at=log.eval.created,
         )
         del log
     return summaries

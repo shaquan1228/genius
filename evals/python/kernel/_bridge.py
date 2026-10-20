@@ -89,15 +89,6 @@ def value(data: object) -> Any:
     return kinds.get(type(data), lambda data: native.Value.String(value=str(data)))(data)
 
 
-def plain(data: Any) -> Any:
-    """Decode a native value into JSON-shaped Python."""
-    if isinstance(data, native.Value.List):
-        return [plain(item) for item in data.items]
-    if isinstance(data, native.Value.Record):
-        return {name: plain(item) for name, item in data.fields}
-    return None if isinstance(data, native.Value.Null) else data.value
-
-
 def coercer(node: Node) -> Coercer:
     """Convert plain Python wherever the native type expects a value."""
     if node["kind"] == "tuple":

@@ -82,6 +82,25 @@ def native_results_need_no_second_record_format(native_runs: Path) -> None:
     assert "mean_seconds" in comparison.render_report(report)
 
 
+def native_units_record_each_graded_attempt_and_check(native_runs: Path) -> None:
+    report = comparison.compare_runs(
+        {name: native_runs / name for name in ("control", "treatment")},
+        baseline="control",
+        measurement=Measurement(),
+    )
+    (attempt,) = report.runs["control"].units["small-decision"]
+    assert (attempt["accuracy"], attempt["crashed"], attempt["cutoff"], attempt["scope"]) == (
+        1,
+        0,
+        0,
+        1,
+    )
+    assert {"seconds", "correctness.response", "correctness.choice", "correctness.text"} <= set(
+        attempt
+    )
+    assert ComparisonReport.model_validate_json(report.model_dump_json()) == report
+
+
 def _rewrite(directory: Path, *, change: str) -> None:
     log = results.read_run(directory)
     _change(log, change=change)
@@ -128,11 +147,13 @@ def rejects_wrong_saved_variant(native_runs: Path, *, changed: Path, change: str
         evaluation.validate_run(changed, settings=_settings(native_runs))
 
 
-@pytest.mark.parametrize("change", ["crash", "cutoff"])
-def failed_attempts_remain_in_the_average(changed: Path, *, change: str) -> None:
+@pytest.mark.parametrize(("change", "indicator"), [("crash", "crashed"), ("cutoff", "cutoff")])
+def failed_attempts_remain_in_the_average(changed: Path, *, change: str, indicator: str) -> None:
     _rewrite(changed, change=change)
     log = results.read_run(changed)
-    assert results.metrics(log.samples or [])["accuracy"] == 0
+    (attempt,) = results.units(log)["small-decision"]
+    assert (results.metrics(log.samples or [])["accuracy"], attempt["accuracy"]) == (0, 0)
+    assert attempt[indicator] == 1
 
 
 def incompatible_native_models_are_rejected(native_runs: Path, *, changed: Path) -> None:
@@ -163,39 +184,6 @@ def invalid_timing_is_rejected(elapsed: float | None) -> None:
     sample = EvalSample(id="case", epoch=1, input="", target="", total_time=elapsed)
     with pytest.raises(ValueError, match="elapsed"):
         results.elapsed(sample)
-
-
-@pytest.mark.parametrize(
-    ("accuracy", "seconds", "tolerance", "expected"),
-    [
-        (0, -2, None, "inconclusive"),
-        (-0.1, -2, 0.01, "regressed"),
-        (0, 1, 0.01, "regressed"),
-        (0, -2, 0.01, "improved"),
-        (0, -0.5, 0.01, "inconclusive"),
-    ],
-)
-def reports_observed_changes(
-    accuracy: float, *, seconds: float, tolerance: float | None, expected: str
-) -> None:
-    assert (
-        comparison.compare_summaries(
-            {
-                "base": RunSummary(
-                    metrics={"accuracy": 1, "mean_seconds": 10}, created_at="before"
-                ),
-                "candidate": RunSummary(
-                    metrics={"accuracy": 1 + accuracy, "mean_seconds": 10 + seconds},
-                    created_at="after",
-                ),
-            },
-            baseline="base",
-            measurement=Measurement(accuracy_tolerance=tolerance, minimum_time_gain=0.1),
-        )
-        .comparisons["candidate"]
-        .verdict
-        == expected
-    )
 
 
 @pytest.mark.parametrize("version", ["latest", "stable", "next"])
@@ -286,13 +274,16 @@ def other_runners_can_compare_custom_metrics_without_inspect_logs() -> None:
     assert ComparisonReport.model_validate_json(report.model_dump_json()) == report
 
 
-@pytest.mark.parametrize("change", ["metrics", "cases", "case_metrics", "baseline", "cardinality"])
+@pytest.mark.parametrize(
+    "change", ["metrics", "cases", "case_metrics", "units", "baseline", "cardinality"]
+)
 def incomparable_summaries_are_rejected(change: str) -> None:
     before = RunSummary(metrics={"x": 1}, cases={"case": {"x": 1}}, created_at="before")
     changes: dict[str, dict[str, object]] = {
         "metrics": {"metrics": {"y": 1}},
         "cases": {"cases": {}},
         "case_metrics": {"cases": {"case": {"y": 1}}},
+        "units": {"units": {"case": ({"x": 1},)}},
     }
     runs = {"base": before, "other": before.model_copy(update=changes.get(change, {}))}
     if change == "cardinality":
