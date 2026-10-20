@@ -1,8 +1,8 @@
 """Load declarations and compose canonical task snapshots."""
 
 import json
+import re
 from collections import OrderedDict
-from collections.abc import Mapping
 from importlib import import_module
 from threading import RLock
 from typing import Annotated, Protocol, cast
@@ -12,7 +12,7 @@ from pydantic import AfterValidator, validate_call
 from evals.python import FROZEN
 from evals.python.dataset import Dataset, DatasetInfo
 from evals.python.provenance import value_fingerprint
-from kernel import Case, File, Reference, ResourceBinding, Task
+from kernel import Case, Reference, Task
 
 __all__ = [
     "Dataset",
@@ -43,7 +43,7 @@ class DatasetModule(Protocol):
 
 
 def _file_name(value: str) -> str:
-    if not File.valid_path(path=value):
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]*", value):
         raise ValueError("Invalid file name")
     return value
 
@@ -52,36 +52,17 @@ Selection = Annotated[str, AfterValidator(_file_name)] | Dataset
 
 
 @validate_call(config=FROZEN)
-def compile_dataset(
-    *,
-    cases: tuple[Task, ...],
-    info: DatasetInfo | None = None,
-    resources: Mapping[Annotated[str, AfterValidator(_file_name)], str] | None = None,
-) -> Dataset:
+def compile_dataset(*, cases: tuple[Task, ...], info: DatasetInfo | None = None) -> Dataset:
     records = {task.id: task for task in cases}
     if len(records) != len(cases):
         raise ValueError("Dataset task IDs must be unique")
-    bindings = tuple(sorted((resources or {}).items()))
-    return _compiled(records, info=info, bindings=bindings)
-
-
-def _compiled(
-    records: Mapping[str, Task], *, info: DatasetInfo | None, bindings: tuple[tuple[str, str], ...]
-) -> Dataset:
     key = (
         tuple(map(value_fingerprint, records.values())),
-        bindings,
         json.dumps(info.model_dump(mode="json"), sort_keys=True) if info else None,
     )
     with _LOCK:
         if key not in _CACHE:
-            _CACHE[key] = Dataset(
-                records=records,
-                info=info,
-                resources=tuple(
-                    ResourceBinding.create(key=name, contents=text) for name, text in bindings
-                ),
-            )
+            _CACHE[key] = Dataset(records=records, info=info)
         _CACHE.move_to_end(key)
         if len(_CACHE) > 8:
             _CACHE.popitem(last=False)

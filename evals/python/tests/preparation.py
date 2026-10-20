@@ -19,25 +19,10 @@ from evals.python import evaluation as evaluation_api
 from evals.python.evaluation import EvaluationSettings, InstructionDelivery
 from evals.python.integrations.inspect import evaluation, profiles, scoring
 from evals.python.integrations.inspect.tasks import build_task
-from evals.python.tests.declarations import _copy_case, _copy_verifier, _declaration
+from evals.python.tests.declarations import _copy_case, _declaration
 from evals.python.tests.support import offline_run as _offline_run
 from evals.python.tests.support import results as _results
-from kernel import (
-    Artifact,
-    Case,
-    Completion,
-    Content,
-    Criterion,
-    File,
-    Fixture,
-    Instruction,
-    Reference,
-    Response,
-    ResponseField,
-    ResponseValue,
-    Rubric,
-    TextRule,
-)
+from kernel import Criterion, File, Instruction, Reference, Rubric, TextRule
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
@@ -108,12 +93,12 @@ def evaluation_prepares_once_for_all_tasks(
 def private_tasks() -> list[Task]:
     definition = _copy_case(
         _declaration(code=False),
-        instruction=Instruction.create(
+        instruction=Instruction(
             skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
         ),
-        reference=Reference.create(
-            edits=Fixture.create(files=[File.create(path="main.py", contents=PRIVATE_SENTINEL)]),
-            completion=Completion.create(plain=PRIVATE_SENTINEL),
+        reference=Reference(
+            edits=[File(path="main.py", contents=PRIVATE_SENTINEL)],
+            completion=PRIVATE_SENTINEL,
         ),
     )
     snapshots = [
@@ -121,19 +106,13 @@ def private_tasks() -> list[Task]:
             cases=(
                 _copy_case(
                     definition,
-                    criterion=Criterion.create(
-                        answer=Rubric.create(
-                            expected=Response.create(
-                                fields=[
-                                    ResponseField.create(
-                                        name="choice", value=ResponseValue.create(string=choice)
-                                    ),
-                                    ResponseField.create(
-                                        name="safe", value=ResponseValue.create(bool=True)
-                                    ),
-                                ]
-                            ),
-                            text_rule=TextRule.create(field="reason", min_words=1, max_words=5),
+                    criterion=Criterion.Answer(
+                        rubric=Rubric(
+                            expected=[
+                                ("choice", choice),
+                                ("safe", True),
+                            ],
+                            text_rule=TextRule(field="reason", min_words=1, max_words=5),
                         )
                     ),
                 ),
@@ -233,23 +212,3 @@ def _assert_guidance_logs(logs: list[EvalLog], *, digest: str) -> None:
         assert native.eval.metadata is not None
         assert native.eval.metadata["agent_system_prompt_sha256"] == digest
         assert native.status == "success"
-
-
-def unresolved_public_resource_cannot_reach_agent_files() -> None:
-    spec = evaluation_api.resolve_settings()
-    definition = _declaration()
-    assert isinstance(definition.criterion, Criterion.Code)
-    checks = _copy_verifier(
-        definition.criterion.verifier,
-        tools=[
-            Artifact.create(path="context.txt", content=Content.create(resource="private-resource"))
-        ],
-    )
-    case = Case.create(task=_copy_case(definition, criterion=Criterion.create(code=checks)))
-    with pytest.raises(ValueError, match="Unresolved resource in public case external"):
-        cast(
-            Mapping[str, str],
-            profiles.samples(
-                profiles.load_profile("baseline", spec=spec), cases=(case,), documents={}
-            )[0].files,
-        )

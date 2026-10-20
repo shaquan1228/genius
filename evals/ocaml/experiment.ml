@@ -1,3 +1,4 @@
+(* Experiment: the measurement settings a run is executed under. *)
 type t = {
   profiles : Profile.t list;
   epochs : int;
@@ -30,27 +31,18 @@ let default : t =
 let resolve ?(profiles = default.profiles) ?(epochs = default.epochs) ?message_limit
     ?(cost_limit = default.cost_limit) ?(time_limit = default.time_limit) ?(cache = default.cache)
     () =
-  let positive field value =
-    Validation.when_invalid
-      (value > 0)
-      (Validation.issue
-         Validation_code.Invalid_experiment_setting
-         field
-         ("Experiment " ^ field ^ " must be positive")
-         [])
-  in
-  let problems =
-    positive "epochs" epochs @ positive "time_limit" time_limit
-    @ (match message_limit with None -> [] | Some value -> positive "message_limit" value)
-    @ Validation.when_invalid
-        (Float.is_finite cost_limit && cost_limit > 0.)
-        (Validation.issue
-           Validation_code.Invalid_experiment_setting
-           "cost_limit"
-           "Experiment cost_limit must be finite and positive"
-           [])
-  in
-  Validation.checked problems { profiles; epochs; message_limit; cost_limit; time_limit; cache }
+  Support.checked
+    [
+      (epochs > 0, "epochs", "Experiment epochs must be positive");
+      (time_limit > 0, "time_limit", "Experiment time_limit must be positive");
+      ( Option.fold ~none:true ~some:(fun value -> value > 0) message_limit,
+        "message_limit",
+        "Experiment message_limit must be positive" );
+      ( Float.is_finite cost_limit && cost_limit > 0.,
+        "cost_limit",
+        "Experiment cost_limit must be finite and positive" );
+    ]
+    { profiles; epochs; message_limit; cost_limit; time_limit; cache }
 
 let create ~profiles ~epochs ~message_limit ~cost_limit ~time_limit ~cache =
   resolve ~profiles ~epochs ?message_limit ~cost_limit ~time_limit ~cache ()

@@ -11,30 +11,16 @@ from pydantic import ValidationError
 from evals.python import datasets
 from evals.python.dataset import DatasetInfo
 from evals.python.datasets import Dataset
-from evals.python.provenance import fingerprint
+from evals.python.provenance import fingerprint, value_fingerprint
 from evals.python.tests.declarations import (
     _copy_case,
     _copy_verifier,
     _declaration,
-    _files,
     _public_snapshot,
     _reference_files,
 )
 from evals.python.tests.projections import reference, verifier
-from kernel import (
-    Artifact,
-    Case,
-    Completion,
-    Content,
-    Criterion,
-    File,
-    Fixture,
-    Kernel,
-    Reference,
-    ResourceBinding,
-    Task,
-    Verifier,
-)
+from kernel import Case, Criterion, File, Kernel, Reference, Task, Value
 from kernel import (
     ValidationError as DomainValidationError,
 )
@@ -54,7 +40,7 @@ def compiled_cases_separate_construction_from_public_projection() -> None:
     assert not isinstance(case, Task)
     assert isinstance(case, Case)
     assert not hasattr(case, "reference")
-    assert "verify.py" not in {artifact.path: artifact.content for artifact in case.files}
+    assert "verify.py" not in {artifact.path: artifact.contents for artifact in case.files}
 
 
 def compiled_selection_reuses_the_compilation_snapshot() -> None:
@@ -65,7 +51,7 @@ def compiled_selection_reuses_the_compilation_snapshot() -> None:
 def compiled_records_retain_canonical_values() -> None:
     definition = _declaration()
     dataset = datasets.compile_dataset(cases=(definition,))
-    assert Task.compare(before=dataset.records[definition.id], after=definition).equal
+    assert value_fingerprint(dataset.records[definition.id]) == value_fingerprint(definition)
     assert datasets.list_cases(selection=dataset) == tuple(dataset.cases.values())
 
 
@@ -75,12 +61,10 @@ def _independent_datasets() -> tuple[Dataset, Dataset]:
     checks = _copy_verifier(first.criterion.verifier, stdin="different private stdin")
     second = _copy_case(
         first,
-        criterion=Criterion.create(code=checks),
-        reference=Reference.create(
-            edits=Fixture.create(
-                files=[File.create(path="main.py", contents="another fixed solution")]
-            ),
-            completion=Completion.create(plain="another answer"),
+        criterion=Criterion.Code(verifier=checks),
+        reference=Reference(
+            edits=[File(path="main.py", contents="another fixed solution")],
+            completion="another answer",
         ),
     )
     return datasets.compile_dataset(cases=(first,)), datasets.compile_dataset(cases=(second,))
@@ -138,31 +122,6 @@ def compiled_provenance_retains_python_metadata() -> None:
         datasets.compile_dataset(cases=(), info=info)
 
 
-@pytest.mark.parametrize("resource_name", ["checker.py", "ast.ml", "ast.cmo", "case.cmi", "kernel"])
-def compiled_datasets_supply_independent_evaluator_resources(resource_name: str) -> None:
-    definition = _declaration()
-    assert isinstance(definition.criterion, Criterion.Code)
-    checks = _copy_verifier(
-        definition.criterion.verifier,
-        files=[Artifact.create(path="verify.py", content=Content.create(resource=resource_name))],
-    )
-    definition = _copy_case(definition, criterion=Criterion.create(code=checks))
-    first = datasets.compile_dataset(
-        cases=(definition,), resources={resource_name: "first checker"}
-    )
-    second = datasets.compile_dataset(
-        cases=(definition,), resources={resource_name: "second checker"}
-    )
-    a = cast(Verifier, verifier("external", selection=first))
-    b = cast(Verifier, verifier("external", selection=second))
-    assert _files(a.files)["verify.py"] == "first checker"
-    assert _files(b.files)["verify.py"] == "second checker"
-    assert (
-        datasets.load_dataset(selection=first).cases_hash
-        != datasets.load_dataset(selection=second).cases_hash
-    )
-
-
 def compilation_provenance_retains_sources_and_private_records() -> None:
     a, b = _independent_datasets()
     a_provenance = datasets.load_dataset(selection=a)
@@ -170,18 +129,6 @@ def compilation_provenance_retains_sources_and_private_records() -> None:
     assert a_provenance.source_hash == b_provenance.source_hash
     assert a_provenance.cases_hash != b_provenance.cases_hash
     assert a_provenance.source_hash == fingerprint(Kernel.current.sources)
-
-
-def compilation_hashes_include_trusted_source_changes() -> None:
-    dataset = datasets.compile_dataset(cases=(_declaration(),))
-    changed = replace(
-        dataset,
-        resources=(*dataset.resources, ResourceBinding.create(key="extra.txt", contents="changed")),
-    )
-    original = datasets.load_dataset(selection=dataset)
-    updated = datasets.load_dataset(selection=changed)
-    assert original.source_hash != updated.source_hash
-    assert original.cases_hash != updated.cases_hash
 
 
 def compiled_dataset_is_immutable() -> None:
@@ -193,11 +140,7 @@ def compiled_dataset_is_immutable() -> None:
     with pytest.raises(TypeError):
         cast(dict[str, Case], dataset.cases)["external"] = dataset.cases["external"]
     with pytest.raises(TypeError):
-        dataset.cases["external"].files[0] = Artifact.create(  # type: ignore[index]
-            path="main.py", content=Content.create(inline="changed")
-        )
-    with pytest.raises(TypeError):
-        dataset.resources[0] = ResourceBinding.create(key="changed", contents="changed")  # type: ignore[index]
+        dataset.cases["external"].files[0] = File(path="main.py", contents="changed")  # type: ignore[index]
 
 
 def empty_and_duplicate_compilation() -> None:
@@ -225,11 +168,6 @@ def unknown_case_in_compiled_dataset_fails_closed() -> None:
         datasets.load_dataset(selection=dataset).records["absent"]
 
 
-def kernel_source_snapshot_cannot_be_forged() -> None:
-    with pytest.raises(RuntimeError, match="private type"):
-        cast(Callable[..., Kernel], Kernel)(sources=[])
-
-
 def mismatched_record_identity_is_rejected() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(),))
     with pytest.raises(ValueError, match="record ID"):
@@ -248,9 +186,9 @@ def direct_dataset_construction_derives_public_cases_and_copies_records() -> Non
         assert datasets.load_dataset(selection=dataset) is dataset
         assert (
             cast(
-                Completion.Plain,
+                Value.String,
                 datasets.get_reference(case_id=definition.id, selection=dataset).completion,
-            ).text
+            ).value
             == "done"
         )
 
@@ -266,37 +204,6 @@ def direct_dataset_construction_validates_metadata_count() -> None:
 def direct_dataset_construction_validates_native_records() -> None:
     with pytest.raises(DomainValidationError, match="outside allowed_files"):
         _copy_case(_declaration(), allowed_files=())
-
-
-def direct_dataset_construction_resolves_resources() -> None:
-    definition = _declaration()
-    assert isinstance(definition.criterion, Criterion.Code)
-    checks = _copy_verifier(
-        definition.criterion.verifier,
-        files=[Artifact.create(path="verify.py", content=Content.create(resource="checker"))],
-    )
-    definition = _copy_case(definition, criterion=Criterion.create(code=checks))
-    with pytest.raises(DomainValidationError, match="checker"):
-        Dataset(records={definition.id: definition})
-    resources = {"checker": "private checker"}
-    dataset = Dataset(
-        resources=(ResourceBinding.create(key="checker", contents=resources["checker"]),),
-        records={definition.id: definition},
-    )
-    resources.clear()
-    resolved = verifier(definition.id, selection=dataset)
-    assert resolved is not None
-    assert _files(resolved.files) == {"verify.py": "private checker"}
-    assert "verify.py" not in _files(dataset.cases[definition.id].files)
-
-
-def direct_resources_retain_owned_immutable_collections() -> None:
-    resources = [ResourceBinding.create(key="extra", contents="original")]
-    dataset = Dataset(records={}, resources=cast(tuple[ResourceBinding, ...], resources))
-    before = datasets.load_dataset(selection=dataset).source_hash
-    resources.clear()
-    assert [(r.key, r.contents) for r in dataset.resources] == [("extra", "original")]
-    assert datasets.load_dataset(selection=dataset).source_hash == before
 
 
 def metadata_order_preserves_cached_provenance() -> None:

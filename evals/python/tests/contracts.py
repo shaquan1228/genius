@@ -16,7 +16,7 @@ from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.projections import reference
 from evals.python.tests.support import choice_case as _choice_case
-from kernel import Case, Experiment, File, Fixture
+from kernel import Case, Experiment, File
 from kernel import ValidationError as DomainValidationError
 
 
@@ -32,7 +32,7 @@ def third_dataset(*, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Dataset
 
 def third_dataset_requires_only_python_declarations(third_dataset: Dataset) -> None:
     cases = datasets.list_cases(selection=third_dataset)
-    assert cases[0].id == "third-case"
+    assert cases[0].case_id == "third-case"
     task = build_task(
         profile=profiles.load_profile("baseline", spec=evaluation.resolve_settings()),
         spec=evaluation.resolve_settings(),
@@ -60,13 +60,13 @@ def public_projection_contains_no_private_material() -> None:
     for case in datasets.list_cases():
         assert isinstance(case, Case)
         assert (hasattr(case, "reference"), hasattr(case, "criterion")) == (False, False)
-        assert "verifier.py" not in {artifact.path: artifact.content for artifact in case.files}
+        assert "verifier.py" not in {artifact.path: artifact.contents for artifact in case.files}
 
 
 def public_projection_includes_visible_tools() -> None:
     case = datasets.list_cases()[0]
     assert "test_receipt.py" in {
-        artifact.path: artifact.content for artifact in case.files
+        artifact.path: artifact.contents for artifact in case.files
     }  # The visible helper remains available to the agent.
 
 
@@ -78,7 +78,7 @@ def all_contract_collections_are_immutable() -> None:
     with pytest.raises(TypeError):
         info.attributes["new"] = "value"  # type: ignore[index]
     with pytest.raises(TypeError):
-        Fixture.files(fixture=expected.edits)[0] = File.create(path="new", contents="value")  # type: ignore[index]
+        expected.edits[0] = File(path="new", contents="value")  # type: ignore[index]
     spec = evaluation.resolve_settings()
     with pytest.raises((AttributeError, TypeError)):
         spec.profiles[0].preamble = "changed"  # type: ignore[misc]

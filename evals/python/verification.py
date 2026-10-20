@@ -1,5 +1,6 @@
 """Runner-independent verification policy over immutable execution capabilities."""
 
+from collections.abc import Sequence
 from secrets import token_hex
 
 from pydantic import InstanceOf, validate_call
@@ -7,7 +8,7 @@ from pydantic import InstanceOf, validate_call
 from evals.python import FROZEN, execution
 from evals.python.evidence import Diagnostic, VerificationResult, completion
 from evals.python.execution import Environment, Execution, Runtime
-from kernel import Content, Fixture, Task, Verification, Verifier
+from kernel import File, Task, Verification, Verifier
 
 __all__ = ["Diagnostic", "VerificationResult", "validate_reference", "verify"]
 
@@ -25,12 +26,6 @@ async def _inputs(checks: Verifier, *, agent: Environment) -> dict[str, bytes]:
     return result
 
 
-def _contents(value: Content.Value) -> str:
-    if not isinstance(value, Content.Inline):
-        raise ValueError("Verifier resources must be resolved before execution")
-    return value.text
-
-
 async def _execute(
     checks: Verifier, *, grader: Environment, inputs: dict[str, bytes]
 ) -> VerificationResult:
@@ -40,8 +35,7 @@ async def _execute(
     artifacts = {
         **inputs,
         **{
-            artifact.path: _contents(artifact.content).encode()
-            for artifact in (*checks.tools, *checks.files)
+            artifact.path: artifact.contents.encode() for artifact in (*checks.tools, *checks.files)
         },
     }
     for name, contents in artifacts.items():
@@ -85,11 +79,11 @@ async def verify(
         return VerificationResult(verification=Verification.HarnessError(detail=str(error)))
 
 
-async def stage_reference(fixture: Fixture, *, agent: Environment) -> None:
+async def stage_reference(fixture: Sequence[File], *, agent: Environment) -> None:
     result = await agent.execute(Execution(command=("mkdir", "-p", "workspace")))
     if result.returncode != 0:
         raise RuntimeError(f"Could not create reference workspace: {result.stderr}")
-    for file in Fixture.files(fixture=fixture):
+    for file in fixture:
         await agent.write_bytes(f"workspace/{file.path}", file.contents.encode())
 
 
@@ -99,7 +93,7 @@ async def validate_reference(
     *,
     runtime: InstanceOf[Runtime] | None = None,
 ) -> VerificationResult:
-    checks = Task.verifier(task=task)
+    checks = Task.checks(task=task)
     if checks is None:
         return VerificationResult(verification=Verification.Unchecked())
     runtime = runtime or execution.create_runtime()

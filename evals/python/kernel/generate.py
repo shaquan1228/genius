@@ -9,9 +9,11 @@ from typing import Any
 
 HEADER = "# Generated from compiled OCaml interfaces; do not edit.\n"
 PREAMBLE = (
-    "from collections.abc import Sequence\n"
+    "from collections.abc import Mapping, Sequence\n"
     "from typing import ClassVar, Never, Required, TypedDict, overload\n"
     "import {package} as _types\n\n"
+    "# Any JSON-shaped input is accepted where the kernel expects a value.\n"
+    "type Json = None | bool | int | float | str | Sequence[Json] | Mapping[str, Json]\n\n"
 )
 RESERVED = {
     "_bind",
@@ -19,6 +21,8 @@ RESERVED = {
     "_native",
     "_types",
     "__all__",
+    "Json",
+    "Mapping",
     "Sequence",
     "ClassVar",
     "Never",
@@ -41,12 +45,20 @@ def public_name(value: object) -> str:
     return identifier("".join(part[:1].upper() + part[1:] for part in identifier(value).split("_")))
 
 
-def type_name(value: Node, *, qualify: bool = False, variants: frozenset[str] = frozenset()) -> str:
+def type_name(
+    value: Node,
+    *,
+    qualify: bool = False,
+    variants: frozenset[str] = frozenset(),
+    loose: bool = False,
+) -> str:
+    """Render a type; a loose rendering also accepts JSON where a value is expected."""
     if value["kind"] == "tuple":
         return (
             "tuple["
             + ", ".join(
-                type_name(item, qualify=qualify, variants=variants) for item in value["items"]
+                type_name(item, qualify=qualify, variants=variants, loose=loose)
+                for item in value["items"]
             )
             + "]"
         )
@@ -54,8 +66,14 @@ def type_name(value: Node, *, qualify: bool = False, variants: frozenset[str] = 
         raise ValueError(f"Unsupported type node: {value['kind']}")
     name, arguments = str(value["name"]), value["args"]
     if name in ("list", "option") and len(arguments) == 1:
-        item = type_name(arguments[0], qualify=qualify, variants=variants)
-        return f"Sequence[{item}]" if name == "list" else f"{item} | None"
+        item = type_name(arguments[0], qualify=qualify, variants=variants, loose=loose)
+        if name == "option":
+            return f"{item} | None"
+        return f"Sequence[{item}]" + (
+            f" | Mapping[{item[6:-1]}]" if loose and named_pairs(arguments[0]) else ""
+        )
+    if loose and name == "value":
+        return ("_types." if qualify else "") + "Value.Value | Json"
     if arguments:
         raise ValueError(f"Unsupported type application: {name}")
     if name in PRIMITIVES:
@@ -67,6 +85,15 @@ def type_name(value: Node, *, qualify: bool = False, variants: frozenset[str] = 
         ("_types." if qualify else "")
         + public_name(parts[-1])
         + (".Value" if parts[-1] in variants else "")
+    )
+
+
+def named_pairs(node: Node) -> bool:
+    """A list of (string, _) pairs also accepts a mapping at the bridge."""
+    return (
+        node["kind"] == "tuple"
+        and len(node["items"]) == 2
+        and node["items"][0] == {"kind": "name", "name": "string", "args": []}
     )
 
 
@@ -124,11 +151,13 @@ def operation(value: Node, *, variants: frozenset[str] = frozenset()) -> str:
         )
         return "".join(
             f"@overload\ndef {identifier(value['name'])}(*, {arg['label']}: "
-            f"{type_name(arg['argument'], qualify=True, variants=variants)}) -> {returned}: ...\n"
+            f"{type_name(arg['argument'], qualify=True, variants=variants, loose=True)})"
+            f" -> {returned}: ...\n"
             for arg in arguments
         )
     parameters = [
-        f"{arg['label']}: {type_name(arg['argument'], qualify=True, variants=variants)}"
+        f"{arg['label']}: "
+        f"{type_name(arg['argument'], qualify=True, variants=variants, loose=True)}"
         + (" = ..." if arg["optional"] else "")
         for arg in arguments
     ]
@@ -144,7 +173,7 @@ def options(value: Node, *, variants: frozenset[str] = frozenset()) -> str:
         return ""
     result = f"class {identifier(value['name']).capitalize()}Args(TypedDict, total=False):\n"
     for arg in arguments:
-        annotation = type_name(arg["argument"], qualify=True, variants=variants)
+        annotation = type_name(arg["argument"], qualify=True, variants=variants, loose=True)
         result += (
             f"    {arg['label']}: {annotation if arg['optional'] else f'Required[{annotation}]'}\n"
         )
@@ -153,7 +182,7 @@ def options(value: Node, *, variants: frozenset[str] = frozenset()) -> str:
 
 def fields_body(fields: list[Node], *, variants: frozenset[str], private: bool = False) -> str:
     parameters = [
-        f"{identifier(field['name'])}: {type_name(field['type'], variants=variants)}"
+        f"{identifier(field['name'])}: {type_name(field['type'], variants=variants, loose=True)}"
         for field in fields
     ]
     parameters = ["_token: Never"] if private else parameters
@@ -265,6 +294,18 @@ def owner_bindings(value: Node, *, variants: frozenset[str]) -> str:
     return indent(result, "    ")
 
 
+def holds_value(node: Node) -> bool:
+    if node["kind"] == "tuple":
+        return any(holds_value(item) for item in node["items"])
+    return node["name"] == "value" or any(holds_value(item) for item in node["args"])
+
+
+def coercions(typed: list[tuple[str, Node]]) -> str:
+    """Render the value-bearing inputs the bridge converts from plain Python."""
+    specs = {name: node for name, node in typed if holds_value(node)}
+    return f", coerce={specs!r}" if specs else ""
+
+
 def runtime_member(owner: str, *, value: Node, method: bool = False) -> str:
     native = "_native." + ".".join(filter(None, (owner, value["name"])))
     if value["type"]["kind"] != "arrow":
@@ -273,8 +314,18 @@ def runtime_member(owner: str, *, value: Node, method: bool = False) -> str:
     parameters = {arg["label"]: arg["optional"] for arg in arguments}
     payload = result_payload(returned)
     failure = None if payload is None else payload[1]["name"]
-    bound = f"_bind(operation={native}, arguments={parameters!r}, failure={failure!r})"
+    typed = [(str(arg["label"]), arg["argument"]) for arg in arguments]
+    bound = (
+        f"_bind(operation={native}, arguments={parameters!r}, failure={failure!r}"
+        + coercions(typed)
+        + ")"
+    )
     return f"staticmethod({bound})" if method else bound
+
+
+def record_member(native: str, *, fields: list[Node]) -> str:
+    typed = [(str(field["name"]), field["type"]) for field in fields]
+    return f"_named(constructor={native}{coercions(typed)})"
 
 
 def runtime_types(items: list[Node], *, exceptions: tuple[str, ...] = ()) -> str:
@@ -284,7 +335,11 @@ def runtime_types(items: list[Node], *, exceptions: tuple[str, ...] = ()) -> str
         + exception_imports(exceptions)
         + "from ._bridge import native as _native, named as _named, bind as _bind\n\n"
     )
-    records = {str(item.get("native", item["name"])) for item in items if item["kind"] == "record"}
+    records = {
+        str(item.get("native", item["name"])): item["fields"]
+        for item in items
+        if item["kind"] == "record"
+    }
     by_name = {str(item.get("native", item["name"])): item for item in items}
     for name, original in exports:
         item = by_name[original]
@@ -299,7 +354,7 @@ def runtime_types(items: list[Node], *, exceptions: tuple[str, ...] = ()) -> str
         native = f"_native.{original}"
         result += (
             f"{name} = "
-            + (f"_named(constructor={native})" if original in records else native)
+            + (record_member(native, fields=records[original]) if original in records else native)
             + "\n"
         )
     for item in items:
@@ -308,7 +363,10 @@ def runtime_types(items: list[Node], *, exceptions: tuple[str, ...] = ()) -> str
             result += f"{owner}.Value = {owner}\n"
         for owner, name, original in variant_exports([item]):
             prefix = str(item["owner"]) + "." if "owner" in item else ""
-            result += f"{owner}.{name} = _named(constructor=_native.{prefix}{original})\n"
+            fields = next(c["fields"] for c in item["constructors"] if c["name"] == original)
+            result += (
+                f"{owner}.{name} = {record_member(f'_native.{prefix}{original}', fields=fields)}\n"
+            )
             if item.get("private"):
                 result += f"{owner}.{name}._default_type = ()\n"
         for method in item.get("methods", []):

@@ -17,7 +17,7 @@ from evals.python.tests.declarations import _files, _reference_files
 from evals.python.tests.projections import reference, verifier
 from kernel import Case, Task, Verification, Verifier
 
-CASES = {case.id: case for case in datasets.list_cases()}
+CASES = {case.case_id: case for case in datasets.list_cases()}
 
 
 def _snapshot(directory: Path) -> dict[str, bytes]:
@@ -25,7 +25,7 @@ def _snapshot(directory: Path) -> dict[str, bytes]:
 
 
 def _verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> bool:
-    checks = verifier(case.id, selection=selection)
+    checks = verifier(case.case_id, selection=selection)
     assert isinstance(checks, Verifier)
 
     async def execute() -> bool:
@@ -35,7 +35,7 @@ def _verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> b
             for name, data in _snapshot(directory).items():
                 await agent.write_file(f"workspace/{name}", data)
             result = await verification.verify(
-                Task.verifier(task=datasets.load_dataset(selection=selection).records[case.id]),
+                Task.checks(task=datasets.load_dataset(selection=selection).records[case.case_id]),
                 agent=environment(agent),
                 runtime=runtime(agent),
             )
@@ -63,7 +63,7 @@ def _seed(case_id: str, *, directory: Path) -> Case:
 def seeds_fail_and_solutions_pass(*, case_id: str, tmp_path: Path) -> None:
     case = _seed(case_id, directory=tmp_path)
     assert not _verify(case, directory=tmp_path)
-    _write_files(tmp_path, files=_reference_files(reference(case.id)))
+    _write_files(tmp_path, files=_reference_files(reference(case.case_id)))
     before = _snapshot(tmp_path)
     assert _verify(case, directory=tmp_path)
     assert _snapshot(tmp_path) == before
@@ -99,7 +99,7 @@ def preflight_defaults_overrides_and_validation(
     case = _seed("known-preflight", directory=tmp_path)
     (tmp_path / "config.py").write_text(f"timeout_seconds = {config}\n")
     source = (
-        _reference_files(reference(case.id))["client.py"]
+        _reference_files(reference(case.case_id))["client.py"]
         .replace("= 30", f"= {client}")
         .replace("    return value\n", f"    return {override}\n")
     )
@@ -173,5 +173,5 @@ def family_variants_generate_working_seeds_and_solutions(
     assert fragment in _files(case.files)[filename]
     _write_files(tmp_path, files=_files(case.files))
     assert not _verify(case, directory=tmp_path, selection=dataset)
-    _write_files(tmp_path, files=_reference_files(reference(case.id, selection=dataset)))
+    _write_files(tmp_path, files=_reference_files(reference(case.case_id, selection=dataset)))
     assert _verify(case, directory=tmp_path, selection=dataset)

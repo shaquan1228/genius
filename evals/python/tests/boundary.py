@@ -156,14 +156,6 @@ def public_operations_use_native_calls_without_a_transport_layer(owner: str) -> 
     assert "subprocess" not in _imported(PYTHON_ROOT / "kernel/__init__.py")
 
 
-@pytest.mark.parametrize("path", sorted(OCAML_ROOT.glob("*.mli")))
-def domain_types_live_with_owner_contracts(path: Path) -> None:
-    if path.stem in ("validation", "text"):
-        return
-    assert re.search(r"^type t\b", path.read_text(), re.M)
-    assert re.search(r"^type t\b", path.with_suffix(".ml").read_text(), re.M)
-
-
 def kernel_facade_only_exports_owner_modules() -> None:
     assert not (OCAML_ROOT / "ast.ml").exists()
     assert not (OCAML_ROOT / "construct.ml").exists()

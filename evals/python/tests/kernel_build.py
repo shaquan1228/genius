@@ -93,10 +93,8 @@ def _build_bindings(workspace: Path, *, check: bool = True) -> subprocess.Comple
 
 
 def _add_probe(workspace: Path) -> subprocess.CompletedProcess[str]:
-    source = workspace / "ocaml/instruction.ml"
+    source = workspace / "ocaml/profile.ml"
     source.write_text(source.read_text() + "\ntype dune_probe = { payload : int }\n")
-    interface = workspace / "ocaml/instruction.mli"
-    interface.write_text(interface.read_text() + "\ntype dune_probe = { payload : int }\n")
     return _build_bindings(workspace, check=False)
 
 
@@ -179,7 +177,7 @@ def dune_requires_promotion_for_changed_runtime_exports(binding_workspace: Path)
         in (binding_workspace / "python/kernel/__init__.pyi").read_text()
     )
     assert (
-        "DuneProbe = _named(constructor=_native.Instruction.dune_probe)"
+        "DuneProbe = _named(constructor=_native.Profile.dune_probe)"
         in (binding_workspace / "python/kernel/__init__.py").read_text()
     )
 
@@ -187,10 +185,8 @@ def dune_requires_promotion_for_changed_runtime_exports(binding_workspace: Path)
 def dune_rebuilds_stubs_after_compiled_types_change(binding_workspace: Path) -> None:
     _add_probe(binding_workspace)
     _promote_bindings(binding_workspace)
-    source = binding_workspace / "ocaml/instruction.ml"
+    source = binding_workspace / "ocaml/profile.ml"
     source.write_text(source.read_text().replace("payload : int", "payload : string"))
-    interface = binding_workspace / "ocaml/instruction.mli"
-    interface.write_text(interface.read_text().replace("payload : int", "payload : string"))
     _build_bindings(binding_workspace)
     assert (
         "def payload(self) -> str:"
@@ -218,12 +214,10 @@ def installed_kernel_keeps_policy_and_provenance_together(tmp_path: Path) -> Non
     script = """import json
 from unittest.mock import patch
 with patch('subprocess.run', side_effect=AssertionError('Import compiled the kernel')):
-    from kernel import Fixture
-    from kernel import Experiment, File, Kernel
+    from kernel import Experiment, Kernel, Predicate, Value
     spec = Experiment.resolve()
-    assert isinstance(Fixture.create(files=[]), Fixture)
-    Fixture.add(fixture=Fixture.empty, file=File.create(path='probe.py', contents='text'))
-    assert not Fixture.files(fixture=Fixture.empty)
+    observation = Value.Record(fields=[('x', 1)])
+    assert Predicate.holds(predicate=Predicate.Present(path=['x']), observation=observation)
     modules = {file.path: file.contents for file in Kernel.current.sources}
     assert modules['experiment.ml'].find('epochs = 7') >= 0
     assert modules['experiment.ml'].find('epochs = 9') == -1
@@ -284,28 +278,6 @@ def alternative_names_cannot_silently_collide(tmp_path: Path, *, text: str) -> N
 
 
 @pytest.mark.parametrize(
-    "expression",
-    [
-        'let forge (task : Genius_evals_kernel.Task.t) = { task with id = "" }',
-        "let forge (value : Genius_evals_kernel.Verifier.t) = { value with inputs = [] }",
-        "let forge : Genius_evals_kernel.Response.t = { fields = [] }",
-    ],
-)
-def ocaml_clients_cannot_construct_unvalidated_values(tmp_path: Path, *, expression: str) -> None:
-    source = tmp_path / "forge.ml"
-    source.write_text(expression)
-    result = subprocess.run(
-        ["ocamlfind", "ocamlc", "-package", "genius_evals_kernel", "-c", str(source)],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode != 0
-    assert "private type" in result.stderr
-
-
-@pytest.mark.parametrize(
     "text", ["val create : string -> string", "val create : fields:string list -> string -> string"]
 )
 def unnamed_operation_inputs_fail_generation(tmp_path: Path, *, text: str) -> None:
@@ -327,18 +299,18 @@ def factories_can_return_other_types(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("source", "accepted"),
     [
-        ('Content.create(inline="")', True),
-        ('Content.create(resource="checker")', True),
-        ('Completion.create(plain="")', True),
-        ("ResponseValue.create(bool=False)", True),
-        ("Content.create()", False),
-        ('Content.create(inline="x", resource="checker")', False),
-        ("Completion.create()", False),
-        ('Completion.create(plain="", structured=Response.create(fields=[]))', False),
-        ('ResponseValue.create(string="x", bool=False)', False),
-        ("Criterion.create()", False),
-        ('Content.Inline("unchecked")', False),
-        ('TextRule(field="x", min_words=1, max_words=2)', False),
+        ('""', True),
+        ('Criterion.State(predicate=Predicate.Present(path=["response"]))', True),
+        ('TextRule(field="x", min_words=1, max_words=2)', True),
+        ("Outcome.create(changed_files=[], verification=Verification.Passed())", True),
+        ('Predicate.Equals(path=["x"], expected="B")', True),
+        ("Reference(edits=[], completion={'a': [1, None]})", True),
+        ('Value.String("")', False),
+        ("Value.String()", False),
+        ("Criterion.State(predicate=None)", False),
+        ('TextRule(field="x", min_words="1", max_words=2)', False),
+        ("Outcome.create(changed_files=[])", False),
+        ('Outcome.create(changed_files=[], verification="passed")', False),
     ],
 )
 def compiler_owned_factory_contracts_are_checked_statically(
@@ -346,9 +318,8 @@ def compiler_owned_factory_contracts_are_checked_statically(
 ) -> None:
     path = tmp_path / "factory_contract.py"
     path.write_text(
-        "from kernel import Content, Completion, Response, ResponseValue, Criterion, TextRule\n"
-        + source
-        + "\n"
+        "from kernel import Criterion, Outcome, Predicate, Reference, TextRule, Value, "
+        "Verification\n" + source + "\n"
     )
     result = subprocess.run(
         [sys.executable, "-m", "mypy", "--config-file", str(EVALS / "pyproject.toml"), str(path)],

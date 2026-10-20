@@ -1,9 +1,5 @@
-type t = { sources : File.t list }
+(* Kernel: the compiled sources, for fingerprinting runs against the grading policy. *)
+type t = { sources : Task.file list }
 
 let current =
-  {
-    sources =
-      List.map
-        (fun (path, contents) -> Result.get_ok (File.create ~path ~contents))
-        Build_info.sources;
-  }
+  { sources = List.map (fun (path, contents) -> { Task.path; contents }) Build_info.sources }

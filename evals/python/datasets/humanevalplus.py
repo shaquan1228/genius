@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from evals.python.dataset import DatasetInfo
 from evals.python.integrations.evalplus import checks
-from kernel import Completion, File, Fixture, Instruction, Reference, Task
+from kernel import File, Instruction, Reference, Task
 
 info = DatasetInfo(
     source="https://github.com/evalplus/humanevalplus_release/releases/download/v0.1.10/HumanEvalPlus.jsonl.gz",
@@ -44,8 +44,8 @@ def declaration(raw: str) -> Task:
     problem = Problem.model_validate_json(raw)
     return Task.create(
         id="humaneval-" + problem.task_id.split("/")[1],
-        fixture=Fixture.create(files=[File.create(path="solution.py", contents=problem.prompt)]),
-        instruction=Instruction.create(
+        fixture=[File(path="solution.py", contents=problem.prompt)],
+        instruction=Instruction(
             skill="reasoning",
             prompt=(
                 "Implement the specified function in solution.py. Preserve its signature and edit "
@@ -56,15 +56,9 @@ def declaration(raw: str) -> Task:
             record=raw, manifest={**info.model_dump(exclude={"attributes"}), **info.attributes}
         ),
         allowed_files=("solution.py",),
-        reference=Reference.create(
-            edits=Fixture.create(
-                files=[
-                    File.create(
-                        path="solution.py", contents=problem.prompt + problem.canonical_solution
-                    )
-                ]
-            ),
-            completion=Completion.create(plain=""),
+        reference=Reference(
+            edits=[File(path="solution.py", contents=problem.prompt + problem.canonical_solution)],
+            completion=None,
         ),
     )
 
