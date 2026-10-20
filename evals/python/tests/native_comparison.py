@@ -177,7 +177,10 @@ def tool_traces_and_environment_state_are_graded_as_facts() -> None:
         allowed_files=[],
         reference=Reference(edits=[], completion="5"),
     )
-    assert Task.checks(task=task) is None
+    assert (Task.checks(task=task), bool(datasets.compile_dataset(cases=(task,)).cases_hash)) == (
+        None,
+        True,
+    )
     facts: dict[str, JsonValue] = {"trace": [call], "state": {"balance": 5, "ratio": 0.5}}
     outcome = Outcome.create(changed_files=[], verification=Verification.Unchecked(), facts=facts)
     result = Task.assess(task=task, outcome=outcome)
@@ -190,19 +193,21 @@ def tool_traces_and_environment_state_are_graded_as_facts() -> None:
         "no-transfer": True,
         "any": False,
     }
-    assert checks["no-transfer"]["predicate"] == {
-        "kind": "not",
-        "check": {"kind": "present", "path": ["state", "transfer"]},
+    assert {name: checks[name]["predicate"] for name in ("no-transfer", "only-lookups", "any")} == {
+        "no-transfer": {"kind": "not", "check": {"kind": "present", "path": ["state", "transfer"]}},
+        "only-lookups": {
+            "kind": "within",
+            "path": ["trace"],
+            "allowed": [{"name": "lookup", "arguments": {"id": 7}}],
+        },
+        "any": {"kind": "any", "checks": ["missing"]},
     }
-    assert checks["only-lookups"]["predicate"] == {
-        "kind": "within",
-        "path": ["trace"],
-        "allowed": [{"name": "lookup", "arguments": {"id": 7}}],
-    }
-    assert checks["any"]["predicate"] == {"kind": "any", "checks": ["missing"]}
+
+
+def native_values_decode_to_plain_json() -> None:
     witness = Reference(edits=[], completion={"ratio": 0.5, "flag": True, "items": (1, "x")})
-    assert scoring.plain(witness.completion) == {"ratio": 0.5, "flag": True, "items": [1, "x"]}
-    assert str(
-        scoring.plain(Reference(edits=[], completion=cast(JsonValue, object())).completion)
-    ).startswith("<object")
-    assert datasets.compile_dataset(cases=(task,)).cases_hash
+    opaque = Reference(edits=[], completion=cast(JsonValue, object())).completion
+    assert (scoring.plain(witness.completion), str(scoring.plain(opaque))[:7]) == (
+        {"ratio": 0.5, "flag": True, "items": [1, "x"]},
+        "<object",
+    )
