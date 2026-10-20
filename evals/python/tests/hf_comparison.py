@@ -54,7 +54,7 @@ def _report(
     runs: Mapping[str, Path], *, baseline: str, measurement: Measurement
 ) -> ComparisonReport:
     return comparison.compare_summaries(
-        {name: RunSummary(metrics={}, created_at="test") for name in runs},
+        {name: RunSummary(trials={}, created_at="test") for name in runs},
         baseline=baseline,
         measurement=measurement,
     )

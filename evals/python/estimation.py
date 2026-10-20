@@ -1,15 +1,16 @@
-"""Case-clustered estimates over a jagged matrix of graded units.
+"""Case-clustered estimates over a jagged matrix of trials.
 
-A unit is one graded attempt at one case. Cases are the sampling unit: repeated attempts
+A trial is one graded try at one case. Cases are the sampling unit: repeated trials
 refine a case mean and measure within-case variance, but never add cases. Each case holds
-its own number of attempts and observes its own checks, so the matrix is jagged; a metric
-is estimated over the cases that observe it. Paired intervals difference case means.
+its own number of trials and observes its own metrics, so the matrix is jagged; a metric
+is estimated over the cases that observe it. Per-case differences of case means are a
+matrix of one trial per case, so a paired contrast is estimated the same way.
 https://arxiv.org/abs/2411.00640 (Miller, Adding Error Bars to Evals)
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from functools import reduce
-from itertools import accumulate, count, islice
+from itertools import accumulate, chain, count, islice
 from math import atan, cos, fsum, pi, sin, sqrt
 from statistics import fmean, variance
 from typing import Annotated
@@ -18,53 +19,41 @@ from pydantic import BaseModel, Field, validate_call
 
 from evals.python import FROZEN
 
-__all__ = ["Estimate", "Interval", "Units", "estimates", "intervals"]
+__all__ = ["Estimate", "Metrics", "Trials", "differences", "estimates"]
 
-type Unit = dict[str, Annotated[float, Field(allow_inf_nan=False)]]
-type Units = dict[str, Annotated[tuple[Unit, ...], Field(min_length=1)]]
+type Metrics = dict[str, Annotated[float, Field(allow_inf_nan=False)]]
+type Trials = dict[str, Annotated[tuple[Metrics, ...], Field(min_length=1)]]
 type Groups = Sequence[Sequence[float]]
 
 
 class Estimate(BaseModel):
-    """A case-weighted mean with its standard error and variance components.
+    """A metric's mean over cases; with two or more cases, its uncertainty.
 
-    `between` is the variance of true case means and `within` the pooled variance of
-    units around their case mean. Both need repeated attempts; `between` is truncated
-    at zero.
+    `interval` is a two-sided Student-t interval. `between` is the variance of true case
+    means and `within` the pooled variance of trials around their case mean. Both need
+    repeated trials; `between` is truncated at zero.
     """
 
     model_config = FROZEN
     cases: int
-    units: int
     mean: float
-    stderr: float
-    between: float | None
-    within: float | None
+    stderr: float | None = None
+    interval: tuple[float, float] | None = None
+    between: float | None = None
+    within: float | None = None
 
 
-class Interval(BaseModel):
-    """A paired difference of case means with a two-sided Student-t interval."""
-
-    model_config = FROZEN
-    cases: int
-    baseline: float
-    mean: float
-    stderr: float
-    low: float
-    high: float
+def _metrics(rows: Iterable[Metrics]) -> list[str]:
+    return sorted({metric for trial in rows for metric in trial})
 
 
-def _values(attempts: Sequence[Unit], *, metric: str) -> list[float]:
-    return [unit[metric] for unit in attempts if metric in unit]
+def _values(rows: Sequence[Metrics], *, metric: str) -> list[float]:
+    return [trial[metric] for trial in rows if metric in trial]
 
 
-def _observed(units: Units, *, metric: str) -> dict[str, list[float]]:
-    groups = {case: _values(attempts, metric=metric) for case, attempts in units.items()}
-    return {case: values for case, values in groups.items() if values}
-
-
-def _metrics(units: Units) -> set[str]:
-    return {metric for attempts in units.values() for unit in attempts for metric in unit}
+def _groups(trials: Trials, *, metric: str) -> list[list[float]]:
+    groups = (_values(rows, metric=metric) for rows in trials.values())
+    return [values for values in groups if values]
 
 
 def _squares(values: Sequence[float]) -> float:
@@ -76,33 +65,6 @@ def _within(groups: Groups) -> float | None:
     if not repeated:
         return None
     return fsum(map(_squares, repeated)) / (sum(map(len, repeated)) - len(repeated))
-
-
-def _estimate(groups: Groups) -> Estimate:
-    means = [fmean(values) for values in groups]
-    spread = variance(means)
-    within = _within(groups)
-    return Estimate(
-        cases=len(means),
-        units=sum(map(len, groups)),
-        mean=fmean(means),
-        stderr=sqrt(spread / len(means)),
-        between=(
-            None
-            if within is None
-            else max(0.0, spread - within * fmean(1 / len(values) for values in groups))
-        ),
-        within=within,
-    )
-
-
-@validate_call(config=FROZEN)
-def estimates(units: Units) -> dict[str, Estimate]:
-    """Estimate every metric that at least two cases observe."""
-    groups = {
-        metric: list(_observed(units, metric=metric).values()) for metric in sorted(_metrics(units))
-    }
-    return {metric: _estimate(values) for metric, values in groups.items() if len(values) > 1}
 
 
 def _coverage(t: float, *, df: int) -> float:
@@ -133,41 +95,49 @@ def _critical(confidence: float, *, df: int) -> float:
     return (low + high) / 2
 
 
-def _interval(before: Sequence[float], *, after: Sequence[float], confidence: float) -> Interval:
-    differences = [right - left for left, right in zip(before, after, strict=True)]
-    mean = fmean(differences)
-    stderr = sqrt(variance(differences) / len(differences))
-    margin = _critical(confidence, df=len(differences) - 1) * stderr
-    return Interval(
-        cases=len(differences),
-        baseline=fmean(before),
-        mean=mean,
-        stderr=stderr,
-        low=mean - margin,
-        high=mean + margin,
+def _estimate(groups: Groups, *, confidence: float) -> Estimate:
+    means = [fmean(values) for values in groups]
+    estimate = Estimate(cases=len(means), mean=fmean(means), within=_within(groups))
+    if len(means) < 2:
+        return estimate
+    spread = variance(means)
+    stderr = sqrt(spread / len(means))
+    margin = _critical(confidence, df=len(means) - 1) * stderr
+    shrinkage = fmean(1 / len(values) for values in groups)
+    between = None if estimate.within is None else max(0.0, spread - estimate.within * shrinkage)
+    return estimate.model_copy(
+        update={
+            "stderr": stderr,
+            "interval": (estimate.mean - margin, estimate.mean + margin),
+            "between": between,
+        }
     )
-
-
-def _pairs(before: Units, *, after: Units, metric: str) -> tuple[list[float], list[float]]:
-    left, right = (
-        {case: fmean(values) for case, values in _observed(units, metric=metric).items()}
-        for units in (before, after)
-    )
-    shared = sorted(left.keys() & right.keys())
-    return [left[case] for case in shared], [right[case] for case in shared]
 
 
 @validate_call(config=FROZEN)
-def intervals(
-    before: Units, *, after: Units, confidence: Annotated[float, Field(gt=0, lt=1)]
-) -> dict[str, Interval]:
-    """Pair case means of every metric that both runs observe in at least two shared cases."""
-    pairs = {
-        metric: _pairs(before, after=after, metric=metric)
-        for metric in sorted(_metrics(before) & _metrics(after))
-    }
+def estimates(
+    trials: Trials, *, confidence: Annotated[float, Field(gt=0, lt=1)]
+) -> dict[str, Estimate]:
+    """Estimate every metric over the cases that observe it."""
     return {
-        metric: _interval(left, after=right, confidence=confidence)
-        for metric, (left, right) in pairs.items()
-        if len(left) > 1
+        metric: _estimate(_groups(trials, metric=metric), confidence=confidence)
+        for metric in _metrics(chain.from_iterable(trials.values()))
+    }
+
+
+def _means(rows: Sequence[Metrics]) -> Metrics:
+    return {metric: fmean(_values(rows, metric=metric)) for metric in _metrics(rows)}
+
+
+def _change(before: Sequence[Metrics], *, after: Sequence[Metrics]) -> Metrics:
+    left, right = _means(before), _means(after)
+    return {metric: right[metric] - value for metric, value in left.items() if metric in right}
+
+
+@validate_call(config=FROZEN)
+def differences(before: Trials, *, after: Trials) -> dict[str, Metrics]:
+    """Each shared case's change in mean for every metric that both runs observe in it."""
+    return {
+        case: _change(before[case], after=after[case])
+        for case in sorted(before.keys() & after.keys())
     }

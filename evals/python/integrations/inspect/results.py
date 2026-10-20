@@ -1,29 +1,27 @@
 """Compare native Inspect logs using their recorded inputs and completeness checks."""
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from itertools import chain, groupby, product
 from math import inf
 from pathlib import Path
-from statistics import mean
 from typing import Any, cast
 from uuid import uuid4
 
 from inspect_ai import Task as InspectTask
 from inspect_ai.log import EvalLog, EvalSample, list_eval_logs, read_eval_log
 from inspect_ai.model import get_model_info
-from inspect_ai.scorer import CORRECT, SampleScore, Score, accuracy
+from inspect_ai.scorer import CORRECT
 
 import evals.python.integrations.inspect.pricing as pricing_adapter
 import evals.python.integrations.inspect.profiles as profiles_adapter
 import kernel
 from evals.python import EVALS_ROOT, evaluation
 from evals.python.comparison import RunSummary
+from evals.python.estimation import Metrics, Trials
 from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.inspect import completeness
 from kernel import Experiment, Task
-
-_ACCURACY = cast(Callable[[list[SampleScore]], float], accuracy())
 
 
 def _harness_source(path: Path) -> bool:
@@ -169,19 +167,6 @@ def correct(sample: EvalSample) -> bool:
     )
 
 
-def metrics(samples: list[EvalSample]) -> dict[str, float]:
-    scores = [
-        SampleScore(score=Score(value=correct(s)), sample_metadata={"case_id": str(s.id)})
-        for s in samples
-    ]
-    return {
-        "accuracy": _ACCURACY(scores),
-        "mean_seconds": mean(elapsed(s) for s in samples),
-        "crashes": sum(completeness.crashed(s) for s in samples),
-        "cutoffs": sum(s.limit is not None for s in samples),
-    }
-
-
 def checks(details: dict[str, Any], *, prefix: str = "") -> list[tuple[str, bool]]:
     """Every named check in recorded assessment details, by dotted path."""
     return [
@@ -191,8 +176,8 @@ def checks(details: dict[str, Any], *, prefix: str = "") -> list[tuple[str, bool
     ]
 
 
-def unit(sample: EvalSample) -> dict[str, float]:
-    """One graded attempt: success, elapsed time, failure indicators, and each check."""
+def trial(sample: EvalSample) -> Metrics:
+    """One graded try: success, elapsed time, failure indicators, and each check."""
     details = ((sample.scores or {})["evaluation"].metadata or {}).get("assessment", {})
     return {
         "accuracy": float(correct(sample)),
@@ -203,20 +188,13 @@ def unit(sample: EvalSample) -> dict[str, float]:
     }
 
 
-def _by_case(log: EvalLog) -> dict[str, list[EvalSample]]:
+def trials(log: EvalLog) -> Trials:
+    """The jagged matrix of graded trials per case, in epoch order."""
     ordered = sorted(log.samples or [], key=lambda sample: (str(sample.id), sample.epoch))
     return {
-        case: list(group) for case, group in groupby(ordered, key=lambda sample: str(sample.id))
+        case: tuple(map(trial, group))
+        for case, group in groupby(ordered, key=lambda sample: str(sample.id))
     }
-
-
-def case_metrics(log: EvalLog) -> dict[str, dict[str, float]]:
-    return {case: metrics(samples) for case, samples in _by_case(log).items()}
-
-
-def units(log: EvalLog) -> dict[str, tuple[dict[str, float], ...]]:
-    """The jagged matrix of graded attempts per case, in epoch order."""
-    return {case: tuple(map(unit, samples)) for case, samples in _by_case(log).items()}
 
 
 def signature(log: EvalLog) -> tuple[object, ...]:
@@ -240,11 +218,6 @@ def summaries(runs: Mapping[str, Path]) -> dict[str, RunSummary]:
         if reference is not None and current != reference:
             raise ValueError("Incompatible measurement conditions")
         reference = current
-        summaries[name] = RunSummary(
-            metrics=metrics(log.samples or []),
-            cases=case_metrics(log),
-            units=units(log),
-            created_at=log.eval.created,
-        )
+        summaries[name] = RunSummary(trials=trials(log), created_at=log.eval.created)
         del log
     return summaries

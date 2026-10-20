@@ -44,7 +44,7 @@ PUBLIC_OPERATIONS = {
         "compare_summaries",
         "render_report",
     },
-    "estimation": {"estimates", "intervals"},
+    "estimation": {"differences", "estimates"},
 }
 OWNER_TYPES = {
     "datasets": {"Dataset", "DatasetInfo", "Selection"},
@@ -58,8 +58,9 @@ OWNER_TYPES = {
         "Contrast",
         "VariantRequest",
         "Measurement",
+        "Objective",
     },
-    "estimation": {"Estimate", "Interval", "Units"},
+    "estimation": {"Estimate", "Metrics", "Trials"},
 }
 PUBLIC_NAMES = {
     owner: names | PUBLIC_OPERATIONS.get(owner, set()) for owner, names in OWNER_TYPES.items()
