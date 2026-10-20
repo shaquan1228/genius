@@ -3,8 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from evals.python.integrations.inspect.scoring import decode_response, plain
-from kernel import Value
+from evals.python.integrations.inspect.scoring import decode_response
 
 
 @pytest.mark.parametrize(
@@ -16,7 +15,7 @@ from kernel import Value
     ],
 )
 def json_and_fences_decode_to_native_values(text: str) -> None:
-    assert plain(decode_response(text)) == {"choice": "B", "reason": "Cheap"}
+    assert decode_response(text) == {"choice": "B", "reason": "Cheap"}
 
 
 @pytest.mark.parametrize(
@@ -31,29 +30,27 @@ def json_and_fences_decode_to_native_values(text: str) -> None:
     ],
 )
 def malformed_candidates_produce_a_null_response(text: str) -> None:
-    assert isinstance(decode_response(text), Value.Null)
+    assert decode_response(text) is None
 
 
 @pytest.mark.parametrize("safe", [True, False])
 def scalar_values_preserve_types_and_escaping(*, safe: bool) -> None:
     fields = {"state": 'quote" \\ \n é', "safe": safe, "empty": "", "count": 5, "ratio": 0.5}
     result = decode_response(json.dumps(fields))
-    assert plain(result) == fields
-    assert isinstance(result, Value.Record)
-    assert isinstance(dict(result.fields)["safe"], Value.Bool)
+    assert result == fields
+    assert isinstance(result, dict)
+    assert result["safe"] is safe
 
 
 def duplicate_keys_keep_the_last_json_value() -> None:
-    assert plain(decode_response('{"choice":"A","choice":"B"}')) == {"choice": "B"}
+    assert decode_response('{"choice":"A","choice":"B"}') == {"choice": "B"}
 
 
 def nested_replies_decode_to_lists_and_records() -> None:
-    assert plain(decode_response('{"items":[1,null,{"x":[]}]}')) == {"items": [1, None, {"x": []}]}
+    assert decode_response('{"items":[1,null,{"x":[]}]}') == {"items": [1, None, {"x": []}]}
 
 
 def candidate_text_cannot_execute_code(tmp_path: Path) -> None:
     sentinel = tmp_path / "candidate-ran"
-    assert isinstance(
-        decode_response(f'let () = let c = open_out "{sentinel}" in close_out c'), Value.Null
-    )
+    assert decode_response(f'let () = let c = open_out "{sentinel}" in close_out c') is None
     assert not sentinel.exists()

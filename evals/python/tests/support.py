@@ -73,7 +73,7 @@ def choice_case(*, case_id: str, a: int, b: int) -> Task:
         instruction=Instruction(skill="reasoning", prompt="Choose A or B with a reason"),
         criterion=Criterion.Answer(
             rubric=Rubric(
-                expected=[("choice", Value.String(value=choice))],
+                expected=[("choice", choice)],
                 text_rule=TextRule(field="reason", min_words=1, max_words=40),
             )
         ),
@@ -82,8 +82,8 @@ def choice_case(*, case_id: str, a: int, b: int) -> Task:
             edits=[],
             completion=Value.Record(
                 fields=[
-                    ("choice", Value.String(value=choice)),
-                    ("reason", Value.String(value="The cost is lower.")),
+                    ("choice", choice),
+                    ("reason", "The cost is lower."),
                 ]
             ),
         ),

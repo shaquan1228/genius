@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from evals.python.dataset import DatasetInfo
 from evals.python.integrations.evalplus import checks
-from kernel import File, Instruction, Reference, Task, Value
+from kernel import File, Instruction, Reference, Task
 
 info = DatasetInfo(
     source="https://github.com/evalplus/humanevalplus_release/releases/download/v0.1.10/HumanEvalPlus.jsonl.gz",
@@ -58,7 +58,7 @@ def declaration(raw: str) -> Task:
         allowed_files=("solution.py",),
         reference=Reference(
             edits=[File(path="solution.py", contents=problem.prompt + problem.canonical_solution)],
-            completion=Value.Null(),
+            completion=None,
         ),
     )
 

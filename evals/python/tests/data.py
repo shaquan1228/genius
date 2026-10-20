@@ -38,7 +38,6 @@ from kernel import (
     Profile,
     Reference,
     Task,
-    Value,
     Verifier,
 )
 from kernel import (
@@ -241,7 +240,7 @@ def generic_python_case_exports_without_language_restriction() -> None:
             )
         ),
         allowed_files=("solution.py",),
-        reference=Reference(edits=[], completion=Value.String(value="done")),
+        reference=Reference(edits=[], completion="done"),
     )
     dataset = datasets.compile_dataset(cases=(definition,))
     case = datasets.list_cases(selection=dataset)[0]

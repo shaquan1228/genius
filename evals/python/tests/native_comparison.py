@@ -3,6 +3,7 @@
 from typing import cast
 
 import pytest
+from pydantic import JsonValue
 
 from evals.python import datasets
 from evals.python.integrations.inspect import scoring
@@ -24,12 +25,10 @@ from kernel import (
 
 
 def _reply(*, choice: str = "B", reason: str = "One reason") -> Value.Value:
-    return Value.Record(
-        fields=[("choice", Value.String(value=choice)), ("reason", Value.String(value=reason))]
-    )
+    return Value.Record(fields=[("choice", choice), ("reason", reason)])
 
 
-def _observation(response: Value.Value) -> Value.Value:
+def _observation(response: JsonValue | Value.Value) -> Value.Value:
     outcome = Outcome.create(
         changed_files=[], verification=Verification.Unchecked(), response=response
     )
@@ -42,7 +41,7 @@ def _observation(response: Value.Value) -> Value.Value:
         (_reply(), True, True, "One reason"),
         (_reply(choice="A"), True, False, "One reason"),
         (_reply(reason="long enough to fail"), True, False, "long enough to fail"),
-        (Value.Null(), False, False, None),
+        (None, False, False, None),
         (Value.Record(fields=[]), True, False, None),
     ],
 )
@@ -50,7 +49,7 @@ def composed_answer_retains_field_and_text_evidence(
     response: Value.Value, *, present: bool, passed: bool, observed: str | None
 ) -> None:
     rubric = Rubric(
-        expected=[("choice", Value.String(value="B"))],
+        expected=[("choice", "B")],
         text_rule=TextRule(field="reason", min_words=1, max_words=3),
     )
     result = Assessment.create(
@@ -90,7 +89,7 @@ def nested_assessments_retain_both_success_and_failure() -> None:
     child = Predicate.All(checks=[("bad", no), ("good", yes)])
     root = Assessment.create(
         predicate=Predicate.All(checks=[("correctness", child), ("scope", yes)]),
-        observation=_observation(Value.Null()),
+        observation=_observation(None),
     )
     assert isinstance(root, Assessment.All)
     inner = dict(root.checks)["correctness"]
@@ -100,9 +99,9 @@ def nested_assessments_retain_both_success_and_failure() -> None:
 
 
 def conjunction_identity_and_single_check_projection() -> None:
-    empty = Assessment.create(predicate=Predicate.All(checks=[]), observation=Value.Null())
+    empty = Assessment.create(predicate=Predicate.All(checks=[]), observation=None)
     single = Assessment.create(
-        predicate=Predicate.Not(check=Predicate.Present(path=["absent"])), observation=Value.Null()
+        predicate=Predicate.Not(check=Predicate.Present(path=["absent"])), observation=None
     )
     assert Assessment.passed(assessment=empty)
     assert tuple(Assessment.scores(assessment=empty)) == ()
@@ -124,7 +123,7 @@ def harness_failures_are_errors_for_every_criterion(case_id: str) -> None:
 def text_assessment_preserves_wrong_value_type() -> None:
     result = Assessment.create(
         predicate=Predicate.Words(path=["response", "reason"], min_words=0, max_words=3),
-        observation=_observation(Value.Record(fields=[("reason", Value.Bool(value=True))])),
+        observation=_observation(Value.Record(fields=[("reason", True)])),
     )
     assert not Assessment.passed(assessment=result)
     assert scoring.assessment_details(result) == {
@@ -155,7 +154,7 @@ def code_assessment_serializes_the_verified_outcome() -> None:
 
 
 def tool_traces_and_environment_state_are_graded_as_facts() -> None:
-    call = scoring.value({"name": "lookup", "arguments": {"id": 7}})
+    call: dict[str, JsonValue] = {"name": "lookup", "arguments": {"id": 7}}
     criterion = Criterion.State(
         predicate=Predicate.All(
             checks=[
@@ -163,7 +162,7 @@ def tool_traces_and_environment_state_are_graded_as_facts() -> None:
                 ("only-lookups", Predicate.Within(path=["trace"], allowed=[call])),
                 (
                     "balance",
-                    Predicate.Equals(path=["state", "balance"], expected=Value.Int(value=5)),
+                    Predicate.Equals(path=["state", "balance"], expected=5),
                 ),
                 ("no-transfer", Predicate.Not(check=Predicate.Present(path=["state", "transfer"]))),
                 ("any", Predicate.Any(checks=[("missing", Predicate.Present(path=["absent"]))])),
@@ -176,11 +175,10 @@ def tool_traces_and_environment_state_are_graded_as_facts() -> None:
         instruction=Instruction(skill="reasoning", prompt="Report the balance"),
         criterion=criterion,
         allowed_files=[],
-        reference=Reference(edits=[], completion=Value.String(value="5")),
+        reference=Reference(edits=[], completion="5"),
     )
     assert Task.checks(task=task) is None
-    facts = [("trace", scoring.value([{"name": "lookup", "arguments": {"id": 7}}]))]
-    facts.append(("state", scoring.value({"balance": 5, "ratio": 0.5, "note": None})))
+    facts: dict[str, JsonValue] = {"trace": [call], "state": {"balance": 5, "ratio": 0.5}}
     outcome = Outcome.create(changed_files=[], verification=Verification.Unchecked(), facts=facts)
     result = Task.assess(task=task, outcome=outcome)
     details = cast(dict[str, dict[str, object]], scoring.assessment_details(result)["checks"])
@@ -202,10 +200,9 @@ def tool_traces_and_environment_state_are_graded_as_facts() -> None:
         "allowed": [{"name": "lookup", "arguments": {"id": 7}}],
     }
     assert checks["any"]["predicate"] == {"kind": "any", "checks": ["missing"]}
-    assert scoring.plain(scoring.value({"ratio": 0.5, "flag": True, "items": (1, "x")})) == {
-        "ratio": 0.5,
-        "flag": True,
-        "items": [1, "x"],
-    }
-    assert str(scoring.plain(scoring.value(object()))).startswith("<object")
+    witness = Reference(edits=[], completion={"ratio": 0.5, "flag": True, "items": (1, "x")})
+    assert scoring.plain(witness.completion) == {"ratio": 0.5, "flag": True, "items": [1, "x"]}
+    assert str(
+        scoring.plain(Reference(edits=[], completion=cast(JsonValue, object())).completion)
+    ).startswith("<object")
     assert datasets.compile_dataset(cases=(task,)).cases_hash

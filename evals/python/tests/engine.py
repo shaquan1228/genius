@@ -172,7 +172,7 @@ with patch.object(Task, "required_scores", ["correctness", "scope", "extension"]
     yes = Predicate.All(checks=[])
     no = Predicate.Present(path=["absent"])
     predicate = Predicate.All(checks=[("correctness", yes), ("scope", no), ("extension", yes)])
-    assessment = Assessment.create(predicate=predicate, observation=Value.Null())
+    assessment = Assessment.create(predicate=predicate, observation=None)
     scores = Assessment.scores(assessment=assessment)
     assert scoring.score_values(scores) == encoded
 """,

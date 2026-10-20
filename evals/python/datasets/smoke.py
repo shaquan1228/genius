@@ -1,7 +1,7 @@
 """Pure Python declarations for the default four-case smoke dataset."""
 
 from evals.python.integrations.smoke import checks
-from kernel import Criterion, File, Instruction, Reference, Rubric, Task, TextRule, Value
+from kernel import Criterion, File, Instruction, Reference, Rubric, Task, TextRule
 
 info = None
 
@@ -54,7 +54,7 @@ assert total([(1.5, 2)]) == 3.0
                     "    return sum(price * quantity for price, quantity in items)\n",
                 )
             ],
-            completion=Value.String(value="Each quantity now contributes to the total."),
+            completion="Each quantity now contributes to the total.",
         ),
     )
 
@@ -132,31 +132,26 @@ for value in (0, -1):
                 File(path="config.py", contents=f"timeout_seconds = {requested}\n"),
                 File(path="client.py", contents=client(requested)),
             ],
-            completion=Value.String(value="Updated both defaults and preserved overrides."),
+            completion="Updated both defaults and preserved overrides.",
         ),
     )
 
 
-def scalar(*, value: str | bool) -> Value.Value:
-    return Value.Bool(value=value) if isinstance(value, bool) else Value.String(value=value)
-
-
 def answer(*, id: str, prompt: str, expected: dict[str, str | bool], reason: str) -> Task:
-    fields = [(name, scalar(value=value)) for name, value in expected.items()]
     return Task.create(
         id=id,
         fixture=[],
         instruction=Instruction(skill="bayesian", prompt=prompt),
         criterion=Criterion.Answer(
             rubric=Rubric(
-                expected=fields,
+                expected=expected,
                 text_rule=TextRule(field="reason", min_words=1, max_words=40),
             )
         ),
         allowed_files=(),
         reference=Reference(
             edits=[],
-            completion=Value.Record(fields=[*fields, ("reason", Value.String(value=reason))]),
+            completion={**expected, "reason": reason},
         ),
     )
 

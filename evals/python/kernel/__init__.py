@@ -14,11 +14,49 @@ GradingFailure = _native.Failure.grading_failure
 Instruction = _named(constructor=_native.Task.instruction)
 Issue = _named(constructor=_native.Failure.issue)
 Kernel = _named(constructor=_native.Kernel.t)
-Outcome = _named(constructor=_native.Outcome.t)
+Outcome = _named(
+    constructor=_native.Outcome.t,
+    coerce={
+        "response": {"kind": "name", "name": "value", "args": []},
+        "facts": {
+            "kind": "name",
+            "name": "list",
+            "args": [
+                {
+                    "kind": "tuple",
+                    "items": [
+                        {"kind": "name", "name": "string", "args": []},
+                        {"kind": "name", "name": "value", "args": []},
+                    ],
+                }
+            ],
+        },
+    },
+)
 Predicate = _native.Predicate.t
 Profile = _named(constructor=_native.Profile.t)
-Reference = _named(constructor=_native.Task.reference)
-Rubric = _named(constructor=_native.Task.rubric)
+Reference = _named(
+    constructor=_native.Task.reference,
+    coerce={"completion": {"kind": "name", "name": "value", "args": []}},
+)
+Rubric = _named(
+    constructor=_native.Task.rubric,
+    coerce={
+        "expected": {
+            "kind": "name",
+            "name": "list",
+            "args": [
+                {
+                    "kind": "tuple",
+                    "items": [
+                        {"kind": "name", "name": "string", "args": []},
+                        {"kind": "name", "name": "value", "args": []},
+                    ],
+                }
+            ],
+        }
+    },
+)
 Score = _native.Assessment.score
 Task = _named(constructor=_native.Task.t)
 TextRule = _named(constructor=_native.Task.text_rule)
@@ -36,22 +74,76 @@ Value.Bool = _named(constructor=_native.Value.Bool)
 Value.Int = _named(constructor=_native.Value.Int)
 Value.Float = _named(constructor=_native.Value.Float)
 Value.String = _named(constructor=_native.Value.String)
-Value.List = _named(constructor=_native.Value.List)
-Value.Record = _named(constructor=_native.Value.Record)
+Value.List = _named(
+    constructor=_native.Value.List,
+    coerce={
+        "items": {
+            "kind": "name",
+            "name": "list",
+            "args": [{"kind": "name", "name": "value", "args": []}],
+        }
+    },
+)
+Value.Record = _named(
+    constructor=_native.Value.Record,
+    coerce={
+        "fields": {
+            "kind": "name",
+            "name": "list",
+            "args": [
+                {
+                    "kind": "tuple",
+                    "items": [
+                        {"kind": "name", "name": "string", "args": []},
+                        {"kind": "name", "name": "value", "args": []},
+                    ],
+                }
+            ],
+        }
+    },
+)
 Value.strings = staticmethod(
     _bind(operation=_native.Value.strings, arguments={"values": False}, failure=None)
 )
 Value.get = staticmethod(
-    _bind(operation=_native.Value.get, arguments={"value": False, "path": False}, failure=None)
+    _bind(
+        operation=_native.Value.get,
+        arguments={"value": False, "path": False},
+        failure=None,
+        coerce={"value": {"kind": "name", "name": "value", "args": []}},
+    )
 )
 Value.equal = staticmethod(
-    _bind(operation=_native.Value.equal, arguments={"left": False, "right": False}, failure=None)
+    _bind(
+        operation=_native.Value.equal,
+        arguments={"left": False, "right": False},
+        failure=None,
+        coerce={
+            "left": {"kind": "name", "name": "value", "args": []},
+            "right": {"kind": "name", "name": "value", "args": []},
+        },
+    )
 )
 Predicate.Value = Predicate
 Predicate.Present = _named(constructor=_native.Predicate.Present)
-Predicate.Equals = _named(constructor=_native.Predicate.Equals)
-Predicate.Within = _named(constructor=_native.Predicate.Within)
-Predicate.Contains = _named(constructor=_native.Predicate.Contains)
+Predicate.Equals = _named(
+    constructor=_native.Predicate.Equals,
+    coerce={"expected": {"kind": "name", "name": "value", "args": []}},
+)
+Predicate.Within = _named(
+    constructor=_native.Predicate.Within,
+    coerce={
+        "allowed": {
+            "kind": "name",
+            "name": "list",
+            "args": [{"kind": "name", "name": "value", "args": []}],
+        }
+    },
+)
+Predicate.Contains = _named(
+    constructor=_native.Predicate.Contains,
+    coerce={"item": {"kind": "name", "name": "value", "args": []}},
+)
 Predicate.Words = _named(constructor=_native.Predicate.Words)
 Predicate.All = _named(constructor=_native.Predicate.All)
 Predicate.Any = _named(constructor=_native.Predicate.Any)
@@ -61,6 +153,7 @@ Predicate.holds = staticmethod(
         operation=_native.Predicate.holds,
         arguments={"predicate": False, "observation": False},
         failure=None,
+        coerce={"observation": {"kind": "name", "name": "value", "args": []}},
     )
 )
 Verification.Value = Verification
@@ -78,19 +171,39 @@ Outcome.create = staticmethod(
         operation=_native.Outcome.create,
         arguments={"response": True, "facts": True, "changed_files": False, "verification": False},
         failure=None,
+        coerce={
+            "response": {"kind": "name", "name": "value", "args": []},
+            "facts": {
+                "kind": "name",
+                "name": "list",
+                "args": [
+                    {
+                        "kind": "tuple",
+                        "items": [
+                            {"kind": "name", "name": "string", "args": []},
+                            {"kind": "name", "name": "value", "args": []},
+                        ],
+                    }
+                ],
+            },
+        },
     )
 )
 Outcome.observation = staticmethod(
     _bind(operation=_native.Outcome.observation, arguments={"outcome": False}, failure=None)
 )
 Assessment.Value = Assessment
-Assessment.Check = _named(constructor=_native.Assessment.Check)
+Assessment.Check = _named(
+    constructor=_native.Assessment.Check,
+    coerce={"observation": {"kind": "name", "name": "value", "args": []}},
+)
 Assessment.All = _named(constructor=_native.Assessment.All)
 Assessment.create = staticmethod(
     _bind(
         operation=_native.Assessment.create,
         arguments={"predicate": False, "observation": False},
         failure=None,
+        coerce={"observation": {"kind": "name", "name": "value", "args": []}},
     )
 )
 Assessment.passed = staticmethod(

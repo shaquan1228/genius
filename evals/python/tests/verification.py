@@ -19,7 +19,7 @@ from evals.python.integrations.inspect.environments import environment, runtime
 from evals.python.tests.declarations import _copy_case, _declaration
 from evals.python.tests.projections import verifier
 from evals.python.verification import VerificationResult
-from kernel import Criterion, File, Reference, Task, Value, Verification, Verifier
+from kernel import Criterion, File, Reference, Task, Verification, Verifier
 from kernel import (
     ValidationError as DomainValidationError,
 )
@@ -317,7 +317,7 @@ def invalid_executable_contract_is_rejected(updates: dict[str, object]) -> None:
                     fixture=[File(path="solution.py", contents="print(42)")],
                     criterion=Criterion.Code(verifier=_checks(**updates)),
                     allowed_files=("solution.py",),
-                    reference=Reference(edits=[], completion=Value.Null()),
+                    reference=Reference(edits=[], completion=None),
                 ),
             )
         )
@@ -413,7 +413,7 @@ def reference_candidate_and_grader_are_both_cleaned() -> None:
                 new_callable=PropertyMock,
                 return_value=Reference(
                     edits=[File(path="solution.py", contents="print(42)")],
-                    completion=Value.Null(),
+                    completion=None,
                 ),
             ),
             patch("evals.python.verification.token_hex", return_value="secret"),
@@ -452,7 +452,7 @@ def reference_setup_failures_preserve_lifecycle(stage: str) -> None:
                 new_callable=PropertyMock,
                 return_value=Reference(
                     edits=[File(path="solution.py", contents="")],
-                    completion=Value.Null(),
+                    completion=None,
                 ),
             ),
         ):
@@ -486,7 +486,7 @@ def reference_nonzero_mkdir_is_harness_error() -> None:
                 Task,
                 "reference",
                 new_callable=PropertyMock,
-                return_value=Reference(edits=[], completion=Value.Null()),
+                return_value=Reference(edits=[], completion=None),
             ),
         ):
             result = await verification.validate_reference(

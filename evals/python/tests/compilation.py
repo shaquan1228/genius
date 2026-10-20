@@ -64,7 +64,7 @@ def _independent_datasets() -> tuple[Dataset, Dataset]:
         criterion=Criterion.Code(verifier=checks),
         reference=Reference(
             edits=[File(path="main.py", contents="another fixed solution")],
-            completion=Value.String(value="another answer"),
+            completion="another answer",
         ),
     )
     return datasets.compile_dataset(cases=(first,)), datasets.compile_dataset(cases=(second,))

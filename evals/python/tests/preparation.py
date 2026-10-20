@@ -22,7 +22,7 @@ from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.declarations import _copy_case, _declaration
 from evals.python.tests.support import offline_run as _offline_run
 from evals.python.tests.support import results as _results
-from kernel import Criterion, File, Instruction, Reference, Rubric, TextRule, Value
+from kernel import Criterion, File, Instruction, Reference, Rubric, TextRule
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
@@ -98,7 +98,7 @@ def private_tasks() -> list[Task]:
         ),
         reference=Reference(
             edits=[File(path="main.py", contents=PRIVATE_SENTINEL)],
-            completion=Value.String(value=PRIVATE_SENTINEL),
+            completion=PRIVATE_SENTINEL,
         ),
     )
     snapshots = [
@@ -109,8 +109,8 @@ def private_tasks() -> list[Task]:
                     criterion=Criterion.Answer(
                         rubric=Rubric(
                             expected=[
-                                ("choice", Value.String(value=choice)),
-                                ("safe", Value.Bool(value=True)),
+                                ("choice", choice),
+                                ("safe", True),
                             ],
                             text_rule=TextRule(field="reason", min_words=1, max_words=5),
                         )

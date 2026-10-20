@@ -22,14 +22,12 @@ from kernel import (
 
 
 def _answer() -> tuple[Task, Value.Value]:
-    expected = Value.Record(fields=[("choice", Value.String(value="B"))])
+    expected = Value.Record(fields=[("choice", "B")])
     case = Task.create(
         id="native-answer",
         fixture=[File(path="context.txt", contents="Public context")],
         instruction=Instruction(skill="reasoning", prompt="Choose B"),
-        criterion=Criterion.Answer(
-            rubric=Rubric(expected=[("choice", Value.String(value="B"))], text_rule=None)
-        ),
+        criterion=Criterion.Answer(rubric=Rubric(expected=[("choice", "B")], text_rule=None)),
         allowed_files=[],
         reference=Reference(edits=[], completion=expected),
     )
@@ -81,9 +79,7 @@ def check_code(status: Verification.Value, *, correctness: bool) -> None:
         instruction=Instruction(skill="reasoning", prompt="Fix solution.py"),
         criterion=Criterion.Code(verifier=checks),
         allowed_files=["solution.py"],
-        reference=Reference(
-            edits=[File(path="solution.py", contents="fixed")], completion=Value.Null()
-        ),
+        reference=Reference(edits=[File(path="solution.py", contents="fixed")], completion=None),
     )
     assert Task.checks(task=case) is not None
     assert [file.path for file in Task.project(task=case).files] == ["solution.py"]

@@ -216,7 +216,7 @@ from unittest.mock import patch
 with patch('subprocess.run', side_effect=AssertionError('Import compiled the kernel')):
     from kernel import Experiment, Kernel, Predicate, Value
     spec = Experiment.resolve()
-    observation = Value.Record(fields=[('x', Value.Int(value=1))])
+    observation = Value.Record(fields=[('x', 1)])
     assert Predicate.holds(predicate=Predicate.Present(path=['x']), observation=observation)
     modules = {file.path: file.contents for file in Kernel.current.sources}
     assert modules['experiment.ml'].find('epochs = 7') >= 0
@@ -299,13 +299,15 @@ def factories_can_return_other_types(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("source", "accepted"),
     [
-        ('Value.String(value="")', True),
+        ('""', True),
         ('Criterion.State(predicate=Predicate.Present(path=["response"]))', True),
         ('TextRule(field="x", min_words=1, max_words=2)', True),
         ("Outcome.create(changed_files=[], verification=Verification.Passed())", True),
+        ('Predicate.Equals(path=["x"], expected="B")', True),
+        ("Reference(edits=[], completion={'a': [1, None]})", True),
         ('Value.String("")', False),
         ("Value.String()", False),
-        ("Criterion.State(predicate=Value.Null())", False),
+        ("Criterion.State(predicate=None)", False),
         ('TextRule(field="x", min_words="1", max_words=2)', False),
         ("Outcome.create(changed_files=[])", False),
         ('Outcome.create(changed_files=[], verification="passed")', False),
@@ -316,9 +318,8 @@ def compiler_owned_factory_contracts_are_checked_statically(
 ) -> None:
     path = tmp_path / "factory_contract.py"
     path.write_text(
-        "from kernel import Criterion, Outcome, Predicate, TextRule, Value, Verification\n"
-        + source
-        + "\n"
+        "from kernel import Criterion, Outcome, Predicate, Reference, TextRule, Value, "
+        "Verification\n" + source + "\n"
     )
     result = subprocess.run(
         [sys.executable, "-m", "mypy", "--config-file", str(EVALS / "pyproject.toml"), str(path)],

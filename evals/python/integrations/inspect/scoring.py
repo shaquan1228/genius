@@ -19,32 +19,14 @@ from kernel import Assessment, Outcome, Predicate, Task, Value, Verification
 WORKSPACE = "workspace/"
 
 
-def decode_response(text: str) -> Value.Value:
-    """Decode a JSON reply as a native value; anything else is a null response."""
+def decode_response(text: str) -> JsonValue:
+    """Decode a JSON reply; anything else is a null response."""
     text = text.strip()
     if text.startswith("```json\n") and text.endswith("\n```"):
         text = text[8:-4]
     with suppress(ValueError, RecursionError):
-        return value(json.loads(text))
-    return Value.Null()
-
-
-_ENCODERS: dict[type, Callable[[Any], Value.Value]] = {
-    type(None): lambda _: Value.Null(),
-    bool: lambda data: Value.Bool(value=data),
-    int: lambda data: Value.Int(value=data),
-    float: lambda data: Value.Float(value=data),
-    str: lambda data: Value.String(value=data),
-    list: lambda data: Value.List(items=[value(item) for item in data]),
-    tuple: lambda data: Value.List(items=[value(item) for item in data]),
-    dict: lambda data: Value.Record(fields=[(str(key), value(item)) for key, item in data.items()]),
-}
-
-
-def value(data: object) -> Value.Value:
-    """Encode JSON-shaped data as a native value; any other object becomes its text."""
-    encode = _ENCODERS.get(type(data), lambda data: Value.String(value=str(data)))
-    return encode(data)
+        return cast(JsonValue, json.loads(text))
+    return None
 
 
 def plain(data: Value.Value) -> JsonValue:
@@ -59,16 +41,14 @@ def plain(data: Value.Value) -> JsonValue:
             return data.value
 
 
-def trace(state: TaskState) -> Value.Value:
+def trace(state: TaskState) -> list[JsonValue]:
     """Every recorded tool call, as the agent's interaction trace."""
-    return value(
-        [
-            {"name": call.function, "arguments": call.arguments}
-            for message in state.messages
-            if isinstance(message, ChatMessageAssistant)
-            for call in message.tool_calls or []
-        ]
-    )
+    return [
+        {"name": call.function, "arguments": cast(JsonValue, call.arguments)}
+        for message in state.messages
+        if isinstance(message, ChatMessageAssistant)
+        for call in message.tool_calls or []
+    ]
 
 
 def workspace_path(path: str) -> str:
@@ -135,7 +115,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
         agent=environments_adapter.environment(current),
         runtime=environments_adapter.runtime(current),
     )
-    facts = [("trace", trace(state)), ("state", value(dict(state.store.items())))]
+    facts: dict[str, JsonValue] = {"trace": trace(state), "state": dict(state.store.items())}
     result = Task.assess(
         task=task,
         outcome=Outcome.create(
@@ -158,7 +138,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
             },
             "verifier_metadata": evidence.metadata_json(),
             "changed_files": changed,
-            "facts": {name: plain(fact) for name, fact in facts},
+            "facts": facts,
             "agent_failure": failure,
             "assessment": assessment_details(result),
         },
