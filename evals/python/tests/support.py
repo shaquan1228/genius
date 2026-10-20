@@ -20,7 +20,12 @@ __test__ = False
 
 
 def offline_run(
-    tasks: list[InspectTask], *, mode: Mode | None, directory: Path, epochs: int = 1
+    tasks: list[InspectTask],
+    *,
+    mode: Mode | None,
+    directory: Path,
+    epochs: int = 1,
+    sandbox: str | tuple[str, str] = "local",
 ) -> list[EvalLog]:
     """Mode None keeps each task's own agent solver."""
     model = get_model("mockllm/model", custom_outputs=_echo_model)
@@ -32,7 +37,7 @@ def offline_run(
         tasks,
         model=model,
         solver=None if mode is None else _scripted(mode),
-        sandbox="local",
+        sandbox=sandbox,
         epochs=epochs,
         max_samples=1,
         log_dir=str(directory),

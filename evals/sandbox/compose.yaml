@@ -1,0 +1,18 @@
+services:
+  default:
+    build:
+      context: .
+      target: local
+    init: true
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 1
+    mem_limit: 1g
+    pids_limit: 128
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m,mode=1777
+    volumes:
+      - /home/evaluator
+    stop_grace_period: 1s
