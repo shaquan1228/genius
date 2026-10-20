@@ -10,7 +10,7 @@ from evals.python.integrations.inspect import environments, tasks
 from evals.python.tests import support
 from evals.python.tests.scenarios import Mode
 
-CONFIG = str(Path(__file__).resolve().parents[1] / "sandbox" / "compose.yaml")
+CONFIG = str(Path(__file__).resolve().parents[1] / "docker" / "compose.yaml")
 
 
 @pytest.mark.parametrize("mode", ["pass", "untouched", "tampered-checks"])

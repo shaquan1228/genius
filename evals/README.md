@@ -44,36 +44,10 @@ opam exec --switch=genius-kernel-414 -- make -C evals check
 The offline checks use mock models and local sandboxes; no API keys are needed.
 Use `make -C evals format` under the same opam switch to apply formatting.
 
-## Run in local containers
-
-Start Docker, complete the setup above, then run from the repository root:
-
-```sh
-opam exec --switch=genius-kernel-414 -- uv run --project evals pytest evals/tests/docker.py
-```
-
-This runs three offline smoke evaluations (correct, untouched, and tampered submissions)
-with scripted candidates and a mock model. It validates the harness, not model quality;
-no model credentials or paid requests are needed. Inspect writes native evaluation logs
-under pytest's temporary directories; use `--basetemp=evals/results/docker` to retain them
-at a predictable location after creating `evals/results` (pytest clears the selected
-directory on each invocation).
-
-The Compose configuration builds the `local` Dockerfile stage. Candidate and fresh grader
-containers use the same configuration: non-root user, no network, read-only root filesystem,
-no host directory mounts or credentials, dropped capabilities, no privilege escalation, and bounded
-CPU, memory, processes, and `/tmp` storage. Each workspace uses a disposable Docker volume
-with no separate disk quota; it is removed with its container. Only declared submission inputs
-are copied into the grader alongside its private verifier. Containers are removed after use.
-The isolation test checks host-file/secret exclusion, workspace separation, and restrictions
-in both environments. Docker shares its execution host's kernel; this is not a VM boundary.
-The existing `local` subprocess backend remains suitable only for trusted code.
-
-For custom Inspect solvers that execute through its sandbox API, select
-`("docker", "evals/sandbox/compose.yaml")` as the sandbox. The offline configuration disables
-all container networking; CLI agents that need a model proxy require separate connectivity
-configuration and are not validated by these smoke runs. Host-side custom tools must also
-use the sandbox API to keep candidate execution inside the container.
+With Docker running, check three offline container evals and candidate/grader isolation:
+`opam exec --switch=genius-kernel-414 -- uv run --project evals pytest evals/tests/docker.py`.
+[Container configuration](docker/compose.yaml) disables networking; live CLI agents need separate proxy setup.
+The subprocess `local` backend is for trusted code. Docker shares its host kernel; workspace volumes have no disk quota.
 
 ## Validate references
 
