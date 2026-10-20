@@ -37,3 +37,37 @@ let compare ~(before : t) ~(after : t) =
         ("expected", (Response.compare ~before:before.expected ~after:after.expected).equal);
         ("text_rule", before.text_rule = after.text_rule);
       ]
+
+let predicate ~(rubric : t) =
+  let field name = [ "response"; name ] in
+  let scalar = function
+    | Response_value.String { value } -> Value.String { value }
+    | Response_value.Bool { value } -> Value.Bool { value }
+  in
+  let fields =
+    List.map
+      (fun (expected : Response_field.t) ->
+        ( expected.name,
+          Result.get_ok
+            (Predicate.equals ~path:(field expected.name) ~expected:(scalar expected.value)) ))
+      rubric.expected.fields
+  in
+  let text =
+    Option.map
+      (fun (rule : Text_rule.t) ->
+        ( "text",
+          Result.get_ok
+            (Predicate.words
+               ~path:(field rule.field)
+               ~min_words:rule.min_words
+               ~max_words:rule.max_words) ))
+      rubric.text_rule
+  in
+  Result.get_ok
+    (Predicate.all
+       ~checks:
+         ([
+            ("response", Result.get_ok (Predicate.present ~path:[ "response" ]));
+            ("fields", Result.get_ok (Predicate.all ~checks:fields));
+          ]
+         @ Option.to_list text))

@@ -67,7 +67,7 @@ let create ~id ~fixture ~(instruction : Instruction.t) ~criterion ~allowed_files
         reference_paths
     @
     match criterion with
-    | Criterion.Answer _ -> []
+    | Criterion.Answer _ | Criterion.State _ -> []
     | Criterion.Code { verifier } ->
         require
           Validation_code.Missing_fixture_inputs
@@ -94,7 +94,7 @@ let create ~id ~fixture ~(instruction : Instruction.t) ~criterion ~allowed_files
 let resolve_resources ~(task : t) ~resources =
   let result =
     match task.criterion with
-    | Criterion.Answer _ -> Ok task
+    | Criterion.Answer _ | Criterion.State _ -> Ok task
     | Criterion.Code { verifier } ->
         Result.bind (Verifier.resolve_resources ~verifier ~resources) (fun verifier ->
             Result.map
@@ -108,7 +108,7 @@ let resolve_resources ~(task : t) ~resources =
 let verifier ~(task : t) =
   match task.criterion with
   | Criterion.Code { verifier } -> Some verifier
-  | Criterion.Answer _ -> None
+  | Criterion.Answer _ | Criterion.State _ -> None
 
 let compare ~(before : t) ~(after : t) =
   Comparison.create
@@ -126,30 +126,30 @@ let compare ~(before : t) ~(after : t) =
            ])
     ~reference:(Reference.compare ~before:before.reference ~after:after.reference)
 
-let assessors =
-  [
-    ( "correctness",
-      fun ~(task : t) ~response ~(outcome : Outcome.t) ->
-        Assessment.criterion ~criterion:task.criterion ~response ~verification:outcome.verification
-    );
-    ( "scope",
-      fun ~(task : t) ~response:_ ~(outcome : Outcome.t) ->
-        Ok
-          (Assessment.scope
-             ~allowed_files:(List.map (fun path -> "workspace/" ^ path) task.allowed_files)
-             ~changed_files:outcome.changed_files) );
-  ]
+let required_scores = [ "correctness"; "scope" ]
 
-let required_scores = List.map fst assessors
-
-let assess ~task ~response ~outcome =
-  List.fold_right
-    (fun (name, assessor) rest ->
-      Result.bind (assessor ~task ~response ~outcome) (fun assessment ->
-          Result.map (fun checks -> (name, assessment) :: checks) rest))
-    assessors
-    (Ok [])
-  |> Result.map (fun checks -> Result.get_ok (Assessment.all ~checks))
+let assess ~task ~response ~(outcome : Outcome.t) =
+  match outcome.verification with
+  | Verification.Harness_error { detail } ->
+      Error (Grading_failure.Verification_harness_error { detail })
+  | _ ->
+      let scope =
+        Result.get_ok
+          (Predicate.within
+             ~path:[ "changed_files" ]
+             ~allowed:(List.map (fun value -> Value.String { value }) task.allowed_files))
+      in
+      Ok
+        (Assessment.create
+           ~predicate:
+             (Result.get_ok
+                (Predicate.all
+                   ~checks:
+                     [
+                       ("correctness", Criterion.condition ~criterion:task.criterion);
+                       ("scope", scope);
+                     ]))
+           ~observation:(Outcome.observation ~outcome ~response))
 
 (* Grader: pure logic applying criteria to responses and observed outcomes.
    IO, execution, and presentation remain harness responsibilities.

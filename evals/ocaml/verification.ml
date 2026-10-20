@@ -9,3 +9,12 @@ type t =
   | Invalid_submission
   | Timed_out
   | Harness_error of { detail : string }
+
+let name ~status =
+  match status with
+  | Unchecked -> "unchecked"
+  | Passed -> "passed"
+  | Failed -> "failed"
+  | Invalid_submission -> "invalid_submission"
+  | Timed_out -> "timed_out"
+  | Harness_error _ -> "harness_error"

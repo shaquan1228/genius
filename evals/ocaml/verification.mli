@@ -9,3 +9,6 @@ type t =
   | Invalid_submission
   | Timed_out
   | Harness_error of { detail : string }
+
+val name : status:t -> string
+(** The status as recorded under the ["verification"] fact of an observation. *)

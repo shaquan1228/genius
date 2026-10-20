@@ -12,7 +12,6 @@ Comparison = _named(constructor=_native.Comparison.t)
 Completion = _native.Completion.t
 Content = _native.Content.t
 Criterion = _native.Criterion.t
-Evidence = _native.Assessment.evidence
 Experiment = _named(constructor=_native.Experiment.t)
 FieldComparison = _named(constructor=_native.Response.Comparison.field_comparison)
 File = _named(constructor=_native.File.t)
@@ -22,6 +21,7 @@ GradingFailure = _native.Grading_failure.t
 Instruction = _named(constructor=_native.Instruction.t)
 Kernel = _named(constructor=_native.Kernel.t)
 Outcome = _named(constructor=_native.Outcome.t)
+Predicate = _native.Predicate.t
 Profile = _named(constructor=_native.Profile.t)
 Reference = _named(constructor=_native.Reference.t)
 ResourceBinding = _named(constructor=_native.Resource_binding.t)
@@ -37,6 +37,7 @@ TextRule = _named(constructor=_native.Text_rule.t)
 ValidationCode = _native.Validation_code.t
 ValidationFailure = _named(constructor=_native.Validation_failure.t)
 ValidationIssue = _named(constructor=_native.Validation_issue.t)
+Value = _native.Value.t
 Verification = _native.Verification.t
 Verifier = _named(constructor=_native.Verifier.t)
 Comparison.create = staticmethod(
@@ -80,6 +81,7 @@ ValidationCode.InvalidResponseField = _named(
     constructor=_native.Validation_code.Invalid_response_field
 )
 ValidationCode.InvalidTextRule = _named(constructor=_native.Validation_code.Invalid_text_rule)
+ValidationCode.InvalidPredicate = _named(constructor=_native.Validation_code.Invalid_predicate)
 ValidationCode.OverlappingTextField = _named(
     constructor=_native.Validation_code.Overlapping_text_field
 )
@@ -103,6 +105,103 @@ Verification.Failed = _named(constructor=_native.Verification.Failed)
 Verification.InvalidSubmission = _named(constructor=_native.Verification.Invalid_submission)
 Verification.TimedOut = _named(constructor=_native.Verification.Timed_out)
 Verification.HarnessError = _named(constructor=_native.Verification.Harness_error)
+Verification.name = staticmethod(
+    _bind(operation=_native.Verification.name, arguments={"status": False}, failure=None)
+)
+Value.Value = Value
+Value.Null = _named(constructor=_native.Value.Null)
+Value.Bool = _named(constructor=_native.Value.Bool)
+Value.Int = _named(constructor=_native.Value.Int)
+Value.Float = _named(constructor=_native.Value.Float)
+Value.String = _named(constructor=_native.Value.String)
+Value.List = _named(constructor=_native.Value.List)
+Value.Record = _named(constructor=_native.Value.Record)
+Value.strings = staticmethod(
+    _bind(operation=_native.Value.strings, arguments={"values": False}, failure=None)
+)
+Value.get = staticmethod(
+    _bind(operation=_native.Value.get, arguments={"value": False, "path": False}, failure=None)
+)
+Value.equal = staticmethod(
+    _bind(operation=_native.Value.equal, arguments={"left": False, "right": False}, failure=None)
+)
+Predicate.Value = Predicate
+Predicate.Present = _named(constructor=_native.Predicate.Present)
+Predicate.Present._default_type = ()
+Predicate.Equals = _named(constructor=_native.Predicate.Equals)
+Predicate.Equals._default_type = ()
+Predicate.Within = _named(constructor=_native.Predicate.Within)
+Predicate.Within._default_type = ()
+Predicate.Contains = _named(constructor=_native.Predicate.Contains)
+Predicate.Contains._default_type = ()
+Predicate.Words = _named(constructor=_native.Predicate.Words)
+Predicate.Words._default_type = ()
+Predicate.All = _named(constructor=_native.Predicate.All)
+Predicate.All._default_type = ()
+Predicate.Any = _named(constructor=_native.Predicate.Any)
+Predicate.Any._default_type = ()
+Predicate.Not = _named(constructor=_native.Predicate.Not)
+Predicate.Not._default_type = ()
+Predicate.present = staticmethod(
+    _bind(
+        operation=_native.Predicate.present, arguments={"path": False}, failure="validation_failure"
+    )
+)
+Predicate.equals = staticmethod(
+    _bind(
+        operation=_native.Predicate.equals,
+        arguments={"path": False, "expected": False},
+        failure="validation_failure",
+    )
+)
+Predicate.within = staticmethod(
+    _bind(
+        operation=_native.Predicate.within,
+        arguments={"path": False, "allowed": False},
+        failure="validation_failure",
+    )
+)
+Predicate.contains = staticmethod(
+    _bind(
+        operation=_native.Predicate.contains,
+        arguments={"path": False, "item": False},
+        failure="validation_failure",
+    )
+)
+Predicate.words = staticmethod(
+    _bind(
+        operation=_native.Predicate.words,
+        arguments={"path": False, "min_words": False, "max_words": False},
+        failure="validation_failure",
+    )
+)
+Predicate.all = staticmethod(
+    _bind(
+        operation=_native.Predicate.all, arguments={"checks": False}, failure="validation_failure"
+    )
+)
+Predicate.any = staticmethod(
+    _bind(
+        operation=_native.Predicate.any, arguments={"checks": False}, failure="validation_failure"
+    )
+)
+Predicate.not_ = staticmethod(
+    _bind(operation=_native.Predicate.not_, arguments={"check": False}, failure=None)
+)
+Predicate.holds = staticmethod(
+    _bind(
+        operation=_native.Predicate.holds,
+        arguments={"predicate": False, "observation": False},
+        failure=None,
+    )
+)
+Predicate.compare = staticmethod(
+    _bind(
+        operation=_native.Predicate.compare,
+        arguments={"before": False, "after": False},
+        failure=None,
+    )
+)
 ResponseValue.Value = ResponseValue
 ResponseValue.String = _named(constructor=_native.Response_value.String)
 ResponseValue.String._default_type = ()
@@ -135,6 +234,9 @@ Response.compare = staticmethod(
         failure=None,
     )
 )
+Response.value = staticmethod(
+    _bind(operation=_native.Response.value, arguments={"response": False}, failure=None)
+)
 ResponseComparison.create = staticmethod(
     _bind(
         operation=_native.Response.Comparison.create,
@@ -145,7 +247,14 @@ ResponseComparison.create = staticmethod(
 Outcome.create = staticmethod(
     _bind(
         operation=_native.Outcome.create,
-        arguments={"changed_files": False, "verification": False},
+        arguments={"facts": True, "changed_files": False, "verification": False},
+        failure=None,
+    )
+)
+Outcome.observation = staticmethod(
+    _bind(
+        operation=_native.Outcome.observation,
+        arguments={"outcome": False, "response": False},
         failure=None,
     )
 )
@@ -316,6 +425,9 @@ Rubric.compare = staticmethod(
         operation=_native.Rubric.compare, arguments={"before": False, "after": False}, failure=None
     )
 )
+Rubric.predicate = staticmethod(
+    _bind(operation=_native.Rubric.predicate, arguments={"rubric": False}, failure=None)
+)
 Fixture.create = staticmethod(
     _bind(
         operation=_native.Fixture.create, arguments={"files": False}, failure="validation_failure"
@@ -349,10 +461,12 @@ Criterion.Code = _named(constructor=_native.Criterion.Code)
 Criterion.Code._default_type = ()
 Criterion.Answer = _named(constructor=_native.Criterion.Answer)
 Criterion.Answer._default_type = ()
+Criterion.State = _named(constructor=_native.Criterion.State)
+Criterion.State._default_type = ()
 Criterion.create = staticmethod(
     _bind(
         operation=_native.Criterion.create,
-        arguments={"code": True, "answer": True},
+        arguments={"code": True, "answer": True, "state": True},
         failure="validation_failure",
     )
 )
@@ -362,6 +476,9 @@ Criterion.compare = staticmethod(
         arguments={"before": False, "after": False},
         failure=None,
     )
+)
+Criterion.condition = staticmethod(
+    _bind(operation=_native.Criterion.condition, arguments={"criterion": False}, failure=None)
 )
 Reference.create = staticmethod(
     _bind(
@@ -377,76 +494,23 @@ Reference.compare = staticmethod(
         failure=None,
     )
 )
-Evidence.Value = Evidence
-Evidence.Present = _named(constructor=_native.Assessment.Present)
-Evidence.Present._default_type = ()
-Evidence.Field = _named(constructor=_native.Assessment.Field)
-Evidence.Field._default_type = ()
-Evidence.Text = _named(constructor=_native.Assessment.Text)
-Evidence.Text._default_type = ()
-Evidence.Verified = _named(constructor=_native.Assessment.Verified)
-Evidence.Verified._default_type = ()
-Evidence.Scope = _named(constructor=_native.Assessment.Scope)
-Evidence.Scope._default_type = ()
 Assessment.Value = Assessment
 Assessment.Check = _named(constructor=_native.Assessment.Check)
 Assessment.Check._default_type = ()
 Assessment.All = _named(constructor=_native.Assessment.All)
 Assessment.All._default_type = ()
-Assessment.present = staticmethod(
-    _bind(operation=_native.Assessment.present, arguments={"response": False}, failure=None)
-)
-Assessment.field = staticmethod(
-    _bind(operation=_native.Assessment.field, arguments={"comparison": False}, failure=None)
-)
-Assessment.text = staticmethod(
+Assessment.create = staticmethod(
     _bind(
-        operation=_native.Assessment.text, arguments={"rule": False, "value": False}, failure=None
-    )
-)
-Assessment.verified = staticmethod(
-    _bind(
-        operation=_native.Assessment.verified,
-        arguments={"verification": False},
-        failure="grading_failure",
-    )
-)
-Assessment.scope = staticmethod(
-    _bind(
-        operation=_native.Assessment.scope,
-        arguments={"allowed_files": False, "changed_files": False},
+        operation=_native.Assessment.create,
+        arguments={"predicate": False, "observation": False},
         failure=None,
-    )
-)
-Assessment.all = staticmethod(
-    _bind(
-        operation=_native.Assessment.all, arguments={"checks": False}, failure="validation_failure"
-    )
-)
-Assessment.rubric = staticmethod(
-    _bind(
-        operation=_native.Assessment.rubric,
-        arguments={"rubric": False, "response": False},
-        failure=None,
-    )
-)
-Assessment.criterion = staticmethod(
-    _bind(
-        operation=_native.Assessment.criterion,
-        arguments={"criterion": False, "response": False, "verification": False},
-        failure="grading_failure",
     )
 )
 Assessment.passed = staticmethod(
     _bind(operation=_native.Assessment.passed, arguments={"assessment": False}, failure=None)
 )
-Assessment.word_count = staticmethod(
-    _bind(operation=_native.Assessment.word_count, arguments={"value": False}, failure=None)
-)
-Assessment.unexpected_files = staticmethod(
-    _bind(
-        operation=_native.Assessment.unexpected_files, arguments={"assessment": False}, failure=None
-    )
+Assessment.observed = staticmethod(
+    _bind(operation=_native.Assessment.observed, arguments={"assessment": False}, failure=None)
 )
 Assessment.scores = staticmethod(
     _bind(operation=_native.Assessment.scores, arguments={"assessment": False}, failure=None)
@@ -519,7 +583,6 @@ __all__ = [
     "Completion",
     "Content",
     "Criterion",
-    "Evidence",
     "Experiment",
     "FieldComparison",
     "File",
@@ -530,6 +593,7 @@ __all__ = [
     "Instruction",
     "Kernel",
     "Outcome",
+    "Predicate",
     "Profile",
     "Reference",
     "ResourceBinding",
@@ -546,6 +610,7 @@ __all__ = [
     "ValidationError",
     "ValidationFailure",
     "ValidationIssue",
+    "Value",
     "Verification",
     "Verifier",
 ]

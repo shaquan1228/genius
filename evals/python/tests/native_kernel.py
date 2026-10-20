@@ -108,15 +108,13 @@ def check_code(status: Verification.Value, *, correctness: bool) -> None:
     projected = Task.verifier(task=case)
     assert projected is not None
     public_files = [artifact.path for artifact in Case.create(task=case).files]
-    outcome = Outcome.create(changed_files=["workspace/solution.py"], verification=status)
+    outcome = Outcome.create(changed_files=["solution.py"], verification=status)
     scores = Task.grade(task=case, response=None, outcome=outcome)
     assert (tuple(map(itemgetter(0), scores)), dict(scores)) == (
         tuple(Task.required_scores),
         {"correctness": correctness, "scope": True},
     )
-    outside_scope = Outcome.create(
-        changed_files=["workspace/other.py"], verification=Verification.Passed()
-    )
+    outside_scope = Outcome.create(changed_files=["other.py"], verification=Verification.Passed())
     assert (
         projected.stdin,
         public_files,

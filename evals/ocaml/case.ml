@@ -5,7 +5,7 @@ let create ~(task : Task.t) : t =
   let tools =
     match task.criterion with
     | Criterion.Code { verifier } -> verifier.tools
-    | Criterion.Answer _ -> []
+    | Criterion.Answer _ | Criterion.State _ -> []
   in
   let artifact (file : File.t) =
     Result.get_ok

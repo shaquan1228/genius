@@ -21,9 +21,7 @@ async def validate(task: Task) -> bool:
                 task=task,
                 response=candidate,
                 outcome=Outcome.create(
-                    changed_files=[
-                        f"workspace/{file.path}" for file in Fixture.files(fixture=reference.edits)
-                    ],
+                    changed_files=[file.path for file in Fixture.files(fixture=reference.edits)],
                     verification=result.verification,
                 ),
             )
@@ -33,7 +31,7 @@ async def validate(task: Task) -> bool:
         json.dumps(
             {
                 "id": task.id,
-                "verification": type(result.verification).__name__.lower(),
+                "verification": Verification.name(status=result.verification),
                 "scores": scores,
             }
         )

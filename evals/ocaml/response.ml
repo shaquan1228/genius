@@ -52,3 +52,16 @@ let create ~(fields : Response_field.t list) =
   Validation.checked (collect [] fields) { fields }
 
 let compare ~(before : t) ~(after : t) = Comparison.create ~before:before.fields ~after:after.fields
+
+let value ~(response : t) =
+  let scalar = function
+    | Response_value.String { value } -> Value.String { value }
+    | Response_value.Bool { value } -> Value.Bool { value }
+  in
+  Value.Record
+    {
+      fields =
+        List.map
+          (fun (field : Response_field.t) -> (field.name, scalar field.value))
+          response.fields;
+    }

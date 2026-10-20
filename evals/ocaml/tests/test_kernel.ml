@@ -73,35 +73,56 @@ let decision =
     ~expected:[ field ~name:"choice" ~value:(Result.get_ok (Response_value.create ~string:"B" ())) ]
     ()
 
-let no_changes = { Outcome.changed_files = []; verification = Verification.Unchecked }
+let no_changes = Outcome.create ~changed_files:[] ~verification:Verification.Unchecked ()
 
 let () =
-  let all checks = Result.get_ok (Assessment.all ~checks) in
-  let check value = Result.get_ok (Assessment.verified ~verification:value) in
-  let values = [ Verification.Passed; Verification.Failed ] in
+  let all checks = Result.get_ok (Predicate.all ~checks) in
+  let verification value =
+    Value.Record
+      { fields = [ ("verification", Value.String { value = Verification.name ~status:value }) ] }
+  in
+  let verified =
+    Result.get_ok
+      (Predicate.equals ~path:[ "verification" ] ~expected:(Value.String { value = "passed" }))
+  in
+  let passed predicate observation =
+    Assessment.passed ~assessment:(Assessment.create ~predicate ~observation)
+  in
   List.iter
-    (fun a ->
-      List.iter
-        (fun b ->
-          List.iter
-            (fun c ->
-              let a = check a and b = check b and c = check c in
-              let left = all [ ("pair", all [ ("a", a); ("b", b) ]); ("c", c) ] in
-              let right = all [ ("a", a); ("pair", all [ ("b", b); ("c", c) ]) ] in
-              assert (Assessment.passed ~assessment:left = Assessment.passed ~assessment:right);
-              assert (
-                Assessment.passed ~assessment:left
-                = (Assessment.passed ~assessment:a && Assessment.passed ~assessment:b
-                 && Assessment.passed ~assessment:c)))
-            values)
-        values)
-    values;
-  assert (Assessment.passed ~assessment:(all []));
-  let scope = Assessment.scope ~allowed_files:[] ~changed_files:[ "b"; "a"; "b" ] in
+    (fun status ->
+      let observation = verification status in
+      let yes = all [] and no = Predicate.not_ ~check:(all []) in
+      assert (passed verified observation = (status = Verification.Passed));
+      assert (
+        passed (all [ ("pair", all [ ("a", verified); ("b", yes) ]); ("c", no) ]) observation
+        = false);
+      assert (
+        passed (all [ ("a", verified); ("pair", all [ ("b", yes); ("c", yes) ]) ]) observation
+        = (status = Verification.Passed)))
+    [ Verification.Passed; Verification.Failed ];
+  let scope = Result.get_ok (Predicate.within ~path:[ "changed_files" ] ~allowed:[]) in
+  let report =
+    Assessment.create
+      ~predicate:(all [ ("one", scope); ("two", scope) ])
+      ~observation:
+        (Value.Record { fields = [ ("changed_files", Value.strings ~values:[ "b"; "a"; "b" ]) ] })
+  in
+  assert (Assessment.scores ~assessment:report = [ ("one", false); ("two", false) ]);
+  (match report with
+  | Assessment.All { checks } ->
+      assert (
+        Assessment.observed ~assessment:(List.assoc "one" checks)
+        = Some (Value.strings ~values:[ "b"; "a"; "b" ]))
+  | Assessment.Check _ -> assert false);
+  assert (Assessment.observed ~assessment:report = None);
   assert (
-    Assessment.unexpected_files ~assessment:(all [ ("one", scope); ("two", scope) ]) = [ "a"; "b" ]);
-  assert (Result.is_error (Assessment.all ~checks:[ ("same", scope); ("same", scope) ]));
-  assert (Result.is_error (Assessment.all ~checks:[ ("", scope) ]))
+    Assessment.observed
+      ~assessment:
+        (Assessment.create ~predicate:(Predicate.not_ ~check:scope) ~observation:Value.Null)
+    = None);
+  assert (
+    Assessment.scores ~assessment:(Assessment.create ~predicate:scope ~observation:Value.Null)
+    = [ ("passed", false) ])
 
 let () =
   let same = Result.get_ok (code ()) in
@@ -146,10 +167,9 @@ let () =
                        ~name:"reason"
                        ~value:(Result.get_ok (Response_value.create ~string:"Cheaper" ()));
                    ]))
-         ~outcome:{ no_changes with changed_files = [ "workspace/unexpected.txt" ] })
+         ~outcome:{ no_changes with changed_files = [ "unexpected.txt" ] })
   in
   assert (not (Assessment.passed ~assessment:report));
-  assert (Assessment.unexpected_files ~assessment:report = [ "workspace/unexpected.txt" ]);
   assert (Assessment.scores ~assessment:report = [ ("correctness", false); ("scope", false) ]);
   match report with
   | Assessment.All { checks } ->
@@ -224,12 +244,12 @@ let () =
     (fun changed_files ->
       List.iter
         (fun verification ->
-          let outcome = { Outcome.changed_files; verification } in
+          let outcome = Outcome.create ~changed_files ~verification () in
           assert (
             scores ~outcome ~response:None ~task:code_case ()
             = [
                 ("correctness", verification = Verification.Passed);
-                ("scope", changed_files = [] || changed_files = [ "workspace/source.txt" ]);
+                ("scope", changed_files = [] || changed_files = [ "source.txt" ]);
               ]))
         [
           Verification.Unchecked;
@@ -238,7 +258,7 @@ let () =
           Verification.Invalid_submission;
           Verification.Timed_out;
         ])
-    [ []; [ "workspace/source.txt" ]; [ "workspace/other.txt" ]; [ "../outside" ] ];
+    [ []; [ "source.txt" ]; [ "other.txt" ]; [ "../outside" ] ];
   assert (
     Task.grade
       ~task:code_case
@@ -272,8 +292,13 @@ let () =
         field ~name:"choice" ~value:(Result.get_ok (Response_value.create ~string:"B" ()));
         field ~name:"reason" ~value:(Result.get_ok (Response_value.create ~bool:true ()));
       ];
-      fields @ [ field ~name:"extra" ~value:(Result.get_ok (Response_value.create ~bool:true ())) ];
     ];
+  assert (
+    correct
+      ~fields:
+        (fields
+        @ [ field ~name:"extra" ~value:(Result.get_ok (Response_value.create ~bool:true ())) ])
+      ~task:decision);
   let status =
     field ~name:"status" ~value:(Result.get_ok (Response_value.create ~string:"ready" ()))
   and safe = field ~name:"safe" ~value:(Result.get_ok (Response_value.create ~bool:true ())) in
@@ -312,7 +337,7 @@ let () =
          ~task));
   let exact = answer_case ~expected:[ status ] () in
   assert (correct ~fields:[ status ] ~task:exact);
-  assert (not (correct ~fields:[ status; safe ] ~task:exact));
+  assert (correct ~fields:[ status; safe ] ~task:exact);
   let note =
     answer_case ~text_rule:(rule ~field:"note" ~min_words:0 ~max_words:0) ~expected:[] ()
   in
@@ -401,3 +426,146 @@ let () =
   List.iter
     (fun task -> assert (List.map fst (scores ~response:None ~task ()) = Task.required_scores))
     [ code_case; decision ]
+
+let () =
+  let call name =
+    Value.Record
+      {
+        fields =
+          [
+            ("name", Value.String { value = name });
+            ("arguments", Value.Record { fields = [ ("id", Value.Int { value = 7 }) ] });
+          ];
+      }
+  in
+  let predicate =
+    Result.get_ok
+      (Predicate.all
+         ~checks:
+           [
+             ( "looked-up",
+               Result.get_ok (Predicate.contains ~path:[ "trace" ] ~item:(call "lookup")) );
+             ( "only-lookups",
+               Result.get_ok (Predicate.within ~path:[ "trace" ] ~allowed:[ call "lookup" ]) );
+             ( "balance",
+               Result.get_ok
+                 (Predicate.equals ~path:[ "state"; "balance" ] ~expected:(Value.Int { value = 5 }))
+             );
+             ( "unverified",
+               Result.get_ok
+                 (Predicate.equals
+                    ~path:[ "verification" ]
+                    ~expected:(Value.String { value = "unchecked" })) );
+             ( "answered",
+               Result.get_ok
+                 (Predicate.equals
+                    ~path:[ "response"; "choice" ]
+                    ~expected:(Value.String { value = "B" })) );
+           ])
+  in
+  let criterion = Result.get_ok (Criterion.create ~state:predicate ()) in
+  let task =
+    Result.get_ok
+      (Task.create
+         ~id:"tool-task"
+         ~fixture:Fixture.empty
+         ~instruction:(instruction ~prompt:"Look up account 7 and report its balance.")
+         ~criterion
+         ~allowed_files:[]
+         ~reference:
+           {
+             Reference.edits = Fixture.empty;
+             completion = Result.get_ok (Completion.create ~plain:"5" ());
+           })
+  in
+  assert (Task.verifier ~task = None);
+  assert ((Case.create ~task).files = []);
+  assert (Task.resolve_resources ~task ~resources:[] = Ok task);
+  let state = Value.Record { fields = [ ("balance", Value.Int { value = 5 }) ] } in
+  let response =
+    Some
+      (response
+         ~fields:
+           [ field ~name:"choice" ~value:(Result.get_ok (Response_value.create ~string:"B" ())) ])
+  in
+  let scores ~trace ~state ~response =
+    Result.get_ok
+      (Task.grade
+         ~task
+         ~response
+         ~outcome:
+           (Outcome.create
+              ~facts:[ ("trace", Value.List { items = trace }); ("state", state) ]
+              ~changed_files:[]
+              ~verification:Verification.Unchecked
+              ()))
+  in
+  assert (
+    scores ~trace:[ call "lookup" ] ~state ~response = [ ("correctness", true); ("scope", true) ]);
+  assert (scores ~trace:[] ~state ~response = [ ("correctness", false); ("scope", true) ]);
+  assert (
+    scores ~trace:[ call "lookup"; call "transfer" ] ~state ~response
+    = [ ("correctness", false); ("scope", true) ]);
+  assert (
+    scores ~trace:[ call "lookup" ] ~state:Value.Null ~response
+    = [ ("correctness", false); ("scope", true) ]);
+  assert (
+    scores ~trace:[ call "lookup" ] ~state ~response:None
+    = [ ("correctness", false); ("scope", true) ]);
+  let report =
+    Result.get_ok
+      (Task.assess
+         ~task
+         ~response:None
+         ~outcome:
+           (Outcome.create
+              ~facts:[ ("trace", Value.List { items = [ call "lookup" ] }); ("state", state) ]
+              ~changed_files:[]
+              ~verification:Verification.Unchecked
+              ()))
+  in
+  (match report with
+  | Assessment.All { checks } -> (
+      match List.assoc "correctness" checks with
+      | Assessment.All { checks } ->
+          assert (
+            List.map (fun (name, check) -> (name, Assessment.passed ~assessment:check)) checks
+            = [
+                ("looked-up", true);
+                ("only-lookups", true);
+                ("balance", true);
+                ("unverified", true);
+                ("answered", false);
+              ]);
+          assert (Assessment.observed ~assessment:(List.assoc "answered" checks) = None);
+          assert (
+            Assessment.observed ~assessment:(List.assoc "balance" checks)
+            = Some (Value.Int { value = 5 }))
+      | Assessment.Check _ -> assert false)
+  | Assessment.Check _ -> assert false);
+  assert (Result.is_error (Criterion.create ~state:predicate ~code:checks ()));
+  assert (Criterion.compare ~before:criterion ~after:criterion).equal;
+  assert (
+    (Criterion.compare ~before:criterion ~after:decision.criterion).changed_fields = [ "kind" ]);
+  let other =
+    Result.get_ok (Criterion.create ~state:(Result.get_ok (Predicate.all ~checks:[])) ())
+  in
+  assert ((Criterion.compare ~before:criterion ~after:other).changed_fields = [ "state.predicate" ]);
+  assert (
+    Task.grade
+      ~task
+      ~response:None
+      ~outcome:
+        (Outcome.create
+           ~changed_files:[]
+           ~verification:(Verification.Harness_error { detail = "offline" })
+           ())
+    = Error (Grading_failure.Verification_harness_error { detail = "offline" }));
+  assert (Verification.name ~status:(Verification.Harness_error { detail = "x" }) = "harness_error");
+  assert (Verification.name ~status:Verification.Timed_out = "timed_out");
+  assert (Verification.name ~status:Verification.Invalid_submission = "invalid_submission");
+  assert (Verification.name ~status:Verification.Failed = "failed");
+  assert (
+    Criterion.condition ~criterion:code_case.criterion
+    = Result.get_ok
+        (Predicate.equals ~path:[ "verification" ] ~expected:(Value.String { value = "passed" })))

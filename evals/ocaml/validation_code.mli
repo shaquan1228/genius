@@ -8,6 +8,7 @@ type t =
   | Nonpositive_timeout
   | Invalid_response_field
   | Invalid_text_rule
+  | Invalid_predicate
   | Overlapping_text_field
   | Empty_answer
   | Missing_fixture_inputs

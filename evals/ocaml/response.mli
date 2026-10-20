@@ -19,3 +19,6 @@ type t = private { fields : Response_field.t list }
 val create : fields:Response_field.t list -> (t, Validation_failure.t) result
 val empty : t
 val compare : before:t -> after:t -> Comparison.t
+
+val value : response:t -> Value.t
+(** The fields as a record value, for predicates over the whole observation. *)
