@@ -12,7 +12,7 @@ from inspect_ai.dataset import Sample
 
 from evals.python import REPO_ROOT
 from evals.python.evaluation import InstructionDelivery
-from kernel import Case, Content, Experiment, Profile
+from kernel import Case, Experiment, Profile
 
 REASONING_DOCUMENTS = (
     "skills/reasoning/SKILL.md",
@@ -119,10 +119,7 @@ def prompt(
 def workspace_files(case: Case) -> dict[str, str]:
     workspace = {"workspace/.gitkeep": inline_file(contents=b"")}
     for artifact in case.files:
-        name, content = artifact.path, artifact.content
-        if not isinstance(content, Content.Inline):
-            raise ValueError(f"Unresolved resource in public case {case.id}: {name}")
-        workspace[f"workspace/{name}"] = inline_file(contents=content.text.encode())
+        workspace[f"workspace/{artifact.path}"] = inline_file(contents=artifact.contents.encode())
     return workspace
 
 
@@ -142,7 +139,7 @@ def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery optio
     }
     return [
         Sample(
-            id=case.id,
+            id=case.case_id,
             input=prompt(
                 profile,
                 case=case,
@@ -152,7 +149,7 @@ def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery optio
             ),
             files={**workspace_files(case), **instructions},
             metadata={
-                "case_id": case.id,
+                "case_id": case.case_id,
                 "profile": profile.name,
                 "dataset": dataset,
                 **({"sandbox_image": sandbox_image} if sandbox_image is not None else {}),

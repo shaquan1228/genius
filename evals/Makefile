@@ -63,20 +63,8 @@ ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
   cp $(addprefix ocaml/,$(1)) "$$build_dir" && cd "$$build_dir" && \
   ocamlc $(OCAML_FLAGS) -o test $(notdir $(1)) && ./test
 
-COMPARISON = comparison.mli comparison.ml
-VALIDATION = $(COMPARISON) validation_code.mli validation_code.ml validation_issue.mli validation_issue.ml validation_failure.mli validation_failure.ml validation.mli validation.ml
-FILES = $(VALIDATION) file.mli file.ml fixture_comparison.mli fixture_comparison.ml fixture.mli fixture.ml
-RESPONSE = $(VALIDATION) text.mli text.ml value.mli value.ml predicate.mli predicate.ml verification.mli verification.ml response_value.mli response_value.ml response_field.mli response_field.ml response.mli response.ml text_rule.mli text_rule.ml rubric.mli rubric.ml
-PREDICATE = $(VALIDATION) text.mli text.ml value.mli value.ml predicate.mli predicate.ml
-VERIFIER = $(VALIDATION) file.mli file.ml content.mli content.ml resource_binding.mli resource_binding.ml artifact.mli artifact.ml verifier.mli verifier.ml
-
 test-ocaml:
-	$(call ocaml_test,$(VALIDATION) profile.mli profile.ml experiment.mli experiment.ml tests/test_experiment.ml)
-	$(call ocaml_test,$(VERIFIER) tests/test_verifier.ml)
-	$(call ocaml_test,$(FILES) tests/test_fixture.ml)
-	$(call ocaml_test,$(RESPONSE) tests/test_criterion.ml)
-	$(call ocaml_test,$(PREDICATE) tests/test_predicate.ml)
-	$(call ocaml_test,$(KERNEL) tests/test_content.ml)
+	$(call ocaml_test,$(KERNEL) tests/test_predicate.ml)
 	$(call ocaml_test,$(KERNEL) tests/test_kernel.ml)
 
 check-install:

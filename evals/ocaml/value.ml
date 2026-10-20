@@ -1,6 +1,5 @@
-(* Value: the universal observation and expectation domain. One JSON-shaped,
-   structurally comparable value lets tasks state goals over any environment:
-   files, tool traces, database state, or structured replies.
+(* Value: one JSON-shaped domain for inputs, expectations, and observations, so tasks
+   state goals over files, tool traces, database state, or structured replies alike.
    https://arxiv.org/abs/2406.12045 (tau-bench grades a final database state)
    https://arxiv.org/abs/2307.13854 (WebArena grades answers and located page state) *)
 type t =
@@ -21,20 +20,14 @@ let rec get ~value ~path =
       Option.bind (List.assoc_opt name fields) (fun value -> get ~value ~path:rest)
   | _ :: _, _ -> None
 
-let normalize fields =
-  List.fold_left
-    (fun kept (name, value) -> if List.mem_assoc name kept then kept else (name, value) :: kept)
-    []
-    fields
-  |> List.sort (fun (left, _) (right, _) -> String.compare left right)
-
+(* Record fields compare without order; the first duplicate wins. *)
 let rec equal ~left ~right =
+  let names fields = List.sort_uniq String.compare (List.map fst fields) in
   match (left, right) with
-  | Record { fields = left }, Record { fields = right } ->
-      List.equal
-        (fun (name, left) (other, right) -> name = other && equal ~left ~right)
-        (normalize left)
-        (normalize right)
-  | List { items = left }, List { items = right } ->
-      List.equal (fun left right -> equal ~left ~right) left right
+  | Record { fields = l }, Record { fields = r } ->
+      names l = names r
+      && List.for_all
+           (fun name -> equal ~left:(List.assoc name l) ~right:(List.assoc name r))
+           (names l)
+  | List { items = l }, List { items = r } -> List.equal (fun left right -> equal ~left ~right) l r
   | _ -> left = right

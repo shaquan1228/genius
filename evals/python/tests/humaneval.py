@@ -58,14 +58,14 @@ def import_preserves_original_private_json() -> None:
 
 def imported_case_keeps_grader_private() -> None:
     case = _import_records((_record(),))[0]
-    assert case.id == "humaneval-0"
+    assert case.case_id == "humaneval-0"
     assert _reference_files(_imported_reference(_record()))["solution.py"].endswith(
         "    return x\n"
     )
     assert _files(case.files) == {"solution.py": json.loads(_record())["prompt"]}
     assert (
         "canonical_solution" in case.prompt,
-        "verifier.py" in {artifact.path: artifact.content for artifact in case.files},
+        "verifier.py" in {artifact.path: artifact.contents for artifact in case.files},
     ) == (False, False)
 
 
@@ -120,7 +120,7 @@ def dataset_selector_preserves_trusted_records() -> None:
     case = _import_records((raw,))[0]
     compiled = _import_dataset((raw,))
     with patch("evals.python.datasets.load_dataset", return_value=compiled):
-        assert public_case(case.id, selection="humanevalplus") == case
+        assert public_case(case.case_id, selection="humanevalplus") == case
         assert datasets.list_cases(selection="humanevalplus") == (case,)
         samples = profiles.samples(
             load_profile(name="baseline", spec=evaluation.resolve_settings()),
@@ -129,7 +129,7 @@ def dataset_selector_preserves_trusted_records() -> None:
             documents=profiles.load_documents(evaluation.resolve_settings()),
         )
     assert samples[0].metadata == {
-        "case_id": case.id,
+        "case_id": case.case_id,
         "profile": "baseline",
         "dataset": "humanevalplus",
     }
@@ -151,9 +151,9 @@ def synthetic_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def dataset_index_keeps_all_cases(synthetic_dataset: None) -> None:
     cases = datasets.list_cases(selection="humanevalplus")
-    assert (len(cases), len({case.id for case in cases})) == (164, 164)
+    assert (len(cases), len({case.case_id for case in cases})) == (164, 164)
     assert all(
-        tuple({artifact.path: artifact.content for artifact in case.files}) == ("solution.py",)
+        tuple({artifact.path: artifact.contents for artifact in case.files}) == ("solution.py",)
         for case in cases
     )
 

@@ -1,159 +1,180 @@
-(* Task: one test specification combining instruction, initial state, criteria, and reference.
-   Anthropic defines a task as a single test with inputs and success criteria; Hugging Face
-   represents a benchmark sample with its query, expected outputs, and task metadata.
+(* Task: one test specification combining instruction, initial files, a criterion, and a
+   reference. Anthropic defines a task as a single test with inputs and success criteria;
+   Hugging Face represents a benchmark sample with its query, expected outputs, and
+   metadata. Correctness and scope are separate scores, as utility and policy compliance
+   are in tau-bench and AgentDojo.
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
-   https://huggingface.co/docs/lighteval/v0.13.0/package_reference/doc *)
-module Component_comparison = Comparison
+   https://huggingface.co/docs/lighteval/v0.13.0/package_reference/doc
+   https://arxiv.org/abs/2406.13352 *)
 
-module Comparison = struct
-  type t = {
-    equal : bool;
-    id : Comparison.t;
-    fixture : Fixture_comparison.t;
-    instruction : Comparison.t;
-    criterion : Comparison.t;
-    allowed_files : Comparison.t;
-    reference : Comparison.t;
-  }
+(* Fixture files: immutable initial state, the seed for file and non-file environments.
+   https://inspect.aisi.org.uk/datasets.html#sample-files
+   https://docs.harborframework.com/tasks/environment *)
+type file = { path : string; contents : string }
 
-  let create ~(id : Comparison.t) ~(fixture : Fixture_comparison.t) ~(instruction : Comparison.t)
-      ~(criterion : Comparison.t) ~(allowed_files : Comparison.t) ~(reference : Comparison.t) =
-    {
-      equal =
-        id.equal && fixture.equal && instruction.equal && criterion.equal && allowed_files.equal
-        && reference.equal;
-      id;
-      fixture;
-      instruction;
-      criterion;
-      allowed_files;
-      reference;
-    }
-end
+(* Instruction: the task input, mapping to lighteval's query and OpenAI eval inputs.
+   https://huggingface.co/docs/lighteval/main/en/package_reference/doc *)
+type instruction = { skill : string; prompt : string }
+
+(* Verifier: an executable private check run on declared candidate inputs.
+   https://docs.harborframework.com/tasks/verifier *)
+type verifier = {
+  inputs : string list;
+  files : file list;
+  tools : file list;
+  command : string list;
+  stdin : string;
+  timeout_seconds : int;
+}
+
+(* Rubric: expected response fields and a bounded-word text rule, this repository's
+   deterministic subset of a grading rubric.
+   https://github.com/openai/evals/blob/main/docs/eval-templates.md#example-model-graded-evals *)
+type text_rule = { field : string; min_words : int; max_words : int }
+type rubric = { expected : (string * Value.t) list; text_rule : text_rule option }
+
+(* Criterion: a declarative success condition applied by the grader: executable code, a
+   rubric over the response, or a predicate over the whole observation.
+   https://developers.openai.com/api/docs/guides/evals
+   https://arxiv.org/abs/2406.12045 (tau-bench: final state and required outputs) *)
+type criterion =
+  | Code of { verifier : verifier }
+  | Answer of { rubric : rubric }
+  | State of { predicate : Predicate.t }
+
+(* Reference: reference edits and completion for offline validation.
+   https://evalscope.readthedocs.io/en/latest/advanced_guides/custom_dataset/llm.html *)
+type reference = { edits : file list; completion : Value.t }
 
 type t = {
   id : string;
-  fixture : Fixture.t;
-  instruction : Instruction.t;
-  criterion : Criterion.t;
+  fixture : file list;
+  instruction : instruction;
+  criterion : criterion;
   allowed_files : string list;
-  reference : Reference.t;
+  reference : reference;
 }
 
-let create ~id ~fixture ~(instruction : Instruction.t) ~criterion ~allowed_files
-    ~(reference : Reference.t) =
-  let paths fixture = List.map (fun (file : File.t) -> file.path) (Fixture.files ~fixture) in
-  let fixture_paths = paths fixture and reference_paths = paths reference.edits in
-  let require code field problem ~within names =
-    let missing = List.filter (fun name -> not (List.mem name within)) names in
-    Validation.when_invalid
-      (missing = [])
-      (Validation.issue
-         code
-         field
-         (Printf.sprintf "Case %s: %s: %s" id problem (String.concat ", " missing))
-         missing)
-  in
-  let problems =
-    Validation.when_invalid
-      (Instruction.valid_name ~name:id)
-      (Validation.issue Validation_code.Invalid_identity "id" "Invalid case identity" [ id ])
-    @ File.path_issues ~field:"allowed_files" ~paths:allowed_files
-    @ require
-        Validation_code.Reference_outside_scope
-        "reference.edits"
-        "reference edits files outside allowed_files"
-        ~within:allowed_files
-        reference_paths
-    @
-    match criterion with
-    | Criterion.Answer _ | Criterion.State _ -> []
-    | Criterion.Code { verifier } ->
-        require
-          Validation_code.Missing_fixture_inputs
-          "verifier.inputs"
-          "criteria read files missing from the fixture"
-          ~within:fixture_paths
-          verifier.inputs
-        @ Validation.when_invalid
-            (not
-               (List.exists
-                  (fun (artifact : Artifact.t) -> List.mem artifact.path fixture_paths)
-                  (verifier.files @ verifier.tools)))
-            (Validation.issue
-               Validation_code.Artifact_overlap
-               "verifier"
-               ("Case " ^ id ^ ": verifier artifacts overlap fixture")
-               [])
-  in
-  Validation.checked
-    ~case_id:id
-    problems
-    { id; fixture; instruction; criterion; allowed_files; reference }
-
-let resolve_resources ~(task : t) ~resources =
-  let result =
-    match task.criterion with
-    | Criterion.Answer _ | Criterion.State _ -> Ok task
-    | Criterion.Code { verifier } ->
-        Result.bind (Verifier.resolve_resources ~verifier ~resources) (fun verifier ->
-            Result.map
-              (fun criterion -> { task with criterion })
-              (Criterion.create ~code:verifier ()))
-  in
-  Result.map_error
-    (fun failure -> { failure with Validation_failure.case_id = Some task.id })
-    result
-
-let verifier ~(task : t) =
-  match task.criterion with
-  | Criterion.Code { verifier } -> Some verifier
-  | Criterion.Answer _ | Criterion.State _ -> None
-
-let compare ~(before : t) ~(after : t) =
-  Comparison.create
-    ~id:(Component_comparison.create ~fields:[ ("id", before.id = after.id) ])
-    ~fixture:(Fixture.compare ~before:before.fixture ~after:after.fixture)
-    ~instruction:(Instruction.compare ~before:before.instruction ~after:after.instruction)
-    ~criterion:(Criterion.compare ~before:before.criterion ~after:after.criterion)
-    ~allowed_files:
-      (Component_comparison.create
-         ~fields:
-           [
-             ( "allowed_files",
-               List.sort_uniq String.compare before.allowed_files
-               = List.sort_uniq String.compare after.allowed_files );
-           ])
-    ~reference:(Reference.compare ~before:before.reference ~after:after.reference)
+(* Case: the public projection a candidate receives; private verifier and reference
+   material is absent. *)
+type case = { case_id : string; skill : string; prompt : string; files : file list }
 
 let required_scores = [ "correctness"; "scope" ]
+let paths ~files = List.map (fun (file : file) -> file.path) files
+let checks ~task = match task.criterion with Code { verifier } -> Some verifier | _ -> None
 
-let assess ~task ~response ~(outcome : Outcome.t) =
+let project ~task =
+  let tools = match task.criterion with Code { verifier } -> verifier.tools | _ -> [] in
+  {
+    case_id = task.id;
+    skill = task.instruction.skill;
+    prompt = task.instruction.prompt;
+    files = task.fixture @ tools;
+  }
+
+let create ~id ~fixture ~(instruction : instruction) ~criterion ~allowed_files ~reference =
+  let fixture_paths = paths ~files:fixture and edits = paths ~files:reference.edits in
+  let all_paths = fixture_paths @ allowed_files @ edits in
+  let criterion_rules =
+    match criterion with
+    | Code { verifier } ->
+        let artifacts = paths ~files:verifier.files @ paths ~files:verifier.tools in
+        [
+          (verifier.inputs <> [], "verifier.inputs", "Verifier inputs cannot be empty");
+          ( List.for_all (fun input -> List.mem input fixture_paths) verifier.inputs,
+            "verifier.inputs",
+            "Criteria read files missing from the fixture" );
+          ( not (List.exists (fun path -> List.mem path fixture_paths) artifacts),
+            "verifier",
+            "Verifier artifacts overlap fixture" );
+          (Support.unique (verifier.inputs @ artifacts), "verifier", "Overlapping verifier paths");
+          (List.for_all Support.valid_path artifacts, "verifier", "Invalid verifier path");
+          ( verifier.command <> [] && not (List.mem "" verifier.command),
+            "verifier.command",
+            "Invalid verifier command" );
+          ( verifier.timeout_seconds > 0,
+            "verifier.timeout_seconds",
+            "Verifier timeout must be positive" );
+        ]
+    | Answer { rubric } ->
+        [
+          (rubric.expected <> [] || rubric.text_rule <> None, "rubric", "Empty rubric");
+          ( Option.fold
+              ~none:true
+              ~some:(fun (rule : text_rule) ->
+                0 <= rule.min_words && rule.min_words <= rule.max_words
+                && not (List.mem_assoc rule.field rubric.expected))
+              rubric.text_rule,
+            "rubric.text_rule",
+            "Invalid text rule" );
+        ]
+    | State _ -> []
+  in
+  Support.checked
+    ~case_id:id
+    ([
+       (Support.valid_name id, "id", "Invalid case identity");
+       (Support.valid_name instruction.skill, "instruction.skill", "Invalid instruction skill");
+       (List.for_all Support.valid_path all_paths, "fixture", "Invalid path");
+       (Support.unique fixture_paths && Support.unique edits, "fixture", "Duplicate path");
+       ( List.for_all (fun path -> List.mem path allowed_files) edits,
+         "reference.edits",
+         "Reference edits files outside allowed_files" );
+     ]
+    @ criterion_rules)
+    { id; fixture; instruction; criterion; allowed_files; reference }
+
+(* Every criterion is a predicate over the observation. *)
+let condition ~criterion =
+  match criterion with
+  | Code _ ->
+      Predicate.Equals { path = [ "verification" ]; expected = Value.String { value = "passed" } }
+  | State { predicate } -> predicate
+  | Answer { rubric } ->
+      let field name = [ "response"; name ] in
+      Predicate.All
+        {
+          checks =
+            [ ("response", Predicate.Present { path = [ "response" ] }) ]
+            @ List.map
+                (fun (name, expected) -> (name, Predicate.Equals { path = field name; expected }))
+                rubric.expected
+            @ Option.to_list
+                (Option.map
+                   (fun (rule : text_rule) ->
+                     ( "text",
+                       Predicate.Words
+                         {
+                           path = field rule.field;
+                           min_words = rule.min_words;
+                           max_words = rule.max_words;
+                         } ))
+                   rubric.text_rule);
+        }
+
+(* Grader: pure logic applying the criterion and the file scope to an observed outcome.
+   IO, execution, and presentation remain harness responsibilities.
+   https://developers.openai.com/api/docs/guides/graders *)
+let assess ~task ~(outcome : Outcome.t) =
   match outcome.verification with
-  | Verification.Harness_error { detail } ->
-      Error (Grading_failure.Verification_harness_error { detail })
+  | Outcome.Harness_error { detail } -> Error (Failure.Verification_harness_error { detail })
   | _ ->
       let scope =
-        Result.get_ok
-          (Predicate.within
-             ~path:[ "changed_files" ]
-             ~allowed:(List.map (fun value -> Value.String { value }) task.allowed_files))
+        Predicate.Within
+          {
+            path = [ "changed_files" ];
+            allowed = List.map (fun value -> Value.String { value }) task.allowed_files;
+          }
       in
       Ok
         (Assessment.create
            ~predicate:
-             (Result.get_ok
-                (Predicate.all
-                   ~checks:
-                     [
-                       ("correctness", Criterion.condition ~criterion:task.criterion);
-                       ("scope", scope);
-                     ]))
-           ~observation:(Outcome.observation ~outcome ~response))
+             (Predicate.All
+                {
+                  checks =
+                    [ ("correctness", condition ~criterion:task.criterion); ("scope", scope) ];
+                })
+           ~observation:(Outcome.observation ~outcome))
 
-(* Grader: pure logic applying criteria to responses and observed outcomes.
-   IO, execution, and presentation remain harness responsibilities.
-   https://developers.openai.com/api/docs/guides/graders
-   https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents *)
-let grade ~task ~response ~outcome =
-  Result.map (fun assessment -> Assessment.scores ~assessment) (assess ~task ~response ~outcome)
+let grade ~task ~outcome =
+  Result.map (fun assessment -> Assessment.scores ~assessment) (assess ~task ~outcome)

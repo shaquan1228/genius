@@ -14,21 +14,7 @@ from evals.python.tests.projections import reference, verifier
 from evals.python.tests.scenarios import Mode
 from evals.python.tests.scenarios import echo_model as _echo_model
 from evals.python.tests.scenarios import scripted as _scripted
-from kernel import (
-    Case,
-    Completion,
-    Criterion,
-    Fixture,
-    Instruction,
-    Reference,
-    Response,
-    ResponseField,
-    ResponseValue,
-    Rubric,
-    Task,
-    TextRule,
-    Verifier,
-)
+from kernel import Case, Criterion, Instruction, Reference, Rubric, Task, TextRule, Value, Verifier
 
 __test__ = False
 
@@ -83,34 +69,22 @@ def choice_case(*, case_id: str, a: int, b: int) -> Task:
     choice = "A" if a < b else "B"
     return Task.create(
         id=case_id,
-        fixture=Fixture.create(files=[]),
-        instruction=Instruction.create(skill="reasoning", prompt="Choose A or B with a reason"),
-        criterion=Criterion.create(
-            answer=Rubric.create(
-                expected=Response.create(
-                    fields=[
-                        ResponseField.create(
-                            name="choice", value=ResponseValue.create(string=choice)
-                        )
-                    ]
-                ),
-                text_rule=TextRule.create(field="reason", min_words=1, max_words=40),
+        fixture=[],
+        instruction=Instruction(skill="reasoning", prompt="Choose A or B with a reason"),
+        criterion=Criterion.Answer(
+            rubric=Rubric(
+                expected=[("choice", Value.String(value=choice))],
+                text_rule=TextRule(field="reason", min_words=1, max_words=40),
             )
         ),
         allowed_files=(),
-        reference=Reference.create(
-            edits=Fixture.create(files=[]),
-            completion=Completion.create(
-                structured=Response.create(
-                    fields=[
-                        ResponseField.create(
-                            name="choice", value=ResponseValue.create(string=choice)
-                        ),
-                        ResponseField.create(
-                            name="reason", value=ResponseValue.create(string="The cost is lower.")
-                        ),
-                    ]
-                )
+        reference=Reference(
+            edits=[],
+            completion=Value.Record(
+                fields=[
+                    ("choice", Value.String(value=choice)),
+                    ("reason", Value.String(value="The cost is lower.")),
+                ]
             ),
         ),
     )

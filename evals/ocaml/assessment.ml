@@ -1,11 +1,12 @@
-(* Assessment: a predicate evaluated against one observation, retaining the
-   observation behind every check so a result explains itself. Named conjunctions
-   become scores; the sources establish that separation, not this algebra.
+(* Assessment: a predicate evaluated against one observation, retaining the observation
+   behind every check so a result explains itself. Named conjunctions become scores.
    https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
    https://developers.openai.com/api/docs/guides/graders *)
 type t =
   | Check of { predicate : Predicate.t; observation : Value.t }
   | All of { checks : (string * t) list }
+
+type score = (string * bool) list
 
 let rec create ~predicate ~observation =
   match predicate with
@@ -22,6 +23,7 @@ let rec passed ~assessment =
   | Check { predicate; observation } -> Predicate.holds ~predicate ~observation
   | All { checks } -> List.for_all (fun (_, check) -> passed ~assessment:check) checks
 
+(* The value a check looked at, for leaf predicates with a path. *)
 let observed ~assessment =
   match assessment with
   | Check
@@ -35,9 +37,9 @@ let observed ~assessment =
         observation;
       } ->
       Value.get ~value:observation ~path
-  | Check { predicate = Predicate.All _ | Predicate.Any _ | Predicate.Not _; _ } | All _ -> None
+  | Check _ | All _ -> None
 
-let scores ~assessment =
+let scores ~assessment : score =
   match assessment with
   | All { checks } -> List.map (fun (name, assessment) -> (name, passed ~assessment)) checks
   | Check _ -> [ ("passed", passed ~assessment) ]

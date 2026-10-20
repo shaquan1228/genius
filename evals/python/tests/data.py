@@ -29,19 +29,16 @@ from evals.python.tests.support import (
     timeout_case as _timeout_case,
 )
 from kernel import (
-    Artifact,
     Case,
-    Completion,
-    Content,
     Criterion,
     Experiment,
     File,
-    Fixture,
     Instruction,
     Kernel,
     Profile,
     Reference,
     Task,
+    Value,
     Verifier,
 )
 from kernel import (
@@ -65,9 +62,7 @@ def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
 def generated_paths_are_validated(path: str) -> None:
     declaration = _choice_case(case_id="paths", a=1, b=2)
     with pytest.raises(DomainValidationError):
-        _copy_case(
-            declaration, fixture=Fixture.create(files=[File.create(path=path, contents="bad")])
-        )
+        _copy_case(declaration, fixture=[File(path=path, contents="bad")])
 
 
 def profiles_share_fixture_files() -> None:
@@ -147,7 +142,7 @@ def samples_keep_task_ids_and_metadata() -> None:
             cases=datasets.list_cases(),
             documents=profiles.load_documents(evaluation.resolve_settings()),
         )
-    ] == [case.id for case in datasets.list_cases()]
+    ] == [case.case_id for case in datasets.list_cases()]
 
 
 def hash_tracks_contents_and_ignores_mapping_order() -> None:
@@ -165,7 +160,7 @@ def cases_200_cases_are_python_values() -> None:
     cases = datasets.list_cases(selection=dataset)
     assert len(cases) == 200
     assert (
-        _reference_files(reference(cases[199].id, selection=dataset))["config.py"]
+        _reference_files(reference(cases[199].case_id, selection=dataset))["config.py"]
         == "timeout_seconds = 229\n"
     )
 
@@ -194,7 +189,7 @@ def native_projection_preserves_strings() -> None:
     text = 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
     definition = _copy_case(
         _choice_case(case_id="escaped", a=10, b=8),
-        instruction=Instruction.create(skill="reasoning", prompt=text),
+        instruction=Instruction(skill="reasoning", prompt=text),
     )
     dataset = datasets.compile_dataset(cases=(definition,))
     assert datasets.list_cases(selection=dataset)[0].prompt == text
@@ -203,14 +198,12 @@ def native_projection_preserves_strings() -> None:
 def cases_are_immutable() -> None:
     case = public_case("clear-task")
     with pytest.raises((AttributeError, TypeError)):
-        case.id = "changed"  # type: ignore[misc]
+        case.case_id = "changed"  # type: ignore[misc]
     with pytest.raises(TypeError):
-        case.files[0] = Artifact.create(path="receipt.py", content=Content.create(inline="changed"))  # type: ignore[index]
+        case.files[0] = File(path="receipt.py", contents="changed")  # type: ignore[index]
     with pytest.raises(TypeError):
-        Fixture.files(fixture=reference(case.id).edits)[0] = File.create(  # type: ignore[index]
-            path="receipt.py", contents="changed"
-        )
-    checks = verifier(case.id)
+        reference(case.case_id).edits[0] = File(path="receipt.py", contents="changed")  # type: ignore[index]
+    checks = verifier(case.case_id)
     assert checks is not None
     with pytest.raises((AttributeError, TypeError)):
         checks.stdin = "changed"  # type: ignore[misc]
@@ -235,12 +228,12 @@ def compilation_cache_invalidates_when_declarations_change() -> None:
 def generic_python_case_exports_without_language_restriction() -> None:
     definition = Task.create(
         id="python-case",
-        fixture=Fixture.create(files=[File.create(path="solution.py", contents="print(42)")]),
-        instruction=Instruction.create(skill="reasoning", prompt="Return 42"),
-        criterion=Criterion.create(
-            code=Verifier.create(
+        fixture=[File(path="solution.py", contents="print(42)")],
+        instruction=Instruction(skill="reasoning", prompt="Return 42"),
+        criterion=Criterion.Code(
+            verifier=Verifier(
                 inputs=("solution.py",),
-                files=[Artifact.create(path="grader.py", content=Content.create(inline="trusted"))],
+                files=[File(path="grader.py", contents="trusted")],
                 tools=[],
                 command=("python3", "grader.py"),
                 stdin="private",
@@ -248,13 +241,11 @@ def generic_python_case_exports_without_language_restriction() -> None:
             )
         ),
         allowed_files=("solution.py",),
-        reference=Reference.create(
-            edits=Fixture.create(files=[]), completion=Completion.create(plain="done")
-        ),
+        reference=Reference(edits=[], completion=Value.String(value="done")),
     )
     dataset = datasets.compile_dataset(cases=(definition,))
     case = datasets.list_cases(selection=dataset)[0]
-    checks = verifier(case.id, selection=dataset)
+    checks = verifier(case.case_id, selection=dataset)
     assert checks is not None
     assert (tuple(checks.inputs), tuple(checks.tools), tuple(checks.command)) == (
         ("solution.py",),
@@ -300,8 +291,8 @@ def experiment_configuration_reaches_tasks_and_profiles() -> None:
 
 def record_updates_cannot_bypass_kernel_validation() -> None:
     definition = _timeout_case(case_id="updated", initial=15, requested=30)
-    with pytest.raises(DomainValidationError, match="criteria read files missing from the fixture"):
-        _copy_case(definition, fixture=Fixture.create(files=[]))
+    with pytest.raises(DomainValidationError, match="read files missing from the fixture"):
+        _copy_case(definition, fixture=[])
 
 
 @pytest.mark.parametrize("delivery", ["manifest", "inline"])
@@ -359,7 +350,7 @@ def delivery_rejects_unimplemented_skill_instead_of_silently_changing_it() -> No
 def kernel_fingerprint_tracks_every_trusted_source(source: str) -> None:
     original = Kernel.current.sources
     changed = [
-        File.create(
+        File(
             path=file.path,
             contents=file.contents + "\n" if file.path == source else file.contents,
         )

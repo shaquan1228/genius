@@ -13,7 +13,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from . import GradingFailure, ValidationFailure, ValidationIssue
+    from . import GradingFailure, Issue, ValidationFailure
 
 _environment = {name: os.environ.get(name) for name in ("PATH", "PYTHONHOME", "PYTHONPATH")}
 os.environ["PATH"] = str(Path(sys.executable).parent) + os.pathsep + (_environment["PATH"] or "")
@@ -44,7 +44,7 @@ class ValidationError(ValueError):
     """A rejected declaration, retaining native validation issues."""
 
     def __init__(self, *, failure: ValidationFailure) -> None:
-        self.issues: tuple[ValidationIssue, ...] = tuple(failure.issues)
+        self.issues: tuple[Issue, ...] = tuple(failure.issues)
         self.case_id = failure.case_id
         super().__init__("; ".join(issue.message for issue in self.issues))
 

@@ -2,19 +2,16 @@
 
 from pathlib import Path
 
-from kernel import Artifact, Content, Criterion, Verifier
+from kernel import Criterion, File, Verifier
 
 
 def checks(*, inputs: tuple[str, ...], program: str) -> Criterion.Value:
-    return Criterion.create(
-        code=Verifier.create(
+    return Criterion.Code(
+        verifier=Verifier(
             inputs=inputs,
             files=[
-                Artifact.create(
-                    path="verifier.py",
-                    content=Content.create(
-                        inline=Path(__file__).with_name("verifier.py").read_text()
-                    ),
+                File(
+                    path="verifier.py", contents=Path(__file__).with_name("verifier.py").read_text()
                 )
             ],
             tools=[],

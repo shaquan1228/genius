@@ -1,20 +1,7 @@
 """Pure Python declarations for the default four-case smoke dataset."""
 
 from evals.python.integrations.smoke import checks
-from kernel import (
-    Completion,
-    Criterion,
-    File,
-    Fixture,
-    Instruction,
-    Reference,
-    Response,
-    ResponseField,
-    ResponseValue,
-    Rubric,
-    Task,
-    TextRule,
-)
+from kernel import Criterion, File, Instruction, Reference, Rubric, Task, TextRule, Value
 
 info = None
 
@@ -22,25 +9,23 @@ info = None
 def receipt(*, term: str = "price") -> Task:
     return Task.create(
         id="clear-task",
-        fixture=Fixture.create(
-            files=[
-                File.create(
-                    path="receipt.py",
-                    contents="def total(items):\n"
-                    f"    return sum({term} for price, quantity in items)\n",
-                ),
-                File.create(
-                    path="test_receipt.py",
-                    contents="""import runpy
+        fixture=[
+            File(
+                path="receipt.py",
+                contents="def total(items):\n"
+                f"    return sum({term} for price, quantity in items)\n",
+            ),
+            File(
+                path="test_receipt.py",
+                contents="""import runpy
 
 total = runpy.run_path("receipt.py")["total"]
 assert total([]) == 0
 assert total([(3.0, 1), (4.0, 1)]) == 7.0
 """,
-                ),
-            ]
-        ),
-        instruction=Instruction.create(
+            ),
+        ],
+        instruction=Instruction(
             skill="reasoning",
             prompt=(
                 "Fix total in receipt.py so each item's quantity contributes to the total. "
@@ -61,17 +46,15 @@ assert total([(1.5, 2)]) == 3.0
 """,
         ),
         allowed_files=("receipt.py",),
-        reference=Reference.create(
-            edits=Fixture.create(
-                files=[
-                    File.create(
-                        path="receipt.py",
-                        contents="def total(items):\n"
-                        "    return sum(price * quantity for price, quantity in items)\n",
-                    )
-                ]
-            ),
-            completion=Completion.create(plain="Each quantity now contributes to the total."),
+        reference=Reference(
+            edits=[
+                File(
+                    path="receipt.py",
+                    contents="def total(items):\n"
+                    "    return sum(price * quantity for price, quantity in items)\n",
+                )
+            ],
+            completion=Value.String(value="Each quantity now contributes to the total."),
         ),
     )
 
@@ -94,13 +77,12 @@ def timeout(*, initial: int = 15, requested: int = 30) -> Task:
         raise ValueError("Timeout changes need distinct positive initial and requested values")
     return Task.create(
         id="known-preflight",
-        fixture=Fixture.create(
-            files=[
-                File.create(path="config.py", contents=f"timeout_seconds = {initial}\n"),
-                File.create(path="client.py", contents=client(initial)),
-                File.create(
-                    path="test_client.py",
-                    contents="""import runpy
+        fixture=[
+            File(path="config.py", contents=f"timeout_seconds = {initial}\n"),
+            File(path="client.py", contents=client(initial)),
+            File(
+                path="test_client.py",
+                contents="""import runpy
 
 config = runpy.run_path("config.py")
 client = runpy.run_path("client.py")
@@ -113,10 +95,9 @@ except ValueError:
 else:
     raise AssertionError("nonpositive timeout accepted")
 """,
-                ),
-            ]
-        ),
-        instruction=Instruction.create(
+            ),
+        ],
+        instruction=Instruction(
             skill="preflight",
             prompt=(
                 f"On branch eval, change the default timeout from {initial} to {requested} seconds "
@@ -146,51 +127,36 @@ for value in (0, -1):
 """,
         ),
         allowed_files=("config.py", "client.py"),
-        reference=Reference.create(
-            edits=Fixture.create(
-                files=[
-                    File.create(path="config.py", contents=f"timeout_seconds = {requested}\n"),
-                    File.create(path="client.py", contents=client(requested)),
-                ]
-            ),
-            completion=Completion.create(plain="Updated both defaults and preserved overrides."),
+        reference=Reference(
+            edits=[
+                File(path="config.py", contents=f"timeout_seconds = {requested}\n"),
+                File(path="client.py", contents=client(requested)),
+            ],
+            completion=Value.String(value="Updated both defaults and preserved overrides."),
         ),
     )
 
 
+def scalar(*, value: str | bool) -> Value.Value:
+    return Value.Bool(value=value) if isinstance(value, bool) else Value.String(value=value)
+
+
 def answer(*, id: str, prompt: str, expected: dict[str, str | bool], reason: str) -> Task:
-    fields = [
-        ResponseField.create(
-            name=name,
-            value=ResponseValue.create(bool=value)
-            if isinstance(value, bool)
-            else ResponseValue.create(string=value),
-        )
-        for name, value in expected.items()
-    ]
+    fields = [(name, scalar(value=value)) for name, value in expected.items()]
     return Task.create(
         id=id,
-        fixture=Fixture.empty,
-        instruction=Instruction.create(skill="bayesian", prompt=prompt),
-        criterion=Criterion.create(
-            answer=Rubric.create(
-                expected=Response.create(fields=fields),
-                text_rule=TextRule.create(field="reason", min_words=1, max_words=40),
+        fixture=[],
+        instruction=Instruction(skill="bayesian", prompt=prompt),
+        criterion=Criterion.Answer(
+            rubric=Rubric(
+                expected=fields,
+                text_rule=TextRule(field="reason", min_words=1, max_words=40),
             )
         ),
         allowed_files=(),
-        reference=Reference.create(
-            edits=Fixture.empty,
-            completion=Completion.create(
-                structured=Response.create(
-                    fields=[
-                        *fields,
-                        ResponseField.create(
-                            name="reason", value=ResponseValue.create(string=reason)
-                        ),
-                    ]
-                ),
-            ),
+        reference=Reference(
+            edits=[],
+            completion=Value.Record(fields=[*fields, ("reason", Value.String(value=reason))]),
         ),
     )
 

@@ -8,49 +8,25 @@ from inspect_ai.model import ChatMessageAssistant
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer, stderr
 from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
-from pydantic import ConfigDict, JsonValue, TypeAdapter
+from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import datasets, verification
 from evals.python.datasets import Dataset
-from kernel import (
-    Assessment,
-    Completion,
-    Outcome,
-    Predicate,
-    Response,
-    ResponseField,
-    ResponseValue,
-    Task,
-    Value,
-    Verification,
-)
+from kernel import Assessment, Outcome, Predicate, Task, Value, Verification
 
-_RESPONSE_FIELDS = TypeAdapter(dict[str, str | bool], config=ConfigDict(strict=True))
 WORKSPACE = "workspace/"
 
 
-def decode_response(text: str) -> Response | None:
-    text = Completion.trim(text=text)
+def decode_response(text: str) -> Value.Value:
+    """Decode a JSON reply as a native value; anything else is a null response."""
+    text = text.strip()
     if text.startswith("```json\n") and text.endswith("\n```"):
         text = text[8:-4]
     with suppress(ValueError, RecursionError):
-        fields = _RESPONSE_FIELDS.validate_python(json.loads(text))
-        return Response.create(
-            fields=[
-                ResponseField.create(
-                    name=name,
-                    value=(
-                        ResponseValue.create(bool=value)
-                        if isinstance(value, bool)
-                        else ResponseValue.create(string=value)
-                    ),
-                )
-                for name, value in fields.items()
-            ]
-        )
-    return None
+        return value(json.loads(text))
+    return Value.Null()
 
 
 _ENCODERS: dict[type, Callable[[Any], Value.Value]] = {
@@ -155,16 +131,18 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
     )
     task = selected.records[str(state.metadata["case_id"])]
     evidence = await verification.verify(
-        Task.verifier(task=task),
+        Task.checks(task=task),
         agent=environments_adapter.environment(current),
         runtime=environments_adapter.runtime(current),
     )
     facts = [("trace", trace(state)), ("state", value(dict(state.store.items())))]
     result = Task.assess(
         task=task,
-        response=decode_response(completion),
         outcome=Outcome.create(
-            changed_files=changed, verification=evidence.verification, facts=facts
+            changed_files=changed,
+            verification=evidence.verification,
+            response=decode_response(completion),
+            facts=facts,
         ),
     )
     explanation = (
@@ -175,7 +153,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
         explanation=with_failure(explanation, failure=failure),
         metadata={
             "verification": {
-                "status": Verification.name(status=evidence.verification),
+                "status": Outcome.status(verification=evidence.verification),
                 "detail": evidence.detail,
             },
             "verifier_metadata": evidence.metadata_json(),

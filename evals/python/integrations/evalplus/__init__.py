@@ -4,19 +4,16 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
-from kernel import Artifact, Content, Criterion, Verifier
+from kernel import Criterion, File, Verifier
 
 
 def checks(*, record: str, manifest: Mapping[str, object]) -> Criterion.Value:
-    return Criterion.create(
-        code=Verifier.create(
+    return Criterion.Code(
+        verifier=Verifier(
             inputs=("solution.py",),
             files=[
-                Artifact.create(
-                    path="verifier.py",
-                    content=Content.create(
-                        inline=Path(__file__).with_name("verifier.py").read_text()
-                    ),
+                File(
+                    path="verifier.py", contents=Path(__file__).with_name("verifier.py").read_text()
                 )
             ],
             tools=[],

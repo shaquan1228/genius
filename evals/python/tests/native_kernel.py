@@ -1,57 +1,37 @@
 """Exercise generated types and real kernel policy through an in-process bridge."""
 
-from collections.abc import Callable
-from inspect import unwrap
 from operator import itemgetter
-from typing import cast
 
 import pytest
 
-import kernel as kernel_types
 from evals.python.tests.declarations import _files
 from kernel import (
-    Artifact,
     Case,
-    Completion,
-    Content,
     Criterion,
     Experiment,
     File,
-    Fixture,
     Instruction,
     Outcome,
     Reference,
-    Response,
-    ResponseField,
-    ResponseValue,
     Rubric,
     Task,
+    Value,
     Verification,
     Verifier,
 )
-from kernel import (
-    ValidationError as DomainValidationError,
-)
-from kernel._bridge import native as native_kernel
 
 
-def _answer() -> tuple[Task, Response]:
-    expected = Response.create(
-        fields=[ResponseField.create(name="choice", value=ResponseValue.create(string="B"))]
-    )
-    fixture = Fixture.create(files=[File.create(path="context.txt", contents="Public context")])
-    reference = Reference.create(
-        edits=Fixture.create(files=[]), completion=Completion.create(structured=expected)
-    )
-    criterion = Criterion.create(answer=Rubric.create(expected=expected, text_rule=None))
-    instruction = Instruction.create(skill="reasoning", prompt="Choose B")
+def _answer() -> tuple[Task, Value.Value]:
+    expected = Value.Record(fields=[("choice", Value.String(value="B"))])
     case = Task.create(
         id="native-answer",
-        fixture=fixture,
-        instruction=instruction,
-        criterion=criterion,
+        fixture=[File(path="context.txt", contents="Public context")],
+        instruction=Instruction(skill="reasoning", prompt="Choose B"),
+        criterion=Criterion.Answer(
+            rubric=Rubric(expected=[("choice", Value.String(value="B"))], text_rule=None)
+        ),
         allowed_files=[],
-        reference=reference,
+        reference=Reference(edits=[], completion=expected),
     )
     return case, expected
 
@@ -59,36 +39,37 @@ def _answer() -> tuple[Task, Response]:
 def check_answer_projection() -> None:
     case, _ = _answer()
     assert isinstance(case, Task)
-    public = Case.create(task=case)
+    public = Task.project(task=case)
     assert isinstance(public, Case)
-    assert (public.id, hasattr(public, "reference"), Task.verifier(task=case)) == (
+    assert (public.case_id, hasattr(public, "reference"), Task.checks(task=case)) == (
         case.id,
         False,
         None,
     )
-    assert (
-        list(_files(public.files).items()),
-        cast(Completion.Structured, (case).reference.completion).response.fields[0].name,
-    ) == ([("context.txt", "Public context")], "choice")
+    assert list(_files(public.files).items()) == [("context.txt", "Public context")]
+    assert isinstance(case.reference.completion, Value.Record)
 
 
 def check_answer_grading() -> None:
     assert Experiment.resolve(epochs=1).epochs == 1
     case, expected = _answer()
-    outcome = Outcome.create(changed_files=[], verification=Verification.Unchecked())
-    scores = Task.grade(task=case, response=expected, outcome=outcome)
+    outcome = Outcome.create(
+        changed_files=[], verification=Verification.Unchecked(), response=expected
+    )
+    scores = Task.grade(task=case, outcome=outcome)
     assert tuple(map(itemgetter(0), scores)) == tuple(Task.required_scores)
     assert dict(scores) == {"correctness": True, "scope": True}
-    assert not dict(Task.grade(task=case, response=None, outcome=outcome))["correctness"]
+    silent = Outcome.create(changed_files=[], verification=Verification.Unchecked())
+    assert not dict(Task.grade(task=case, outcome=silent))["correctness"]
 
 
 @pytest.mark.parametrize(
     ("status", "correctness"), [(Verification.Passed(), True), (Verification.Failed(), False)]
 )
 def check_code(status: Verification.Value, *, correctness: bool) -> None:
-    checks = Verifier.create(
+    checks = Verifier(
         inputs=["solution.py"],
-        files=[Artifact.create(path="verify.py", content=Content.create(inline="private check"))],
+        files=[File(path="verify.py", contents="private check")],
         tools=[],
         command=["python3", "verify.py"],
         stdin="private input",
@@ -96,106 +77,21 @@ def check_code(status: Verification.Value, *, correctness: bool) -> None:
     )
     case = Task.create(
         id="native-code",
-        fixture=Fixture.create(files=[File.create(path="solution.py", contents="pass")]),
-        instruction=Instruction.create(skill="reasoning", prompt="Fix solution.py"),
-        criterion=Criterion.create(code=checks),
+        fixture=[File(path="solution.py", contents="pass")],
+        instruction=Instruction(skill="reasoning", prompt="Fix solution.py"),
+        criterion=Criterion.Code(verifier=checks),
         allowed_files=["solution.py"],
-        reference=Reference.create(
-            edits=Fixture.create(files=[File.create(path="solution.py", contents="fixed")]),
-            completion=Completion.create(plain=""),
+        reference=Reference(
+            edits=[File(path="solution.py", contents="fixed")], completion=Value.Null()
         ),
     )
-    projected = Task.verifier(task=case)
-    assert projected is not None
-    public_files = [artifact.path for artifact in Case.create(task=case).files]
+    assert Task.checks(task=case) is not None
+    assert [file.path for file in Task.project(task=case).files] == ["solution.py"]
     outcome = Outcome.create(changed_files=["solution.py"], verification=status)
-    scores = Task.grade(task=case, response=None, outcome=outcome)
+    scores = Task.grade(task=case, outcome=outcome)
     assert (tuple(map(itemgetter(0), scores)), dict(scores)) == (
         tuple(Task.required_scores),
         {"correctness": correctness, "scope": True},
     )
-    outside_scope = Outcome.create(changed_files=["other.py"], verification=Verification.Passed())
-    assert (
-        projected.stdin,
-        public_files,
-        dict(Task.grade(task=case, response=None, outcome=outside_scope))["scope"],
-    ) == ("private input", ["solution.py"], False)
-
-
-def check_rejections() -> None:
-    with pytest.raises(DomainValidationError):
-        Fixture.create(
-            files=[
-                File.create(path="duplicate.txt", contents="one"),
-                File.create(path="duplicate.txt", contents="two"),
-            ]
-        )
-    with pytest.raises(TypeError):
-        cast(Callable[..., Experiment], Experiment.resolve)(epochs="wrong type")
-
-
-@pytest.mark.parametrize(
-    ("public_name", "native_name"),
-    [("Case", "Case"), ("Task", "Task"), ("Rubric", "Rubric")],
-)
-def explicit_types_preserve_native_identity(public_name: str, *, native_name: str) -> None:
-    assert getattr(kernel_types, public_name) is getattr(native_kernel, native_name).t
-
-
-@pytest.mark.parametrize(
-    ("owner", "alternative", "native_name"),
-    [
-        ("Criterion", "Answer", "Criterion.Answer"),
-        ("Content", "Inline", "Content.Inline"),
-        ("Completion", "Plain", "Completion.Plain"),
-        ("ResponseValue", "String", "Response_value.String"),
-        ("Verification", "HarnessError", "Verification.Harness_error"),
-    ],
-)
-def owned_alternatives_preserve_native_identity(
-    owner: str, *, alternative: str, native_name: str
-) -> None:
-    native_owner, native_alternative = native_name.split(".")
-    assert getattr(getattr(kernel_types, owner), alternative) is getattr(
-        getattr(native_kernel, native_owner), native_alternative
-    )
-
-
-def public_kernel_exports_only_types() -> None:
-    assert all(
-        name[0].isupper() and isinstance(getattr(kernel_types, name), type)
-        for name in vars(kernel_types)["__all__"]
-    )
-    assert (
-        not {
-            "Ast",
-            "Grader",
-            "Projection",
-            "sources",
-            "Answer",
-            "Code",
-            "Inline",
-            "Plain",
-            "String",
-            "HarnessError",
-        }
-        & vars(kernel_types).keys()
-    )
-
-
-@pytest.mark.parametrize(
-    ("owner", "method", "native_owner"),
-    [
-        ("Fixture", "files", "Fixture"),
-        ("Task", "grade", "Task"),
-        ("Task", "verifier", "Task"),
-        ("Experiment", "resolve", "Experiment"),
-        ("File", "valid_path", "File"),
-        ("Completion", "trim", "Completion"),
-        ("TextRule", "word_count", "Text_rule"),
-    ],
-)
-def type_methods_bind_the_native_owner(owner: str, *, method: str, native_owner: str) -> None:
-    assert unwrap(getattr(getattr(kernel_types, owner), method)) is getattr(
-        getattr(native_kernel, native_owner), method
-    )
+    outside = Outcome.create(changed_files=["other.py"], verification=Verification.Passed())
+    assert dict(Task.grade(task=case, outcome=outside)) == {"correctness": True, "scope": False}

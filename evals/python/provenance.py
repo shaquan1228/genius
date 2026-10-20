@@ -4,7 +4,7 @@ import hashlib
 from collections.abc import Sequence
 from typing import cast
 
-from kernel import File, Fixture, Task
+from kernel import File, Task
 
 
 def fingerprint(sources: Sequence[File], *, resources: tuple[tuple[str, str], ...] = ()) -> str:
@@ -16,8 +16,6 @@ def _canonical(value: object) -> object:
     match value:
         case None | str() | bool() | int() | float():
             return value
-        case Fixture():
-            return tuple(_canonical(file) for file in Fixture.files(fixture=value))
         case _:
             return (
                 type(value).__name__,

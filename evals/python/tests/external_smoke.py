@@ -12,14 +12,14 @@ from evals.python.datasets import smoke as declarations
 from evals.python.integrations.smoke import __main__ as cli
 from evals.python.tests.declarations import _copy_case, _files, _reference_files
 from evals.python.verification import VerificationResult
-from kernel import Case, Completion, Criterion, Fixture, Reference, Response, Verification
+from kernel import Case, Criterion, Reference, Value, Verification
 
 
 def python_smoke_compiles_to_public_cases() -> None:
     definitions = declarations.cases()
     dataset = datasets.compile_dataset(cases=definitions)
     cases = datasets.list_cases(selection=dataset)
-    assert tuple(case.id for case in cases) == tuple(case.id for case in definitions)
+    assert tuple(case.case_id for case in cases) == tuple(task.id for task in definitions)
     assert all(isinstance(case, Case) for case in cases)
 
 
@@ -77,9 +77,7 @@ def offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[str])
 def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixture[str]) -> None:
     case = _copy_case(
         declarations.cases()[2],
-        reference=Reference.create(
-            edits=Fixture.empty, completion=Completion.create(structured=Response.empty)
-        ),
+        reference=Reference(edits=[], completion=Value.Record(fields=[])),
     )
     dataset = datasets.compile_dataset(cases=(case,))
     with patch.object(datasets, "load_dataset", return_value=dataset):

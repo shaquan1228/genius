@@ -3,7 +3,7 @@ import json
 import sys
 
 from evals.python import datasets, verification
-from kernel import Completion, Fixture, Outcome, Task, Verification
+from kernel import Outcome, Task, Verification
 
 
 async def validate(task: Task) -> bool:
@@ -11,18 +11,13 @@ async def validate(task: Task) -> bool:
     result = await verification.validate_reference(task)
     scores: dict[str, bool] = {}
     if not isinstance(result.verification, Verification.HarnessError):
-        candidate = (
-            reference.completion.response
-            if isinstance(reference.completion, Completion.Structured)
-            else None
-        )
         scores = dict(
             Task.grade(
                 task=task,
-                response=candidate,
                 outcome=Outcome.create(
-                    changed_files=[file.path for file in Fixture.files(fixture=reference.edits)],
+                    changed_files=[file.path for file in reference.edits],
                     verification=result.verification,
+                    response=reference.completion,
                 ),
             )
         )
@@ -31,7 +26,7 @@ async def validate(task: Task) -> bool:
         json.dumps(
             {
                 "id": task.id,
-                "verification": Verification.name(status=result.verification),
+                "verification": Outcome.status(verification=result.verification),
                 "scores": scores,
             }
         )

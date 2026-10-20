@@ -8,7 +8,7 @@ __test__ = False
 
 
 def verifier(case_id: str, *, selection: Selection = "smoke") -> Verifier | None:
-    return Task.verifier(task=datasets.load_dataset(selection=selection).records[case_id])
+    return Task.checks(task=datasets.load_dataset(selection=selection).records[case_id])
 
 
 def reference(case_id: str, *, selection: Selection = "smoke") -> Reference:

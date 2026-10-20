@@ -19,18 +19,7 @@ from evals.python.integrations.inspect.environments import environment, runtime
 from evals.python.tests.declarations import _copy_case, _declaration
 from evals.python.tests.projections import verifier
 from evals.python.verification import VerificationResult
-from kernel import (
-    Artifact,
-    Completion,
-    Content,
-    Criterion,
-    File,
-    Fixture,
-    Reference,
-    Task,
-    Verification,
-    Verifier,
-)
+from kernel import Criterion, File, Reference, Task, Value, Verification, Verifier
 from kernel import (
     ValidationError as DomainValidationError,
 )
@@ -46,16 +35,14 @@ print(json.dumps({'marker': os.environ['GENIUS_VERIFIER_MARKER'],
 def _checks(**updates: object) -> Verifier:
     values = {
         "inputs": ("solution.py",),
-        "files": [Artifact.create(path="grader.py", content=Content.create(inline=DRIVER))],
-        "tools": [
-            Artifact.create(path="visible.py", content=Content.create(inline="raise Exception()"))
-        ],
+        "files": [File(path="grader.py", contents=DRIVER)],
+        "tools": [File(path="visible.py", contents="raise Exception()")],
         "command": ("python3", "grader.py"),
         "stdin": "42",
         "timeout_seconds": 30,
         **updates,
     }
-    constructor = cast(Callable[..., Verifier], Verifier.create)
+    constructor = cast(Callable[..., Verifier], Verifier)
     return constructor(**values)
 
 
@@ -327,14 +314,10 @@ def invalid_executable_contract_is_rejected(updates: dict[str, object]) -> None:
             cases=(
                 _copy_case(
                     case,
-                    fixture=Fixture.create(
-                        files=[File.create(path="solution.py", contents="print(42)")]
-                    ),
-                    criterion=Criterion.create(code=_checks(**updates)),
+                    fixture=[File(path="solution.py", contents="print(42)")],
+                    criterion=Criterion.Code(verifier=_checks(**updates)),
                     allowed_files=("solution.py",),
-                    reference=Reference.create(
-                        edits=Fixture.create(files=[]), completion=Completion.create(plain="")
-                    ),
+                    reference=Reference(edits=[], completion=Value.Null()),
                 ),
             )
         )
@@ -342,11 +325,11 @@ def invalid_executable_contract_is_rejected(updates: dict[str, object]) -> None:
 
 def private_artifacts_are_excluded_from_public_files() -> None:
     for case in datasets.list_cases():
-        executable = verifier(case.id)
+        executable = verifier(case.case_id)
         if isinstance(executable, Verifier):
             assert (
-                not {artifact.path: artifact.content for artifact in executable.files}.keys()
-                & {artifact.path: artifact.content for artifact in case.files}.keys()
+                not {artifact.path: artifact.contents for artifact in executable.files}.keys()
+                & {artifact.path: artifact.contents for artifact in case.files}.keys()
             )
 
 
@@ -407,7 +390,7 @@ def reference_uses_default_local_adapter_and_real_ocaml() -> None:
 
 def answer_only_reference_never_allocates() -> None:
     ports = _runtime_port(_grader_port())
-    with patch("kernel.Task.verifier", return_value=None):
+    with patch("kernel.Task.checks", return_value=None):
         result = asyncio.run(
             verification.validate_reference(
                 datasets.load_dataset(selection="smoke").records["small-decision"], runtime=ports
@@ -423,16 +406,14 @@ def reference_candidate_and_grader_are_both_cleaned() -> None:
         ports = _runtime_port(grader)
         cast(AsyncMock, ports.create).side_effect = [agent, grader]
         with (
-            patch("kernel.Task.verifier", return_value=_checks()),
+            patch("kernel.Task.checks", return_value=_checks()),
             patch.object(
                 Task,
                 "reference",
                 new_callable=PropertyMock,
-                return_value=Reference.create(
-                    edits=Fixture.create(
-                        files=[File.create(path="solution.py", contents="print(42)")]
-                    ),
-                    completion=Completion.create(plain=""),
+                return_value=Reference(
+                    edits=[File(path="solution.py", contents="print(42)")],
+                    completion=Value.Null(),
                 ),
             ),
             patch("evals.python.verification.token_hex", return_value="secret"),
@@ -464,14 +445,14 @@ def reference_setup_failures_preserve_lifecycle(stage: str) -> None:
         error = asyncio.CancelledError() if stage == "cancel" else TimeoutError("setup")
         cast(AsyncMock, effects[stage]).side_effect = error
         with (
-            patch("kernel.Task.verifier", return_value=_checks()),
+            patch("kernel.Task.checks", return_value=_checks()),
             patch.object(
                 Task,
                 "reference",
                 new_callable=PropertyMock,
-                return_value=Reference.create(
-                    edits=Fixture.create(files=[File.create(path="solution.py", contents="")]),
-                    completion=Completion.create(plain=""),
+                return_value=Reference(
+                    edits=[File(path="solution.py", contents="")],
+                    completion=Value.Null(),
                 ),
             ),
         ):
@@ -500,14 +481,12 @@ def reference_nonzero_mkdir_is_harness_error() -> None:
         agent = _agent_port()
         cast(AsyncMock, agent.execute).return_value = _output(code=1)
         with (
-            patch("kernel.Task.verifier", return_value=_checks()),
+            patch("kernel.Task.checks", return_value=_checks()),
             patch.object(
                 Task,
                 "reference",
                 new_callable=PropertyMock,
-                return_value=Reference.create(
-                    edits=Fixture.create(files=[]), completion=Completion.create(plain="")
-                ),
+                return_value=Reference(edits=[], completion=Value.Null()),
             ),
         ):
             result = await verification.validate_reference(
@@ -579,16 +558,3 @@ def cancelled_allocation_never_cleans_candidate() -> None:
         cast(AsyncMock, ports.cleanup).assert_not_awaited()
 
     asyncio.run(execute())
-
-
-def unresolved_verifier_resource_is_a_harness_error() -> None:
-    agent, grader = (_agent_port(), _grader_port())
-    ports = _runtime_port(grader)
-    checks = _checks(
-        files=[Artifact.create(path="grader.py", content=Content.create(resource="unresolved"))]
-    )
-    result = asyncio.run(verification.verify(checks, agent=agent, runtime=ports))
-    assert isinstance(result.verification, Verification.HarnessError)
-    assert result.detail == "Verifier resources must be resolved before execution"
-    cast(AsyncMock, grader.write_bytes).assert_not_awaited()
-    cast(AsyncMock, ports.cleanup).assert_awaited_once_with(grader, interrupted=False)

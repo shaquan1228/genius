@@ -62,9 +62,7 @@ def _assert_answer_judgments(sample: EvalSample) -> None:
     assert sample.scores is not None
     metadata = sample.scores["evaluation"].metadata
     assert metadata is not None
-    assert metadata["assessment"]["checks"]["correctness"]["checks"]["fields"]["checks"][
-        "choice"
-    ] == {
+    assert metadata["assessment"]["checks"]["correctness"]["checks"]["choice"] == {
         "passed": True,
         "predicate": {"kind": "equals", "path": ["response", "choice"], "expected": "B"},
         "observed": "B",
@@ -171,9 +169,9 @@ with patch.object(Task, "required_scores", ["correctness", "scope", "extension"]
     assert not completeness.complete_value({"correctness": CORRECT, "scope": INCORRECT})
     encoded = {"correctness": CORRECT, "scope": INCORRECT, "extension": CORRECT}
     assert completeness.complete_value(encoded)
-    yes = Predicate.all(checks=[])
-    no = Predicate.present(path=["absent"])
-    predicate = Predicate.all(checks=[("correctness", yes), ("scope", no), ("extension", yes)])
+    yes = Predicate.All(checks=[])
+    no = Predicate.Present(path=["absent"])
+    predicate = Predicate.All(checks=[("correctness", yes), ("scope", no), ("extension", yes)])
     assessment = Assessment.create(predicate=predicate, observation=Value.Null())
     scores = Assessment.scores(assessment=assessment)
     assert scoring.score_values(scores) == encoded
