@@ -14,7 +14,7 @@ def _data(*rows: dict[str, object]) -> bytes:
     return json.dumps(list(rows), separators=(",", ":")).encode()
 
 
-def declarations_assign_stable_ids_and_keep_answers_private() -> None:
+def declarations_assign_stable_ids_and_instruct_json_output() -> None:
     data = _data(
         {"instruction": "Preflop scenario", "output": "call"},
         {"instruction": "Another scenario", "output": "raise 2"},
@@ -22,28 +22,59 @@ def declarations_assign_stable_ids_and_keep_answers_private() -> None:
     tasks = pokerbench.declarations(
         split="preflop", data=data, sha256=hashlib.sha256(data).hexdigest(), count=2
     )
-    first, second = tasks
-    assert (first.id, second.id) == ("preflop-0000", "preflop-0001")
+    first = tasks[0]
+    assert tuple(task.id for task in tasks) == ("preflop-0000", "preflop-0001")
     assert first.instruction.prompt.endswith('Reply with only JSON: {"action":"<action>"}.')
     assert first.instruction.skill == "reasoning"
-    assert isinstance(first.criterion, Criterion.Answer)
-    name, expected = first.criterion.rubric.expected[0]
+
+
+def answer_declarations_keep_labels_in_rubric_and_reference() -> None:
+    data = _data({"instruction": "Scenario", "output": "call"})
+    (task,) = pokerbench.declarations(
+        split="preflop", data=data, sha256=hashlib.sha256(data).hexdigest(), count=1
+    )
+    assert isinstance(task.criterion, Criterion.Answer)
+    name, expected = task.criterion.rubric.expected[0]
     assert name == "action"
     assert isinstance(expected, Value.String)
     assert expected.value == "call"
-    assert isinstance(first.reference.completion, Value.Record)
-    reference_action = dict(first.reference.completion.fields)["action"]
+
+
+def answer_references_keep_the_annotated_action() -> None:
+    data = _data({"instruction": "Scenario", "output": "call"})
+    (task,) = pokerbench.declarations(
+        split="preflop", data=data, sha256=hashlib.sha256(data).hexdigest(), count=1
+    )
+    assert isinstance(task.reference.completion, Value.Record)
+    reference_action = dict(task.reference.completion.fields)["action"]
     assert isinstance(reference_action, Value.String)
     assert reference_action.value == "call"
-    assert [
-        task.id
-        for task in pokerbench.declarations(
-            split="preflop", data=data, sha256=hashlib.sha256(data).hexdigest(), count=2
-        )
-    ] == ["preflop-0000", "preflop-0001"]
-    public = Task.project(task=first)
+
+
+def declarations_assign_ids_deterministically() -> None:
+    data = _data({"instruction": "Scenario", "output": "check"})
+    digest = hashlib.sha256(data).hexdigest()
+    first = pokerbench.declarations(split="preflop", data=data, sha256=digest, count=1)
+    second = pokerbench.declarations(split="preflop", data=data, sha256=digest, count=1)
+    assert tuple(task.id for task in first) == tuple(task.id for task in second)
+
+
+def public_projection_omits_private_answer_text() -> None:
+    data = _data({"instruction": "Scenario", "output": "call"})
+    (task,) = pokerbench.declarations(
+        split="preflop", data=data, sha256=hashlib.sha256(data).hexdigest(), count=1
+    )
+    public = Task.project(task=task)
     assert public.prompt.endswith('Reply with only JSON: {"action":"<action>"}.')
     assert "call" not in public.prompt
+
+
+def public_projection_omits_private_answer_fields() -> None:
+    data = _data({"instruction": "Scenario", "output": "call"})
+    (task,) = pokerbench.declarations(
+        split="preflop", data=data, sha256=hashlib.sha256(data).hexdigest(), count=1
+    )
+    public = Task.project(task=task)
     assert len(public.files) == 0
     assert not hasattr(public, "criterion")
     assert not hasattr(public, "reference")

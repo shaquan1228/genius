@@ -1,5 +1,6 @@
 """Generic assessments explain every check against the observation it saw."""
 
+from collections.abc import Sequence
 from typing import cast
 
 import pytest
@@ -153,56 +154,81 @@ def code_assessment_serializes_the_verified_outcome() -> None:
     }
 
 
-def tool_traces_and_environment_state_are_graded_as_facts() -> None:
-    call: dict[str, JsonValue] = {"name": "lookup", "arguments": {"id": 7}}
-    criterion = Criterion.State(
-        predicate=Predicate.All(
-            checks=[
-                ("looked-up", Predicate.Contains(path=["trace"], item=call)),
-                ("only-lookups", Predicate.Within(path=["trace"], allowed=[call])),
-                (
-                    "balance",
-                    Predicate.Equals(path=["state", "balance"], expected=5),
-                ),
-                ("no-transfer", Predicate.Not(check=Predicate.Present(path=["state", "transfer"]))),
-                ("any", Predicate.Any(checks=[("missing", Predicate.Present(path=["absent"]))])),
-            ]
-        )
-    )
+def _state_details(
+    checks: Sequence[tuple[str, Predicate.Value]], *, facts: dict[str, JsonValue]
+) -> dict[str, object]:
     task = Task.create(
         id="tool-task",
         fixture=[],
         instruction=Instruction(skill="reasoning", prompt="Report the balance"),
-        criterion=criterion,
+        criterion=Criterion.State(predicate=Predicate.All(checks=checks)),
         allowed_files=[],
         reference=Reference(edits=[], completion="5"),
     )
-    assert Task.checks(task=task) is None
-    facts: dict[str, JsonValue] = {"trace": [call], "state": {"balance": 5, "ratio": 0.5}}
     outcome = Outcome.create(changed_files=[], verification=Verification.Unchecked(), facts=facts)
     result = Task.assess(task=task, outcome=outcome)
-    details = cast(dict[str, dict[str, object]], scoring.assessment_details(result)["checks"])
-    checks = cast(dict[str, dict[str, object]], details["correctness"]["checks"])
-    assert {name: check["passed"] for name, check in checks.items()} == {
+    assert Task.checks(task=task) is None
+    return cast(dict[str, object], scoring.assessment_details(result)["checks"])
+
+
+def tool_trace_facts_are_graded() -> None:
+    call: dict[str, JsonValue] = {"name": "lookup", "arguments": {"id": 7}}
+    checks: list[tuple[str, Predicate.Value]] = [
+        ("looked-up", Predicate.Contains(path=["trace"], item=call)),
+        ("only-lookups", Predicate.Within(path=["trace"], allowed=[call])),
+    ]
+    details = cast(dict[str, dict[str, object]], _state_details(checks, facts={"trace": [call]}))
+    graded = details["correctness"]["checks"]
+    assert isinstance(graded, dict)
+    assert {name: item["passed"] for name, item in graded.items()} == {
         "looked-up": True,
         "only-lookups": True,
-        "balance": True,
-        "no-transfer": True,
-        "any": False,
     }
-    assert checks["no-transfer"]["predicate"] == {
-        "kind": "not",
-        "check": {"kind": "present", "path": ["state", "transfer"]},
-    }
-    assert checks["only-lookups"]["predicate"] == {
+    assert graded["only-lookups"]["predicate"] == {
         "kind": "within",
         "path": ["trace"],
         "allowed": [{"name": "lookup", "arguments": {"id": 7}}],
     }
-    assert checks["any"]["predicate"] == {"kind": "any", "checks": ["missing"]}
+
+
+def environment_state_facts_are_graded() -> None:
+    checks: list[tuple[str, Predicate.Value]] = [
+        ("balance", Predicate.Equals(path=["state", "balance"], expected=5)),
+        ("no-transfer", Predicate.Not(check=Predicate.Present(path=["state", "transfer"]))),
+    ]
+    details = cast(
+        dict[str, dict[str, object]],
+        _state_details(checks, facts={"state": {"balance": 5, "ratio": 0.5}}),
+    )
+    graded = details["correctness"]["checks"]
+    assert isinstance(graded, dict)
+    assert {name: item["passed"] for name, item in graded.items()} == {
+        "balance": True,
+        "no-transfer": True,
+    }
+    assert graded["no-transfer"]["predicate"] == {
+        "kind": "not",
+        "check": {"kind": "present", "path": ["state", "transfer"]},
+    }
+
+
+def any_predicate_records_missing_checks() -> None:
+    checks = [("any", Predicate.Any(checks=[("missing", Predicate.Present(path=["absent"]))]))]
+    details = cast(dict[str, dict[str, object]], _state_details(checks, facts={}))
+    graded = details["correctness"]["checks"]
+    assert isinstance(graded, dict)
+    assert graded["any"]["passed"] is False
+    assert graded["any"]["predicate"] == {"kind": "any", "checks": ["missing"]}
+
+
+def plain_reference_values_project_to_json() -> None:
     witness = Reference(edits=[], completion={"ratio": 0.5, "flag": True, "items": (1, "x")})
     assert scoring.plain(witness.completion) == {"ratio": 0.5, "flag": True, "items": [1, "x"]}
     assert str(
         scoring.plain(Reference(edits=[], completion=cast(JsonValue, object())).completion)
     ).startswith("<object")
+
+
+def compiled_dataset_keeps_its_case_hash() -> None:
+    task, _ = _answer()
     assert datasets.compile_dataset(cases=(task,)).cases_hash

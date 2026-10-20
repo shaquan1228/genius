@@ -29,16 +29,22 @@ def decode_response(text: str) -> JsonValue:
     return None
 
 
+def _plain_list(items: Sequence[Value.Value]) -> list[JsonValue]:
+    return [plain(item) for item in items]
+
+
+def _plain_record(fields: Sequence[tuple[str, Value.Value]]) -> dict[str, JsonValue]:
+    return {name: plain(item) for name, item in fields}
+
+
 def plain(data: Value.Value) -> JsonValue:
-    match data:
-        case Value.Null():
-            return None
-        case Value.List():
-            return [plain(item) for item in data.items]
-        case Value.Record():
-            return {name: plain(item) for name, item in data.fields}
-        case _:
-            return data.value
+    if isinstance(data, Value.List):
+        return _plain_list(data.items)
+    if isinstance(data, Value.Record):
+        return _plain_record(data.fields)
+    if isinstance(data, Value.Null):
+        return None
+    return data.value
 
 
 def trace(state: TaskState) -> list[JsonValue]:

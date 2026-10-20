@@ -37,15 +37,21 @@ def _answer() -> tuple[Task, Value.Value]:
 
 def check_answer_projection() -> None:
     case, _ = _answer()
-    assert isinstance(case, Task)
     public = Task.project(task=case)
     assert isinstance(public, Case)
-    assert (public.case_id, hasattr(public, "reference"), Task.checks(task=case)) == (
-        case.id,
-        False,
-        None,
-    )
+    assert (public.case_id, Task.checks(task=case)) == (case.id, None)
+    assert not hasattr(public, "reference")
+    assert not hasattr(public, "criterion")
+
+
+def answer_projection_includes_fixture_files() -> None:
+    case, _ = _answer()
+    public = Task.project(task=case)
     assert list(_files(public.files).items()) == [("context.txt", "Public context")]
+
+
+def answer_reference_retains_completion() -> None:
+    case, _ = _answer()
     assert isinstance(case.reference.completion, Value.Record)
 
 
