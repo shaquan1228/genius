@@ -19,6 +19,7 @@ from kernel import (
     Verification,
     Verifier,
 )
+from kernel._bridge import plain as plain_value
 
 
 def _answer() -> tuple[Task, Value.Value]:
@@ -59,6 +60,17 @@ def check_answer_grading() -> None:
     assert dict(scores) == {"correctness": True, "scope": True}
     silent = Outcome.create(changed_files=[], verification=Verification.Unchecked())
     assert not dict(Task.grade(task=case, outcome=silent))["correctness"]
+
+
+def native_values_project_to_plain_python() -> None:
+    value = Value.Record(
+        fields=[
+            ("items", Value.List(items=[Value.Int(value=3), Value.String(value="x")])),
+            ("missing", Value.Null()),
+            ("enabled", Value.Bool(value=True)),
+        ]
+    )
+    assert plain_value(value) == {"items": [3, "x"], "missing": None, "enabled": True}
 
 
 @pytest.mark.parametrize(
