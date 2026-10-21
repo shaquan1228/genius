@@ -44,6 +44,11 @@ opam exec --switch=genius-kernel-414 -- make -C evals check
 The offline checks use mock models and local sandboxes; no API keys are needed.
 Use `make -C evals format` under the same opam switch to apply formatting.
 
+With Docker running, check three offline container evals and candidate/grader isolation:
+`opam exec --switch=genius-kernel-414 -- uv run --project evals pytest evals/tests/docker.py`.
+[Container configuration](docker/compose.yaml) disables networking; live CLI agents need separate proxy setup.
+The subprocess `local` backend is for trusted code. Docker shares its host kernel; workspace volumes have no disk quota.
+
 ## Validate references
 
 These commands make no model calls or hosted requests:

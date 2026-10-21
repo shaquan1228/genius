@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, PropertyMock, patch
 
 import pytest
 from inspect_ai.util import ExecResult
+from inspect_ai.util._sandbox.docker.docker import DockerSandboxEnvironment
+from inspect_ai.util._sandbox.docker.util import ComposeProject
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
 from evals.python import datasets, verification
@@ -556,5 +558,25 @@ def cancelled_allocation_never_cleans_candidate() -> None:
         with pytest.raises(asyncio.CancelledError):
             await pending
         cast(AsyncMock, ports.cleanup).assert_not_awaited()
+
+    asyncio.run(execute())
+
+
+def docker_grader_retains_candidate_configuration() -> None:
+    async def execute() -> None:
+        project = ComposeProject("candidate", "/restricted/compose.yaml", None, None, None)
+        candidate = DockerSandboxEnvironment("default", project, "/home/evaluator")
+        ports = runtime(candidate)
+        allocated = {"default": candidate}
+        with (
+            patch.object(DockerSandboxEnvironment, "sample_init", return_value=allocated) as create,
+            patch.object(DockerSandboxEnvironment, "sample_cleanup") as cleanup,
+        ):
+            grader = await ports.create()
+            await ports.cleanup(grader, interrupted=True)
+        create.assert_awaited_once_with("genius-verification", project.config, {})
+        cleanup.assert_awaited_once_with(
+            "genius-verification", project.config, allocated, interrupted=True
+        )
 
     asyncio.run(execute())

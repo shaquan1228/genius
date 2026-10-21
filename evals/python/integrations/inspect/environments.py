@@ -2,6 +2,7 @@ from collections.abc import Callable
 from typing import cast
 
 from inspect_ai.util import SandboxEnvironment
+from inspect_ai.util._sandbox.docker.docker import DockerSandboxEnvironment
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
 
 from evals.python.execution import Completion, Environment, Execution, Runtime
@@ -35,6 +36,7 @@ def environment(sandbox: SandboxEnvironment) -> Environment:
 
 def runtime(sandbox: SandboxEnvironment | None = None) -> Runtime:
     provider: type[SandboxEnvironment]
+    config: str | None = None
     if sandbox is None:
         provider = LocalSandboxEnvironment
     else:
@@ -43,10 +45,12 @@ def runtime(sandbox: SandboxEnvironment | None = None) -> Runtime:
         if isinstance(underlying, remote.HfSandboxEnvironment):
             return underlying.runtime
         provider = type(underlying)
+        if isinstance(underlying, DockerSandboxEnvironment):
+            config = underlying._project.config
     owned: dict[Environment, dict[str, SandboxEnvironment]] = {}
 
     async def create() -> Environment:
-        sandboxes = await provider.sample_init("genius-verification", None, {})
+        sandboxes = await provider.sample_init("genius-verification", config, {})
         result = environment(sandboxes["default"])
         owned[result] = sandboxes
         return result
@@ -54,7 +58,7 @@ def runtime(sandbox: SandboxEnvironment | None = None) -> Runtime:
     async def cleanup(target: Environment, *, interrupted: bool) -> None:
         sandboxes = owned.pop(target)
         await provider.sample_cleanup(
-            "genius-verification", None, sandboxes, interrupted=interrupted
+            "genius-verification", config, sandboxes, interrupted=interrupted
         )
 
     return Runtime(create=create, cleanup=cleanup)
