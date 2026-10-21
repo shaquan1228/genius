@@ -52,11 +52,16 @@ def _file_name(value: str) -> str:
 Selection = Annotated[str, AfterValidator(_file_name)] | Dataset
 
 
-@validate_call(config=FROZEN)
-def compile_dataset(*, cases: tuple[Task, ...], info: DatasetInfo | None = None) -> Dataset:
+def _unique_records(cases: tuple[Task, ...]) -> dict[str, Task]:
     records = {task.id: task for task in cases}
     if len(records) != len(cases):
         raise ValueError("Dataset task IDs must be unique")
+    return records
+
+
+@validate_call(config=FROZEN)
+def compile_dataset(*, cases: tuple[Task, ...], info: DatasetInfo | None = None) -> Dataset:
+    records = _unique_records(cases)
     key = (
         tuple(map(value_fingerprint, records.values())),
         json.dumps(info.model_dump(mode="json"), sort_keys=True) if info else None,
