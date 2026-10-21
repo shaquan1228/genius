@@ -1,30 +1,27 @@
 """Compare native Inspect logs using their recorded inputs and completeness checks."""
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from itertools import chain, groupby, product
 from math import inf
 from pathlib import Path
-from statistics import mean
 from typing import Any, cast
 from uuid import uuid4
 
 from inspect_ai import Task as InspectTask
 from inspect_ai.log import EvalLog, EvalSample, list_eval_logs, read_eval_log
 from inspect_ai.model import get_model_info
-from inspect_ai.scorer import CORRECT, SampleScore, Score, accuracy, stderr
+from inspect_ai.scorer import CORRECT
 
 import evals.python.integrations.inspect.pricing as pricing_adapter
 import evals.python.integrations.inspect.profiles as profiles_adapter
 import kernel
 from evals.python import EVALS_ROOT, evaluation
 from evals.python.comparison import RunSummary
+from evals.python.estimation import Metrics, Trials
 from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.inspect import completeness
 from kernel import Experiment, Task
-
-_ACCURACY = cast(Callable[[list[SampleScore]], float], accuracy())
-_STDERR = cast(Callable[[list[SampleScore]], float], stderr(cluster="case_id"))
 
 
 def _harness_source(path: Path) -> bool:
@@ -170,24 +167,32 @@ def correct(sample: EvalSample) -> bool:
     )
 
 
-def metrics(samples: list[EvalSample]) -> dict[str, float]:
-    scores = [
-        SampleScore(score=Score(value=correct(s)), sample_metadata={"case_id": str(s.id)})
-        for s in samples
+def checks(details: dict[str, Any], *, prefix: str = "") -> list[tuple[str, bool]]:
+    """Every named check in recorded assessment details, by dotted path."""
+    return [
+        result
+        for name, check in details.get("checks", {}).items()
+        for result in ((prefix + name, check["passed"]), *checks(check, prefix=f"{prefix}{name}."))
     ]
+
+
+def trial(sample: EvalSample) -> Metrics:
+    """One graded try: success, elapsed time, failure indicators, and each check."""
+    details = ((sample.scores or {})["evaluation"].metadata or {}).get("assessment", {})
     return {
-        "accuracy": _ACCURACY(scores),
-        "accuracy_stderr": _STDERR(scores),
-        "mean_seconds": mean(elapsed(s) for s in samples),
-        "crashes": sum(completeness.crashed(s) for s in samples),
-        "cutoffs": sum(s.limit is not None for s in samples),
+        "accuracy": float(correct(sample)),
+        "seconds": elapsed(sample),
+        "crashed": float(completeness.crashed(sample)),
+        "cutoff": float(sample.limit is not None),
+        **{name: float(passed) for name, passed in checks(details)},
     }
 
 
-def case_metrics(log: EvalLog) -> dict[str, dict[str, float]]:
-    ordered = sorted(log.samples or [], key=lambda sample: str(sample.id))
+def trials(log: EvalLog) -> Trials:
+    """The jagged matrix of graded trials per case, in epoch order."""
+    ordered = sorted(log.samples or [], key=lambda sample: (str(sample.id), sample.epoch))
     return {
-        case: metrics(list(group))
+        case: tuple(map(trial, group))
         for case, group in groupby(ordered, key=lambda sample: str(sample.id))
     }
 
@@ -213,8 +218,6 @@ def summaries(runs: Mapping[str, Path]) -> dict[str, RunSummary]:
         if reference is not None and current != reference:
             raise ValueError("Incompatible measurement conditions")
         reference = current
-        summaries[name] = RunSummary(
-            metrics=metrics(log.samples or []), cases=case_metrics(log), created_at=log.eval.created
-        )
+        summaries[name] = RunSummary(trials=trials(log), created_at=log.eval.created)
         del log
     return summaries

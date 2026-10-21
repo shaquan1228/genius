@@ -3,6 +3,7 @@
 import json
 import re
 from collections import OrderedDict
+from collections.abc import Callable
 from importlib import import_module
 from threading import RLock
 from typing import Annotated, Protocol, cast
@@ -65,9 +66,14 @@ def compile_dataset(*, cases: tuple[Task, ...], info: DatasetInfo | None = None)
         tuple(map(value_fingerprint, records.values())),
         json.dumps(info.model_dump(mode="json"), sort_keys=True) if info else None,
     )
+    return _cached(key, dataset=lambda: Dataset(records=records, info=info))
+
+
+def _cached(key: tuple[object, ...], *, dataset: Callable[[], Dataset]) -> Dataset:
+    """Reuse the snapshot for a key, keeping the eight most recent."""
     with _LOCK:
         if key not in _CACHE:
-            _CACHE[key] = Dataset(records=records, info=info)
+            _CACHE[key] = dataset()
         _CACHE.move_to_end(key)
         if len(_CACHE) > 8:
             _CACHE.popitem(last=False)

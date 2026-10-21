@@ -70,17 +70,6 @@ Node = Mapping[str, Any]
 Coercer = Callable[[Any], Any]
 
 
-def _tuple_coercer(node: Node) -> Coercer:
-    items = tuple(map(coercer, node["items"]))
-    return lambda data: tuple(convert(item) for convert, item in zip(items, data, strict=True))
-
-
-def _list_items(data: Any) -> Any:
-    if isinstance(data, Mapping):
-        return data.items()
-    return data
-
-
 def value(data: object) -> Any:
     """Encode JSON-shaped Python as a native value; other objects become their text."""
     kinds: dict[type, Coercer] = {
@@ -100,34 +89,26 @@ def value(data: object) -> Any:
     return kinds.get(type(data), lambda data: native.Value.String(value=str(data)))(data)
 
 
-def plain(data: Any) -> Any:
-    """Decode a native value into JSON-shaped Python."""
-    if isinstance(data, native.Value.List):
-        return _plain_list(data.items)
-    if isinstance(data, native.Value.Record):
-        return _plain_record(data.fields)
-    if isinstance(data, native.Value.Null):
-        return None
-    return data.value
+def _tuple(node: Node) -> Coercer:
+    items = [coercer(item) for item in node["items"]]
+    return lambda data: tuple(convert(item) for convert, item in zip(items, data, strict=True))
 
 
-def _plain_list(items: Any) -> list[Any]:
-    return [plain(item) for item in items]
-
-
-def _plain_record(fields: Any) -> dict[str, Any]:
-    return {name: plain(item) for name, item in fields}
+def _list(node: Node) -> Coercer:
+    convert = coercer(node["args"][0])
+    return lambda data: [
+        convert(item) for item in (data.items() if isinstance(data, Mapping) else data)
+    ]
 
 
 def coercer(node: Node) -> Coercer:
     """Convert plain Python wherever the native type expects a value."""
     if node["kind"] == "tuple":
-        return _tuple_coercer(node)
+        return _tuple(node)
     if node["name"] == "value":
         return value
     if node["name"] == "list":
-        convert = coercer(node["args"][0])
-        return lambda data: [convert(item) for item in _list_items(data)]
+        return _list(node)
     return lambda data: data
 
 

@@ -2,6 +2,7 @@ import json
 from collections.abc import Callable, Sequence
 from contextlib import suppress
 from functools import partial, wraps
+from operator import attrgetter
 from typing import Any, cast
 
 from inspect_ai.model import ChatMessageAssistant
@@ -29,22 +30,16 @@ def decode_response(text: str) -> JsonValue:
     return None
 
 
-def _plain_list(items: Sequence[Value.Value]) -> list[JsonValue]:
-    return [plain(item) for item in items]
-
-
-def _plain_record(fields: Sequence[tuple[str, Value.Value]]) -> dict[str, JsonValue]:
-    return {name: plain(item) for name, item in fields}
+_PLAIN: dict[type, Callable[[Any], JsonValue]] = {
+    Value.Null: lambda _: None,
+    Value.List: lambda data: [plain(item) for item in data.items],
+    Value.Record: lambda data: {name: plain(item) for name, item in data.fields},
+}
+_SCALAR: Callable[[Any], JsonValue] = attrgetter("value")
 
 
 def plain(data: Value.Value) -> JsonValue:
-    if isinstance(data, Value.List):
-        return _plain_list(data.items)
-    if isinstance(data, Value.Record):
-        return _plain_record(data.fields)
-    if isinstance(data, Value.Null):
-        return None
-    return data.value
+    return _PLAIN.get(type(data), _SCALAR)(data)
 
 
 def trace(state: TaskState) -> list[JsonValue]:
