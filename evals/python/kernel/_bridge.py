@@ -89,18 +89,26 @@ def value(data: object) -> Any:
     return kinds.get(type(data), lambda data: native.Value.String(value=str(data)))(data)
 
 
+def _tuple(node: Node) -> Coercer:
+    items = [coercer(item) for item in node["items"]]
+    return lambda data: tuple(convert(item) for convert, item in zip(items, data, strict=True))
+
+
+def _list(node: Node) -> Coercer:
+    convert = coercer(node["args"][0])
+    return lambda data: [
+        convert(item) for item in (data.items() if isinstance(data, Mapping) else data)
+    ]
+
+
 def coercer(node: Node) -> Coercer:
     """Convert plain Python wherever the native type expects a value."""
     if node["kind"] == "tuple":
-        items = [coercer(item) for item in node["items"]]
-        return lambda data: tuple(convert(item) for convert, item in zip(items, data, strict=True))
+        return _tuple(node)
     if node["name"] == "value":
         return value
     if node["name"] == "list":
-        convert = coercer(node["args"][0])
-        return lambda data: [
-            convert(item) for item in (data.items() if isinstance(data, Mapping) else data)
-        ]
+        return _list(node)
     return lambda data: data
 
 

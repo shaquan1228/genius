@@ -21,6 +21,7 @@ from evals.python.comparison import (
     RunSummary,
     VariantRequest,
 )
+from evals.python.estimation import Estimate
 from evals.python.evaluation import EvaluationSettings, ModelPricing, VariantSettings
 from evals.python.integrations.inspect import agents, results
 
@@ -73,13 +74,18 @@ def native_results_need_no_second_record_format(native_runs: Path) -> None:
         baseline="treatment",
         measurement=Measurement(),
     )
+    (trial,) = report.runs["control"].trials["small-decision"]
+    checks = {"seconds", "correctness.response", "correctness.choice", "correctness.text"}
     assert (
-        report.runs["control"].metrics["accuracy"],
+        report.estimates["control"]["accuracy"].mean,
         set(report.comparisons),
         set(report.comparisons["alternative"].cases),
-    ) == (1.0, {"control", "alternative"}, {"small-decision"})
-    assert not (native_runs / "control/run.json").exists()
-    assert "mean_seconds" in comparison.render_report(report)
+        (trial["accuracy"], trial["crashed"], trial["cutoff"], trial["scope"]),
+        checks <= set(trial),
+        (native_runs / "control/run.json").exists(),
+        "| seconds | control |" in comparison.render_report(report),
+    ) == (1.0, {"control", "alternative"}, {"small-decision"}, (1, 0, 0, 1), True, False, True)
+    assert ComparisonReport.model_validate_json(report.model_dump_json()) == report
 
 
 def _rewrite(directory: Path, *, change: str) -> None:
@@ -128,11 +134,11 @@ def rejects_wrong_saved_variant(native_runs: Path, *, changed: Path, change: str
         evaluation.validate_run(changed, settings=_settings(native_runs))
 
 
-@pytest.mark.parametrize("change", ["crash", "cutoff"])
-def failed_attempts_remain_in_the_average(changed: Path, *, change: str) -> None:
+@pytest.mark.parametrize(("change", "indicator"), [("crash", "crashed"), ("cutoff", "cutoff")])
+def failed_trials_count_as_incorrect(changed: Path, *, change: str, indicator: str) -> None:
     _rewrite(changed, change=change)
-    log = results.read_run(changed)
-    assert results.metrics(log.samples or [])["accuracy"] == 0
+    (trial,) = results.trials(results.read_run(changed))["small-decision"]
+    assert (trial["accuracy"], trial[indicator]) == (0, 1)
 
 
 def incompatible_native_models_are_rejected(native_runs: Path, *, changed: Path) -> None:
@@ -163,39 +169,6 @@ def invalid_timing_is_rejected(elapsed: float | None) -> None:
     sample = EvalSample(id="case", epoch=1, input="", target="", total_time=elapsed)
     with pytest.raises(ValueError, match="elapsed"):
         results.elapsed(sample)
-
-
-@pytest.mark.parametrize(
-    ("accuracy", "seconds", "tolerance", "expected"),
-    [
-        (0, -2, None, "inconclusive"),
-        (-0.1, -2, 0.01, "regressed"),
-        (0, 1, 0.01, "regressed"),
-        (0, -2, 0.01, "improved"),
-        (0, -0.5, 0.01, "inconclusive"),
-    ],
-)
-def reports_observed_changes(
-    accuracy: float, *, seconds: float, tolerance: float | None, expected: str
-) -> None:
-    assert (
-        comparison.compare_summaries(
-            {
-                "base": RunSummary(
-                    metrics={"accuracy": 1, "mean_seconds": 10}, created_at="before"
-                ),
-                "candidate": RunSummary(
-                    metrics={"accuracy": 1 + accuracy, "mean_seconds": 10 + seconds},
-                    created_at="after",
-                ),
-            },
-            baseline="base",
-            measurement=Measurement(accuracy_tolerance=tolerance, minimum_time_gain=0.1),
-        )
-        .comparisons["candidate"]
-        .verdict
-        == expected
-    )
 
 
 @pytest.mark.parametrize("version", ["latest", "stable", "next"])
@@ -266,44 +239,38 @@ def invalid_variant_sets_are_rejected(names: tuple[str, ...]) -> None:
 
 def other_runners_can_compare_custom_metrics_without_inspect_logs() -> None:
     runs = {
-        name: RunSummary(
-            metrics={"tokens": tokens}, cases={"case": {"tokens": tokens}}, created_at=name
-        )
+        name: RunSummary(trials={"case": ({"tokens": tokens},)}, created_at=name)
         for name, tokens in (("plain", 100), ("short", 50), ("long", 200))
     }
-    report = comparison.compare_summaries(
-        runs, baseline="short", measurement=Measurement(accuracy_tolerance=0)
-    )
+    report = comparison.compare_summaries(runs, baseline="short", measurement=Measurement())
     assert report.comparisons == {
-        "plain": Contrast(
-            differences={"tokens": 50}, cases={"case": {"tokens": 50}}, verdict="inconclusive"
-        ),
-        "long": Contrast(
-            differences={"tokens": 150}, cases={"case": {"tokens": 150}}, verdict="inconclusive"
-        ),
+        name: Contrast(
+            cases={"case": {"tokens": change}},
+            estimates={"tokens": Estimate(cases=1, mean=change)},
+            verdict="inconclusive",
+        )
+        for name, change in (("plain", 50), ("long", 150))
     }
-    assert "tokens" in comparison.render_report(report)
+    assert "| tokens | long - short | 150 | n/a |" in comparison.render_report(report)
     assert ComparisonReport.model_validate_json(report.model_dump_json()) == report
 
 
-@pytest.mark.parametrize("change", ["metrics", "cases", "case_metrics", "baseline", "cardinality"])
+@pytest.mark.parametrize("change", ["cases", "baseline", "cardinality"])
 def incomparable_summaries_are_rejected(change: str) -> None:
-    before = RunSummary(metrics={"x": 1}, cases={"case": {"x": 1}}, created_at="before")
-    changes: dict[str, dict[str, object]] = {
-        "metrics": {"metrics": {"y": 1}},
-        "cases": {"cases": {}},
-        "case_metrics": {"cases": {"case": {"y": 1}}},
-    }
+    before = RunSummary(trials={"case": ({"x": 1},)}, created_at="before")
+    changes: dict[str, dict[str, object]] = {"cases": {"trials": {"other": ({"x": 1},)}}}
     runs = {"base": before, "other": before.model_copy(update=changes.get(change, {}))}
     if change == "cardinality":
         runs.pop("other")
-    with pytest.raises(ValueError, match=r"same|baseline|two"):
+    with pytest.raises(ValueError, match=r"same|baseline|at least 2"):
         comparison.compare_summaries(
             runs, baseline="missing" if change == "baseline" else "base", measurement=Measurement()
         )
 
 
-@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
-def summaries_reject_nonfinite_metrics(value: float) -> None:
-    with pytest.raises(ValueError, match="finite"):
-        RunSummary(metrics={"custom": value}, created_at="now")
+@pytest.mark.parametrize(
+    "rows", [(), *(({"custom": value},) for value in (float("nan"), float("inf"), -float("inf")))]
+)
+def summaries_reject_empty_or_nonfinite_trials(rows: tuple[dict[str, float], ...]) -> None:
+    with pytest.raises(ValueError, match=r"at least 1|finite"):
+        RunSummary(trials={"case": rows}, created_at="now")

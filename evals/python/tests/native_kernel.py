@@ -36,16 +36,17 @@ def _answer() -> tuple[Task, Value.Value]:
 
 def check_answer_projection() -> None:
     case, _ = _answer()
-    assert isinstance(case, Task)
     public = Task.project(task=case)
-    assert isinstance(public, Case)
+    assert all(
+        isinstance(item, kind)
+        for item, kind in ((case, Task), (public, Case), (case.reference.completion, Value.Record))
+    )
     assert (public.case_id, hasattr(public, "reference"), Task.checks(task=case)) == (
         case.id,
         False,
         None,
     )
     assert list(_files(public.files).items()) == [("context.txt", "Public context")]
-    assert isinstance(case.reference.completion, Value.Record)
 
 
 def check_answer_grading() -> None:
