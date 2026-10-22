@@ -6,9 +6,5 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
-/python/kernel/*.pyi
-
-/_build/
-
 /build/
 /dist/

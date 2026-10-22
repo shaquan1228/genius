@@ -7,11 +7,23 @@ from typing import cast
 from unittest.mock import patch
 
 import pytest
+from kernel import (
+    Criterion,
+    File,
+    Instruction,
+    Reference,
+    Task,
+    Value,
+    Verifier,
+)
+from kernel import (
+    ValidationError as DomainValidationError,
+)
 from pydantic import ValidationError
 
 from evals.python import REPO_ROOT, datasets, evaluation
-from evals.python.datasets import Dataset
-from evals.python.evaluation import InstructionDelivery
+from evals.python.datasets import Case, Dataset, Declaration
+from evals.python.evaluation import Experiment, InstructionDelivery, Profile
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.profiles import (
     REASONING_DOCUMENTS,
@@ -27,21 +39,6 @@ from evals.python.tests.support import (
 )
 from evals.python.tests.support import (
     timeout_case as _timeout_case,
-)
-from kernel import (
-    Case,
-    Criterion,
-    Experiment,
-    File,
-    Instruction,
-    Kernel,
-    Profile,
-    Reference,
-    Task,
-    Verifier,
-)
-from kernel import (
-    ValidationError as DomainValidationError,
 )
 
 
@@ -188,7 +185,7 @@ def native_projection_preserves_strings() -> None:
     text = 'quote" slash\\ newline\n tab\t return\r zero\x00 é'
     definition = _copy_case(
         _choice_case(case_id="escaped", a=10, b=8),
-        instruction=Instruction(skill="reasoning", prompt=text),
+        instruction=Instruction(prompt=text),
     )
     dataset = datasets.compile_dataset(cases=(definition,))
     assert datasets.list_cases(selection=dataset)[0].prompt == text
@@ -225,11 +222,11 @@ def compilation_cache_invalidates_when_declarations_change() -> None:
 
 
 def generic_python_case_exports_without_language_restriction() -> None:
-    definition = Task.create(
+    definition = Task(
         id="python-case",
         fixture=[File(path="solution.py", contents="print(42)")],
-        instruction=Instruction(skill="reasoning", prompt="Return 42"),
-        criterion=Criterion.Code(
+        instruction=Instruction(prompt="Return 42"),
+        criterion=Criterion.code(
             verifier=Verifier(
                 inputs=("solution.py",),
                 files=[File(path="grader.py", contents="trusted")],
@@ -240,9 +237,9 @@ def generic_python_case_exports_without_language_restriction() -> None:
             )
         ),
         allowed_files=("solution.py",),
-        reference=Reference(edits=[], completion="done"),
+        reference=Reference(edits=[], completion=Value.from_python(value="done")),
     )
-    dataset = datasets.compile_dataset(cases=(definition,))
+    dataset = datasets.compile_dataset(cases=(Declaration(skill="reasoning", task=definition),))
     case = datasets.list_cases(selection=dataset)[0]
     checks = verifier(case.case_id, selection=dataset)
     assert checks is not None
@@ -257,15 +254,15 @@ def generic_python_case_exports_without_language_restriction() -> None:
 
 def experiment_configuration_reaches_tasks_and_profiles() -> None:
     before = evaluation.resolve_settings()
-    spec = Experiment.create(
-        profiles=[
-            Profile.create(
+    spec = Experiment(
+        profiles=tuple(
+            Profile(
                 name=item.name,
                 preamble=item.preamble.replace("Apply that", "Follow that"),
                 instructions=item.instructions,
             )
             for item in before.profiles
-        ],
+        ),
         epochs=7,
         message_limit=before.message_limit,
         cost_limit=before.cost_limit,
@@ -345,14 +342,7 @@ def delivery_rejects_unimplemented_skill_instead_of_silently_changing_it() -> No
         )
 
 
-@pytest.mark.parametrize("source", [file.path for file in Kernel.current.sources])
-def kernel_fingerprint_tracks_every_trusted_source(source: str) -> None:
-    original = Kernel.current.sources
-    changed = [
-        File(
-            path=file.path,
-            contents=file.contents + "\n" if file.path == source else file.contents,
-        )
-        for file in original
-    ]
-    assert fingerprint(changed) != fingerprint(original)
+def fingerprint_tracks_the_installed_kernel_source() -> None:
+    original = fingerprint(resources=(("case", "digest"),))
+    with patch("evals.python.provenance.source_hash", return_value="changed"):
+        assert fingerprint(resources=(("case", "digest"),)) != original

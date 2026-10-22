@@ -3,12 +3,12 @@
 from collections.abc import Sequence
 from secrets import token_hex
 
+from kernel import File, Task, Verification, Verifier
 from pydantic import InstanceOf, validate_call
 
 from evals.python import FROZEN, execution
 from evals.python.evidence import Diagnostic, VerificationResult, completion
 from evals.python.execution import Environment, Execution, Runtime
-from kernel import File, Task, Verification, Verifier
 
 __all__ = ["Diagnostic", "VerificationResult", "validate_reference", "verify"]
 
@@ -52,7 +52,7 @@ async def _execute(
             )
         )
     except TimeoutError as error:
-        return VerificationResult(verification=Verification.TimedOut(), detail=str(error))
+        return VerificationResult(verification=Verification.timed_out(), detail=str(error))
     return completion(result, marker=marker)
 
 
@@ -64,19 +64,19 @@ async def verify(
     runtime: InstanceOf[Runtime],
 ) -> VerificationResult:
     if checks is None:
-        return VerificationResult(verification=Verification.Unchecked())
+        return VerificationResult(verification=Verification.unchecked())
     try:
         try:
             inputs = await _inputs(checks, agent=agent)
         except FileNotFoundError as error:
             return VerificationResult(
-                verification=Verification.InvalidSubmission(),
+                verification=Verification.invalid_submission(),
                 detail=f"Missing required input: {error}",
             )
         async with execution.allocated(runtime, candidate=agent) as grader:
             return await _execute(checks, grader=grader, inputs=inputs)
     except Exception as error:
-        return VerificationResult(verification=Verification.HarnessError(detail=str(error)))
+        return VerificationResult(verification=Verification.harness_error(detail=str(error)))
 
 
 async def stage_reference(fixture: Sequence[File], *, agent: Environment) -> None:
@@ -93,13 +93,13 @@ async def validate_reference(
     *,
     runtime: InstanceOf[Runtime] | None = None,
 ) -> VerificationResult:
-    checks = Task.checks(task=task)
+    checks = task.checks()
     if checks is None:
-        return VerificationResult(verification=Verification.Unchecked())
+        return VerificationResult(verification=Verification.unchecked())
     runtime = runtime or execution.create_runtime()
     try:
         async with execution.allocated(runtime) as agent:
             await stage_reference(task.reference.edits, agent=agent)
             return await verify(checks, agent=agent, runtime=runtime)
     except Exception as error:
-        return VerificationResult(verification=Verification.HarnessError(detail=str(error)))
+        return VerificationResult(verification=Verification.harness_error(detail=str(error)))

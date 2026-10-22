@@ -6,20 +6,21 @@ from typing import cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from kernel import Reference, Value, Verification
 
 from evals.python import datasets, verification
+from evals.python.datasets import Case
 from evals.python.datasets import smoke as declarations
 from evals.python.integrations.smoke import __main__ as cli
 from evals.python.tests.declarations import _copy_case, _files, _reference_files
 from evals.python.verification import VerificationResult
-from kernel import Case, Criterion, Reference, Value, Verification
 
 
 def python_smoke_compiles_to_public_cases() -> None:
     definitions = declarations.cases()
     dataset = datasets.compile_dataset(cases=definitions)
     cases = datasets.list_cases(selection=dataset)
-    assert tuple(case.case_id for case in cases) == tuple(task.id for task in definitions)
+    assert tuple(case.case_id for case in cases) == tuple(record.task.id for record in definitions)
     assert all(isinstance(case, Case) for case in cases)
 
 
@@ -46,9 +47,10 @@ def python_smoke_keeps_checks_and_references_private() -> None:
     definitions = declarations.cases()
     dataset = datasets.compile_dataset(cases=definitions)
     cases = datasets.list_cases(selection=dataset)
-    code = definitions[0]
-    assert isinstance(code.criterion, Criterion.Code)
-    assert code.criterion.verifier.stdin not in json.dumps(_files(cases[0].files))
+    code = definitions[0].task
+    checks = code.checks()
+    assert checks is not None
+    assert checks.stdin not in json.dumps(_files(cases[0].files))
     assert _reference_files(code.reference)["receipt.py"] not in _files(cases[0].files).values()
     assert "verifier.py" not in _files(cases[0].files)
 
@@ -77,7 +79,7 @@ def offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[str])
 def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixture[str]) -> None:
     case = _copy_case(
         declarations.cases()[2],
-        reference=Reference(edits=[], completion=Value.Record(fields=[])),
+        reference=Reference(edits=[], completion=Value.from_python(value={})),
     )
     dataset = datasets.compile_dataset(cases=(case,))
     with patch.object(datasets, "load_dataset", return_value=dataset):
@@ -91,7 +93,9 @@ def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixtur
 def offline_cli_reports_harness_failure_without_success(
     *, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    result = VerificationResult(verification=Verification.HarnessError(detail="private diagnostic"))
+    result = VerificationResult(
+        verification=Verification.harness_error(detail="private diagnostic")
+    )
     with patch.object(verification, "validate_reference", new=AsyncMock(return_value=result)):
         assert _run_cli() == 1
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines()]

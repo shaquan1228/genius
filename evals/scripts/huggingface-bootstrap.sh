@@ -22,20 +22,20 @@ Options:
   --results-dir DIR  Writable results directory (default: /results).
   -h, --help         Show help without filesystem or network changes.
 
-Environment: KERNEL_SWITCH, KERNEL_JOBS, EVAL_RUNNER_MODULE, and EVAL_* runner settings.
+Environment: EVAL_RUNNER_MODULE and EVAL_* runner settings.
 Help: https://github.com/shaquan1228/genius/tree/main/evals#run-on-hugging-face
 HELP
 }
 
 build_tools() {
   local tool
-  for tool in git opam make cc pkg-config rsync; do
+  for tool in git cc; do
     if ! command -v "$tool" >/dev/null 2>&1; then
       cli_require apt-get
       ((EUID == 0)) || cli_die 'Installing missing build tools requires root; install the tools yourself and retry.'
       cli_info 'Installing worker build tools.'
       apt-get update -qq >&2
-      apt-get install -y --no-install-recommends git make opam build-essential pkg-config rsync >&2
+      apt-get install -y --no-install-recommends git build-essential >&2
       return
     fi
   done
@@ -78,10 +78,8 @@ main() {
   cp -R -- "$source_dir/." "$work_dir/"
   cd -- "$work_dir"
   uv sync --project evals --python 3.12 --locked --inexact >&2
-  bash evals/scripts/kernel-setup.sh
   cli_info 'Starting evaluation runner.'
-  exec opam exec --switch="${KERNEL_SWITCH:-genius-kernel-414}" -- \
-    uv run --project evals --no-sync python -m "${EVAL_RUNNER_MODULE:-evals.python.integrations.hugging_face.job}"
+  exec uv run --project evals --no-sync python -m "${EVAL_RUNNER_MODULE:-evals.python.integrations.hugging_face.job}"
 }
 
 cli_init

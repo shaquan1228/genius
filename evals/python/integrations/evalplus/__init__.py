@@ -7,8 +7,8 @@ from pathlib import Path
 from kernel import Criterion, File, Verifier
 
 
-def checks(*, record: str, manifest: Mapping[str, object]) -> Criterion.Value:
-    return Criterion.Code(
+def checks(*, record: str, manifest: Mapping[str, object]) -> Criterion:
+    return Criterion.code(
         verifier=Verifier(
             inputs=("solution.py",),
             files=[

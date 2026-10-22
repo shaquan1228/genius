@@ -4,12 +4,7 @@ import json
 from collections.abc import Callable, Sequence
 
 import pytest
-
-from evals.python import datasets
-from evals.python.tests.projections import reference as private_reference
-from evals.python.tests.projections import verifier
 from kernel import (
-    Case,
     Criterion,
     File,
     Instruction,
@@ -23,6 +18,12 @@ from kernel import (
 from kernel import (
     ValidationError as DomainValidationError,
 )
+from pydantic import ValidationError
+
+from evals.python import datasets
+from evals.python.datasets import Case, Declaration
+from evals.python.tests.projections import reference as private_reference
+from evals.python.tests.projections import verifier
 
 
 def _override[T](value: T | None, *, original: T) -> T:
@@ -30,22 +31,26 @@ def _override[T](value: T | None, *, original: T) -> T:
 
 
 def _copy_case(  # noqa: PLR0913 - Reconstruct the actual native record fields.
-    value: Task,
+    value: Declaration,
     *,
     id: str | None = None,
     fixture: Sequence[File] | None = None,
     instruction: Instruction | None = None,
-    criterion: Criterion.Value | None = None,
+    criterion: Criterion | None = None,
     allowed_files: Sequence[str] | None = None,
     reference: Reference | None = None,
-) -> Task:
-    return Task.create(
-        id=_override(id, original=value.id),
-        fixture=_override(fixture, original=value.fixture),
-        instruction=_override(instruction, original=value.instruction),
-        criterion=_override(criterion, original=value.criterion),
-        allowed_files=_override(allowed_files, original=value.allowed_files),
-        reference=_override(reference, original=value.reference),
+) -> Declaration:
+    task = value.task
+    return Declaration(
+        skill=value.skill,
+        task=Task(
+            id=_override(id, original=task.id),
+            fixture=_override(fixture, original=task.fixture),
+            instruction=_override(instruction, original=task.instruction),
+            criterion=_override(criterion, original=task.criterion),
+            allowed_files=_override(allowed_files, original=task.allowed_files),
+            reference=_override(reference, original=task.reference),
+        ),
     )
 
 
@@ -73,10 +78,9 @@ def _files(value: Sequence[File]) -> dict[str, str]:
     return {file.path: file.contents for file in value}
 
 
-def _declaration(*, code: bool = True) -> Task:
-    criterion: Criterion.Value
+def _declaration(*, code: bool = True) -> Declaration:
     if code:
-        criterion = Criterion.Code(
+        criterion = Criterion.code(
             verifier=Verifier(
                 inputs=("main.py",),
                 files=[File(path="verify.py", contents="private assertions")],
@@ -87,21 +91,29 @@ def _declaration(*, code: bool = True) -> Task:
             )
         )
     else:
-        criterion = Criterion.Answer(
+        criterion = Criterion.answer(
             rubric=Rubric(
-                expected=[("choice", "B"), ("safe", True)],
+                expected=[
+                    ("choice", Value.from_python(value="B")),
+                    ("safe", Value.from_python(value=True)),
+                ],
                 text_rule=TextRule(field="reason", min_words=1, max_words=5),
             )
         )
-    return Task.create(
-        id="external",
-        fixture=[File(path="main.py", contents="broken")],
-        instruction=Instruction(skill="reasoning", prompt="Fix it: é"),
-        criterion=criterion,
-        allowed_files=("main.py",),
-        reference=Reference(
-            edits=[File(path="main.py", contents="fixed")],
-            completion="done" if code else Value.Record(fields=[("choice", "B"), ("safe", True)]),
+    return Declaration(
+        skill="reasoning",
+        task=Task(
+            id="external",
+            fixture=[File(path="main.py", contents="broken")],
+            instruction=Instruction(prompt="Fix it: é"),
+            criterion=criterion,
+            allowed_files=("main.py",),
+            reference=Reference(
+                edits=[File(path="main.py", contents="fixed")],
+                completion=Value.from_python(
+                    value="done" if code else {"choice": "B", "safe": True}
+                ),
+            ),
         ),
     )
 
@@ -137,11 +149,10 @@ def declarations_preserve_private_reference_edits(*, code: bool) -> None:
 def answer_declarations_preserve_typed_completion_fields() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
     completion = private_reference("external", selection=dataset).completion
-    assert isinstance(completion, Value.Record)
+    assert completion.kind == "record"
     choice, safe = dict(completion.fields)["choice"], dict(completion.fields)["safe"]
-    assert isinstance(choice, Value.String)
-    assert isinstance(safe, Value.Bool)
-    assert (choice.value, safe.value) == ("B", True)
+    assert (choice.kind, safe.kind) == ("string", "bool")
+    assert (choice.scalar, safe.scalar) == ("B", True)
 
 
 def answer_declarations_do_not_supply_executable_checks() -> None:
@@ -159,13 +170,13 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
         lambda c: _copy_case(c, allowed_files=()),
         lambda c: _copy_case(c, fixture=[]),
         lambda c: _copy_case(
-            c, criterion=Criterion.Answer(rubric=Rubric(expected=[], text_rule=None))
+            c, criterion=Criterion.answer(rubric=Rubric(expected=[], text_rule=None))
         ),
         lambda c: _copy_case(
             c,
-            criterion=Criterion.Answer(
+            criterion=Criterion.answer(
                 rubric=Rubric(
-                    expected=[("choice", "B")],
+                    expected=[("choice", Value.from_python(value="B"))],
                     text_rule=TextRule(field="choice", min_words=0, max_words=2),
                 )
             ),
@@ -174,15 +185,16 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
             c,
             reference=Reference(
                 edits=[File(path="outside.py", contents="unauthorized")],
-                completion=None,
+                completion=Value.from_python(value=None),
             ),
         ),
+        lambda c: Declaration(skill="Reasoning", task=c.task),
     ],
 )
 def kernel_constructors_validate_raw_declarations(
-    invalid: Callable[[Task], Task],
+    invalid: Callable[[Declaration], Declaration],
 ) -> None:
-    with pytest.raises(DomainValidationError):
+    with pytest.raises((DomainValidationError, ValidationError)):
         datasets.compile_dataset(cases=(invalid(_declaration()),))
 
 
@@ -199,8 +211,8 @@ def kernel_constructors_validate_raw_declarations(
 )
 def nested_constructor_rules_fail_closed(field: str, *, value: object) -> None:
     definition = _declaration()
-    assert isinstance(definition.criterion, Criterion.Code)
-    old = definition.criterion.verifier
+    old = definition.task.checks()
+    assert old is not None
     fields = {
         name: getattr(old, name)
         for name in ("inputs", "files", "tools", "command", "stdin", "timeout_seconds")
@@ -208,7 +220,7 @@ def nested_constructor_rules_fail_closed(field: str, *, value: object) -> None:
     with pytest.raises(DomainValidationError):
         _copy_case(
             definition,
-            criterion=Criterion.Code(
+            criterion=Criterion.code(
                 verifier=Verifier(**{**fields, field: value() if callable(value) else value})
             ),
         )
@@ -219,7 +231,7 @@ def answer_constructor_rules_fail_closed(minimum: int, *, maximum: int) -> None:
     with pytest.raises(DomainValidationError, match="text rule"):
         _copy_case(
             _declaration(code=False),
-            criterion=Criterion.Answer(
+            criterion=Criterion.answer(
                 rubric=Rubric(
                     expected=[],
                     text_rule=TextRule(field="reason", min_words=minimum, max_words=maximum),
@@ -230,14 +242,15 @@ def answer_constructor_rules_fail_closed(minimum: int, *, maximum: int) -> None:
 
 def native_fields_retain_immutable_snapshots() -> None:
     initial = [File(path="main.py", contents="broken")]
-    task = _copy_case(_declaration(), fixture=initial)
+    task = _copy_case(_declaration(), fixture=initial).task
     initial[0] = File(path="main.py", contents="changed")
     assert _files(task.fixture) == {"main.py": "broken"}
     with pytest.raises((AttributeError, TypeError)):
-        task.fixture = []  # type: ignore[misc]
+        task.fixture = ()  # type: ignore[misc]
     artifacts = [File(path="verify.py", contents="private assertions")]
-    assert isinstance(task.criterion, Criterion.Code)
-    checks = _copy_verifier(task.criterion.verifier, files=artifacts)
+    original = task.checks()
+    assert original is not None
+    checks = _copy_verifier(original, files=artifacts)
     artifacts.clear()
     assert _files(checks.files) == {"verify.py": "private assertions"}
 
@@ -245,13 +258,15 @@ def native_fields_retain_immutable_snapshots() -> None:
 @pytest.mark.parametrize(
     "criterion",
     [
-        Criterion.Answer(rubric=Rubric(expected=[("choice", "B")], text_rule=None)),
-        Criterion.Answer(
+        Criterion.answer(
+            rubric=Rubric(expected=[("choice", Value.from_python(value="B"))], text_rule=None)
+        ),
+        Criterion.answer(
             rubric=Rubric(expected=[], text_rule=TextRule(field="reason", min_words=1, max_words=5))
         ),
     ],
 )
-def answer_construction_supports_each_optional_rule_shape(criterion: Criterion.Value) -> None:
+def answer_construction_supports_each_optional_rule_shape(criterion: Criterion) -> None:
     dataset = datasets.compile_dataset(
         cases=(_copy_case(_declaration(code=False), criterion=criterion),)
     )
@@ -266,8 +281,8 @@ def _reference_text(value: Reference) -> str:
     from evals.python.integrations.inspect.scoring import plain  # noqa: PLC0415
 
     completion = value.completion
-    if isinstance(completion, Value.String):
-        return completion.value
+    if completion.kind == "string":
+        return str(completion.scalar)
     return json.dumps(plain(completion))
 
 

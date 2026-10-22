@@ -6,12 +6,16 @@ from typing import assert_type, cast
 from unittest.mock import patch
 
 import pytest
+from kernel import Criterion, File, Reference, Task, Value, source_hash
+from kernel import (
+    ValidationError as DomainValidationError,
+)
 from pydantic import ValidationError
 
 from evals.python import datasets
 from evals.python.dataset import DatasetInfo
-from evals.python.datasets import Dataset
-from evals.python.provenance import fingerprint, value_fingerprint
+from evals.python.datasets import Case, Dataset
+from evals.python.provenance import value_fingerprint
 from evals.python.tests.declarations import (
     _copy_case,
     _copy_verifier,
@@ -20,10 +24,6 @@ from evals.python.tests.declarations import (
     _reference_files,
 )
 from evals.python.tests.projections import reference, verifier
-from kernel import Case, Criterion, File, Kernel, Reference, Task, Value
-from kernel import (
-    ValidationError as DomainValidationError,
-)
 
 
 def compile_dataset_exposes_canonical_public_cases() -> None:
@@ -31,7 +31,7 @@ def compile_dataset_exposes_canonical_public_cases() -> None:
     dataset = assert_type(datasets.compile_dataset(cases=(definition,)), Dataset)
     assert isinstance(dataset, Dataset)
     cases = assert_type(datasets.list_cases(selection=dataset), tuple[Case, ...])
-    assert cases[0] is dataset.cases[definition.id]
+    assert cases[0] is dataset.cases[definition.task.id]
 
 
 def compiled_cases_separate_construction_from_public_projection() -> None:
@@ -51,20 +51,32 @@ def compiled_selection_reuses_the_compilation_snapshot() -> None:
 def compiled_records_retain_canonical_values() -> None:
     definition = _declaration()
     dataset = datasets.compile_dataset(cases=(definition,))
-    assert value_fingerprint(dataset.records[definition.id]) == value_fingerprint(definition)
+    assert value_fingerprint(dataset.records[definition.task.id]) == value_fingerprint(definition)
     assert datasets.list_cases(selection=dataset) == tuple(dataset.cases.values())
+    completions = ("1", 1, 1.0, True, None, [1], {"value": 1})
+    typed = {
+        value_fingerprint(
+            _copy_case(
+                definition,
+                reference=Reference(edits=[], completion=Value.from_python(value=completion)),
+            )
+        )
+        for completion in completions
+    }
+    assert len(typed) == len(completions)
 
 
 def _independent_datasets() -> tuple[Dataset, Dataset]:
     first = _declaration()
-    assert isinstance(first.criterion, Criterion.Code)
-    checks = _copy_verifier(first.criterion.verifier, stdin="different private stdin")
+    original = first.task.checks()
+    assert original is not None
+    checks = _copy_verifier(original, stdin="different private stdin")
     second = _copy_case(
         first,
-        criterion=Criterion.Code(verifier=checks),
+        criterion=Criterion.code(verifier=checks),
         reference=Reference(
             edits=[File(path="main.py", contents="another fixed solution")],
-            completion="another answer",
+            completion=Value.from_python(value="another answer"),
         ),
     )
     return datasets.compile_dataset(cases=(first,)), datasets.compile_dataset(cases=(second,))
@@ -128,7 +140,7 @@ def compilation_provenance_retains_sources_and_private_records() -> None:
     b_provenance = datasets.load_dataset(selection=b)
     assert a_provenance.source_hash == b_provenance.source_hash
     assert a_provenance.cases_hash != b_provenance.cases_hash
-    assert a_provenance.source_hash == fingerprint(Kernel.current.sources)
+    assert a_provenance.source_hash == source_hash()
 
 
 def compiled_dataset_is_immutable() -> None:
@@ -176,21 +188,16 @@ def mismatched_record_identity_is_rejected() -> None:
 
 def direct_dataset_construction_derives_public_cases_and_copies_records() -> None:
     definition = _declaration()
-    records = {definition.id: definition}
+    records = {definition.task.id: definition}
     dataset = Dataset(records=records)
     before = (dataset.source_hash, dataset.cases_hash)
     records.clear()
-    assert datasets.list_cases(selection=dataset)[0].prompt == definition.instruction.prompt
+    assert datasets.list_cases(selection=dataset)[0].prompt == definition.task.instruction.prompt
     assert (dataset.source_hash, dataset.cases_hash) == before
     with patch("evals.python.datasets._module", side_effect=AssertionError("reload")):
         assert datasets.load_dataset(selection=dataset) is dataset
-        assert (
-            cast(
-                Value.String,
-                datasets.get_reference(case_id=definition.id, selection=dataset).completion,
-            ).value
-            == "done"
-        )
+        reference = datasets.get_reference(case_id=definition.task.id, selection=dataset)
+        assert reference.completion.scalar == "done"
 
 
 def direct_dataset_construction_validates_metadata_count() -> None:

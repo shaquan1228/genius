@@ -6,19 +6,17 @@ import re
 import subprocess
 import sys
 from importlib import import_module
+from importlib.metadata import distribution
 from pathlib import Path
 
+import kernel as native
 import pytest
 
-import kernel as native
 from evals.python import datasets, evaluation
-from kernel import Case, Experiment, Kernel
+from evals.python.datasets import Case
+from evals.python.evaluation import Experiment
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
-OCAML_ROOT = PYTHON_ROOT.parent / "ocaml"
-LIBRARY = tuple(
-    OCAML_ROOT / file.path for file in Kernel.current.sources if file.path.endswith((".ml", ".mli"))
-)
 
 
 PUBLIC_OPERATIONS = {
@@ -47,10 +45,17 @@ PUBLIC_OPERATIONS = {
     "estimation": {"differences", "estimates"},
 }
 OWNER_TYPES = {
-    "datasets": {"Dataset", "DatasetInfo", "Selection"},
+    "datasets": {"Case", "Dataset", "DatasetInfo", "Declaration", "Selection"},
     "verification": {"Diagnostic", "VerificationResult"},
     "execution": {"Execution", "Completion", "Environment", "Runtime", "Cleanup"},
-    "evaluation": {"EvaluationSettings", "ModelPricing", "InstructionDelivery", "VariantSettings"},
+    "evaluation": {
+        "EvaluationSettings",
+        "Experiment",
+        "ModelPricing",
+        "InstructionDelivery",
+        "Profile",
+        "VariantSettings",
+    },
     "comparison": {
         "ComparisonRequest",
         "ComparisonReport",
@@ -122,10 +127,14 @@ def dataset_loader_has_no_provider_dispatch() -> None:
     )
 
 
-def dataset_ingestion_has_no_ocaml_adapters_or_global_drivers() -> None:
-    assert not (OCAML_ROOT / "datasets").exists()
-    assert not (OCAML_ROOT / "dataset.mli").exists()
-    assert not any("Dataset." in path.read_text() for path in LIBRARY)
+def kernel_is_the_installed_package_without_an_ocaml_bridge() -> None:
+    removed = ("ocaml", "dune-project", "python/kernel", "scripts/kernel-setup.sh")
+    assert not [name for name in removed if (PYTHON_ROOT.parent / name).exists()]
+    installed = distribution("genius-bench-kernel").locate_file("kernel/__init__.py")
+    assert Path(native.__file__).resolve() == Path(str(installed)).resolve()
+
+
+def dataset_ingestion_has_no_global_drivers() -> None:
     assert not re.search(
         r"humaneval|evalplus|DRIVERS", (PYTHON_ROOT / "datasets/__init__.py").read_text()
     )
@@ -146,25 +155,10 @@ def runtime_consumers_use_public_namespaces(prefix: str) -> None:
     assert not any(name.startswith(prefix) for name in names)
 
 
-def domain_modules_are_codec_free() -> None:
-    assert sorted(OCAML_ROOT.glob("*.ml*")) == sorted(LIBRARY)
-    assert not any(re.search(r"Jsonm|Codec|print_", path.read_text()) for path in LIBRARY)
-
-
 @pytest.mark.parametrize("owner", PUBLIC_OPERATIONS)
 def public_operations_use_native_calls_without_a_transport_layer(owner: str) -> None:
     path = PYTHON_ROOT / ("datasets/__init__.py" if owner == "datasets" else f"{owner}.py")
     assert "subprocess" not in _imported(path)
-    assert not (PYTHON_ROOT / "kernel/build.py").exists()
-    assert "subprocess" not in _imported(PYTHON_ROOT / "kernel/__init__.py")
-
-
-def kernel_facade_only_exports_owner_modules() -> None:
-    assert not (OCAML_ROOT / "ast.ml").exists()
-    assert not (OCAML_ROOT / "construct.ml").exists()
-    assert not re.search(
-        r"^type |^include ", (OCAML_ROOT / "genius_evals_kernel.ml").read_text(), re.M
-    )
 
 
 def integrations_do_not_import_sibling_implementations() -> None:
@@ -373,8 +367,8 @@ libc = ctypes.CDLL(None)
 libc.getenv.restype = ctypes.c_char_p
 names = (b"PATH", b"PYTHONHOME", b"PYTHONPATH")
 before = tuple(libc.getenv(name) for name in names)
-from kernel import Experiment
-assert Experiment.resolve(epochs=1).epochs == 1
+from kernel import Value
+assert Value.from_python(value=1).kind == "int"
 assert tuple(libc.getenv(name) for name in names) == before
 assert list(pathlib.Path.cwd().iterdir()) == []
 subprocess.run([sys.executable, "-c", "import re, pathlib"], check=True)
@@ -390,7 +384,7 @@ subprocess.run([sys.executable, "-c", "import re, pathlib"], check=True)
     )
 
 
-def public_domain_values_are_native_types() -> None:
+def public_domain_values_are_owner_types() -> None:
     assert not (PYTHON_ROOT / "_kernel.py").exists()
     assert isinstance(datasets.list_cases()[0], Case)
     assert isinstance(evaluation.resolve_settings(), Experiment)

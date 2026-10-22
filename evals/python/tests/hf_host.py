@@ -3,7 +3,7 @@
 import asyncio
 import json
 import os
-import shlex
+import re
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -283,10 +283,8 @@ def host_script_launches_job_without_exposing_key(
         ".github/workflows/evals.yml",
     ],
 )
-def hosted_setup_installs_opam_path_pin_dependency(path: str) -> None:
-    source = (REPO_ROOT / path).read_text()
-    install = next(line for line in source.splitlines() if "apt-get install " in line)
-    assert "rsync" in shlex.split(install)
+def hosted_setup_installs_no_ocaml_toolchain(path: str) -> None:
+    assert not re.search(r"opam|ocaml|kernel-setup", (REPO_ROOT / path).read_text(), re.I)
 
 
 def host_script_uses_hf_model_without_provider_key(

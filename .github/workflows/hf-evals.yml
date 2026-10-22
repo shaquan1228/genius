@@ -118,11 +118,7 @@ jobs:
             git cat-file -e "$PR_HEAD^{commit}"
           fi
       - name: Set up trusted harness
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y opam build-essential pkg-config ocaml-nox rsync
-          uv sync --project evals --locked --inexact
-          bash evals/scripts/kernel-setup.sh
+        run: uv sync --project evals --locked --inexact
       - name: Prepare and run comparison
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -145,7 +141,7 @@ jobs:
           COMPARISON_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
           COMPARISON_REQUEST: ${{ inputs.comparison_request }}
         run: |
-          opam exec --switch=genius-kernel-414 -- uv run --project evals --no-sync python -m evals.python.integrations.hugging_face.compare --output evals/reports/comparison
+          uv run --project evals --no-sync python -m evals.python.integrations.hugging_face.compare --output evals/reports/comparison
       - name: Publish job summary
         if: always()
         run: |

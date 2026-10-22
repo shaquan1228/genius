@@ -1,4 +1,0 @@
-(lang dune 3.1)
-(name genius_evals_kernel)
-(package
- (name genius_evals_kernel))

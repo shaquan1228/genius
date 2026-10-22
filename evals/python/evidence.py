@@ -5,11 +5,11 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Literal, cast
 
+from kernel import Verification
 from pydantic import BaseModel, JsonValue, ValidationError
 
 from evals.python import FROZEN
 from evals.python.execution import Completion
-from kernel import Verification
 
 VerificationStatus = Literal[
     "unchecked", "passed", "failed", "invalid_submission", "timed_out", "harness_error"
@@ -38,12 +38,12 @@ def _json(value: Diagnostic) -> JsonValue:
 
 @dataclass(frozen=True, kw_only=True)
 class VerificationResult:
-    verification: Verification.Value
+    verification: Verification
     detail: str = ""
     metadata: Mapping[str, Diagnostic] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if isinstance(self.verification, Verification.HarnessError) and not self.detail:
+        if self.verification.status == "harness_error" and not self.detail:
             object.__setattr__(self, "detail", self.verification.detail)
         object.__setattr__(
             self,
@@ -66,11 +66,11 @@ class _Evidence(BaseModel):
         return self.marker == marker and result.returncode == 0 and self.status != "unchecked"
 
 
-_STATUSES: Mapping[str, Callable[[], Verification.Value]] = {
-    "passed": Verification.Passed,
-    "failed": Verification.Failed,
-    "invalid_submission": Verification.InvalidSubmission,
-    "timed_out": Verification.TimedOut,
+_STATUSES: Mapping[str, Callable[[], Verification]] = {
+    "passed": Verification.passed,
+    "failed": Verification.failed,
+    "invalid_submission": Verification.invalid_submission,
+    "timed_out": Verification.timed_out,
 }
 
 
@@ -79,16 +79,16 @@ def completion(result: Completion, *, marker: str) -> VerificationResult:
         evidence = _Evidence.model_validate_json(result.stdout.strip().splitlines()[-1])
     except (ValidationError, IndexError) as error:
         return VerificationResult(
-            verification=Verification.HarnessError(detail=f"Invalid verifier evidence: {error}")
+            verification=Verification.harness_error(detail=f"Invalid verifier evidence: {error}")
         )
     if not evidence.authenticates(result, marker=marker):
         return VerificationResult(
-            verification=Verification.HarnessError(
+            verification=Verification.harness_error(
                 detail="Verifier completion was not authenticated"
             )
         )
     verification = (
-        Verification.HarnessError(detail=evidence.detail)
+        Verification.harness_error(detail=evidence.detail)
         if evidence.status == "harness_error"
         else _STATUSES[evidence.status]()
     )

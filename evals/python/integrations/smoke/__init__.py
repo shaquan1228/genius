@@ -5,8 +5,8 @@ from pathlib import Path
 from kernel import Criterion, File, Verifier
 
 
-def checks(*, inputs: tuple[str, ...], program: str) -> Criterion.Value:
-    return Criterion.Code(
+def checks(*, inputs: tuple[str, ...], program: str) -> Criterion:
+    return Criterion.code(
         verifier=Verifier(
             inputs=inputs,
             files=[

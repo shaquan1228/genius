@@ -7,13 +7,13 @@ import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from kernel import Verification
 
 from evals.python import EVALS_ROOT, datasets, verification
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.tests.humaneval import _record
 from evals.python.tests.support import import_dataset as _import_dataset
 from evals.python.verification import VerificationResult
-from kernel import Verification
 
 
 def info(capsys: pytest.CaptureFixture[str]) -> None:
@@ -40,12 +40,12 @@ def invalid_limit() -> None:
 def reference_validation_uses_public_operation_and_thaws_only_cli_output() -> None:
     dataset = _import_dataset((_record(),))
     canonical = VerificationResult(
-        verification=Verification.Passed(), metadata={"test": {"items": (True,)}}
+        verification=Verification.passed(), metadata={"test": {"items": (True,)}}
     )
     with patch.object(
         verification, "validate_reference", new_callable=AsyncMock, return_value=canonical
     ):
-        result = asyncio.run(benchmarks.validate_case(next(iter(dataset.records.values()))))
+        result = asyncio.run(benchmarks.validate_case(next(iter(dataset.records.values())).task))
     assert result == {
         "case_id": next(iter(dataset.records)),
         "status": "passed",
