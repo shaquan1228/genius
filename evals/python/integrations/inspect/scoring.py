@@ -29,6 +29,12 @@ def decode_response(text: str) -> JsonValue:
     return None
 
 
+def observed(data: object) -> Value:
+    with suppress(TypeError, ValueError, OverflowError):
+        return Value.from_python(value=data)
+    return Value.from_python(value=None)
+
+
 def plain(data: Value) -> JsonValue:
     match data.kind:
         case "list":
@@ -117,8 +123,8 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
         outcome=Outcome(
             changed_files=changed,
             verification=evidence.verification,
-            response=Value.from_python(value=decode_response(completion)),
-            facts=[(name, Value.from_python(value=fact)) for name, fact in facts.items()],
+            response=observed(decode_response(completion)),
+            facts=[(name, observed(fact)) for name, fact in facts.items()],
         )
     )
     explanation = completion if evidence.verification.status == "unchecked" else evidence.detail

@@ -188,14 +188,19 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
                 completion=Value.from_python(value=None),
             ),
         ),
-        lambda c: Declaration(skill="Reasoning", task=c.task),
     ],
 )
 def kernel_constructors_validate_raw_declarations(
     invalid: Callable[[Declaration], Declaration],
 ) -> None:
-    with pytest.raises((DomainValidationError, ValidationError)):
+    with pytest.raises(DomainValidationError):
         datasets.compile_dataset(cases=(invalid(_declaration()),))
+
+
+@pytest.mark.parametrize("skill", ["", "Reasoning", "1reasoning", "reasoning skill"])
+def declarations_reject_invalid_skill_names(skill: str) -> None:
+    with pytest.raises(ValidationError, match="skill"):
+        Declaration(skill=skill, task=_declaration().task)
 
 
 @pytest.mark.parametrize(

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from evals.python.integrations.inspect.scoring import decode_response
+from evals.python.integrations.inspect.scoring import decode_response, observed, plain
 
 
 @pytest.mark.parametrize(
@@ -47,7 +47,23 @@ def duplicate_keys_keep_the_last_json_value() -> None:
 
 
 def nested_replies_decode_to_lists_and_records() -> None:
-    assert decode_response('{"items":[1,null,{"x":[]}]}') == {"items": [1, None, {"x": []}]}
+    reply = decode_response('{"items":[1,null,{"x":[]}]}')
+    assert reply == {"items": [1, None, {"x": []}]}
+    assert plain(observed(reply)) == reply
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        json.loads("[" * 300 + "]" * 300),
+        2**64,
+        {"count": -(2**64)},
+        {1: "key"},
+        object(),
+    ],
+)
+def unrepresentable_observations_are_null(data: object) -> None:
+    assert observed(data).kind == "null"
 
 
 def candidate_text_cannot_execute_code(tmp_path: Path) -> None:

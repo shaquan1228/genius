@@ -1,4 +1,4 @@
-"""Stable fingerprints preserve native value ordering and the saved-run encoding."""
+"""Stable fingerprints preserve native value ordering and value types."""
 
 import hashlib
 from collections.abc import Mapping

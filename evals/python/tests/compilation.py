@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError, replace
+from inspect import isgetsetdescriptor
 from typing import assert_type, cast
 from unittest.mock import patch
 
@@ -15,7 +16,7 @@ from pydantic import ValidationError
 from evals.python import datasets
 from evals.python.dataset import DatasetInfo
 from evals.python.datasets import Case, Dataset
-from evals.python.provenance import value_fingerprint
+from evals.python.provenance import _FIELDS, value_fingerprint
 from evals.python.tests.declarations import (
     _copy_case,
     _copy_verifier,
@@ -64,6 +65,12 @@ def compiled_records_retain_canonical_values() -> None:
         for completion in completions
     }
     assert len(typed) == len(completions)
+
+
+@pytest.mark.parametrize("kind", _FIELDS)
+def fingerprints_cover_every_kernel_property(kind: type) -> None:
+    properties = {name for name, member in vars(kind).items() if isgetsetdescriptor(member)}
+    assert set(_FIELDS[kind]) == properties
 
 
 def _independent_datasets() -> tuple[Dataset, Dataset]:
