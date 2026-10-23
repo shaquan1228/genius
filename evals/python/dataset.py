@@ -10,7 +10,7 @@ from kernel import File, Task, source_hash
 from pydantic import AfterValidator, BaseModel, Field, PlainSerializer
 
 from evals.python import FROZEN
-from evals.python.provenance import fingerprint, value_fingerprint
+from evals.python.provenance import fingerprint
 
 Attributes = Annotated[Mapping[str, str], AfterValidator(MappingProxyType), PlainSerializer(dict)]
 
@@ -48,23 +48,19 @@ class Dataset:
     info: DatasetInfo | None = None
 
     def __post_init__(self) -> None:
-        if self.info is not None and len(self.records) != self.info.count:
+        records = MappingProxyType(dict(self.records))
+        if self.info is not None and len(records) != self.info.count:
             raise ValueError("Dataset count mismatch")
-        for name, record in self.records.items():
+        for name, record in records.items():
             if name != record.task.id:
                 raise ValueError(f"Dataset record ID differs from its key: {name}")
-        object.__setattr__(self, "records", MappingProxyType(dict(self.records)))
+        object.__setattr__(self, "records", records)
 
     @cached_property
     def cases(self) -> Mapping[str, Case]:
         return MappingProxyType({name: record.project() for name, record in self.records.items()})
 
     @cached_property
-    def source_hash(self) -> str:
-        return source_hash()
-
-    @cached_property
     def cases_hash(self) -> str:
-        records = tuple((name, value_fingerprint(record)) for name, record in self.records.items())
-        metadata = self.info.model_dump_json() if self.info else "null"
-        return fingerprint(resources=(*records, ("dataset-info", metadata)))
+        metadata = self.info.model_dump_json() if self.info else None
+        return fingerprint((source_hash(), tuple(self.records.items()), metadata))

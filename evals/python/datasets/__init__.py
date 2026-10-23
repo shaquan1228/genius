@@ -13,7 +13,7 @@ from pydantic import AfterValidator, validate_call
 
 from evals.python import FROZEN
 from evals.python.dataset import Case, Dataset, DatasetInfo, Declaration
-from evals.python.provenance import value_fingerprint
+from evals.python.provenance import fingerprint
 
 __all__ = [
     "Case",
@@ -60,7 +60,7 @@ def compile_dataset(*, cases: tuple[Declaration, ...], info: DatasetInfo | None 
     if len(records) != len(cases):
         raise ValueError("Dataset task IDs must be unique")
     key = (
-        tuple(map(value_fingerprint, records.values())),
+        tuple(map(fingerprint, records.values())),
         json.dumps(info.model_dump(mode="json"), sort_keys=True) if info else None,
     )
     return _cached(key, dataset=lambda: Dataset(records=records, info=info))

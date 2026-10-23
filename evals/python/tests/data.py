@@ -31,7 +31,6 @@ from evals.python.integrations.inspect.profiles import (
     load_profile,
 )
 from evals.python.integrations.inspect.tasks import build_task
-from evals.python.provenance import fingerprint
 from evals.python.tests.declarations import _copy_case, _files, _reference_files, _reference_text
 from evals.python.tests.projections import public_case, reference, verifier
 from evals.python.tests.support import (
@@ -342,7 +341,7 @@ def delivery_rejects_unimplemented_skill_instead_of_silently_changing_it() -> No
         )
 
 
-def fingerprint_tracks_the_installed_kernel_source() -> None:
-    original = fingerprint(resources=(("case", "digest"),))
-    with patch("evals.python.provenance.source_hash", return_value="changed"):
-        assert fingerprint(resources=(("case", "digest"),)) != original
+def cases_hash_tracks_the_installed_kernel_source() -> None:
+    dataset = datasets.load_dataset()
+    with patch("evals.python.dataset.source_hash", return_value="changed"):
+        assert Dataset(records=dataset.records).cases_hash != dataset.cases_hash

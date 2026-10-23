@@ -37,10 +37,10 @@ class Problem(BaseModel):
 
 
 def declarations(records: Iterable[str]) -> tuple[Declaration, ...]:
-    return tuple(Declaration(skill="reasoning", task=declaration(raw)) for raw in records)
+    return tuple(Declaration(skill="reasoning", task=task(raw)) for raw in records)
 
 
-def declaration(raw: str) -> Task:
+def task(raw: str) -> Task:
     problem = Problem.model_validate_json(raw)
     return Task(
         id="humaneval-" + problem.task_id.split("/")[1],

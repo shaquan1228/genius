@@ -44,7 +44,7 @@ class VerificationResult:
 
     def __post_init__(self) -> None:
         if self.verification.status == "harness_error" and not self.detail:
-            object.__setattr__(self, "detail", self.verification.detail)
+            object.__setattr__(self, "detail", self.verification.detail or "")
         object.__setattr__(
             self,
             "metadata",
@@ -66,7 +66,7 @@ class _Evidence(BaseModel):
         return self.marker == marker and result.returncode == 0 and self.status != "unchecked"
 
 
-_STATUSES: Mapping[str, Callable[[], Verification]] = {
+_STATUSES: Mapping[VerificationStatus, Callable[[], Verification]] = {
     "passed": Verification.passed,
     "failed": Verification.failed,
     "invalid_submission": Verification.invalid_submission,

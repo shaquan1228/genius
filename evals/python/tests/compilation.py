@@ -2,12 +2,11 @@
 
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError, replace
-from inspect import isgetsetdescriptor
 from typing import assert_type, cast
 from unittest.mock import patch
 
 import pytest
-from kernel import Criterion, File, Reference, Task, Value, source_hash
+from kernel import Criterion, File, Record, Reference, Task, Value
 from kernel import (
     ValidationError as DomainValidationError,
 )
@@ -16,7 +15,7 @@ from pydantic import ValidationError
 from evals.python import datasets
 from evals.python.dataset import DatasetInfo
 from evals.python.datasets import Case, Dataset
-from evals.python.provenance import _FIELDS, value_fingerprint
+from evals.python.provenance import fingerprint
 from evals.python.tests.declarations import (
     _copy_case,
     _copy_verifier,
@@ -52,11 +51,11 @@ def compiled_selection_reuses_the_compilation_snapshot() -> None:
 def compiled_records_retain_canonical_values() -> None:
     definition = _declaration()
     dataset = datasets.compile_dataset(cases=(definition,))
-    assert value_fingerprint(dataset.records[definition.task.id]) == value_fingerprint(definition)
+    assert fingerprint(dataset.records[definition.task.id]) == fingerprint(definition)
     assert datasets.list_cases(selection=dataset) == tuple(dataset.cases.values())
     completions = ("1", 1, 1.0, True, None, [1], {"value": 1})
     typed = {
-        value_fingerprint(
+        fingerprint(
             _copy_case(
                 definition,
                 reference=Reference(edits=[], completion=Value.from_python(value=completion)),
@@ -67,10 +66,18 @@ def compiled_records_retain_canonical_values() -> None:
     assert len(typed) == len(completions)
 
 
-@pytest.mark.parametrize("kind", _FIELDS)
-def fingerprints_cover_every_kernel_property(kind: type) -> None:
-    properties = {name for name, member in vars(kind).items() if isgetsetdescriptor(member)}
-    assert set(_FIELDS[kind]) == properties
+def fingerprints_follow_kernel_record_equality() -> None:
+    repeated = Value.from_python(value=Record(fields=[("a", 1), ("b", 2), ("a", 3)]))
+    reordered = Value.from_python(value={"b": 2, "a": 1})
+    assert repeated.equal(other=reordered)
+    assert fingerprint(repeated) == fingerprint(reordered)
+    assert fingerprint(Value.from_python(value={"a": 3, "b": 2})) != fingerprint(reordered)
+
+
+@pytest.mark.parametrize("value", [{"a": 1}, [1], object()])
+def fingerprints_reject_values_without_public_fields(value: object) -> None:
+    with pytest.raises(TypeError, match="Unsupported value"):
+        fingerprint(value)
 
 
 def _independent_datasets() -> tuple[Dataset, Dataset]:
@@ -141,13 +148,11 @@ def compiled_provenance_retains_python_metadata() -> None:
         datasets.compile_dataset(cases=(), info=info)
 
 
-def compilation_provenance_retains_sources_and_private_records() -> None:
+def compilation_provenance_retains_private_records() -> None:
     a, b = _independent_datasets()
     a_provenance = datasets.load_dataset(selection=a)
     b_provenance = datasets.load_dataset(selection=b)
-    assert a_provenance.source_hash == b_provenance.source_hash
     assert a_provenance.cases_hash != b_provenance.cases_hash
-    assert a_provenance.source_hash == source_hash()
 
 
 def compiled_dataset_is_immutable() -> None:
@@ -197,10 +202,10 @@ def direct_dataset_construction_derives_public_cases_and_copies_records() -> Non
     definition = _declaration()
     records = {definition.task.id: definition}
     dataset = Dataset(records=records)
-    before = (dataset.source_hash, dataset.cases_hash)
+    before = dataset.cases_hash
     records.clear()
     assert datasets.list_cases(selection=dataset)[0].prompt == definition.task.instruction.prompt
-    assert (dataset.source_hash, dataset.cases_hash) == before
+    assert dataset.cases_hash == before
     with patch("evals.python.datasets._module", side_effect=AssertionError("reload")):
         assert datasets.load_dataset(selection=dataset) is dataset
         reference = datasets.get_reference(case_id=definition.task.id, selection=dataset)

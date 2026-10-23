@@ -1,78 +1,58 @@
-"""Stable fingerprints preserve native value ordering and value types."""
+"""Plain JSON views and stable fingerprints of kernel values, models and tuples.
+
+One generic traversal reads every field a type exposes, after Lämmel and Peyton Jones,
+"Scrap Your Boilerplate" (TLDI 2003), so a new kernel field needs no edit here.
+"""
 
 import hashlib
-from collections.abc import Mapping
+import json
+from inspect import isgetsetdescriptor
 
-from kernel import (
-    Criterion,
-    File,
-    Instruction,
-    Predicate,
-    Reference,
-    Rubric,
-    Task,
-    TextRule,
-    Value,
-    Verifier,
-    source_hash,
-)
-from pydantic import BaseModel
-
-_FIELDS: Mapping[type, tuple[str, ...]] = {
-    Criterion: ("kind", "verifier", "rubric", "predicate"),
-    File: ("path", "contents"),
-    Instruction: ("prompt",),
-    Predicate: (
-        "kind",
-        "path",
-        "expected",
-        "item",
-        "allowed",
-        "min_words",
-        "max_words",
-        "checks",
-        "check",
-    ),
-    Reference: ("edits", "completion"),
-    Rubric: ("expected", "text_rule"),
-    Task: ("id", "fixture", "instruction", "criterion", "allowed_files", "reference"),
-    TextRule: ("field", "min_words", "max_words"),
-    Verifier: ("inputs", "files", "tools", "command", "stdin", "timeout_seconds"),
-}
+from kernel import Value
+from pydantic import BaseModel, JsonValue
 
 
-def fingerprint(*, resources: tuple[tuple[str, str], ...] = ()) -> str:
-    return hashlib.sha256(repr((source_hash(), resources)).encode()).hexdigest()
-
-
-def _value(value: Value) -> object:
-    match value.kind:
-        case "list":
-            return ("list", tuple(map(_value, value.items)))
-        case "record":
-            return ("record", tuple((name, _value(item)) for name, item in value.fields))
-        case _:
-            return value.scalar
-
-
-def _names(value: object) -> tuple[str, ...]:
-    return tuple(type(value).model_fields) if isinstance(value, BaseModel) else _FIELDS[type(value)]
-
-
-def _canonical(value: object) -> object:
+def plain(value: object) -> JsonValue:
     match value:
         case None | str() | bool() | int() | float():
             return value
         case tuple():
-            return tuple(map(_canonical, value))
+            return [plain(item) for item in value]
         case Value():
             return _value(value)
         case _:
-            return (
-                type(value).__name__,
-                tuple((name, _canonical(getattr(value, name))) for name in _names(value)),
-            )
+            return _object(value)
 
 
-def value_fingerprint(value: object) -> str:
-    return hashlib.sha256(repr(_canonical(value)).encode()).hexdigest()
+def _value(value: Value) -> JsonValue:
+    match value.kind:
+        case "list":
+            return plain(value.items)
+        case "record":
+            # Like the kernel, read the first of repeated names.
+            return {name: plain(value.get(path=[name])) for name, _ in value.fields}
+        case _:
+            return value.scalar
+
+
+def _object(value: object) -> dict[str, JsonValue]:
+    """Every present field of a model or native type; None and () mark absent fields."""
+    fields = dict(value) if isinstance(value, BaseModel) else _getters(value)
+    return {name: plain(item) for name, item in fields.items() if item not in (None, ())}
+
+
+def _getters(value: object) -> dict[str, object]:
+    kind = type(value)
+    getters = {
+        name: getattr(value, name)
+        for name, member in vars(kind).items()
+        if isgetsetdescriptor(member) and not name.startswith("_")
+    }
+    if not getters:
+        raise TypeError(f"Unsupported value: {kind.__name__}")
+    return getters
+
+
+def fingerprint(value: object) -> str:
+    """Hash the sorted JSON view, so values the kernel treats as equal hash alike."""
+    return hashlib.sha256(json.dumps(plain(value), sort_keys=True).encode()).hexdigest()

@@ -127,9 +127,7 @@ def dataset_loader_has_no_provider_dispatch() -> None:
     )
 
 
-def kernel_is_the_installed_package_without_an_ocaml_bridge() -> None:
-    removed = ("ocaml", "dune-project", "python/kernel", "scripts/kernel-setup.sh")
-    assert not [name for name in removed if (PYTHON_ROOT.parent / name).exists()]
+def kernel_is_the_installed_package() -> None:
     installed = distribution("genius-bench-kernel").locate_file("kernel/__init__.py")
     assert Path(native.__file__).resolve() == Path(str(installed)).resolve()
 

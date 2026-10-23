@@ -8,3 +8,6 @@ __pycache__/
 *.egg-info/
 /build/
 /dist/
+# Build output of the removed OCaml kernel that older checkouts keep after pull.
+/python/kernel/
+/_build/

@@ -54,11 +54,14 @@ def _instruction_path(path: str) -> None:
         raise ValueError("Instruction paths must name a file or directory")
 
 
+Instructions = Annotated[tuple[str, ...], AfterValidator(_instruction_paths)]
+
+
 class Profile(BaseModel):
     model_config = FROZEN
-    name: str
+    name: Identifier
     preamble: str
-    instructions: tuple[str, ...]
+    instructions: Instructions
 
 
 _GENIUS = Profile(
@@ -82,21 +85,13 @@ class Experiment(BaseModel):
     cache: bool = False
 
 
-class VariantSettings(BaseModel):
+class VariantSettings(Profile):
     """One instruction intervention, independent of its comparison role."""
 
-    model_config = FROZEN
-    name: Identifier
-    instructions: Annotated[tuple[str, ...], AfterValidator(_instruction_paths)] = (
-        _GENIUS.instructions
-    )
+    instructions: Instructions = _GENIUS.instructions
     preamble: str = _GENIUS.preamble
     source_dir: str | None = None
     source_ref: str | None = None
-
-    @property
-    def profile(self) -> Profile:
-        return Profile(name=self.name, preamble=self.preamble, instructions=self.instructions)
 
 
 class EvaluationSettings(BaseModel):

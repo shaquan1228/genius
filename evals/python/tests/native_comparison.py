@@ -10,6 +10,7 @@ from kernel import (
     Instruction,
     Outcome,
     Predicate,
+    Record,
     Reference,
     Rubric,
     Task,
@@ -22,6 +23,7 @@ from pydantic import JsonValue
 from evals.python import datasets
 from evals.python.datasets import Declaration
 from evals.python.integrations.inspect import scoring
+from evals.python.provenance import plain
 from evals.python.tests.native_kernel import _answer
 
 
@@ -88,7 +90,7 @@ def assessment_and_scores_agree() -> None:
     result = task.assess(outcome=outcome)
     assert result.kind == "all"
     scope = dict(result.checks)["scope"]
-    assert scoring.plain(cast(Value, scope.observed())) == ["unexpected.txt"]
+    assert plain(scope.observed()) == ["unexpected.txt"]
     assert (
         dict(result.scores())
         == dict(task.grade(outcome=outcome))
@@ -216,12 +218,63 @@ def tool_traces_and_environment_state_are_graded_as_facts() -> None:
             "path": ["trace"],
             "allowed": [{"name": "lookup", "arguments": {"id": 7}}],
         },
-        "any": {"kind": "any", "checks": ["missing"]},
+        "any": {"kind": "any", "checks": [["missing", {"kind": "present", "path": ["absent"]}]]},
     }
 
 
 def native_values_decode_to_plain_json() -> None:
     witness = Value.from_python(value={"ratio": 0.5, "flag": True, "items": (1, "x")})
-    assert scoring.plain(witness) == {"ratio": 0.5, "flag": True, "items": [1, "x"]}
+    assert plain(witness) == {"ratio": 0.5, "flag": True, "items": [1, "x"]}
     with pytest.raises(TypeError, match="Unsupported"):
         Value.from_python(value=object())
+
+
+@pytest.mark.parametrize("state", [{"transfer": 2**64}, {"transfer": 5, "time": 2**64}])
+def unrepresentable_state_cannot_pass_a_negated_check(state: dict[str, object]) -> None:
+    absent = Predicate.not_(check=Predicate.present(path=["state", "transfer"]))
+    outcome = Outcome(
+        changed_files=[],
+        verification=Verification.unchecked(),
+        response=scoring.observed(None),
+        facts=[("state", scoring.observed(state))],
+    )
+    assert not absent.holds(observation=outcome.observation())
+
+
+def unrepresentable_extra_field_keeps_the_answer_gradable() -> None:
+    task, _ = _answer()
+    outcome = _outcome(verification=Verification.unchecked())
+    reply = scoring.observed({"choice": "B", "id": 2**64})
+    graded = Outcome(
+        changed_files=outcome.changed_files,
+        verification=outcome.verification,
+        response=reply,
+        facts=outcome.facts,
+    )
+    assert dict(task.grade(outcome=graded))["correctness"]
+
+
+def _equals(*, expected: object, path: tuple[str, ...] = ("response",)) -> Predicate:
+    return Predicate.equals(path=path, expected=Value.from_python(value=expected))
+
+
+@pytest.mark.parametrize(
+    ("check", "response", "holds"),
+    [
+        (_equals(expected=1), 1.0, False),
+        (_equals(expected=True), 1, False),
+        (_equals(expected={"a": 1, "b": 2}), {"b": 2, "a": 1}, True),
+        (_equals(expected=[1, 2]), [2, 1], False),
+        (
+            _equals(expected=1, path=("response", "a")),
+            Value.from_python(value=Record(fields=[("a", 1), ("a", 2)])),
+            True,
+        ),
+        (Predicate.words(path=["response"], min_words=2, max_words=2), "one\u3000two", True),
+    ],
+    ids=["int-float", "bool-int", "record-order", "list-order", "first-duplicate", "unicode-words"],
+)
+def grading_rules_genius_depends_on(
+    check: Predicate, *, response: JsonValue | Value, holds: bool
+) -> None:
+    assert check.holds(observation=_observation(response)) is holds

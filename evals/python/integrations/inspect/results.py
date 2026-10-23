@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Mapping
+from importlib.metadata import distribution
 from itertools import chain, groupby, product
 from math import inf
 from pathlib import Path
@@ -39,7 +40,10 @@ def harness_hash() -> str:
         )
         if _harness_source(path)
     }
-    files["genius-bench-kernel"] = source_hash().encode()
+    # The installed origin, so a kernel that differs from the pin changes the hash.
+    origin = json.loads(distribution("genius-bench-kernel").read_text("direct_url.json") or "{}")
+    commit = origin.get("vcs_info", {}).get("commit_id", origin.get("url"))
+    files["genius-bench-kernel"] = repr((source_hash(), commit)).encode()
     files["pyproject.toml"] = (EVALS_ROOT / "pyproject.toml").read_bytes()
     files["uv.lock"] = (EVALS_ROOT / "uv.lock").read_bytes()
     return profiles_adapter.content_hash(files)
@@ -168,13 +172,14 @@ def checks(details: dict[str, Any], *, prefix: str = "") -> list[tuple[str, bool
 
 def trial(sample: EvalSample) -> Metrics:
     """One graded try: success, elapsed time, failure indicators, and each check."""
-    details = ((sample.scores or {})["evaluation"].metadata or {}).get("assessment", {})
+    metadata = (sample.scores or {})["evaluation"].metadata or {}
     return {
         "accuracy": float(correct(sample)),
         "seconds": elapsed(sample),
         "crashed": float(completeness.crashed(sample)),
         "cutoff": float(sample.limit is not None),
-        **{name: float(passed) for name, passed in checks(details)},
+        "unrepresentable": float(bool(metadata.get("unrepresentable"))),
+        **{name: float(passed) for name, passed in checks(metadata.get("assessment", {}))},
     }
 
 

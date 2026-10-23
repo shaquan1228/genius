@@ -56,7 +56,7 @@ def variant_experiment(spec: Experiment, *, request: EvaluationSettings) -> Expe
     if variant := request.variant:
         if request.deliveries:
             raise ValueError("Choose a variant or delivery diagnostics")
-        spec = spec.model_copy(update={"profiles": (variant.profile,)})
+        spec = Experiment.model_validate({**dict(spec), "profiles": (variant,)})
     return spec
 
 
@@ -94,7 +94,7 @@ def diagnostic_tasks(
     spec: Experiment, *, request: EvaluationSettings, build: partial[Task]
 ) -> list[Task]:
     modes = request.deliveries or ()
-    single = spec.model_copy(update={"epochs": 1})
+    single = Experiment.model_validate({**dict(spec), "epochs": 1})
     profile = profile_adapter.load_profile("genius", spec=spec)
     return [
         build(

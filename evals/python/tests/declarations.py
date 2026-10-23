@@ -22,6 +22,7 @@ from pydantic import ValidationError
 
 from evals.python import datasets
 from evals.python.datasets import Case, Declaration
+from evals.python.provenance import plain
 from evals.python.tests.projections import reference as private_reference
 from evals.python.tests.projections import verifier
 
@@ -283,8 +284,6 @@ def _reference_files(value: Reference) -> dict[str, str]:
 
 
 def _reference_text(value: Reference) -> str:
-    from evals.python.integrations.inspect.scoring import plain  # noqa: PLC0415
-
     completion = value.completion
     if completion.kind == "string":
         return str(completion.scalar)

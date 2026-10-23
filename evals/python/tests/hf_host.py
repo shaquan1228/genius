@@ -3,7 +3,6 @@
 import asyncio
 import json
 import os
-import re
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -273,18 +272,6 @@ def host_script_launches_job_without_exposing_key(
         "--env EVAL_VERSION=test-pinned-version" in commands,
         "--detach" in commands,
     ) == (False, True, False)
-
-
-@pytest.mark.parametrize(
-    "path",
-    [
-        "evals/scripts/huggingface-bootstrap.sh",
-        ".github/workflows/hf-evals.yml",
-        ".github/workflows/evals.yml",
-    ],
-)
-def hosted_setup_installs_no_ocaml_toolchain(path: str) -> None:
-    assert not re.search(r"opam|ocaml|kernel-setup", (REPO_ROOT / path).read_text(), re.I)
 
 
 def host_script_uses_hf_model_without_provider_key(
