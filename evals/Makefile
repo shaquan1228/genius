@@ -1,79 +1,37 @@
-.PHONY: check-bin check check-scaffolding check-ocaml-format check-python format format-ocaml format-python lint-ocaml setup setup-kernel test-ocaml check-install
+.PHONY: check-bin check check-scaffolding check-python format format-python setup check-install
 
-KERNEL_SWITCH ?= genius-kernel-414
-KERNEL_RUN = opam exec --switch="$(KERNEL_SWITCH)" -- uv run --no-sync
+RUN = uv run --no-sync
 
-# Every OCaml warning is an error, except type-directed disambiguation and open shadowing.
-OCAML_FLAGS = -strict-sequence -strict-formats -w +a-4-40-41-42-44-45-70 -warn-error +a
-
-# The full local gate. CI runs check-ocaml-format in its own job, because the hosted
-# runtime image has no ocamlformat.
-check: check-scaffolding check-ocaml-format lint-ocaml test-ocaml check-python
+check: check-scaffolding check-python
 
 # With full statement/branch coverage, CRAP equals cyclomatic complexity.
 # Xenon's A rank requires every function to have complexity <= 5.
-# The binding renderer and pytest collection hook remain outside runtime complexity checks.
+# The pytest collection hook remains outside runtime complexity checks.
 check-python:
 	uv sync --python 3.12 --extra dev --locked --inexact
-	$(MAKE) setup-kernel
-	$(KERNEL_RUN) dune build @python-bindings
-	$(KERNEL_RUN) ruff format --check python scripts/check_installation.py
-	$(KERNEL_RUN) ruff check python scripts/check_installation.py
-	$(KERNEL_RUN) mypy
-	$(KERNEL_RUN) pytest --cov --cov-branch --cov-report=term-missing --cov-report=json:results/coverage.json --cov-report=xml:results/coverage.xml --junitxml=results/tests.xml
-	$(KERNEL_RUN) xenon --max-absolute A --max-modules A --max-average A --exclude python/kernel/generate.py,python/tests/conftest.py python
-	$(KERNEL_RUN) radon cc --show-complexity --json --exclude python/kernel/generate.py,python/tests/conftest.py python > results/complexity.json
+	$(RUN) ruff format --check python scripts/check_installation.py
+	$(RUN) ruff check python scripts/check_installation.py
+	$(RUN) mypy
+	$(RUN) pytest --cov --cov-branch --cov-report=term-missing --cov-report=json:results/coverage.json --cov-report=xml:results/coverage.xml --junitxml=results/tests.xml
+	$(RUN) xenon --max-absolute A --max-modules A --max-average A --exclude python/tests/conftest.py python
+	$(RUN) radon cc --show-complexity --json --exclude python/tests/conftest.py python > results/complexity.json
 
 setup:
 	uv sync --python 3.12 --extra dev --locked --inexact
-	$(MAKE) setup-kernel
 
-# Sync Python dependencies first; the bridge is installed from the pinned opam package.
-setup-kernel:
-	KERNEL_SWITCH="$(KERNEL_SWITCH)" bash scripts/kernel-setup.sh
-
-format: format-ocaml format-python
+format: format-python
 
 # pyproject.toml configures Ruff's style and lint rules.
 format-python:
 	uv run ruff format python scripts/check_installation.py
 	uv run ruff check --fix python scripts/check_installation.py
 
-# ocaml/.ocamlformat pins the formatter version and style; `make format-ocaml` applies it.
-format-ocaml:
-	ocamlformat --inplace $(shell find ocaml -name '*.ml' -o -name '*.mli')
-
-check-ocaml-format:
-	@command -v ocamlformat >/dev/null || { echo "Install ocamlformat 0.29.0 for OCaml style checks; see README.md." >&2; exit 1; }
-	ocamlformat --check $(shell find ocaml -name '*.ml' -o -name '*.mli') || { echo "OCaml style differs; run make -C evals format-ocaml." >&2; exit 1; }
-
-# Compile temporary copies in dependency order so no build files enter the checkout.
-lint-ocaml:
-	@command -v ocamlc >/dev/null || { echo "Install OCaml 4.13+ for kernel checks." >&2; exit 1; }
-	@build_dir=$$(mktemp -d) && \
-	  (trap 'rm -rf "$$build_dir"' EXIT; \
-	    cp $(filter-out ocaml/genius_evals_kernel.ml ocaml/kernel.ml,$(wildcard ocaml/*.mli ocaml/*.ml)) "$$build_dir" && cd "$$build_dir" && \
-	    ocamlc $(OCAML_FLAGS) -c $$(ocamldep -sort *.mli *.ml))
-
-# Pure kernel modules in dependency order.
-KERNEL = $(shell cd ocaml && ocamldep -sort $(notdir $(filter-out ocaml/genius_evals_kernel.ml ocaml/kernel.ml,$(wildcard ocaml/*.mli ocaml/*.ml))))
-
-# Link a test with only the modules it may use, so a new dependency fails to compile.
-ocaml_test = build_dir=$$(mktemp -d) && trap 'rm -rf "$$build_dir"' EXIT && \
-  cp $(addprefix ocaml/,$(1)) "$$build_dir" && cd "$$build_dir" && \
-  ocamlc $(OCAML_FLAGS) -o test $(notdir $(1)) && ./test
-
-test-ocaml:
-	$(call ocaml_test,$(KERNEL) tests/test_predicate.ml)
-	$(call ocaml_test,$(KERNEL) tests/test_kernel.ml)
-
 check-install:
-	$(KERNEL_RUN) python scripts/check_installation.py
+	$(RUN) python scripts/check_installation.py
 
 check-scaffolding:
 	bash -n bin/huggingface-run
 	bash -n scripts/huggingface-bootstrap.sh
-	bash -n scripts/kernel-setup.sh
 	uv lock --check
 
 # CLI contracts use only the standard library; tools are pinned and isolated by uv.

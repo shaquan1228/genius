@@ -3,7 +3,6 @@
 import asyncio
 import json
 import os
-import shlex
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -273,20 +272,6 @@ def host_script_launches_job_without_exposing_key(
         "--env EVAL_VERSION=test-pinned-version" in commands,
         "--detach" in commands,
     ) == (False, True, False)
-
-
-@pytest.mark.parametrize(
-    "path",
-    [
-        "evals/scripts/huggingface-bootstrap.sh",
-        ".github/workflows/hf-evals.yml",
-        ".github/workflows/evals.yml",
-    ],
-)
-def hosted_setup_installs_opam_path_pin_dependency(path: str) -> None:
-    source = (REPO_ROOT / path).read_text()
-    install = next(line for line in source.splitlines() if "apt-get install " in line)
-    assert "rsync" in shlex.split(install)
 
 
 def host_script_uses_hf_model_without_provider_key(

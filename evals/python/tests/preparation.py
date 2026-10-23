@@ -13,6 +13,7 @@ from inspect_ai.log import EvalLog, read_eval_log
 from inspect_ai.scorer import CORRECT, INCORRECT
 from inspect_ai.scorer._scorer import scorer_create
 from inspect_ai.solver import generate
+from kernel import Criterion, File, Instruction, Reference, Rubric, TextRule, Value
 
 from evals.python import datasets
 from evals.python import evaluation as evaluation_api
@@ -22,7 +23,6 @@ from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.declarations import _copy_case, _declaration
 from evals.python.tests.support import offline_run as _offline_run
 from evals.python.tests.support import results as _results
-from kernel import Criterion, File, Instruction, Reference, Rubric, TextRule
 
 PRIVATE_SENTINEL = "PRIVATE_DATASET_SNAPSHOT_7bb284"
 
@@ -93,12 +93,10 @@ def evaluation_prepares_once_for_all_tasks(
 def private_tasks() -> list[Task]:
     definition = _copy_case(
         _declaration(code=False),
-        instruction=Instruction(
-            skill="reasoning", prompt='{"choice":"B","safe":true,"reason":"clear"}'
-        ),
+        instruction=Instruction(prompt='{"choice":"B","safe":true,"reason":"clear"}'),
         reference=Reference(
             edits=[File(path="main.py", contents=PRIVATE_SENTINEL)],
-            completion=PRIVATE_SENTINEL,
+            completion=Value.from_python(value=PRIVATE_SENTINEL),
         ),
     )
     snapshots = [
@@ -106,11 +104,11 @@ def private_tasks() -> list[Task]:
             cases=(
                 _copy_case(
                     definition,
-                    criterion=Criterion.Answer(
+                    criterion=Criterion.answer(
                         rubric=Rubric(
                             expected=[
-                                ("choice", choice),
-                                ("safe", True),
+                                ("choice", Value.from_python(value=choice)),
+                                ("safe", Value.from_python(value=True)),
                             ],
                             text_rule=TextRule(field="reason", min_words=1, max_words=5),
                         )

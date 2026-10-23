@@ -68,13 +68,6 @@ def main() -> None:
             str(next(work.glob("*.whl"))),
             cwd=work,
         )
-        subprocess.run(
-            ["bash", str(ROOT / "scripts/kernel-setup.sh")],
-            cwd=work,
-            check=True,
-            env=os.environ | {"KERNEL_PYTHON": str(python)},
-            stdout=sys.stderr,
-        )
         expected_hash = subprocess.check_output(
             [
                 sys.executable,

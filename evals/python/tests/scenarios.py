@@ -8,11 +8,11 @@ from inspect_ai.model import ChatMessage, ChatMessageUser, GenerateConfig, Model
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
 from inspect_ai.util import sandbox
+from kernel import Reference
 
 from evals.python.integrations.inspect.workspace import GIT_IDENTITY, execute
 from evals.python.tests.declarations import _reference_files, _reference_text
 from evals.python.tests.projections import reference
-from kernel import Reference
 
 __test__ = False
 

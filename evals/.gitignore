@@ -6,9 +6,8 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
-/python/kernel/*.pyi
-
-/_build/
-
 /build/
 /dist/
+# Build output of the removed OCaml kernel that older checkouts keep after pull.
+/python/kernel/
+/_build/

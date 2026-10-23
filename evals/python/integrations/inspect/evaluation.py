@@ -20,8 +20,7 @@ import evals.python.integrations.inspect.remote  # noqa: F401 - register the HF 
 import evals.python.integrations.inspect.results as results_adapter
 import evals.python.integrations.inspect.tasks as task_adapter
 from evals.python import datasets, evaluation
-from evals.python.evaluation import EvaluationSettings, ModelPricing
-from kernel import Experiment
+from evals.python.evaluation import EvaluationSettings, Experiment, ModelPricing
 
 
 @modelapi(name="genius-hf")
@@ -57,14 +56,7 @@ def variant_experiment(spec: Experiment, *, request: EvaluationSettings) -> Expe
     if variant := request.variant:
         if request.deliveries:
             raise ValueError("Choose a variant or delivery diagnostics")
-        spec = Experiment.create(
-            profiles=[variant.profile],
-            epochs=spec.epochs,
-            message_limit=spec.message_limit,
-            cost_limit=spec.cost_limit,
-            time_limit=spec.time_limit,
-            cache=spec.cache,
-        )
+        spec = Experiment.model_validate({**dict(spec), "profiles": (variant,)})
     return spec
 
 
@@ -102,14 +94,7 @@ def diagnostic_tasks(
     spec: Experiment, *, request: EvaluationSettings, build: partial[Task]
 ) -> list[Task]:
     modes = request.deliveries or ()
-    single = Experiment.create(
-        profiles=spec.profiles,
-        epochs=1,
-        message_limit=spec.message_limit,
-        cost_limit=spec.cost_limit,
-        time_limit=spec.time_limit,
-        cache=spec.cache,
-    )
+    single = Experiment.model_validate({**dict(spec), "epochs": 1})
     profile = profile_adapter.load_profile("genius", spec=spec)
     return [
         build(

@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Mapping
+from importlib.metadata import distribution
 from itertools import chain, groupby, product
 from math import inf
 from pathlib import Path
@@ -12,26 +13,22 @@ from inspect_ai import Task as InspectTask
 from inspect_ai.log import EvalLog, EvalSample, list_eval_logs, read_eval_log
 from inspect_ai.model import get_model_info
 from inspect_ai.scorer import CORRECT
+from kernel import REQUIRED_SCORES, source_hash
 
 import evals.python.integrations.inspect.pricing as pricing_adapter
 import evals.python.integrations.inspect.profiles as profiles_adapter
-import kernel
 from evals.python import EVALS_ROOT, evaluation
 from evals.python.comparison import RunSummary
 from evals.python.estimation import Metrics, Trials
-from evals.python.evaluation import EvaluationSettings
+from evals.python.evaluation import EvaluationSettings, Experiment
 from evals.python.integrations.inspect import completeness
-from kernel import Experiment, Task
 
 
 def _harness_source(path: Path) -> bool:
     return (
         path.is_file()
-        and (path.suffix in (".py", ".ml", ".mli", ".sh") or path.parent == EVALS_ROOT / "bin")
-        and not {
-            "tests",
-            "kernel",
-        }.intersection(path.relative_to(EVALS_ROOT).parts)
+        and (path.suffix in (".py", ".sh") or path.parent == EVALS_ROOT / "bin")
+        and "tests" not in path.relative_to(EVALS_ROOT).parts
     )
 
 
@@ -39,17 +36,14 @@ def harness_hash() -> str:
     files = {
         path.relative_to(EVALS_ROOT).as_posix(): path.read_bytes()
         for path in chain.from_iterable(
-            (EVALS_ROOT / folder).rglob("*")
-            for folder in ("python", "ocaml", "bin", "lib", "scripts")
+            (EVALS_ROOT / folder).rglob("*") for folder in ("python", "bin", "lib", "scripts")
         )
         if _harness_source(path)
     }
-    files.update(
-        {
-            "python/kernel/" + path.name: path.read_bytes()
-            for path in Path(kernel.__file__).parent.glob("*.py")
-        }
-    )
+    # The installed origin, so a kernel that differs from the pin changes the hash.
+    origin = json.loads(distribution("genius-bench-kernel").read_text("direct_url.json") or "{}")
+    commit = origin.get("vcs_info", {}).get("commit_id", origin.get("url"))
+    files["genius-bench-kernel"] = repr((source_hash(), commit)).encode()
     files["pyproject.toml"] = (EVALS_ROOT / "pyproject.toml").read_bytes()
     files["uv.lock"] = (EVALS_ROOT / "uv.lock").read_bytes()
     return profiles_adapter.content_hash(files)
@@ -163,7 +157,7 @@ def correct(sample: EvalSample) -> bool:
     return (
         not sample.limit
         and not completeness.crashed(sample)
-        and all(value[name] == CORRECT for name in Task.required_scores)
+        and all(value[name] == CORRECT for name in REQUIRED_SCORES)
     )
 
 
@@ -178,13 +172,14 @@ def checks(details: dict[str, Any], *, prefix: str = "") -> list[tuple[str, bool
 
 def trial(sample: EvalSample) -> Metrics:
     """One graded try: success, elapsed time, failure indicators, and each check."""
-    details = ((sample.scores or {})["evaluation"].metadata or {}).get("assessment", {})
+    metadata = (sample.scores or {})["evaluation"].metadata or {}
     return {
         "accuracy": float(correct(sample)),
         "seconds": elapsed(sample),
         "crashed": float(completeness.crashed(sample)),
         "cutoff": float(sample.limit is not None),
-        **{name: float(passed) for name, passed in checks(details)},
+        "unrepresentable": float(bool(metadata.get("unrepresentable"))),
+        **{name: float(passed) for name, passed in checks(metadata.get("assessment", {}))},
     }
 
 

@@ -2,8 +2,11 @@ import json
 from pathlib import Path
 
 import pytest
+from kernel import Outcome, Verification
+from pydantic import JsonValue
 
-from evals.python.integrations.inspect.scoring import decode_response
+from evals.python.integrations.inspect.scoring import decode_response, observed, unrepresentable
+from evals.python.provenance import plain
 
 
 @pytest.mark.parametrize(
@@ -47,7 +50,38 @@ def duplicate_keys_keep_the_last_json_value() -> None:
 
 
 def nested_replies_decode_to_lists_and_records() -> None:
-    assert decode_response('{"items":[1,null,{"x":[]}]}') == {"items": [1, None, {"x": []}]}
+    reply = decode_response('{"items":[1,null,{"x":[]}]}')
+    assert reply == {"items": [1, None, {"x": []}]}
+    assert plain(observed(reply)) == reply
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        (2**63, {"unrepresentable": "int"}),
+        ({"count": -(2**64), "kept": 1}, {"count": {"unrepresentable": "int"}, "kept": 1}),
+        ({1: "key"}, {"1": "key"}),
+        (object(), {"unrepresentable": "object"}),
+    ],
+)
+def unrepresentable_parts_become_records_naming_their_type(
+    data: object, *, expected: JsonValue
+) -> None:
+    assert plain(observed(data)) == expected
+
+
+@pytest.mark.parametrize(("depth", "kind"), [(255, "list"), (256, "record"), (300, "list")])
+def deep_replies_fit_inside_the_observation_record(depth: int, *, kind: str) -> None:
+    reply = observed(json.loads("[" * depth + "]" * depth))
+    outcome = Outcome(
+        changed_files=[], verification=Verification.unchecked(), response=reply, facts=[]
+    )
+    assert outcome.response.kind == kind
+
+
+def unrepresentable_names_the_channels_the_kernel_cannot_hold() -> None:
+    channels = {"response": {"id": 2**64}, "trace": [], "state": {1: "key"}}
+    assert unrepresentable(channels) == ["response", "state"]
 
 
 def candidate_text_cannot_execute_code(tmp_path: Path) -> None:

@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
+from kernel import Task, Verifier
 
 from evals.python import datasets, verification
-from evals.python.datasets import Selection
+from evals.python.datasets import Case, Declaration, Selection
 from evals.python.datasets import smoke as declarations
 from evals.python.integrations.inspect.environments import environment, runtime
 from evals.python.tests.declarations import _files, _reference_files
 from evals.python.tests.projections import reference, verifier
-from kernel import Case, Task, Verification, Verifier
 
 CASES = {case.case_id: case for case in datasets.list_cases()}
 
@@ -35,11 +35,11 @@ def _verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> b
             for name, data in _snapshot(directory).items():
                 await agent.write_file(f"workspace/{name}", data)
             result = await verification.verify(
-                Task.checks(task=datasets.load_dataset(selection=selection).records[case.case_id]),
+                datasets.load_dataset(selection=selection).records[case.case_id].task.checks(),
                 agent=environment(agent),
                 runtime=runtime(agent),
             )
-            return isinstance(result.verification, Verification.Passed)
+            return result.verification.status == "passed"
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
                 "test", None, {"default": agent}, interrupted=False
@@ -168,7 +168,7 @@ def family_variants_generate_working_seeds_and_solutions(
     fragment: str,
     tmp_path: Path,
 ) -> None:
-    dataset = datasets.compile_dataset(cases=(definition,))
+    dataset = datasets.compile_dataset(cases=(Declaration(skill="reasoning", task=definition),))
     case = datasets.list_cases(selection=dataset)[0]
     assert fragment in _files(case.files)[filename]
     _write_files(tmp_path, files=_files(case.files))

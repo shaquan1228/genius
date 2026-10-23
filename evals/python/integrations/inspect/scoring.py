@@ -1,21 +1,21 @@
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from functools import partial, wraps
-from operator import attrgetter
-from typing import Any, cast
+from typing import cast
 
 from inspect_ai.model import ChatMessageAssistant
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer, stderr
 from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
+from kernel import REQUIRED_SCORES, Assessment, Outcome, Value
 from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import datasets, verification
 from evals.python.datasets import Dataset
-from kernel import Assessment, Outcome, Predicate, Task, Value, Verification
+from evals.python.provenance import plain
 
 WORKSPACE = "workspace/"
 
@@ -30,16 +30,33 @@ def decode_response(text: str) -> JsonValue:
     return None
 
 
-_PLAIN: dict[type, Callable[[Any], JsonValue]] = {
-    Value.Null: lambda _: None,
-    Value.List: lambda data: [plain(item) for item in data.items],
-    Value.Record: lambda data: {name: plain(item) for name, item in data.fields},
-}
-_SCALAR: Callable[[Any], JsonValue] = attrgetter("value")
+def observed(data: object) -> Value:
+    """Observe harness data one level down, as the kernel's observation record holds it.
+
+    A part the kernel cannot hold, such as an integer beyond signed 64 bits, becomes a record
+    naming its type. The part stays present, so a negated check cannot pass on it.
+    """
+    match data:
+        case dict():
+            parts: object = {str(key): observed(item) for key, item in data.items()}
+        case list() | tuple():
+            parts = [observed(item) for item in data]
+        case _:
+            parts = data
+    with suppress(TypeError, ValueError, OverflowError):
+        return Value.from_python(value=[parts]).items[0]
+    return Value.from_python(value={"unrepresentable": type(data).__name__})
 
 
-def plain(data: Value.Value) -> JsonValue:
-    return _PLAIN.get(type(data), _SCALAR)(data)
+def unrepresentable(channels: Mapping[str, object]) -> list[str]:
+    """Channels the kernel cannot hold as given, so each arm's rate can be estimated."""
+    names = []
+    for name, data in channels.items():
+        try:
+            Value.from_python(value=[data])
+        except (TypeError, ValueError, OverflowError):
+            names.append(name)
+    return names
 
 
 def trace(state: TaskState) -> list[JsonValue]:
@@ -56,36 +73,17 @@ def workspace_path(path: str) -> str:
     return path.removeprefix(WORKSPACE) if path.startswith(WORKSPACE) else f"../{path}"
 
 
-_PREDICATES: dict[type, Callable[[Any], dict[str, JsonValue]]] = {
-    Predicate.Present: lambda _: {},
-    Predicate.Equals: lambda check: {"expected": plain(check.expected)},
-    Predicate.Within: lambda check: {"allowed": [plain(item) for item in check.allowed]},
-    Predicate.Contains: lambda check: {"item": plain(check.item)},
-    Predicate.Words: lambda check: {"min_words": check.min_words, "max_words": check.max_words},
-    Predicate.All: lambda check: {"checks": [name for name, _ in check.checks]},
-    Predicate.Any: lambda check: {"checks": [name for name, _ in check.checks]},
-    Predicate.Not: lambda check: {"check": predicate_details(check.check)},
-}
-
-
-def predicate_details(predicate: Predicate.Value) -> dict[str, JsonValue]:
-    details: dict[str, JsonValue] = {"kind": type(predicate).__name__.lower()}
-    path = getattr(predicate, "path", None)
-    if path is not None:
-        details["path"] = list(path)
-    details.update(_PREDICATES[type(predicate)](predicate))
-    return details
-
-
-def assessment_details(assessment: Assessment.Value) -> dict[str, JsonValue]:
-    result: dict[str, JsonValue] = {"passed": Assessment.passed(assessment=assessment)}
-    if isinstance(assessment, Assessment.All):
-        result["checks"] = {name: assessment_details(check) for name, check in assessment.checks}
-        return result
-    observed = Assessment.observed(assessment=assessment)
-    result["predicate"] = predicate_details(assessment.predicate)
-    result["observed"] = None if observed is None else plain(observed)
-    return result
+def assessment_details(assessment: Assessment) -> dict[str, JsonValue]:
+    if assessment.kind == "all":
+        return {
+            "passed": assessment.passed(),
+            "checks": {name: assessment_details(check) for name, check in assessment.checks},
+        }
+    return {
+        "passed": assessment.passed(),
+        "predicate": plain(assessment.predicate),
+        "observed": plain(assessment.observed()),
+    }
 
 
 def score_values(scores: Sequence[tuple[str, bool]]) -> dict[str, str]:
@@ -110,43 +108,42 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
         if dataset is not None
         else cast(str, state.metadata.get("dataset", "smoke"))
     )
-    task = selected.records[str(state.metadata["case_id"])]
+    task = selected.records[str(state.metadata["case_id"])].task
     evidence = await verification.verify(
-        Task.checks(task=task),
+        task.checks(),
         agent=environments_adapter.environment(current),
         runtime=environments_adapter.runtime(current),
     )
+    response = decode_response(completion)
     facts: dict[str, JsonValue] = {"trace": trace(state), "state": dict(state.store.items())}
-    result = Task.assess(
-        task=task,
-        outcome=Outcome.create(
+    result = task.assess(
+        outcome=Outcome(
             changed_files=changed,
             verification=evidence.verification,
-            response=decode_response(completion),
-            facts=facts,
-        ),
+            response=observed(response),
+            facts=[(name, observed(fact)) for name, fact in facts.items()],
+        )
     )
-    explanation = (
-        completion if isinstance(evidence.verification, Verification.Unchecked) else evidence.detail
-    )
+    explanation = completion if evidence.verification.status == "unchecked" else evidence.detail
     return Score(
-        value=score_values(Assessment.scores(assessment=result)),
+        value=score_values(result.scores()),
         explanation=with_failure(explanation, failure=failure),
         metadata={
             "verification": {
-                "status": Outcome.status(verification=evidence.verification),
+                "status": evidence.verification.status,
                 "detail": evidence.detail,
             },
             "verifier_metadata": evidence.metadata_json(),
             "changed_files": changed,
             "facts": facts,
+            "unrepresentable": unrepresentable({"response": response, **facts}),
             "agent_failure": failure,
             "assessment": assessment_details(result),
         },
     )
 
 
-@scorer(metrics={name: [accuracy(), stderr()] for name in Task.required_scores})
+@scorer(metrics={name: [accuracy(), stderr()] for name in REQUIRED_SCORES})
 def evaluation() -> Scorer:
     return score_sample
 

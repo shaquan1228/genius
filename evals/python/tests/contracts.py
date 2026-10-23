@@ -6,18 +6,17 @@ from typing import cast
 from unittest.mock import patch
 
 import pytest
+from kernel import File
 from pydantic import ValidationError
 
 from evals.python import datasets, evaluation
-from evals.python.datasets import Dataset
-from evals.python.evaluation import resolve_settings
+from evals.python.datasets import Case, Dataset
+from evals.python.evaluation import Experiment, resolve_settings
 from evals.python.integrations.evalplus import benchmarks
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.tasks import build_task
 from evals.python.tests.projections import reference
 from evals.python.tests.support import choice_case as _choice_case
-from kernel import Case, Experiment, File
-from kernel import ValidationError as DomainValidationError
 
 
 @pytest.fixture
@@ -80,8 +79,8 @@ def all_contract_collections_are_immutable() -> None:
     with pytest.raises(TypeError):
         expected.edits[0] = File(path="new", contents="value")  # type: ignore[index]
     spec = evaluation.resolve_settings()
-    with pytest.raises((AttributeError, TypeError)):
-        spec.profiles[0].preamble = "changed"  # type: ignore[misc]
+    with pytest.raises(ValidationError, match="frozen"):
+        spec.profiles[0].preamble = "changed"
     assert tuple(spec.profiles[0].instructions) == ()
 
 
@@ -106,9 +105,9 @@ def run_overrides_are_resolved_once_and_shared_with_inspect() -> None:
 
 @pytest.mark.parametrize("field", ["epochs", "message_limit", "cost_limit", "time_limit"])
 @pytest.mark.parametrize("value", [0, -1])
-def kernel_rejects_invalid_run_overrides(field: str, *, value: int) -> None:
+def experiment_rejects_invalid_run_overrides(field: str, *, value: int) -> None:
     operation = cast(Callable[..., Experiment], resolve_settings)
-    with pytest.raises(DomainValidationError):
+    with pytest.raises(ValidationError, match=field):
         operation(**{field: value})
 
 

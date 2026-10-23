@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 import pytest
 from inspect_ai.log import EvalLog, EvalSample, read_eval_log
 from inspect_ai.scorer import CORRECT, INCORRECT
+from kernel import Verification
 
 from evals.python.integrations.inspect.agents import AGENT_REGISTRY
 from evals.python.integrations.inspect.tasks import baseline, genius
@@ -24,7 +25,6 @@ from evals.python.tests.support import (
     results as _results,
 )
 from evals.python.verification import VerificationResult
-from kernel import Verification
 
 
 def complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
@@ -141,7 +141,7 @@ def verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
     with patch(
         "evals.python.verification.verify",
         return_value=VerificationResult(
-            verification=Verification.HarnessError(detail="grader failed to import")
+            verification=Verification.harness_error(detail="grader failed to import")
         ),
     ):
         log = _offline_run([baseline()], mode="pass", directory=tmp_path)[0]
@@ -157,24 +157,24 @@ def extended_native_contract_drives_fresh_inspect_registration() -> None:
             "-c",
             """
 from unittest.mock import patch
-from kernel import Assessment, Predicate, Task, Value
-with patch.object(Task, "required_scores", ["correctness", "scope", "extension"]):
+import kernel
+from kernel import Assessment, Predicate, Value
+with patch.object(kernel, "REQUIRED_SCORES", ("correctness", "scope", "extension")):
     from evals.python.integrations.inspect import completeness, scoring
     from inspect_ai.scorer._scorer import scorer_metrics
     from inspect_ai.scorer import CORRECT, INCORRECT
     metrics = scorer_metrics(scoring.evaluation())
     assert isinstance(metrics, dict)
-    assert tuple(metrics) == tuple(Task.required_scores)
+    assert tuple(metrics) == kernel.REQUIRED_SCORES
     assert all(len(items) == 2 for items in metrics.values())
     assert not completeness.complete_value({"correctness": CORRECT, "scope": INCORRECT})
     encoded = {"correctness": CORRECT, "scope": INCORRECT, "extension": CORRECT}
     assert completeness.complete_value(encoded)
-    yes = Predicate.All(checks=[])
-    no = Predicate.Present(path=["absent"])
-    predicate = Predicate.All(checks=[("correctness", yes), ("scope", no), ("extension", yes)])
-    assessment = Assessment.create(predicate=predicate, observation=None)
-    scores = Assessment.scores(assessment=assessment)
-    assert scoring.score_values(scores) == encoded
+    yes = Predicate.all(checks=[])
+    no = Predicate.present(path=["absent"])
+    predicate = Predicate.all(checks=[("correctness", yes), ("scope", no), ("extension", yes)])
+    assessment = Assessment(predicate=predicate, observation=Value.from_python(value=None))
+    assert scoring.score_values(assessment.scores()) == encoded
 """,
         ],
         capture_output=True,
