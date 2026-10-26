@@ -6,7 +6,7 @@ from typing import cast
 from unittest.mock import patch
 
 import pytest
-from kernel import File
+from kernel import SourceFile
 from pydantic import ValidationError
 
 from evals.python import datasets, evaluation
@@ -77,7 +77,7 @@ def all_contract_collections_are_immutable() -> None:
     with pytest.raises(TypeError):
         info.attributes["new"] = "value"  # type: ignore[index]
     with pytest.raises(TypeError):
-        expected.edits[0] = File(path="new", contents="value")  # type: ignore[index]
+        expected.edits[0] = SourceFile(path="new", contents="value")  # type: ignore[index]
     spec = evaluation.resolve_settings()
     with pytest.raises(ValidationError, match="frozen"):
         spec.profiles[0].preamble = "changed"

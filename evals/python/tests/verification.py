@@ -13,7 +13,7 @@ from inspect_ai.util import ExecResult
 from inspect_ai.util._sandbox.docker.docker import DockerSandboxEnvironment
 from inspect_ai.util._sandbox.docker.util import ComposeProject
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
-from kernel import Criterion, File, Instruction, Reference, Task, Value, Verification, Verifier
+from kernel import Criterion, Instruction, Reference, SourceFile, Task, Verification, Verifier
 from kernel import (
     ValidationError as DomainValidationError,
 )
@@ -37,8 +37,8 @@ print(json.dumps({'marker': os.environ['GENIUS_VERIFIER_MARKER'],
 def _checks(**updates: object) -> Verifier:
     values = {
         "inputs": ("solution.py",),
-        "files": [File(path="grader.py", contents=DRIVER)],
-        "tools": [File(path="visible.py", contents="raise Exception()")],
+        "files": [SourceFile(path="grader.py", contents=DRIVER)],
+        "tools": [SourceFile(path="visible.py", contents="raise Exception()")],
         "command": ("python3", "grader.py"),
         "stdin": "42",
         "timeout_seconds": 30,
@@ -48,14 +48,14 @@ def _checks(**updates: object) -> Verifier:
     return constructor(**values)
 
 
-def _reference_task(*, edits: list[File]) -> Task:
+def _reference_task(*, edits: list[SourceFile]) -> Task:
     return Task(
         id="reference",
-        fixture=[File(path="solution.py", contents="")],
+        fixture=[SourceFile(path="solution.py", contents="")],
         instruction=Instruction(prompt="Print 42"),
         criterion=Criterion.code(verifier=_checks()),
         allowed_files=["solution.py"],
-        reference=Reference(edits=edits, completion=Value.from_python(value=None)),
+        reference=Reference(edits=edits, completion=None),
     )
 
 
@@ -324,10 +324,10 @@ def invalid_executable_contract_is_rejected(updates: dict[str, object]) -> None:
             cases=(
                 _copy_case(
                     case,
-                    fixture=[File(path="solution.py", contents="print(42)")],
+                    fixture=[SourceFile(path="solution.py", contents="print(42)")],
                     criterion=Criterion.code(verifier=_checks(**updates)),
                     allowed_files=("solution.py",),
-                    reference=Reference(edits=[], completion=Value.from_python(value=None)),
+                    reference=Reference(edits=[], completion=None),
                 ),
             )
         )
@@ -414,7 +414,7 @@ def reference_candidate_and_grader_are_both_cleaned() -> None:
         agent, grader = _agent_port(), _grader_port()
         ports = _runtime_port(grader)
         cast(AsyncMock, ports.create).side_effect = [agent, grader]
-        task = _reference_task(edits=[File(path="solution.py", contents="print(42)")])
+        task = _reference_task(edits=[SourceFile(path="solution.py", contents="print(42)")])
         with patch("evals.python.verification.token_hex", return_value="secret"):
             result = await verification.validate_reference(task, runtime=ports)
         assert result.verification.status == "passed"
@@ -440,7 +440,7 @@ def reference_setup_failures_preserve_lifecycle(stage: str) -> None:
         }
         error = asyncio.CancelledError() if stage == "cancel" else TimeoutError("setup")
         cast(AsyncMock, effects[stage]).side_effect = error
-        task = _reference_task(edits=[File(path="solution.py", contents="")])
+        task = _reference_task(edits=[SourceFile(path="solution.py", contents="")])
         if stage == "cancel":
             with pytest.raises(asyncio.CancelledError):
                 await verification.validate_reference(task, runtime=ports)

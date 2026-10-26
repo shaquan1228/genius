@@ -6,10 +6,10 @@ from collections.abc import Callable, Sequence
 import pytest
 from kernel import (
     Criterion,
-    File,
     Instruction,
     Reference,
     Rubric,
+    SourceFile,
     Task,
     TextRule,
     Value,
@@ -35,7 +35,7 @@ def _copy_case(  # noqa: PLR0913 - Reconstruct the actual native record fields.
     value: Declaration,
     *,
     id: str | None = None,
-    fixture: Sequence[File] | None = None,
+    fixture: Sequence[SourceFile] | None = None,
     instruction: Instruction | None = None,
     criterion: Criterion | None = None,
     allowed_files: Sequence[str] | None = None,
@@ -59,8 +59,8 @@ def _copy_verifier(  # noqa: PLR0913 - Reconstruct the actual native record fiel
     value: Verifier,
     *,
     inputs: Sequence[str] | None = None,
-    files: Sequence[File] | None = None,
-    tools: Sequence[File] | None = None,
+    files: Sequence[SourceFile] | None = None,
+    tools: Sequence[SourceFile] | None = None,
     command: Sequence[str] | None = None,
     stdin: str | None = None,
     timeout_seconds: int | None = None,
@@ -75,7 +75,7 @@ def _copy_verifier(  # noqa: PLR0913 - Reconstruct the actual native record fiel
     )
 
 
-def _files(value: Sequence[File]) -> dict[str, str]:
+def _files(value: Sequence[SourceFile]) -> dict[str, str]:
     return {file.path: file.contents for file in value}
 
 
@@ -84,8 +84,8 @@ def _declaration(*, code: bool = True) -> Declaration:
         criterion = Criterion.code(
             verifier=Verifier(
                 inputs=("main.py",),
-                files=[File(path="verify.py", contents="private assertions")],
-                tools=[File(path="check.sh", contents="visible helper")],
+                files=[SourceFile(path="verify.py", contents="private assertions")],
+                tools=[SourceFile(path="check.sh", contents="visible helper")],
                 command=("python3", "verify.py"),
                 stdin="private stdin",
                 timeout_seconds=30,
@@ -105,15 +105,13 @@ def _declaration(*, code: bool = True) -> Declaration:
         skill="reasoning",
         task=Task(
             id="external",
-            fixture=[File(path="main.py", contents="broken")],
+            fixture=[SourceFile(path="main.py", contents="broken")],
             instruction=Instruction(prompt="Fix it: é"),
             criterion=criterion,
             allowed_files=("main.py",),
             reference=Reference(
-                edits=[File(path="main.py", contents="fixed")],
-                completion=Value.from_python(
-                    value="done" if code else {"choice": "B", "safe": True}
-                ),
+                edits=[SourceFile(path="main.py", contents="fixed")],
+                completion="done" if code else {"choice": "B", "safe": True},
             ),
         ),
     )
@@ -185,8 +183,8 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
         lambda c: _copy_case(
             c,
             reference=Reference(
-                edits=[File(path="outside.py", contents="unauthorized")],
-                completion=Value.from_python(value=None),
+                edits=[SourceFile(path="outside.py", contents="unauthorized")],
+                completion=None,
             ),
         ),
     ],
@@ -211,8 +209,8 @@ def declarations_reject_invalid_skill_names(skill: str) -> None:
         ("inputs", ("missing.py",)),
         ("command", ()),
         ("timeout_seconds", 0),
-        ("files", lambda: [File(path="main.py", contents="overlap")]),
-        ("tools", lambda: [File(path="../secret", contents="bad")]),
+        ("files", lambda: [SourceFile(path="main.py", contents="overlap")]),
+        ("tools", lambda: [SourceFile(path="../secret", contents="bad")]),
     ],
 )
 def nested_constructor_rules_fail_closed(field: str, *, value: object) -> None:
@@ -247,13 +245,13 @@ def answer_constructor_rules_fail_closed(minimum: int, *, maximum: int) -> None:
 
 
 def native_fields_retain_immutable_snapshots() -> None:
-    initial = [File(path="main.py", contents="broken")]
+    initial = [SourceFile(path="main.py", contents="broken")]
     task = _copy_case(_declaration(), fixture=initial).task
-    initial[0] = File(path="main.py", contents="changed")
+    initial[0] = SourceFile(path="main.py", contents="changed")
     assert _files(task.fixture) == {"main.py": "broken"}
     with pytest.raises((AttributeError, TypeError)):
         task.fixture = ()  # type: ignore[misc]
-    artifacts = [File(path="verify.py", contents="private assertions")]
+    artifacts = [SourceFile(path="verify.py", contents="private assertions")]
     original = task.checks()
     assert original is not None
     checks = _copy_verifier(original, files=artifacts)

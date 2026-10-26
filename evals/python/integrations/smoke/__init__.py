@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from kernel import Criterion, File, Verifier
+from kernel import Criterion, SourceFile, Verifier
 
 
 def checks(*, inputs: tuple[str, ...], program: str) -> Criterion:
@@ -10,7 +10,7 @@ def checks(*, inputs: tuple[str, ...], program: str) -> Criterion:
         verifier=Verifier(
             inputs=inputs,
             files=[
-                File(
+                SourceFile(
                     path="verifier.py", contents=Path(__file__).with_name("verifier.py").read_text()
                 )
             ],

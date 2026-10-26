@@ -9,11 +9,10 @@ from unittest.mock import patch
 import pytest
 from kernel import (
     Criterion,
-    File,
     Instruction,
     Reference,
+    SourceFile,
     Task,
-    Value,
     Verifier,
 )
 from kernel import (
@@ -57,7 +56,7 @@ def native_dataset_paths_are_rejected(tmp_path: Path) -> None:
 def generated_paths_are_validated(path: str) -> None:
     declaration = _choice_case(case_id="paths", a=1, b=2)
     with pytest.raises(DomainValidationError):
-        _copy_case(declaration, fixture=[File(path=path, contents="bad")])
+        _copy_case(declaration, fixture=[SourceFile(path=path, contents="bad")])
 
 
 def profiles_share_fixture_files() -> None:
@@ -195,9 +194,9 @@ def cases_are_immutable() -> None:
     with pytest.raises((AttributeError, TypeError)):
         case.case_id = "changed"  # type: ignore[misc]
     with pytest.raises(TypeError):
-        case.files[0] = File(path="receipt.py", contents="changed")  # type: ignore[index]
+        case.files[0] = SourceFile(path="receipt.py", contents="changed")  # type: ignore[index]
     with pytest.raises(TypeError):
-        reference(case.case_id).edits[0] = File(path="receipt.py", contents="changed")  # type: ignore[index]
+        reference(case.case_id).edits[0] = SourceFile(path="receipt.py", contents="changed")  # type: ignore[index]
     checks = verifier(case.case_id)
     assert checks is not None
     with pytest.raises((AttributeError, TypeError)):
@@ -223,12 +222,12 @@ def compilation_cache_invalidates_when_declarations_change() -> None:
 def generic_python_case_exports_without_language_restriction() -> None:
     definition = Task(
         id="python-case",
-        fixture=[File(path="solution.py", contents="print(42)")],
+        fixture=[SourceFile(path="solution.py", contents="print(42)")],
         instruction=Instruction(prompt="Return 42"),
         criterion=Criterion.code(
             verifier=Verifier(
                 inputs=("solution.py",),
-                files=[File(path="grader.py", contents="trusted")],
+                files=[SourceFile(path="grader.py", contents="trusted")],
                 tools=[],
                 command=("python3", "grader.py"),
                 stdin="private",
@@ -236,7 +235,7 @@ def generic_python_case_exports_without_language_restriction() -> None:
             )
         ),
         allowed_files=("solution.py",),
-        reference=Reference(edits=[], completion=Value.from_python(value="done")),
+        reference=Reference(edits=[], completion="done"),
     )
     dataset = datasets.compile_dataset(cases=(Declaration(skill="reasoning", task=definition),))
     case = datasets.list_cases(selection=dataset)[0]

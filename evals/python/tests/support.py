@@ -88,9 +88,7 @@ def choice_case(*, case_id: str, a: int, b: int) -> Declaration:
             allowed_files=(),
             reference=Reference(
                 edits=[],
-                completion=Value.from_python(
-                    value={"choice": choice, "reason": "The cost is lower."}
-                ),
+                completion={"choice": choice, "reason": "The cost is lower."},
             ),
         ),
     )

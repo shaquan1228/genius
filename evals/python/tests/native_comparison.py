@@ -193,7 +193,7 @@ def tool_traces_and_environment_state_are_graded_as_facts() -> None:
         instruction=Instruction(prompt="Report the balance"),
         criterion=criterion,
         allowed_files=[],
-        reference=Reference(edits=[], completion=Value.from_python(value="5")),
+        reference=Reference(edits=[], completion="5"),
     )
     dataset = datasets.compile_dataset(cases=(Declaration(skill="reasoning", task=task),))
     assert (task.checks(), bool(dataset.cases_hash)) == (None, True)

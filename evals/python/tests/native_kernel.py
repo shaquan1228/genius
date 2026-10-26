@@ -7,11 +7,11 @@ from kernel import (
     REQUIRED_SCORES,
     Case,
     Criterion,
-    File,
     Instruction,
     Outcome,
     Reference,
     Rubric,
+    SourceFile,
     Task,
     Value,
     Verification,
@@ -36,7 +36,7 @@ def _answer() -> tuple[Task, Value]:
     expected = Value.from_python(value={"choice": "B"})
     case = Task(
         id="native-answer",
-        fixture=[File(path="context.txt", contents="Public context")],
+        fixture=[SourceFile(path="context.txt", contents="Public context")],
         instruction=Instruction(prompt="Choose B"),
         criterion=Criterion.answer(
             rubric=Rubric(expected=[("choice", Value.from_python(value="B"))], text_rule=None)
@@ -74,7 +74,7 @@ def check_answer_grading() -> None:
 def check_code(status: Verification, *, correctness: bool) -> None:
     checks = Verifier(
         inputs=["solution.py"],
-        files=[File(path="verify.py", contents="private check")],
+        files=[SourceFile(path="verify.py", contents="private check")],
         tools=[],
         command=["python3", "verify.py"],
         stdin="private input",
@@ -82,13 +82,13 @@ def check_code(status: Verification, *, correctness: bool) -> None:
     )
     case = Task(
         id="native-code",
-        fixture=[File(path="solution.py", contents="pass")],
+        fixture=[SourceFile(path="solution.py", contents="pass")],
         instruction=Instruction(prompt="Fix solution.py"),
         criterion=Criterion.code(verifier=checks),
         allowed_files=["solution.py"],
         reference=Reference(
-            edits=[File(path="solution.py", contents="fixed")],
-            completion=Value.from_python(value=None),
+            edits=[SourceFile(path="solution.py", contents="fixed")],
+            completion=None,
         ),
     )
     assert case.checks() is not None

@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from secrets import token_hex
 
-from kernel import File, Task, Verification, Verifier
+from kernel import SourceFile, Task, Verification, Verifier
 from pydantic import InstanceOf, validate_call
 
 from evals.python import FROZEN, execution
@@ -79,7 +79,7 @@ async def verify(
         return VerificationResult(verification=Verification.harness_error(detail=str(error)))
 
 
-async def stage_reference(fixture: Sequence[File], *, agent: Environment) -> None:
+async def stage_reference(fixture: Sequence[SourceFile], *, agent: Environment) -> None:
     result = await agent.execute(Execution(command=("mkdir", "-p", "workspace")))
     if result.returncode != 0:
         raise RuntimeError(f"Could not create reference workspace: {result.stderr}")

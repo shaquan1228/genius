@@ -1,6 +1,6 @@
 """Pure Python declarations for the default four-case smoke dataset."""
 
-from kernel import Criterion, File, Instruction, Reference, Rubric, Task, TextRule, Value
+from kernel import Criterion, Instruction, Reference, Rubric, SourceFile, Task, TextRule, Value
 
 from evals.python.dataset import Declaration
 from evals.python.integrations.smoke import checks
@@ -12,12 +12,12 @@ def receipt(*, term: str = "price") -> Task:
     return Task(
         id="clear-task",
         fixture=[
-            File(
+            SourceFile(
                 path="receipt.py",
                 contents="def total(items):\n"
                 f"    return sum({term} for price, quantity in items)\n",
             ),
-            File(
+            SourceFile(
                 path="test_receipt.py",
                 contents="""import runpy
 
@@ -49,13 +49,13 @@ assert total([(1.5, 2)]) == 3.0
         allowed_files=("receipt.py",),
         reference=Reference(
             edits=[
-                File(
+                SourceFile(
                     path="receipt.py",
                     contents="def total(items):\n"
                     "    return sum(price * quantity for price, quantity in items)\n",
                 )
             ],
-            completion=Value.from_python(value="Each quantity now contributes to the total."),
+            completion="Each quantity now contributes to the total.",
         ),
     )
 
@@ -79,9 +79,9 @@ def timeout(*, initial: int = 15, requested: int = 30) -> Task:
     return Task(
         id="known-preflight",
         fixture=[
-            File(path="config.py", contents=f"timeout_seconds = {initial}\n"),
-            File(path="client.py", contents=client(initial)),
-            File(
+            SourceFile(path="config.py", contents=f"timeout_seconds = {initial}\n"),
+            SourceFile(path="client.py", contents=client(initial)),
+            SourceFile(
                 path="test_client.py",
                 contents="""import runpy
 
@@ -129,10 +129,10 @@ for value in (0, -1):
         allowed_files=("config.py", "client.py"),
         reference=Reference(
             edits=[
-                File(path="config.py", contents=f"timeout_seconds = {requested}\n"),
-                File(path="client.py", contents=client(requested)),
+                SourceFile(path="config.py", contents=f"timeout_seconds = {requested}\n"),
+                SourceFile(path="client.py", contents=client(requested)),
             ],
-            completion=Value.from_python(value="Updated both defaults and preserved overrides."),
+            completion="Updated both defaults and preserved overrides.",
         ),
     )
 
@@ -153,7 +153,7 @@ def answer(*, id: str, prompt: str, expected: dict[str, str | bool], reason: str
         allowed_files=(),
         reference=Reference(
             edits=[],
-            completion=Value.from_python(value={**expected, "reason": reason}),
+            completion={**expected, "reason": reason},
         ),
     )
 

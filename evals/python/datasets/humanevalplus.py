@@ -9,7 +9,7 @@ from io import BytesIO, TextIOWrapper
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from kernel import File, Instruction, Reference, Task, Value
+from kernel import Instruction, Reference, SourceFile, Task
 from pydantic import BaseModel, ConfigDict, Field
 
 from evals.python.dataset import DatasetInfo, Declaration
@@ -44,7 +44,7 @@ def task(raw: str) -> Task:
     problem = Problem.model_validate_json(raw)
     return Task(
         id="humaneval-" + problem.task_id.split("/")[1],
-        fixture=[File(path="solution.py", contents=problem.prompt)],
+        fixture=[SourceFile(path="solution.py", contents=problem.prompt)],
         instruction=Instruction(
             prompt=(
                 "Implement the specified function in solution.py. Preserve its signature and edit "
@@ -56,8 +56,10 @@ def task(raw: str) -> Task:
         ),
         allowed_files=("solution.py",),
         reference=Reference(
-            edits=[File(path="solution.py", contents=problem.prompt + problem.canonical_solution)],
-            completion=Value.from_python(value=None),
+            edits=[
+                SourceFile(path="solution.py", contents=problem.prompt + problem.canonical_solution)
+            ],
+            completion=None,
         ),
     )
 

@@ -13,7 +13,7 @@ from inspect_ai.log import EvalLog, read_eval_log
 from inspect_ai.scorer import CORRECT, INCORRECT
 from inspect_ai.scorer._scorer import scorer_create
 from inspect_ai.solver import generate
-from kernel import Criterion, File, Instruction, Reference, Rubric, TextRule, Value
+from kernel import Criterion, Instruction, Reference, Rubric, SourceFile, TextRule, Value
 
 from evals.python import datasets
 from evals.python import evaluation as evaluation_api
@@ -95,8 +95,8 @@ def private_tasks() -> list[Task]:
         _declaration(code=False),
         instruction=Instruction(prompt='{"choice":"B","safe":true,"reason":"clear"}'),
         reference=Reference(
-            edits=[File(path="main.py", contents=PRIVATE_SENTINEL)],
-            completion=Value.from_python(value=PRIVATE_SENTINEL),
+            edits=[SourceFile(path="main.py", contents=PRIVATE_SENTINEL)],
+            completion=PRIVATE_SENTINEL,
         ),
     )
     snapshots = [

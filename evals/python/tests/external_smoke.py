@@ -6,7 +6,7 @@ from typing import cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from kernel import Reference, Value, Verification
+from kernel import Reference, Verification
 
 from evals.python import datasets, verification
 from evals.python.datasets import Case
@@ -79,7 +79,7 @@ def offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[str])
 def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixture[str]) -> None:
     case = _copy_case(
         declarations.cases()[2],
-        reference=Reference(edits=[], completion=Value.from_python(value={})),
+        reference=Reference(edits=[], completion={}),
     )
     dataset = datasets.compile_dataset(cases=(case,))
     with patch.object(datasets, "load_dataset", return_value=dataset):

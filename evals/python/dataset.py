@@ -6,7 +6,7 @@ from functools import cached_property
 from types import MappingProxyType
 from typing import Annotated
 
-from kernel import File, Task, source_hash
+from kernel import SourceFile, Task, source_hash
 from pydantic import AfterValidator, BaseModel, Field, PlainSerializer
 
 from evals.python import FROZEN
@@ -29,7 +29,7 @@ class Case:
     case_id: str
     skill: str
     prompt: str
-    files: tuple[File, ...]
+    files: tuple[SourceFile, ...]
 
 
 class Declaration(BaseModel):

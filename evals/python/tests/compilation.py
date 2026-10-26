@@ -6,7 +6,7 @@ from typing import assert_type, cast
 from unittest.mock import patch
 
 import pytest
-from kernel import Criterion, File, Record, Reference, Task, Value
+from kernel import Criterion, Record, Reference, SourceFile, Task, Value
 from kernel import (
     ValidationError as DomainValidationError,
 )
@@ -58,7 +58,7 @@ def compiled_records_retain_canonical_values() -> None:
         fingerprint(
             _copy_case(
                 definition,
-                reference=Reference(edits=[], completion=Value.from_python(value=completion)),
+                reference=Reference(edits=[], completion=completion),
             )
         )
         for completion in completions
@@ -89,8 +89,8 @@ def _independent_datasets() -> tuple[Dataset, Dataset]:
         first,
         criterion=Criterion.code(verifier=checks),
         reference=Reference(
-            edits=[File(path="main.py", contents="another fixed solution")],
-            completion=Value.from_python(value="another answer"),
+            edits=[SourceFile(path="main.py", contents="another fixed solution")],
+            completion="another answer",
         ),
     )
     return datasets.compile_dataset(cases=(first,)), datasets.compile_dataset(cases=(second,))
@@ -164,7 +164,7 @@ def compiled_dataset_is_immutable() -> None:
     with pytest.raises(TypeError):
         cast(dict[str, Case], dataset.cases)["external"] = dataset.cases["external"]
     with pytest.raises(TypeError):
-        dataset.cases["external"].files[0] = File(path="main.py", contents="changed")  # type: ignore[index]
+        dataset.cases["external"].files[0] = SourceFile(path="main.py", contents="changed")  # type: ignore[index]
 
 
 def empty_and_duplicate_compilation() -> None:
