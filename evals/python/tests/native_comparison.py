@@ -27,26 +27,26 @@ from evals.python.provenance import plain
 from evals.python.tests.native_kernel import _answer
 
 
-def _reply(*, choice: str = "B", reason: str = "One reason") -> Value:
-    return Value.from_python(value={"choice": choice, "reason": reason})
+def _reply(*, choice: str = "B", reason: str = "One reason") -> JsonValue:
+    return {"choice": choice, "reason": reason}
 
 
 def _outcome(
     *,
     verification: Verification,
     changed_files: tuple[str, ...] = (),
-    response: JsonValue | Value = None,
+    response: object = None,
     facts: tuple[tuple[str, JsonValue], ...] = (),
 ) -> Outcome:
     return Outcome(
         changed_files=changed_files,
         verification=verification,
-        response=Value.from_python(value=response),
-        facts=[(name, Value.from_python(value=fact)) for name, fact in facts],
+        response=response,
+        facts=facts,
     )
 
 
-def _observation(response: JsonValue | Value) -> Value:
+def _observation(response: object) -> Value:
     return _outcome(verification=Verification.unchecked(), response=response).observation()
 
 
@@ -57,14 +57,14 @@ def _observation(response: JsonValue | Value) -> Value:
         (_reply(choice="A"), True, False, "One reason"),
         (_reply(reason="long enough to fail"), True, False, "long enough to fail"),
         (None, False, False, None),
-        (Value.from_python(value={}), True, False, None),
+        ({}, True, False, None),
     ],
 )
 def composed_answer_retains_field_and_text_evidence(
-    response: Value | None, *, present: bool, passed: bool, observed: str | None
+    response: JsonValue, *, present: bool, passed: bool, observed: str | None
 ) -> None:
     rubric = Rubric(
-        expected=[("choice", Value.from_python(value="B"))],
+        expected=[("choice", "B")],
         text_rule=TextRule(field="reason", min_words=1, max_words=3),
     )
     result = Assessment(
@@ -114,10 +114,9 @@ def nested_assessments_retain_both_success_and_failure() -> None:
 
 
 def conjunction_identity_and_single_check_projection() -> None:
-    nothing = Value.from_python(value=None)
-    empty = Assessment(predicate=Predicate.all(checks=[]), observation=nothing)
+    empty = Assessment(predicate=Predicate.all(checks=[]), observation=None)
     single = Assessment(
-        predicate=Predicate.not_(check=Predicate.present(path=["absent"])), observation=nothing
+        predicate=Predicate.not_(check=Predicate.present(path=["absent"])), observation=None
     )
     assert empty.passed()
     assert empty.scores() == ()
@@ -167,17 +166,14 @@ def code_assessment_serializes_the_verified_outcome() -> None:
 
 def tool_traces_and_environment_state_are_graded_as_facts() -> None:
     call: dict[str, JsonValue] = {"name": "lookup", "arguments": {"id": 7}}
-    observed_call = Value.from_python(value=call)
     criterion = Criterion.state(
         predicate=Predicate.all(
             checks=[
-                ("looked-up", Predicate.contains(path=["trace"], item=observed_call)),
-                ("only-lookups", Predicate.within(path=["trace"], allowed=[observed_call])),
+                ("looked-up", Predicate.contains(path=["trace"], item=call)),
+                ("only-lookups", Predicate.within(path=["trace"], allowed=[call])),
                 (
                     "balance",
-                    Predicate.equals(
-                        path=["state", "balance"], expected=Value.from_python(value=5)
-                    ),
+                    Predicate.equals(path=["state", "balance"], expected=5),
                 ),
                 (
                     "no-transfer",
@@ -255,7 +251,7 @@ def unrepresentable_extra_field_keeps_the_answer_gradable() -> None:
 
 
 def _equals(*, expected: object, path: tuple[str, ...] = ("response",)) -> Predicate:
-    return Predicate.equals(path=path, expected=Value.from_python(value=expected))
+    return Predicate.equals(path=path, expected=expected)
 
 
 @pytest.mark.parametrize(
@@ -267,14 +263,12 @@ def _equals(*, expected: object, path: tuple[str, ...] = ("response",)) -> Predi
         (_equals(expected=[1, 2]), [2, 1], False),
         (
             _equals(expected=1, path=("response", "a")),
-            Value.from_python(value=Record(fields=[("a", 1), ("a", 2)])),
+            Record(fields=[("a", 1), ("a", 2)]),
             True,
         ),
         (Predicate.words(path=["response"], min_words=2, max_words=2), "one\u3000two", True),
     ],
     ids=["int-float", "bool-int", "record-order", "list-order", "first-duplicate", "unicode-words"],
 )
-def grading_rules_genius_depends_on(
-    check: Predicate, *, response: JsonValue | Value, holds: bool
-) -> None:
+def grading_rules_genius_depends_on(check: Predicate, *, response: object, holds: bool) -> None:
     assert check.holds(observation=_observation(response)) is holds

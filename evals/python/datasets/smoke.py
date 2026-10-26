@@ -1,6 +1,6 @@
 """Pure Python declarations for the default four-case smoke dataset."""
 
-from kernel import Criterion, Instruction, Reference, Rubric, SourceFile, Task, TextRule, Value
+from kernel import Criterion, Instruction, Reference, Rubric, SourceFile, Task, TextRule
 
 from evals.python.dataset import Declaration
 from evals.python.integrations.smoke import checks
@@ -144,9 +144,7 @@ def answer(*, id: str, prompt: str, expected: dict[str, str | bool], reason: str
         instruction=Instruction(prompt=prompt),
         criterion=Criterion.answer(
             rubric=Rubric(
-                expected=[
-                    (name, Value.from_python(value=value)) for name, value in expected.items()
-                ],
+                expected=list(expected.items()),
                 text_rule=TextRule(field="reason", min_words=1, max_words=40),
             )
         ),

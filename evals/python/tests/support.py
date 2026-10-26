@@ -6,7 +6,7 @@ from inspect_ai import Task as InspectTask
 from inspect_ai import eval
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import ModelCost, ModelInfo, get_model, set_model_info
-from kernel import Criterion, Instruction, Reference, Rubric, Task, TextRule, Value, Verifier
+from kernel import Criterion, Instruction, Reference, Rubric, Task, TextRule, Verifier
 
 from evals.python import datasets
 from evals.python.datasets import Case, Dataset, Declaration, humanevalplus, smoke
@@ -81,7 +81,7 @@ def choice_case(*, case_id: str, a: int, b: int) -> Declaration:
             instruction=Instruction(prompt="Choose A or B with a reason"),
             criterion=Criterion.answer(
                 rubric=Rubric(
-                    expected=[("choice", Value.from_python(value=choice))],
+                    expected=[("choice", choice)],
                     text_rule=TextRule(field="reason", min_words=1, max_words=40),
                 )
             ),

@@ -13,7 +13,7 @@ from inspect_ai.log import EvalLog, read_eval_log
 from inspect_ai.scorer import CORRECT, INCORRECT
 from inspect_ai.scorer._scorer import scorer_create
 from inspect_ai.solver import generate
-from kernel import Criterion, Instruction, Reference, Rubric, SourceFile, TextRule, Value
+from kernel import Criterion, Instruction, Reference, Rubric, SourceFile, TextRule
 
 from evals.python import datasets
 from evals.python import evaluation as evaluation_api
@@ -107,8 +107,8 @@ def private_tasks() -> list[Task]:
                     criterion=Criterion.answer(
                         rubric=Rubric(
                             expected=[
-                                ("choice", Value.from_python(value=choice)),
-                                ("safe", Value.from_python(value=True)),
+                                ("choice", choice),
+                                ("safe", True),
                             ],
                             text_rule=TextRule(field="reason", min_words=1, max_words=5),
                         )

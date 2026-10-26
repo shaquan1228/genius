@@ -173,7 +173,7 @@ with patch.object(kernel, "REQUIRED_SCORES", ("correctness", "scope", "extension
     yes = Predicate.all(checks=[])
     no = Predicate.present(path=["absent"])
     predicate = Predicate.all(checks=[("correctness", yes), ("scope", no), ("extension", yes)])
-    assessment = Assessment(predicate=predicate, observation=Value.from_python(value=None))
+    assessment = Assessment(predicate=predicate, observation=None)
     assert scoring.score_values(assessment.scores()) == encoded
 """,
         ],

@@ -12,7 +12,6 @@ from kernel import (
     SourceFile,
     Task,
     TextRule,
-    Value,
     Verifier,
 )
 from kernel import (
@@ -95,8 +94,8 @@ def _declaration(*, code: bool = True) -> Declaration:
         criterion = Criterion.answer(
             rubric=Rubric(
                 expected=[
-                    ("choice", Value.from_python(value="B")),
-                    ("safe", Value.from_python(value=True)),
+                    ("choice", "B"),
+                    ("safe", True),
                 ],
                 text_rule=TextRule(field="reason", min_words=1, max_words=5),
             )
@@ -175,7 +174,7 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
             c,
             criterion=Criterion.answer(
                 rubric=Rubric(
-                    expected=[("choice", Value.from_python(value="B"))],
+                    expected=[("choice", "B")],
                     text_rule=TextRule(field="choice", min_words=0, max_words=2),
                 )
             ),
@@ -262,9 +261,7 @@ def native_fields_retain_immutable_snapshots() -> None:
 @pytest.mark.parametrize(
     "criterion",
     [
-        Criterion.answer(
-            rubric=Rubric(expected=[("choice", Value.from_python(value="B"))], text_rule=None)
-        ),
+        Criterion.answer(rubric=Rubric(expected=[("choice", "B")], text_rule=None)),
         Criterion.answer(
             rubric=Rubric(expected=[], text_rule=TextRule(field="reason", min_words=1, max_words=5))
         ),

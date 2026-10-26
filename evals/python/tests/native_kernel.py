@@ -17,30 +17,29 @@ from kernel import (
     Verification,
     Verifier,
 )
+from pydantic import JsonValue
 
 from evals.python.tests.declarations import _files
 
 
 def _outcome(
-    *, changed_files: list[str], verification: Verification, response: Value | None = None
+    *, changed_files: list[str], verification: Verification, response: JsonValue = None
 ) -> Outcome:
     return Outcome(
         changed_files=changed_files,
         verification=verification,
-        response=response or Value.from_python(value=None),
+        response=response,
         facts=[],
     )
 
 
-def _answer() -> tuple[Task, Value]:
-    expected = Value.from_python(value={"choice": "B"})
+def _answer() -> tuple[Task, JsonValue]:
+    expected: JsonValue = {"choice": "B"}
     case = Task(
         id="native-answer",
         fixture=[SourceFile(path="context.txt", contents="Public context")],
         instruction=Instruction(prompt="Choose B"),
-        criterion=Criterion.answer(
-            rubric=Rubric(expected=[("choice", Value.from_python(value="B"))], text_rule=None)
-        ),
+        criterion=Criterion.answer(rubric=Rubric(expected=[("choice", "B")], text_rule=None)),
         allowed_files=[],
         reference=Reference(edits=[], completion=expected),
     )
