@@ -2,13 +2,14 @@ import json
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from functools import partial, wraps
+from itertools import repeat
 from typing import cast
 
 from inspect_ai.model import ChatMessageAssistant
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer, stderr
 from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
-from kernel import REQUIRED_SCORES, Assessment, Outcome, Value
+from kernel import REQUIRED_SCORES, Assessment, Outcome
 from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
@@ -18,6 +19,9 @@ from evals.python.datasets import Dataset
 from evals.python.provenance import plain
 
 WORKSPACE = "workspace/"
+# The kernel nests values 256 levels deep, and its observation record takes the first.
+NESTING = 255
+INT64 = range(-(2**63), 2**63)
 
 
 def decode_response(text: str) -> JsonValue:
@@ -30,33 +34,48 @@ def decode_response(text: str) -> JsonValue:
     return None
 
 
-def observed(data: object) -> Value:
-    """Observe harness data one level down, as the kernel's observation record holds it.
+def held(data: object) -> bool:
+    """Whether the kernel holds a scalar as given: null, boolean, float, string or int64."""
+    return (
+        data is None
+        or isinstance(data, bool | float | str)
+        or (isinstance(data, int) and data in INT64)
+    )
 
-    A part the kernel cannot hold, such as an integer beyond signed 64 bits, becomes a record
-    naming its type. The part stays present, so a negated check cannot pass on it.
-    """
+
+def representable(data: object, *, depth: int = 0) -> bool:
+    """Whether the kernel holds harness data as given, under an outcome channel."""
     match data:
         case dict():
-            parts: object = {str(key): observed(item) for key, item in data.items()}
+            keyed = all(map(isinstance, data, repeat(str)))
+            return keyed and representable([*data.values()], depth=depth)
         case list() | tuple():
-            parts = [observed(item) for item in data]
+            return depth < NESTING and all(map(partial(representable, depth=depth + 1), data))
         case _:
-            parts = data
-    with suppress(TypeError, ValueError, OverflowError):
-        return Value.from_python(value=[parts]).items[0]
-    return Value.from_python(value={"unrepresentable": type(data).__name__})
+            return held(data)
+
+
+def observed(data: object, *, depth: int = 0) -> object:
+    """Harness data the kernel can hold, as plain values.
+
+    Data the kernel holds as given is returned unchanged. A part it cannot hold, such as an
+    integer beyond signed 64 bits, becomes a record naming its type. The part stays present,
+    so a negated check cannot pass on it.
+    """
+    if representable(data, depth=depth):
+        return data
+    part = partial(observed, depth=depth + 1)
+    match data:
+        case dict() if depth < NESTING - 1:
+            return dict(zip(map(str, data), map(part, data.values()), strict=True))
+        case list() | tuple() if depth < NESTING - 1:
+            return [*map(part, data)]
+    return {"unrepresentable": type(data).__name__}
 
 
 def unrepresentable(channels: Mapping[str, object]) -> list[str]:
     """Channels the kernel cannot hold as given, so each arm's rate can be estimated."""
-    names = []
-    for name, data in channels.items():
-        try:
-            Value.from_python(value=[data])
-        except (TypeError, ValueError, OverflowError):
-            names.append(name)
-    return names
+    return [name for name, data in channels.items() if not representable(data)]
 
 
 def trace(state: TaskState) -> list[JsonValue]:

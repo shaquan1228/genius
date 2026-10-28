@@ -67,11 +67,15 @@ def compiled_records_retain_canonical_values() -> None:
 
 
 def fingerprints_follow_kernel_record_equality() -> None:
-    repeated = Value.from_python(value=Record(fields=[("a", 1), ("b", 2), ("a", 3)]))
-    reordered = Value.from_python(value={"b": 2, "a": 1})
+    repeated = _completion(Record(fields=[("a", 1), ("b", 2), ("a", 3)]))
+    reordered = _completion({"b": 2, "a": 1})
     assert repeated.equal(other=reordered)
     assert fingerprint(repeated) == fingerprint(reordered)
-    assert fingerprint(Value.from_python(value={"a": 3, "b": 2})) != fingerprint(reordered)
+    assert fingerprint(_completion({"a": 3, "b": 2})) != fingerprint(reordered)
+
+
+def _completion(value: object) -> Value:
+    return Reference(edits=[], completion=value).completion
 
 
 @pytest.mark.parametrize("value", [{"a": 1}, [1], object()])

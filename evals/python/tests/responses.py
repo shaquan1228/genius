@@ -5,8 +5,12 @@ import pytest
 from kernel import Outcome, Verification
 from pydantic import JsonValue
 
-from evals.python.integrations.inspect.scoring import decode_response, observed, unrepresentable
-from evals.python.provenance import plain
+from evals.python.integrations.inspect.scoring import (
+    decode_response,
+    observed,
+    representable,
+    unrepresentable,
+)
 
 
 @pytest.mark.parametrize(
@@ -52,7 +56,7 @@ def duplicate_keys_keep_the_last_json_value() -> None:
 def nested_replies_decode_to_lists_and_records() -> None:
     reply = decode_response('{"items":[1,null,{"x":[]}]}')
     assert reply == {"items": [1, None, {"x": []}]}
-    assert plain(observed(reply)) == reply
+    assert observed(reply) is reply
 
 
 @pytest.mark.parametrize(
@@ -61,22 +65,51 @@ def nested_replies_decode_to_lists_and_records() -> None:
         (2**63, {"unrepresentable": "int"}),
         ({"count": -(2**64), "kept": 1}, {"count": {"unrepresentable": "int"}, "kept": 1}),
         ({1: "key"}, {"1": "key"}),
+        ((1, 2**64), [1, {"unrepresentable": "int"}]),
         (object(), {"unrepresentable": "object"}),
     ],
 )
 def unrepresentable_parts_become_records_naming_their_type(
     data: object, *, expected: JsonValue
 ) -> None:
-    assert plain(observed(data)) == expected
+    assert observed(data) == expected
 
 
-@pytest.mark.parametrize(("depth", "kind"), [(255, "list"), (256, "record"), (300, "list")])
-def deep_replies_fit_inside_the_observation_record(depth: int, *, kind: str) -> None:
-    reply = observed(json.loads("[" * depth + "]" * depth))
-    outcome = Outcome(
-        changed_files=[], verification=Verification.unchecked(), response=reply, facts=[]
-    )
-    assert outcome.response.kind == kind
+def _nested(depth: int, *, leaf: object) -> object:
+    data = leaf
+    for _ in range(depth):
+        data = [data]
+    return data
+
+
+def _held(data: object) -> bool:
+    try:
+        Outcome(changed_files=[], verification=Verification.unchecked(), response=data, facts=[])
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return True
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        _nested(255, leaf=1),
+        _nested(255, leaf=[]),
+        _nested(254, leaf={"a": 1}),
+        _nested(254, leaf={"a": []}),
+        _nested(300, leaf=None),
+        -(2**63),
+        2**63 - 1,
+        2**63,
+        float("nan"),
+        {1: "key"},
+        b"bytes",
+        {"set": {1}},
+    ],
+)
+def representability_matches_the_kernel(data: object) -> None:
+    assert representable(data) is _held(data)
+    assert _held(observed(data))
 
 
 def unrepresentable_names_the_channels_the_kernel_cannot_hold() -> None:

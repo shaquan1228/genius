@@ -219,10 +219,10 @@ def tool_traces_and_environment_state_are_graded_as_facts() -> None:
 
 
 def native_values_decode_to_plain_json() -> None:
-    witness = Value.from_python(value={"ratio": 0.5, "flag": True, "items": (1, "x")})
-    assert plain(witness) == {"ratio": 0.5, "flag": True, "items": [1, "x"]}
+    witness = Reference(edits=[], completion={"ratio": 0.5, "flag": True, "items": (1, "x")})
+    assert plain(witness.completion) == {"ratio": 0.5, "flag": True, "items": [1, "x"]}
     with pytest.raises(TypeError, match="Unsupported"):
-        Value.from_python(value=object())
+        Reference(edits=[], completion=object())
 
 
 @pytest.mark.parametrize("state", [{"transfer": 2**64}, {"transfer": 5, "time": 2**64}])
