@@ -6,15 +6,15 @@ from inspect_ai import Task as InspectTask
 from inspect_ai import eval
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import ModelCost, ModelInfo, get_model, set_model_info
+from kernel import Criterion, Instruction, Reference, Rubric, Task, TextRule, Verifier
 
 from evals.python import datasets
-from evals.python.datasets import Dataset, humanevalplus, smoke
+from evals.python.datasets import Case, Dataset, Declaration, humanevalplus, smoke
 from evals.python.tests.declarations import _copy_case
 from evals.python.tests.projections import reference, verifier
 from evals.python.tests.scenarios import Mode
 from evals.python.tests.scenarios import echo_model as _echo_model
 from evals.python.tests.scenarios import scripted as _scripted
-from kernel import Case, Criterion, Instruction, Reference, Rubric, Task, TextRule, Value, Verifier
 
 __test__ = False
 
@@ -66,30 +66,29 @@ def results(log: EvalLog) -> list[tuple[str, object, object]]:
     return sorted(sample_result(sample) for sample in log.samples or [])
 
 
-def timeout_case(*, case_id: str, initial: int, requested: int) -> Task:
-    return _copy_case(smoke.timeout(initial=initial, requested=requested), id=case_id)
+def timeout_case(*, case_id: str, initial: int, requested: int) -> Declaration:
+    task = smoke.timeout(initial=initial, requested=requested)
+    return _copy_case(Declaration(skill="preflight", task=task), id=case_id)
 
 
-def choice_case(*, case_id: str, a: int, b: int) -> Task:
+def choice_case(*, case_id: str, a: int, b: int) -> Declaration:
     choice = "A" if a < b else "B"
-    return Task.create(
-        id=case_id,
-        fixture=[],
-        instruction=Instruction(skill="reasoning", prompt="Choose A or B with a reason"),
-        criterion=Criterion.Answer(
-            rubric=Rubric(
-                expected=[("choice", choice)],
-                text_rule=TextRule(field="reason", min_words=1, max_words=40),
-            )
-        ),
-        allowed_files=(),
-        reference=Reference(
-            edits=[],
-            completion=Value.Record(
-                fields=[
-                    ("choice", choice),
-                    ("reason", "The cost is lower."),
-                ]
+    return Declaration(
+        skill="reasoning",
+        task=Task(
+            id=case_id,
+            fixture=[],
+            instruction=Instruction(prompt="Choose A or B with a reason"),
+            criterion=Criterion.answer(
+                rubric=Rubric(
+                    expected=[("choice", choice)],
+                    text_rule=TextRule(field="reason", min_words=1, max_words=40),
+                )
+            ),
+            allowed_files=(),
+            reference=Reference(
+                edits=[],
+                completion={"choice": choice, "reason": "The cost is lower."},
             ),
         ),
     )

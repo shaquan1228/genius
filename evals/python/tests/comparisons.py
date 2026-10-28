@@ -4,6 +4,7 @@ import asyncio
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -111,6 +112,9 @@ def _change(log: Any, *, change: str) -> None:
             log.samples[0].scores["evaluation"].metadata.update(agent_failure="crashed")
         ),
         "cutoff": lambda: setattr(log.samples[0], "limit", EvalSampleLimit(type="time", limit=1)),
+        "unrepresentable": lambda: (
+            log.samples[0].scores["evaluation"].metadata.update(unrepresentable=["response"])
+        ),
     }
     mutations[change]()
 
@@ -139,6 +143,19 @@ def failed_trials_count_as_incorrect(changed: Path, *, change: str, indicator: s
     _rewrite(changed, change=change)
     (trial,) = results.trials(results.read_run(changed))["small-decision"]
     assert (trial["accuracy"], trial[indicator]) == (0, 1)
+
+
+def unrepresentable_channels_are_a_trial_indicator(changed: Path) -> None:
+    _rewrite(changed, change="unrepresentable")
+    (trial,) = results.trials(results.read_run(changed))["small-decision"]
+    assert trial["unrepresentable"] == 1
+
+
+def harness_hash_tracks_the_installed_kernel_origin() -> None:
+    pinned = results.harness_hash()
+    local = SimpleNamespace(read_text=lambda _: '{"url": "file:///tmp/genius-bench"}')
+    with patch("evals.python.integrations.inspect.results.distribution", return_value=local):
+        assert results.harness_hash() != pinned
 
 
 def incompatible_native_models_are_rejected(native_runs: Path, *, changed: Path) -> None:

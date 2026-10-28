@@ -1,17 +1,18 @@
 """Resolve experiment settings and launch evaluations through the runner adapter."""
 
 from pathlib import Path, PurePosixPath
-from typing import Annotated, Literal, cast
+from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, InstanceOf, validate_call
 
 from evals.python import FROZEN, Identifier
-from kernel import Experiment, Profile
 
 __all__ = [
     "EvaluationSettings",
+    "Experiment",
     "InstructionDelivery",
     "ModelPricing",
+    "Profile",
     "VariantSettings",
     "evaluate",
     "prepare_run",
@@ -53,23 +54,44 @@ def _instruction_path(path: str) -> None:
         raise ValueError("Instruction paths must name a file or directory")
 
 
-class VariantSettings(BaseModel):
-    """One instruction intervention, independent of its comparison role."""
+Instructions = Annotated[tuple[str, ...], AfterValidator(_instruction_paths)]
 
+
+class Profile(BaseModel):
     model_config = FROZEN
     name: Identifier
-    instructions: Annotated[tuple[str, ...], AfterValidator(_instruction_paths)] = tuple(
-        Experiment.default.profiles[1].instructions
+    preamble: str
+    instructions: Instructions
+
+
+_GENIUS = Profile(
+    name="genius",
+    preamble="Read ../instructions/skills/{skill}/SKILL.md and its referenced files. Apply that "
+    "skill to this task.\n\n",
+    instructions=("docs", "skills"),
+)
+
+
+class Experiment(BaseModel):
+    model_config = FROZEN
+    profiles: tuple[Profile, ...] = (
+        Profile(name="baseline", preamble="", instructions=()),
+        _GENIUS,
     )
-    preamble: str = Experiment.default.profiles[1].preamble
+    epochs: int = Field(default=5, gt=0)
+    message_limit: int | None = Field(default=None, gt=0)
+    cost_limit: float = Field(default=0.25, gt=0, allow_inf_nan=False)
+    time_limit: int = Field(default=300, gt=0)
+    cache: bool = False
+
+
+class VariantSettings(Profile):
+    """One instruction intervention, independent of its comparison role."""
+
+    instructions: Instructions = _GENIUS.instructions
+    preamble: str = _GENIUS.preamble
     source_dir: str | None = None
     source_ref: str | None = None
-
-    @property
-    def profile(self) -> Profile:
-        return Profile.create(
-            name=self.name, preamble=self.preamble, instructions=self.instructions
-        )
 
 
 class EvaluationSettings(BaseModel):
@@ -118,11 +140,8 @@ def resolve_settings(
         "time_limit": time_limit,
         "cache": cache,
     }
-    return Experiment.resolve(
-        **cast(
-            "Experiment.ResolveArgs",
-            {name: value for name, value in options.items() if value is not None},
-        )
+    return Experiment.model_validate(
+        {name: value for name, value in options.items() if value is not None}
     )
 
 

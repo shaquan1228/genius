@@ -7,6 +7,7 @@ from typing import cast
 from unittest.mock import patch
 
 import pytest
+from kernel import Verifier
 from pydantic import ValidationError
 
 from evals.python import datasets, evaluation
@@ -30,7 +31,6 @@ from evals.python.tests.support import (
 from evals.python.tests.support import (
     imported_verifier as _imported_verifier,
 )
-from kernel import Verifier
 
 
 def _record(**updates: object) -> str:

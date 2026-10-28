@@ -5,8 +5,9 @@ import asyncio
 import json
 from collections.abc import Sequence
 
-from evals.python import datasets, verification
 from kernel import Task
+
+from evals.python import datasets, verification
 
 
 def benchmark_info() -> dict[str, object]:
@@ -20,7 +21,7 @@ async def validate_case(task: Task) -> dict[str, object]:
     result = await verification.validate_reference(task)
     return {
         "case_id": task.id,
-        "status": type(result.verification).__name__.lower(),
+        "status": result.verification.status,
         "detail": result.detail,
         "metadata": result.metadata_json(),
     }
@@ -38,8 +39,8 @@ def validate(arguments: argparse.Namespace) -> int:
         raise ValueError("--limit must be positive")
     dataset = datasets.load_dataset(selection="humanevalplus")
     results = [
-        asyncio.run(validate_case(task))
-        for task in list(dataset.records.values())[: arguments.limit]
+        asyncio.run(validate_case(record.task))
+        for record in list(dataset.records.values())[: arguments.limit]
     ]
     print(json.dumps({"provenance": benchmark_info(), "results": results}, indent=2))
     return int(any(result["status"] != "passed" for result in results))

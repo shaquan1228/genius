@@ -1,21 +1,23 @@
 """Pure Python declarations for the default four-case smoke dataset."""
 
+from kernel import Criterion, Instruction, Reference, Rubric, SourceFile, Task, TextRule
+
+from evals.python.dataset import Declaration
 from evals.python.integrations.smoke import checks
-from kernel import Criterion, File, Instruction, Reference, Rubric, Task, TextRule
 
 info = None
 
 
 def receipt(*, term: str = "price") -> Task:
-    return Task.create(
+    return Task(
         id="clear-task",
         fixture=[
-            File(
+            SourceFile(
                 path="receipt.py",
                 contents="def total(items):\n"
                 f"    return sum({term} for price, quantity in items)\n",
             ),
-            File(
+            SourceFile(
                 path="test_receipt.py",
                 contents="""import runpy
 
@@ -26,7 +28,6 @@ assert total([(3.0, 1), (4.0, 1)]) == 7.0
             ),
         ],
         instruction=Instruction(
-            skill="reasoning",
             prompt=(
                 "Fix total in receipt.py so each item's quantity contributes to the total. "
                 "Change only receipt.py. Verify with python3 -I -B test_receipt.py. "
@@ -48,7 +49,7 @@ assert total([(1.5, 2)]) == 3.0
         allowed_files=("receipt.py",),
         reference=Reference(
             edits=[
-                File(
+                SourceFile(
                     path="receipt.py",
                     contents="def total(items):\n"
                     "    return sum(price * quantity for price, quantity in items)\n",
@@ -75,12 +76,12 @@ def timeout(value=None):
 def timeout(*, initial: int = 15, requested: int = 30) -> Task:
     if initial <= 0 or requested <= 0 or initial == requested:
         raise ValueError("Timeout changes need distinct positive initial and requested values")
-    return Task.create(
+    return Task(
         id="known-preflight",
         fixture=[
-            File(path="config.py", contents=f"timeout_seconds = {initial}\n"),
-            File(path="client.py", contents=client(initial)),
-            File(
+            SourceFile(path="config.py", contents=f"timeout_seconds = {initial}\n"),
+            SourceFile(path="client.py", contents=client(initial)),
+            SourceFile(
                 path="test_client.py",
                 contents="""import runpy
 
@@ -98,7 +99,6 @@ else:
             ),
         ],
         instruction=Instruction(
-            skill="preflight",
             prompt=(
                 f"On branch eval, change the default timeout from {initial} to {requested} seconds "
                 "in config.py and client.py. Only those two files are in scope. "
@@ -129,8 +129,8 @@ for value in (0, -1):
         allowed_files=("config.py", "client.py"),
         reference=Reference(
             edits=[
-                File(path="config.py", contents=f"timeout_seconds = {requested}\n"),
-                File(path="client.py", contents=client(requested)),
+                SourceFile(path="config.py", contents=f"timeout_seconds = {requested}\n"),
+                SourceFile(path="client.py", contents=client(requested)),
             ],
             completion="Updated both defaults and preserved overrides.",
         ),
@@ -138,13 +138,13 @@ for value in (0, -1):
 
 
 def answer(*, id: str, prompt: str, expected: dict[str, str | bool], reason: str) -> Task:
-    return Task.create(
+    return Task(
         id=id,
         fixture=[],
-        instruction=Instruction(skill="bayesian", prompt=prompt),
-        criterion=Criterion.Answer(
+        instruction=Instruction(prompt=prompt),
+        criterion=Criterion.answer(
             rubric=Rubric(
-                expected=expected,
+                expected=list(expected.items()),
                 text_rule=TextRule(field="reason", min_words=1, max_words=40),
             )
         ),
@@ -156,10 +156,8 @@ def answer(*, id: str, prompt: str, expected: dict[str, str | bool], reason: str
     )
 
 
-def cases() -> tuple[Task, ...]:
-    return (
-        receipt(),
-        timeout(),
+def cases() -> tuple[Declaration, ...]:
+    decisions = (
         answer(
             id="small-decision",
             prompt=(
@@ -184,4 +182,9 @@ def cases() -> tuple[Task, ...]:
             expected={"decision_was_supported": True, "change_rule": False},
             reason="One loss did not change the known odds.",
         ),
+    )
+    return (
+        Declaration(skill="reasoning", task=receipt()),
+        Declaration(skill="preflight", task=timeout()),
+        *(Declaration(skill="bayesian", task=task) for task in decisions),
     )

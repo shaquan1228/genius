@@ -9,11 +9,11 @@ from io import BytesIO, TextIOWrapper
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from kernel import Instruction, Reference, SourceFile, Task
 from pydantic import BaseModel, ConfigDict, Field
 
-from evals.python.dataset import DatasetInfo
+from evals.python.dataset import DatasetInfo, Declaration
 from evals.python.integrations.evalplus import checks
-from kernel import File, Instruction, Reference, Task
 
 info = DatasetInfo(
     source="https://github.com/evalplus/humanevalplus_release/releases/download/v0.1.10/HumanEvalPlus.jsonl.gz",
@@ -36,17 +36,16 @@ class Problem(BaseModel):
     canonical_solution: str
 
 
-def declarations(records: Iterable[str]) -> tuple[Task, ...]:
-    return tuple(declaration(raw) for raw in records)
+def declarations(records: Iterable[str]) -> tuple[Declaration, ...]:
+    return tuple(Declaration(skill="reasoning", task=task(raw)) for raw in records)
 
 
-def declaration(raw: str) -> Task:
+def task(raw: str) -> Task:
     problem = Problem.model_validate_json(raw)
-    return Task.create(
+    return Task(
         id="humaneval-" + problem.task_id.split("/")[1],
-        fixture=[File(path="solution.py", contents=problem.prompt)],
+        fixture=[SourceFile(path="solution.py", contents=problem.prompt)],
         instruction=Instruction(
-            skill="reasoning",
             prompt=(
                 "Implement the specified function in solution.py. Preserve its signature and edit "
                 "only solution.py."
@@ -57,7 +56,9 @@ def declaration(raw: str) -> Task:
         ),
         allowed_files=("solution.py",),
         reference=Reference(
-            edits=[File(path="solution.py", contents=problem.prompt + problem.canonical_solution)],
+            edits=[
+                SourceFile(path="solution.py", contents=problem.prompt + problem.canonical_solution)
+            ],
             completion=None,
         ),
     )
@@ -92,7 +93,7 @@ def _download(*, source: str, sha256: str, destination: Path) -> bytes:
     return data
 
 
-def cases() -> tuple[Task, ...]:
+def cases() -> tuple[Declaration, ...]:
     data = _download(source=info.source, sha256=info.sha256, destination=_cache_path(info.sha256))
     with TextIOWrapper(BytesIO(data), encoding="utf-8") as records:
         return declarations(records)

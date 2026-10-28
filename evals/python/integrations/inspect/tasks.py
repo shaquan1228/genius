@@ -4,6 +4,7 @@ from hashlib import sha256
 
 from inspect_ai import Task, task
 from inspect_ai.model import GenerateConfig
+from kernel import source_hash
 
 import evals.python.integrations.inspect.agents as agent_adapter
 import evals.python.integrations.inspect.profiles as profile_adapter
@@ -12,8 +13,7 @@ import evals.python.integrations.inspect.scoring as scoring_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import datasets, evaluation
 from evals.python.datasets import Dataset
-from evals.python.evaluation import InstructionDelivery
-from kernel import Experiment, Profile
+from evals.python.evaluation import Experiment, InstructionDelivery, Profile
 
 
 def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
@@ -76,7 +76,7 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
                     documents=documents,
                 )
             ),
-            "fixtures_sha256": catalog.source_hash,
+            "kernel_sha256": source_hash(),
             "cases_sha256": catalog.cases_hash,
         },
     )

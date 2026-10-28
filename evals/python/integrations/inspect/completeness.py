@@ -6,9 +6,9 @@ from collections.abc import Sequence
 from inspect_ai import Task as InspectTask
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.scorer import CORRECT, INCORRECT
+from kernel import REQUIRED_SCORES
 
 from evals.python.evaluation import EvaluationSettings
-from kernel import Task
 
 Pair = tuple[str, str, int]
 
@@ -49,7 +49,7 @@ def scored(sample: EvalSample) -> bool:
 
 def complete_value(value: object) -> bool:
     return isinstance(value, dict) and all(
-        value.get(name) in (CORRECT, INCORRECT) for name in Task.required_scores
+        value.get(name) in (CORRECT, INCORRECT) for name in REQUIRED_SCORES
     )
 
 

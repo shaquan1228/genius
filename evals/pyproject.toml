@@ -8,6 +8,7 @@ version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "evalplus @ git+https://github.com/evalplus/evalplus.git@6eb1e199c2e370518e7bf3e8eee6322c2b23c89c",
+  "genius-bench-kernel @ git+https://github.com/shaquan1228/genius-bench.git@4d15c76630428a95fb710e75185ca0a4a30aff22#subdirectory=bindings/python",
   "numpy==2.5.4",
   "psutil==7.2.2",
   "huggingface-hub==2.2.0",
@@ -28,13 +29,11 @@ packages = [
   "evals.python.integrations.hugging_face",
   "evals.python.integrations.inspect",
   "evals.python.integrations.smoke",
-  "kernel",
 ]
-package-dir = {"evals" = ".", "kernel" = "python/kernel"}
+package-dir = {"evals" = "."}
 
 [tool.setuptools.package-data]
-evals = ["py.typed", "pyproject.toml", "uv.lock", "ocaml/*.ml", "ocaml/*.mli", "ocaml/tools/*.ml", "bin/*", "scripts/*.sh", "scripts/*.py", "lib/*.sh"]
-kernel = ["*.pyi", "py.typed"]
+evals = ["py.typed", "pyproject.toml", "uv.lock", "bin/*", "scripts/*.sh", "scripts/*.py", "lib/*.sh"]
 
 [project.optional-dependencies]
 dev = [
@@ -56,7 +55,6 @@ ignore = ["PLR2004"]
 
 [tool.ruff.lint.per-file-ignores]
 "python/tests/conftest.py" = ["PLR0917"]
-"python/kernel/*.pyi" = ["F401", "N801", "N818", "N999"]
 
 [tool.ruff.lint.pylint]
 # Only the first parameter may be positional, so callers name every other argument.
@@ -64,15 +62,13 @@ ignore = ["PLR2004"]
 max-positional-args = 1
 
 [tool.ruff.lint.isort]
-known-first-party = ["evals", "kernel"]
+known-first-party = ["evals"]
 
 [tool.mypy]
 strict = true
 enable_error_code = ["exhaustive-match"]
 files = ["python"]
-mypy_path = ["..", "python"]
-# Check bindings through their top-level kernel imports, avoiding a second module identity.
-exclude = ["^python/kernel/"]
+mypy_path = [".."]
 
 [tool.pytest.ini_options]
 testpaths = ["python/tests"]
@@ -84,7 +80,7 @@ pythonpath = [".."]
 [tool.coverage.run]
 branch = true
 source = ["python"]
-omit = ["python/kernel/generate.py", "python/tests/conftest.py"]
+omit = ["python/tests/conftest.py"]
 
 [tool.coverage.report]
 fail_under = 100

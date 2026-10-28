@@ -1,23 +1,27 @@
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from functools import partial, wraps
-from operator import attrgetter
-from typing import Any, cast
+from itertools import repeat
+from typing import cast
 
 from inspect_ai.model import ChatMessageAssistant
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer, stderr
 from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
+from kernel import REQUIRED_SCORES, Assessment, Outcome
 from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import datasets, verification
 from evals.python.datasets import Dataset
-from kernel import Assessment, Outcome, Predicate, Task, Value, Verification
+from evals.python.provenance import plain
 
 WORKSPACE = "workspace/"
+# The kernel nests values 256 levels deep, and its observation record takes the first.
+NESTING = 255
+INT64 = range(-(2**63), 2**63)
 
 
 def decode_response(text: str) -> JsonValue:
@@ -30,16 +34,48 @@ def decode_response(text: str) -> JsonValue:
     return None
 
 
-_PLAIN: dict[type, Callable[[Any], JsonValue]] = {
-    Value.Null: lambda _: None,
-    Value.List: lambda data: [plain(item) for item in data.items],
-    Value.Record: lambda data: {name: plain(item) for name, item in data.fields},
-}
-_SCALAR: Callable[[Any], JsonValue] = attrgetter("value")
+def held(data: object) -> bool:
+    """Whether the kernel holds a scalar as given: null, boolean, float, string or int64."""
+    return (
+        data is None
+        or isinstance(data, bool | float | str)
+        or (isinstance(data, int) and data in INT64)
+    )
 
 
-def plain(data: Value.Value) -> JsonValue:
-    return _PLAIN.get(type(data), _SCALAR)(data)
+def representable(data: object, *, depth: int = 0) -> bool:
+    """Whether the kernel holds harness data as given, under an outcome channel."""
+    match data:
+        case dict():
+            keyed = all(map(isinstance, data, repeat(str)))
+            return keyed and representable([*data.values()], depth=depth)
+        case list() | tuple():
+            return depth < NESTING and all(map(partial(representable, depth=depth + 1), data))
+        case _:
+            return held(data)
+
+
+def observed(data: object, *, depth: int = 0) -> object:
+    """Harness data the kernel can hold, as plain values.
+
+    Data the kernel holds as given is returned unchanged. A part it cannot hold, such as an
+    integer beyond signed 64 bits, becomes a record naming its type. The part stays present,
+    so a negated check cannot pass on it.
+    """
+    if representable(data, depth=depth):
+        return data
+    part = partial(observed, depth=depth + 1)
+    match data:
+        case dict() if depth < NESTING - 1:
+            return dict(zip(map(str, data), map(part, data.values()), strict=True))
+        case list() | tuple() if depth < NESTING - 1:
+            return [*map(part, data)]
+    return {"unrepresentable": type(data).__name__}
+
+
+def unrepresentable(channels: Mapping[str, object]) -> list[str]:
+    """Channels the kernel cannot hold as given, so each arm's rate can be estimated."""
+    return [name for name, data in channels.items() if not representable(data)]
 
 
 def trace(state: TaskState) -> list[JsonValue]:
@@ -56,36 +92,17 @@ def workspace_path(path: str) -> str:
     return path.removeprefix(WORKSPACE) if path.startswith(WORKSPACE) else f"../{path}"
 
 
-_PREDICATES: dict[type, Callable[[Any], dict[str, JsonValue]]] = {
-    Predicate.Present: lambda _: {},
-    Predicate.Equals: lambda check: {"expected": plain(check.expected)},
-    Predicate.Within: lambda check: {"allowed": [plain(item) for item in check.allowed]},
-    Predicate.Contains: lambda check: {"item": plain(check.item)},
-    Predicate.Words: lambda check: {"min_words": check.min_words, "max_words": check.max_words},
-    Predicate.All: lambda check: {"checks": [name for name, _ in check.checks]},
-    Predicate.Any: lambda check: {"checks": [name for name, _ in check.checks]},
-    Predicate.Not: lambda check: {"check": predicate_details(check.check)},
-}
-
-
-def predicate_details(predicate: Predicate.Value) -> dict[str, JsonValue]:
-    details: dict[str, JsonValue] = {"kind": type(predicate).__name__.lower()}
-    path = getattr(predicate, "path", None)
-    if path is not None:
-        details["path"] = list(path)
-    details.update(_PREDICATES[type(predicate)](predicate))
-    return details
-
-
-def assessment_details(assessment: Assessment.Value) -> dict[str, JsonValue]:
-    result: dict[str, JsonValue] = {"passed": Assessment.passed(assessment=assessment)}
-    if isinstance(assessment, Assessment.All):
-        result["checks"] = {name: assessment_details(check) for name, check in assessment.checks}
-        return result
-    observed = Assessment.observed(assessment=assessment)
-    result["predicate"] = predicate_details(assessment.predicate)
-    result["observed"] = None if observed is None else plain(observed)
-    return result
+def assessment_details(assessment: Assessment) -> dict[str, JsonValue]:
+    if assessment.kind == "all":
+        return {
+            "passed": assessment.passed(),
+            "checks": {name: assessment_details(check) for name, check in assessment.checks},
+        }
+    return {
+        "passed": assessment.passed(),
+        "predicate": plain(assessment.predicate),
+        "observed": plain(assessment.observed()),
+    }
 
 
 def score_values(scores: Sequence[tuple[str, bool]]) -> dict[str, str]:
@@ -110,43 +127,42 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
         if dataset is not None
         else cast(str, state.metadata.get("dataset", "smoke"))
     )
-    task = selected.records[str(state.metadata["case_id"])]
+    task = selected.records[str(state.metadata["case_id"])].task
     evidence = await verification.verify(
-        Task.checks(task=task),
+        task.checks(),
         agent=environments_adapter.environment(current),
         runtime=environments_adapter.runtime(current),
     )
+    response = decode_response(completion)
     facts: dict[str, JsonValue] = {"trace": trace(state), "state": dict(state.store.items())}
-    result = Task.assess(
-        task=task,
-        outcome=Outcome.create(
+    result = task.assess(
+        outcome=Outcome(
             changed_files=changed,
             verification=evidence.verification,
-            response=decode_response(completion),
-            facts=facts,
-        ),
+            response=observed(response),
+            facts=[(name, observed(fact)) for name, fact in facts.items()],
+        )
     )
-    explanation = (
-        completion if isinstance(evidence.verification, Verification.Unchecked) else evidence.detail
-    )
+    explanation = completion if evidence.verification.status == "unchecked" else evidence.detail
     return Score(
-        value=score_values(Assessment.scores(assessment=result)),
+        value=score_values(result.scores()),
         explanation=with_failure(explanation, failure=failure),
         metadata={
             "verification": {
-                "status": Outcome.status(verification=evidence.verification),
+                "status": evidence.verification.status,
                 "detail": evidence.detail,
             },
             "verifier_metadata": evidence.metadata_json(),
             "changed_files": changed,
             "facts": facts,
+            "unrepresentable": unrepresentable({"response": response, **facts}),
             "agent_failure": failure,
             "assessment": assessment_details(result),
         },
     )
 
 
-@scorer(metrics={name: [accuracy(), stderr()] for name in Task.required_scores})
+@scorer(metrics={name: [accuracy(), stderr()] for name in REQUIRED_SCORES})
 def evaluation() -> Scorer:
     return score_sample
 

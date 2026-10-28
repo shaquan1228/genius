@@ -88,7 +88,6 @@ def committed_harness() -> None:
         "--untracked-files=all",
         "--",
         "evals/python",
-        "evals/ocaml",
         "evals/bin",
         "evals/pyproject.toml",
         "evals/uv.lock",

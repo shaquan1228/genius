@@ -14,7 +14,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BASH = os.environ.get("BASH_BIN", "bash")
 SCRIPTS = (
-    "evals/scripts/kernel-setup.sh",
     "evals/bin/huggingface-run",
     "evals/scripts/huggingface-bootstrap.sh",
 )
@@ -44,8 +43,6 @@ class BinContracts(unittest.TestCase):
             "EVAL_MODEL_COST",
             "OPENAI_API_KEY",
             "ANTHROPIC_API_KEY",
-            "KERNEL_JOBS",
-            "KERNEL_PYTHON",
             "INSTALL_DATASET",
         ):
             self.environment.pop(name, None)
@@ -181,58 +178,6 @@ class BinContracts(unittest.TestCase):
         self.assertEqual(list(temporary.iterdir()), [])
         self.assertNotIn("secret", result.stdout + result.stderr)
 
-    def test_kernel_rejects_invalid_jobs_before_touching_opam(self):
-        calls = self.work / "calls"
-        self.fake("opam", 'touch "$CALLS"\n')
-        result = self.run_script(
-            "evals/scripts/kernel-setup.sh",
-            env={"KERNEL_JOBS": "0", "CALLS": str(calls)},
-        )
-        self.assertEqual(result.returncode, 2)
-        self.assertFalse(calls.exists())
-
-    def test_bridge_cache_lock_and_failed_clone(self):
-        root = self.work / "opam root"
-        root.mkdir()
-        (root / "config").touch()
-        interpreter = self.work / "python stub"
-        interpreter.write_text(
-            '#!/usr/bin/env bash\ncase "$2" in\n'
-            '  *sys.executable*) printf "%s\\n" "$0" ;;\n'
-            '  *hashlib*) printf "patchhash\\n" ;;\nesac\n'
-        )
-        interpreter.chmod(0o755)
-        self.fake(
-            "opam",
-            'case "$*" in\n'
-            '  "var --global root") printf "%s\\n" "$OPAM_TEST_ROOT" ;;\n'
-            '  "switch list --short") printf "genius-kernel-414\\n" ;;\n'
-            '  *ocaml:version) printf "4.14.2\\n" ;;\n'
-            "  *) exit 99 ;;\nesac\n",
-        )
-        calls = self.work / "git calls"
-        self.fake("git", 'touch "$CALLS"; exit 7\n')
-        lock = (
-            root
-            / "genius-kernel-bridge-4bd7956a69f1ee91201f440f3a87fa976dedfc3a-patchhash.lock"
-        )
-        lock.mkdir()
-        environment = {
-            "OPAM_TEST_ROOT": str(root),
-            "KERNEL_PYTHON": str(interpreter),
-            "CALLS": str(calls),
-        }
-        result = self.run_script("evals/scripts/kernel-setup.sh", env=environment)
-        self.assertEqual(result.returncode, 1, result.stderr)
-        self.assertIn("cache is busy", result.stderr)
-        self.assertTrue(lock.is_dir())
-        self.assertFalse(calls.exists())
-        lock.rmdir()
-        result = self.run_script("evals/scripts/kernel-setup.sh", env=environment)
-        self.assertEqual(result.returncode, 7, result.stderr)
-        self.assertTrue(calls.exists())
-        self.assertEqual(sorted(path.name for path in root.iterdir()), ["config"])
-
     def test_bootstrap_rejects_missing_option_value(self):
         for option in ("--source-dir", "--work-dir", "--results-dir"):
             result = self.run_script("evals/scripts/huggingface-bootstrap.sh", option)
@@ -243,15 +188,12 @@ class BinContracts(unittest.TestCase):
         source = self.work / "source snapshot"
         (source / "evals/scripts").mkdir(parents=True)
         (source / "evals/pyproject.toml").touch()
-        (source / "evals/scripts/kernel-setup.sh").write_text(
-            '#!/usr/bin/env bash\nprintf "native\\n" >&2\n'
-        )
         log = self.work / "runner.json"
-        for tool in ("git", "make", "cc", "pkg-config", "rsync"):
+        for tool in ("git", "cc"):
             self.fake(tool, "exit 0\n")
-        self.fake("uv", "exit 0\n")
         self.fake(
-            "opam",
+            "uv",
+            '[ "$1" = run ] || exit 0\n'
             'exec "$PYTHON_FOR_TEST" -c \'import json, os, sys; json.dump({"args":sys.argv[1:], "log":os.environ["EVAL_LOG_DIR"]},open(os.environ["RUNNER_LOG"],"w")); sys.exit(7)\' "$@"\n',
         )
         work = self.work / "working copy"
