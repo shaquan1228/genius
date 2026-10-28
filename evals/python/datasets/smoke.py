@@ -142,7 +142,7 @@ def answer(*, id: str, prompt: str, expected: dict[str, str | bool], reason: str
         id=id,
         fixture=[],
         instruction=Instruction(prompt=prompt),
-        criterion=Criterion.answer(
+        criterion=Criterion.Answer(
             rubric=Rubric(
                 expected=list(expected.items()),
                 text_rule=TextRule(field="reason", min_words=1, max_words=40),

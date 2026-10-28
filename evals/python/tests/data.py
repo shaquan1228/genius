@@ -224,7 +224,7 @@ def generic_python_case_exports_without_language_restriction() -> None:
         id="python-case",
         fixture=[SourceFile(path="solution.py", contents="print(42)")],
         instruction=Instruction(prompt="Return 42"),
-        criterion=Criterion.code(
+        criterion=Criterion.Code(
             verifier=Verifier(
                 inputs=("solution.py",),
                 files=[SourceFile(path="grader.py", contents="trusted")],

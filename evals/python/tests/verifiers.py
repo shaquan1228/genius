@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
-from kernel import Task, Verifier
+from kernel import Task, Verification, Verifier
 
 from evals.python import datasets, verification
 from evals.python.datasets import Case, Declaration, Selection
@@ -39,7 +39,7 @@ def _verify(case: Case, *, directory: Path, selection: Selection = "smoke") -> b
                 agent=environment(agent),
                 runtime=runtime(agent),
             )
-            return result.verification.status == "passed"
+            return isinstance(result.verification, Verification.Passed)
         finally:
             await LocalSandboxEnvironment.sample_cleanup(
                 "test", None, {"default": agent}, interrupted=False
