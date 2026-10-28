@@ -8,7 +8,7 @@ version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "evalplus @ git+https://github.com/evalplus/evalplus.git@6eb1e199c2e370518e7bf3e8eee6322c2b23c89c",
-  "genius-bench-kernel @ git+https://github.com/shaquan1228/genius-bench.git@4c242d3b943d5e7ddcadd228220d02e0b4f65a3a#subdirectory=bindings/python",
+  "genius-bench-kernel @ git+https://github.com/shaquan1228/genius-bench.git@38ac08b2f3353bb9985fd881ef5171226380f27c#subdirectory=bindings/python",
   "numpy==2.5.4",
   "psutil==7.2.2",
   "huggingface-hub==2.2.0",
