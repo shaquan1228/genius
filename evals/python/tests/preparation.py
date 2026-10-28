@@ -104,7 +104,7 @@ def private_tasks() -> list[Task]:
             cases=(
                 _copy_case(
                     definition,
-                    criterion=Criterion.answer(
+                    criterion=Criterion.Answer(
                         rubric=Rubric(
                             expected=[
                                 ("choice", choice),

@@ -39,7 +39,7 @@ def _answer() -> tuple[Task, JsonValue]:
         id="native-answer",
         fixture=[SourceFile(path="context.txt", contents="Public context")],
         instruction=Instruction(prompt="Choose B"),
-        criterion=Criterion.answer(rubric=Rubric(expected=[("choice", "B")], text_rule=None)),
+        criterion=Criterion.Answer(rubric=Rubric(expected=[("choice", "B")], text_rule=None)),
         allowed_files=[],
         reference=Reference(edits=[], completion=expected),
     )
@@ -59,16 +59,16 @@ def check_answer_projection() -> None:
 
 def check_answer_grading() -> None:
     case, expected = _answer()
-    outcome = _outcome(changed_files=[], verification=Verification.unchecked(), response=expected)
+    outcome = _outcome(changed_files=[], verification=Verification.Unchecked(), response=expected)
     scores = case.grade(outcome=outcome)
     assert tuple(map(itemgetter(0), scores)) == REQUIRED_SCORES
     assert dict(scores) == {"correctness": True, "scope": True}
-    silent = _outcome(changed_files=[], verification=Verification.unchecked())
+    silent = _outcome(changed_files=[], verification=Verification.Unchecked())
     assert not dict(case.grade(outcome=silent))["correctness"]
 
 
 @pytest.mark.parametrize(
-    ("status", "correctness"), [(Verification.passed(), True), (Verification.failed(), False)]
+    ("status", "correctness"), [(Verification.Passed(), True), (Verification.Failed(), False)]
 )
 def check_code(status: Verification, *, correctness: bool) -> None:
     checks = Verifier(
@@ -83,7 +83,7 @@ def check_code(status: Verification, *, correctness: bool) -> None:
         id="native-code",
         fixture=[SourceFile(path="solution.py", contents="pass")],
         instruction=Instruction(prompt="Fix solution.py"),
-        criterion=Criterion.code(verifier=checks),
+        criterion=Criterion.Code(verifier=checks),
         allowed_files=["solution.py"],
         reference=Reference(
             edits=[SourceFile(path="solution.py", contents="fixed")],
@@ -98,5 +98,5 @@ def check_code(status: Verification, *, correctness: bool) -> None:
         REQUIRED_SCORES,
         {"correctness": correctness, "scope": True},
     )
-    outside = _outcome(changed_files=["other.py"], verification=Verification.passed())
+    outside = _outcome(changed_files=["other.py"], verification=Verification.Passed())
     assert dict(case.grade(outcome=outside)) == {"correctness": True, "scope": False}

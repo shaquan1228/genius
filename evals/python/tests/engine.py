@@ -141,7 +141,7 @@ def verifier_infrastructure_failure_is_sample_error(tmp_path: Path) -> None:
     with patch(
         "evals.python.verification.verify",
         return_value=VerificationResult(
-            verification=Verification.harness_error(detail="grader failed to import")
+            verification=Verification.HarnessError(detail="grader failed to import")
         ),
     ):
         log = _offline_run([baseline()], mode="pass", directory=tmp_path)[0]
@@ -170,9 +170,9 @@ with patch.object(kernel, "REQUIRED_SCORES", ("correctness", "scope", "extension
     assert not completeness.complete_value({"correctness": CORRECT, "scope": INCORRECT})
     encoded = {"correctness": CORRECT, "scope": INCORRECT, "extension": CORRECT}
     assert completeness.complete_value(encoded)
-    yes = Predicate.all(checks=[])
-    no = Predicate.present(path=["absent"])
-    predicate = Predicate.all(checks=[("correctness", yes), ("scope", no), ("extension", yes)])
+    yes = Predicate.All(checks=[])
+    no = Predicate.Present(path=["absent"])
+    predicate = Predicate.All(checks=[("correctness", yes), ("scope", no), ("extension", yes)])
     assessment = Assessment(predicate=predicate, observation=None)
     assert scoring.score_values(assessment.scores()) == encoded
 """,

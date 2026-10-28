@@ -12,6 +12,7 @@ from kernel import (
     SourceFile,
     Task,
     TextRule,
+    Value,
     Verifier,
 )
 from kernel import (
@@ -80,7 +81,7 @@ def _files(value: Sequence[SourceFile]) -> dict[str, str]:
 
 def _declaration(*, code: bool = True) -> Declaration:
     if code:
-        criterion = Criterion.code(
+        criterion: Criterion = Criterion.Code(
             verifier=Verifier(
                 inputs=("main.py",),
                 files=[SourceFile(path="verify.py", contents="private assertions")],
@@ -91,7 +92,7 @@ def _declaration(*, code: bool = True) -> Declaration:
             )
         )
     else:
-        criterion = Criterion.answer(
+        criterion = Criterion.Answer(
             rubric=Rubric(
                 expected=[
                     ("choice", "B"),
@@ -147,10 +148,11 @@ def declarations_preserve_private_reference_edits(*, code: bool) -> None:
 def answer_declarations_preserve_typed_completion_fields() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
     completion = private_reference("external", selection=dataset).completion
-    assert completion.kind == "record"
+    assert isinstance(completion, Value.Record)
     choice, safe = dict(completion.fields)["choice"], dict(completion.fields)["safe"]
-    assert (choice.kind, safe.kind) == ("string", "bool")
-    assert (choice.scalar, safe.scalar) == ("B", True)
+    assert isinstance(choice, Value.String)
+    assert isinstance(safe, Value.Bool)
+    assert (choice.value, safe.value) == ("B", True)
 
 
 def answer_declarations_do_not_supply_executable_checks() -> None:
@@ -168,11 +170,11 @@ def generic_declarations_do_not_supply_cases_or_download_metadata() -> None:
         lambda c: _copy_case(c, allowed_files=()),
         lambda c: _copy_case(c, fixture=[]),
         lambda c: _copy_case(
-            c, criterion=Criterion.answer(rubric=Rubric(expected=[], text_rule=None))
+            c, criterion=Criterion.Answer(rubric=Rubric(expected=[], text_rule=None))
         ),
         lambda c: _copy_case(
             c,
-            criterion=Criterion.answer(
+            criterion=Criterion.Answer(
                 rubric=Rubric(
                     expected=[("choice", "B")],
                     text_rule=TextRule(field="choice", min_words=0, max_words=2),
@@ -223,7 +225,7 @@ def nested_constructor_rules_fail_closed(field: str, *, value: object) -> None:
     with pytest.raises(DomainValidationError):
         _copy_case(
             definition,
-            criterion=Criterion.code(
+            criterion=Criterion.Code(
                 verifier=Verifier(**{**fields, field: value() if callable(value) else value})
             ),
         )
@@ -234,7 +236,7 @@ def answer_constructor_rules_fail_closed(minimum: int, *, maximum: int) -> None:
     with pytest.raises(DomainValidationError, match="text rule"):
         _copy_case(
             _declaration(code=False),
-            criterion=Criterion.answer(
+            criterion=Criterion.Answer(
                 rubric=Rubric(
                     expected=[],
                     text_rule=TextRule(field="reason", min_words=minimum, max_words=maximum),
@@ -261,8 +263,8 @@ def native_fields_retain_immutable_snapshots() -> None:
 @pytest.mark.parametrize(
     "criterion",
     [
-        Criterion.answer(rubric=Rubric(expected=[("choice", "B")], text_rule=None)),
-        Criterion.answer(
+        Criterion.Answer(rubric=Rubric(expected=[("choice", "B")], text_rule=None)),
+        Criterion.Answer(
             rubric=Rubric(expected=[], text_rule=TextRule(field="reason", min_words=1, max_words=5))
         ),
     ],
@@ -279,10 +281,11 @@ def _reference_files(value: Reference) -> dict[str, str]:
 
 
 def _reference_text(value: Reference) -> str:
-    completion = value.completion
-    if completion.kind == "string":
-        return str(completion.scalar)
-    return json.dumps(plain(completion))
+    match value.completion:
+        case Value.String(text):
+            return text
+        case completion:
+            return json.dumps(plain(completion))
 
 
 def _public_snapshot(

@@ -2,7 +2,7 @@ import asyncio
 import json
 import sys
 
-from kernel import Task
+from kernel import Task, Verification
 
 from evals.python import datasets, verification
 
@@ -10,7 +10,7 @@ from evals.python import datasets, verification
 async def validate(task: Task) -> bool:
     result = await verification.validate_reference(task)
     scores: dict[str, bool] = {}
-    if result.verification.status != "harness_error":
+    if not isinstance(result.verification, Verification.HarnessError):
         scores = dict(task.grade_reference(verification=result.verification))
 
     print(
@@ -22,7 +22,8 @@ async def validate(task: Task) -> bool:
             }
         )
     )
-    return result.verification.status in {"passed", "unchecked"} and all(scores.values())
+    checked = isinstance(result.verification, Verification.Passed | Verification.Unchecked)
+    return checked and all(scores.values())
 
 
 async def main() -> int:

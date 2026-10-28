@@ -366,7 +366,7 @@ libc.getenv.restype = ctypes.c_char_p
 names = (b"PATH", b"PYTHONHOME", b"PYTHONPATH")
 before = tuple(libc.getenv(name) for name in names)
 from kernel import Predicate
-assert Predicate.present(path=["a"]).holds(observation={"a": 1})
+assert Predicate.Present(path=["a"]).holds(observation={"a": 1})
 assert tuple(libc.getenv(name) for name in names) == before
 assert list(pathlib.Path.cwd().iterdir()) == []
 subprocess.run([sys.executable, "-c", "import re, pathlib"], check=True)

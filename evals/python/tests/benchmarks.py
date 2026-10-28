@@ -40,7 +40,7 @@ def invalid_limit() -> None:
 def reference_validation_uses_public_operation_and_thaws_only_cli_output() -> None:
     dataset = _import_dataset((_record(),))
     canonical = VerificationResult(
-        verification=Verification.passed(), metadata={"test": {"items": (True,)}}
+        verification=Verification.Passed(), metadata={"test": {"items": (True,)}}
     )
     with patch.object(
         verification, "validate_reference", new_callable=AsyncMock, return_value=canonical

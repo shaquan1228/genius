@@ -43,8 +43,8 @@ class VerificationResult:
     metadata: Mapping[str, Diagnostic] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.verification.status == "harness_error" and not self.detail:
-            object.__setattr__(self, "detail", self.verification.detail or "")
+        if isinstance(self.verification, Verification.HarnessError) and not self.detail:
+            object.__setattr__(self, "detail", self.verification.detail)
         object.__setattr__(
             self,
             "metadata",
@@ -67,10 +67,10 @@ class _Evidence(BaseModel):
 
 
 _STATUSES: Mapping[VerificationStatus, Callable[[], Verification]] = {
-    "passed": Verification.passed,
-    "failed": Verification.failed,
-    "invalid_submission": Verification.invalid_submission,
-    "timed_out": Verification.timed_out,
+    "passed": Verification.Passed,
+    "failed": Verification.Failed,
+    "invalid_submission": Verification.InvalidSubmission,
+    "timed_out": Verification.TimedOut,
 }
 
 
@@ -79,16 +79,16 @@ def completion(result: Completion, *, marker: str) -> VerificationResult:
         evidence = _Evidence.model_validate_json(result.stdout.strip().splitlines()[-1])
     except (ValidationError, IndexError) as error:
         return VerificationResult(
-            verification=Verification.harness_error(detail=f"Invalid verifier evidence: {error}")
+            verification=Verification.HarnessError(detail=f"Invalid verifier evidence: {error}")
         )
     if not evidence.authenticates(result, marker=marker):
         return VerificationResult(
-            verification=Verification.harness_error(
+            verification=Verification.HarnessError(
                 detail="Verifier completion was not authenticated"
             )
         )
     verification = (
-        Verification.harness_error(detail=evidence.detail)
+        Verification.HarnessError(detail=evidence.detail)
         if evidence.status == "harness_error"
         else _STATUSES[evidence.status]()
     )

@@ -79,7 +79,7 @@ def choice_case(*, case_id: str, a: int, b: int) -> Declaration:
             id=case_id,
             fixture=[],
             instruction=Instruction(prompt="Choose A or B with a reason"),
-            criterion=Criterion.answer(
+            criterion=Criterion.Answer(
                 rubric=Rubric(
                     expected=[("choice", choice)],
                     text_rule=TextRule(field="reason", min_words=1, max_words=40),

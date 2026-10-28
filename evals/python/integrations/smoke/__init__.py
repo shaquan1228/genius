@@ -6,7 +6,7 @@ from kernel import Criterion, SourceFile, Verifier
 
 
 def checks(*, inputs: tuple[str, ...], program: str) -> Criterion:
-    return Criterion.code(
+    return Criterion.Code(
         verifier=Verifier(
             inputs=inputs,
             files=[

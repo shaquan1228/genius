@@ -52,7 +52,7 @@ async def _execute(
             )
         )
     except TimeoutError as error:
-        return VerificationResult(verification=Verification.timed_out(), detail=str(error))
+        return VerificationResult(verification=Verification.TimedOut(), detail=str(error))
     return completion(result, marker=marker)
 
 
@@ -64,19 +64,19 @@ async def verify(
     runtime: InstanceOf[Runtime],
 ) -> VerificationResult:
     if checks is None:
-        return VerificationResult(verification=Verification.unchecked())
+        return VerificationResult(verification=Verification.Unchecked())
     try:
         try:
             inputs = await _inputs(checks, agent=agent)
         except FileNotFoundError as error:
             return VerificationResult(
-                verification=Verification.invalid_submission(),
+                verification=Verification.InvalidSubmission(),
                 detail=f"Missing required input: {error}",
             )
         async with execution.allocated(runtime, candidate=agent) as grader:
             return await _execute(checks, grader=grader, inputs=inputs)
     except Exception as error:
-        return VerificationResult(verification=Verification.harness_error(detail=str(error)))
+        return VerificationResult(verification=Verification.HarnessError(detail=str(error)))
 
 
 async def stage_reference(fixture: Sequence[SourceFile], *, agent: Environment) -> None:
@@ -95,11 +95,11 @@ async def validate_reference(
 ) -> VerificationResult:
     checks = task.checks()
     if checks is None:
-        return VerificationResult(verification=Verification.unchecked())
+        return VerificationResult(verification=Verification.Unchecked())
     runtime = runtime or execution.create_runtime()
     try:
         async with execution.allocated(runtime) as agent:
             await stage_reference(task.reference.edits, agent=agent)
             return await verify(checks, agent=agent, runtime=runtime)
     except Exception as error:
-        return VerificationResult(verification=Verification.harness_error(detail=str(error)))
+        return VerificationResult(verification=Verification.HarnessError(detail=str(error)))

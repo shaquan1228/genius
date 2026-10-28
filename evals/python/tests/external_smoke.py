@@ -93,9 +93,7 @@ def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixtur
 def offline_cli_reports_harness_failure_without_success(
     *, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    result = VerificationResult(
-        verification=Verification.harness_error(detail="private diagnostic")
-    )
+    result = VerificationResult(verification=Verification.HarnessError(detail="private diagnostic"))
     with patch.object(verification, "validate_reference", new=AsyncMock(return_value=result)):
         assert _run_cli() == 1
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines()]

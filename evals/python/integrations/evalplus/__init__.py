@@ -8,7 +8,7 @@ from kernel import Criterion, SourceFile, Verifier
 
 
 def checks(*, record: str, manifest: Mapping[str, object]) -> Criterion:
-    return Criterion.code(
+    return Criterion.Code(
         verifier=Verifier(
             inputs=("solution.py",),
             files=[

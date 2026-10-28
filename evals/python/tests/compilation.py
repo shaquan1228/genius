@@ -6,7 +6,7 @@ from typing import assert_type, cast
 from unittest.mock import patch
 
 import pytest
-from kernel import Criterion, Record, Reference, SourceFile, Task, Value
+from kernel import Criterion, Predicate, Record, Reference, SourceFile, Task, Value, Verification
 from kernel import (
     ValidationError as DomainValidationError,
 )
@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from evals.python import datasets
 from evals.python.dataset import DatasetInfo
 from evals.python.datasets import Case, Dataset
-from evals.python.provenance import fingerprint
+from evals.python.provenance import fingerprint, plain
 from evals.python.tests.declarations import (
     _copy_case,
     _copy_verifier,
@@ -74,6 +74,22 @@ def fingerprints_follow_kernel_record_equality() -> None:
     assert fingerprint(_completion({"a": 3, "b": 2})) != fingerprint(reordered)
 
 
+def fingerprints_name_each_kernel_variant() -> None:
+    checks = [("a", Predicate.Present(path=["a"]))]
+    assert fingerprint(Predicate.All(checks=checks)) != fingerprint(Predicate.Any(checks=checks))
+    assert plain(Predicate.Words(path=["a"], min_words=1, max_words=2)) == {
+        "kind": "words",
+        "path": ["a"],
+        "min_words": 1,
+        "max_words": 2,
+    }
+    # Inherited getters stay, and each name matches the kernel's own status.
+    assert plain(Verification.InvalidSubmission()) == {
+        "kind": "invalid_submission",
+        "status": "invalid_submission",
+    }
+
+
 def _completion(value: object) -> Value:
     return Reference(edits=[], completion=value).completion
 
@@ -91,7 +107,7 @@ def _independent_datasets() -> tuple[Dataset, Dataset]:
     checks = _copy_verifier(original, stdin="different private stdin")
     second = _copy_case(
         first,
-        criterion=Criterion.code(verifier=checks),
+        criterion=Criterion.Code(verifier=checks),
         reference=Reference(
             edits=[SourceFile(path="main.py", contents="another fixed solution")],
             completion="another answer",
@@ -213,7 +229,7 @@ def direct_dataset_construction_derives_public_cases_and_copies_records() -> Non
     with patch("evals.python.datasets._module", side_effect=AssertionError("reload")):
         assert datasets.load_dataset(selection=dataset) is dataset
         reference = datasets.get_reference(case_id=definition.task.id, selection=dataset)
-        assert reference.completion.scalar == "done"
+        assert reference.completion.equal(other="done")
 
 
 def direct_dataset_construction_validates_metadata_count() -> None:

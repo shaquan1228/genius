@@ -9,7 +9,7 @@ from inspect_ai.model import ChatMessageAssistant
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer, stderr
 from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
-from kernel import REQUIRED_SCORES, Assessment, Outcome
+from kernel import REQUIRED_SCORES, Assessment, Outcome, Verification
 from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
@@ -93,16 +93,20 @@ def workspace_path(path: str) -> str:
 
 
 def assessment_details(assessment: Assessment) -> dict[str, JsonValue]:
-    if assessment.kind == "all":
-        return {
-            "passed": assessment.passed(),
-            "checks": {name: assessment_details(check) for name, check in assessment.checks},
-        }
-    return {
-        "passed": assessment.passed(),
-        "predicate": plain(assessment.predicate),
-        "observed": plain(assessment.observed()),
-    }
+    match assessment:
+        case Assessment.All(checks):
+            return {
+                "passed": assessment.passed(),
+                "checks": {name: assessment_details(check) for name, check in checks},
+            }
+        case Assessment.Check(predicate):
+            return {
+                "passed": assessment.passed(),
+                "predicate": plain(predicate),
+                "observed": plain(assessment.observed()),
+            }
+        case _ as unreachable:
+            raise TypeError(f"Unsupported assessment: {type(unreachable).__name__}")
 
 
 def score_values(scores: Sequence[tuple[str, bool]]) -> dict[str, str]:
@@ -143,7 +147,9 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
             facts=[(name, observed(fact)) for name, fact in facts.items()],
         )
     )
-    explanation = completion if evidence.verification.status == "unchecked" else evidence.detail
+    explanation = (
+        completion if isinstance(evidence.verification, Verification.Unchecked) else evidence.detail
+    )
     return Score(
         value=score_values(result.scores()),
         explanation=with_failure(explanation, failure=failure),

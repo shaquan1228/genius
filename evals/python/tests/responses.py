@@ -84,7 +84,7 @@ def _nested(depth: int, *, leaf: object) -> object:
 
 def _held(data: object) -> bool:
     try:
-        Outcome(changed_files=[], verification=Verification.unchecked(), response=data, facts=[])
+        Outcome(changed_files=[], verification=Verification.Unchecked(), response=data, facts=[])
     except (TypeError, ValueError, OverflowError):
         return False
     return True
