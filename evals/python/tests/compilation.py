@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from evals.python import datasets
 from evals.python.dataset import DatasetInfo
 from evals.python.datasets import Case, Dataset
-from evals.python.provenance import fingerprint, plain
+from evals.python.provenance import fingerprint
 from evals.python.tests.declarations import (
     _copy_case,
     _copy_verifier,
@@ -77,25 +77,21 @@ def fingerprints_follow_kernel_record_equality() -> None:
 def fingerprints_name_each_kernel_variant() -> None:
     checks = [("a", Predicate.Present(path=["a"]))]
     assert fingerprint(Predicate.All(checks=checks)) != fingerprint(Predicate.Any(checks=checks))
-    assert plain(Predicate.Words(path=["a"], min_words=1, max_words=2)) == {
+    assert Predicate.Words(path=["a"], min_words=1, max_words=2).to_python() == {
         "kind": "words",
         "path": ["a"],
         "min_words": 1,
         "max_words": 2,
     }
-    # Inherited getters stay, and each name matches the kernel's own status.
-    assert plain(Verification.InvalidSubmission()) == {
-        "kind": "invalid_submission",
-        "status": "invalid_submission",
-    }
+    assert Verification.InvalidSubmission().to_python() == {"kind": "invalid_submission"}
 
 
 def _completion(value: object) -> Value:
     return Reference(edits=[], completion=value).completion
 
 
-@pytest.mark.parametrize("value", [{"a": 1}, [1], object()])
-def fingerprints_reject_values_without_public_fields(value: object) -> None:
+@pytest.mark.parametrize("value", [object(), {"a": object()}, [object()]])
+def fingerprints_reject_values_without_a_json_view(value: object) -> None:
     with pytest.raises(TypeError, match="Unsupported value"):
         fingerprint(value)
 
@@ -229,7 +225,7 @@ def direct_dataset_construction_derives_public_cases_and_copies_records() -> Non
     with patch("evals.python.datasets._module", side_effect=AssertionError("reload")):
         assert datasets.load_dataset(selection=dataset) is dataset
         reference = datasets.get_reference(case_id=definition.task.id, selection=dataset)
-        assert reference.completion.equal(other="done")
+        assert reference.completion == Value.String(value="done")
 
 
 def direct_dataset_construction_validates_metadata_count() -> None:

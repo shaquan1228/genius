@@ -23,7 +23,6 @@ from pydantic import JsonValue
 from evals.python import datasets
 from evals.python.datasets import Declaration
 from evals.python.integrations.inspect import scoring
-from evals.python.provenance import plain
 from evals.python.tests.native_kernel import _answer
 
 
@@ -71,6 +70,7 @@ def composed_answer_retains_field_and_text_evidence(
         predicate=Criterion.Answer(rubric=rubric).condition(),
         observation=_observation(response),
     )
+    assert isinstance(result, Assessment.All)
     details = scoring.assessment_details(result)
     checks = cast(dict[str, dict[str, object]], details["checks"])
     assert (
@@ -90,7 +90,9 @@ def assessment_and_scores_agree() -> None:
     result = task.assess(outcome=outcome)
     assert isinstance(result, Assessment.All)
     scope = dict(result.checks)["scope"]
-    assert plain(scope.observed()) == ["unexpected.txt"]
+    observed = scope.observed()
+    assert observed is not None
+    assert observed.to_python() == ["unexpected.txt"]
     assert (
         dict(result.scores())
         == dict(task.grade(outcome=outcome))
@@ -132,7 +134,7 @@ def harness_failures_are_errors_for_every_criterion(case_id: str) -> None:
 
 
 def text_assessment_preserves_wrong_value_type() -> None:
-    result = Assessment(
+    result = Assessment.Check(
         predicate=Predicate.Words(path=["response", "reason"], min_words=0, max_words=3),
         observation=_observation({"reason": True}),
     )
@@ -151,7 +153,7 @@ def text_assessment_preserves_wrong_value_type() -> None:
 
 def code_assessment_serializes_the_verified_outcome() -> None:
     outcome = _outcome(verification=Verification.Passed())
-    result = Assessment(
+    result = Assessment.Check(
         predicate=datasets.load_dataset(selection="smoke")
         .records["clear-task"]
         .task.criterion.condition(),
@@ -220,7 +222,7 @@ def tool_traces_and_environment_state_are_graded_as_facts() -> None:
 
 def native_values_decode_to_plain_json() -> None:
     witness = Reference(edits=[], completion={"ratio": 0.5, "flag": True, "items": (1, "x")})
-    assert plain(witness.completion) == {"ratio": 0.5, "flag": True, "items": [1, "x"]}
+    assert witness.completion.to_python() == {"ratio": 0.5, "flag": True, "items": [1, "x"]}
     with pytest.raises(TypeError, match="Unsupported"):
         Reference(edits=[], completion=object())
 

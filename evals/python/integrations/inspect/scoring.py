@@ -2,26 +2,31 @@ import json
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from functools import partial, wraps
-from itertools import repeat
 from typing import cast
 
 from inspect_ai.model import ChatMessageAssistant
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer, stderr
 from inspect_ai.solver import TaskState
 from inspect_ai.util import sandbox
-from kernel import REQUIRED_SCORES, Assessment, Outcome, Verification
+from kernel import (
+    NESTING_LIMIT,
+    REQUIRED_SCORES,
+    Assessment,
+    AssessmentVariant,
+    Outcome,
+    Value,
+    Verification,
+)
 from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
 from evals.python import datasets, verification
 from evals.python.datasets import Dataset
-from evals.python.provenance import plain
 
 WORKSPACE = "workspace/"
-# The kernel nests values 256 levels deep, and its observation record takes the first.
-NESTING = 255
-INT64 = range(-(2**63), 2**63)
+# The kernel bounds value nesting, and its observation record takes the first level.
+NESTING = NESTING_LIMIT - 1
 
 
 def decode_response(text: str) -> JsonValue:
@@ -34,25 +39,11 @@ def decode_response(text: str) -> JsonValue:
     return None
 
 
-def held(data: object) -> bool:
-    """Whether the kernel holds a scalar as given: null, boolean, float, string or int64."""
-    return (
-        data is None
-        or isinstance(data, bool | float | str)
-        or (isinstance(data, int) and data in INT64)
-    )
-
-
 def representable(data: object, *, depth: int = 0) -> bool:
-    """Whether the kernel holds harness data as given, under an outcome channel."""
-    match data:
-        case dict():
-            keyed = all(map(isinstance, data, repeat(str)))
-            return keyed and representable([*data.values()], depth=depth)
-        case list() | tuple():
-            return depth < NESTING and all(map(partial(representable, depth=depth + 1), data))
-        case _:
-            return held(data)
+    """Whether the kernel holds harness data as given, depth levels under an outcome channel."""
+    for _ in range(depth + 1):
+        data = [data]
+    return Value.representable(value=data)
 
 
 def observed(data: object, *, depth: int = 0) -> object:
@@ -92,21 +83,18 @@ def workspace_path(path: str) -> str:
     return path.removeprefix(WORKSPACE) if path.startswith(WORKSPACE) else f"../{path}"
 
 
-def assessment_details(assessment: Assessment) -> dict[str, JsonValue]:
-    match assessment:
-        case Assessment.All(checks):
-            return {
-                "passed": assessment.passed(),
-                "checks": {name: assessment_details(check) for name, check in checks},
-            }
-        case Assessment.Check(predicate):
-            return {
-                "passed": assessment.passed(),
-                "predicate": plain(predicate),
-                "observed": plain(assessment.observed()),
-            }
-        case _ as unreachable:
-            raise TypeError(f"Unsupported assessment: {type(unreachable).__name__}")
+def assessment_details(assessment: AssessmentVariant) -> dict[str, JsonValue]:
+    if isinstance(assessment, Assessment.All):
+        return {
+            "passed": assessment.passed(),
+            "checks": {name: assessment_details(check) for name, check in assessment.checks},
+        }
+    observed = assessment.observed()
+    return {
+        "passed": assessment.passed(),
+        "predicate": assessment.predicate.to_python(),
+        "observed": None if observed is None else observed.to_python(),
+    }
 
 
 def score_values(scores: Sequence[tuple[str, bool]]) -> dict[str, str]:
