@@ -1,11 +1,11 @@
 """Resolve experiment settings and launch evaluations through the runner adapter."""
 
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, InstanceOf, validate_call
 
-from evals.python import FROZEN, Identifier
+from evals.python import FROZEN, GENIUS, Experiment, Instructions, Profile, unique
 
 __all__ = [
     "EvaluationSettings",
@@ -25,12 +25,6 @@ __all__ = [
 type InstructionDelivery = Literal["files", "manifest", "inline"]
 
 
-def _unique[T](values: tuple[T, ...]) -> tuple[T, ...]:
-    if len(set(values)) != len(values):
-        raise ValueError("Selection must contain unique values")
-    return values
-
-
 class ModelPricing(BaseModel):
     """Exact provider prices in USD per million tokens, including cache usage."""
 
@@ -41,55 +35,11 @@ class ModelPricing(BaseModel):
     input_cache_read: float = Field(ge=0, allow_inf_nan=False)
 
 
-def _instruction_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
-    for path in paths:
-        _instruction_path(path)
-    return _unique(paths)
-
-
-def _instruction_path(path: str) -> None:
-    if str(PurePosixPath(path)) != path or path.startswith("/") or ".." in path.split("/"):
-        raise ValueError("Instruction paths must be relative and normalized")
-    if path == ".":
-        raise ValueError("Instruction paths must name a file or directory")
-
-
-Instructions = Annotated[tuple[str, ...], AfterValidator(_instruction_paths)]
-
-
-class Profile(BaseModel):
-    model_config = FROZEN
-    name: Identifier
-    preamble: str
-    instructions: Instructions
-
-
-_GENIUS = Profile(
-    name="genius",
-    preamble="Read ../instructions/skills/{skill}/SKILL.md and its referenced files. Apply that "
-    "skill to this task.\n\n",
-    instructions=("docs", "skills"),
-)
-
-
-class Experiment(BaseModel):
-    model_config = FROZEN
-    profiles: tuple[Profile, ...] = (
-        Profile(name="baseline", preamble="", instructions=()),
-        _GENIUS,
-    )
-    epochs: int = Field(default=5, gt=0)
-    message_limit: int | None = Field(default=None, gt=0)
-    cost_limit: float = Field(default=0.25, gt=0, allow_inf_nan=False)
-    time_limit: int = Field(default=300, gt=0)
-    cache: bool = False
-
-
 class VariantSettings(Profile):
     """One instruction intervention, independent of its comparison role."""
 
-    instructions: Instructions = _GENIUS.instructions
-    preamble: str = _GENIUS.preamble
+    instructions: Instructions = GENIUS.instructions
+    preamble: str = GENIUS.preamble
     source_dir: str | None = None
     source_ref: str | None = None
 
@@ -113,12 +63,12 @@ class EvaluationSettings(BaseModel):
     model_cost: ModelPricing | None = None
     max_samples: int = Field(default=1, gt=0, le=16)
     limit: int | None = Field(default=None, gt=0)
-    sample_ids: Annotated[tuple[str, ...], Field(min_length=1), AfterValidator(_unique)] | None = (
+    sample_ids: Annotated[tuple[str, ...], Field(min_length=1), AfterValidator(unique)] | None = (
         None
     )
     instruction_delivery: InstructionDelivery = "files"
     deliveries: (
-        Annotated[tuple[InstructionDelivery, ...], Field(min_length=2), AfterValidator(_unique)]
+        Annotated[tuple[InstructionDelivery, ...], Field(min_length=2), AfterValidator(unique)]
         | None
     ) = None
     log_dir: str = "/results/live"

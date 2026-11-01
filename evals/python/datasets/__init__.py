@@ -11,8 +11,8 @@ from typing import Annotated, Protocol, cast
 from kernel import Reference
 from pydantic import AfterValidator, validate_call
 
-from evals.python import FROZEN
-from evals.python.dataset import Case, Dataset, DatasetInfo, Declaration
+from evals.python import FROZEN, Case, Declaration
+from evals.python.dataset import Dataset, DatasetInfo
 from evals.python.provenance import fingerprint
 
 __all__ = [

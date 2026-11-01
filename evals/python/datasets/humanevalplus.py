@@ -12,7 +12,8 @@ from tempfile import NamedTemporaryFile
 from kernel import Instruction, Reference, SourceFile, Task
 from pydantic import BaseModel, ConfigDict, Field
 
-from evals.python.dataset import DatasetInfo, Declaration
+from evals.python import Declaration
+from evals.python.dataset import DatasetInfo
 from evals.python.integrations.evalplus import checks
 
 info = DatasetInfo(
