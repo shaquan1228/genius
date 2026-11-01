@@ -10,9 +10,8 @@ from types import MappingProxyType
 
 from inspect_ai.dataset import Sample
 
-from evals.python import REPO_ROOT
-from evals.python.datasets import Case
-from evals.python.evaluation import Experiment, InstructionDelivery, Profile
+from evals.python import REPO_ROOT, Case, Experiment, Profile
+from evals.python.evaluation import InstructionDelivery
 
 REASONING_DOCUMENTS = (
     "skills/reasoning/SKILL.md",

@@ -2,7 +2,7 @@
 
 from kernel import Criterion, Instruction, Reference, Rubric, SourceFile, Task, TextRule
 
-from evals.python.dataset import Declaration
+from evals.python import Declaration
 from evals.python.integrations.smoke import checks
 
 info = None

@@ -328,6 +328,10 @@ def integrations_import_public_namespaces_or_owned_types(path: Path) -> None:
         "Identifier",
         "EVALS_ROOT",
         "REPO_ROOT",
+        "Case",
+        "Declaration",
+        "Experiment",
+        "Profile",
     }
     assert all(
         len(node.names) == 1

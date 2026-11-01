@@ -11,9 +11,9 @@ import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.results as results_adapter
 import evals.python.integrations.inspect.scoring as scoring_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import datasets, evaluation
+from evals.python import Experiment, Profile, datasets, evaluation
 from evals.python.datasets import Dataset
-from evals.python.evaluation import Experiment, InstructionDelivery, Profile
+from evals.python.evaluation import InstructionDelivery
 
 
 def build_task(  # noqa: PLR0913 - canonical values and native Inspect options

@@ -6,10 +6,10 @@ from functools import cached_property
 from types import MappingProxyType
 from typing import Annotated
 
-from kernel import SourceFile, Task, source_hash
+from kernel import source_hash
 from pydantic import AfterValidator, BaseModel, Field, PlainSerializer
 
-from evals.python import FROZEN
+from evals.python import FROZEN, Case, Declaration
 from evals.python.provenance import fingerprint
 
 Attributes = Annotated[Mapping[str, str], AfterValidator(MappingProxyType), PlainSerializer(dict)]
@@ -22,24 +22,6 @@ class DatasetInfo(BaseModel):
     sha256: str
     count: int = Field(ge=0)
     attributes: Attributes
-
-
-@dataclass(frozen=True, kw_only=True)
-class Case:
-    case_id: str
-    skill: str
-    prompt: str
-    files: tuple[SourceFile, ...]
-
-
-class Declaration(BaseModel):
-    model_config = FROZEN
-    skill: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
-    task: Task
-
-    def project(self) -> Case:
-        case = self.task.project()
-        return Case(case_id=case.case_id, skill=self.skill, prompt=case.prompt, files=case.files)
 
 
 @dataclass(frozen=True, kw_only=True)

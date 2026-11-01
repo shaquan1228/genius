@@ -22,7 +22,6 @@ from pydantic import ValidationError
 
 from evals.python import datasets
 from evals.python.datasets import Case, Declaration
-from evals.python.provenance import plain
 from evals.python.tests.projections import reference as private_reference
 from evals.python.tests.projections import verifier
 
@@ -149,10 +148,9 @@ def answer_declarations_preserve_typed_completion_fields() -> None:
     dataset = datasets.compile_dataset(cases=(_declaration(code=False),))
     completion = private_reference("external", selection=dataset).completion
     assert isinstance(completion, Value.Record)
-    choice, safe = dict(completion.fields)["choice"], dict(completion.fields)["safe"]
-    assert isinstance(choice, Value.String)
-    assert isinstance(safe, Value.Bool)
-    assert (choice.value, safe.value) == ("B", True)
+    fields = dict(completion.fields)
+    assert fields["choice"] == Value.String(value="B")
+    assert fields["safe"] == Value.Bool(value=True)
 
 
 def answer_declarations_do_not_supply_executable_checks() -> None:
@@ -285,7 +283,7 @@ def _reference_text(value: Reference) -> str:
         case Value.String(text):
             return text
         case completion:
-            return json.dumps(plain(completion))
+            return json.dumps(completion.to_python())
 
 
 def _public_snapshot(

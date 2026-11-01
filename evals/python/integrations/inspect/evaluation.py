@@ -19,8 +19,8 @@ import evals.python.integrations.inspect.progress as progress_adapter
 import evals.python.integrations.inspect.remote  # noqa: F401 - register the HF sandbox
 import evals.python.integrations.inspect.results as results_adapter
 import evals.python.integrations.inspect.tasks as task_adapter
-from evals.python import datasets, evaluation
-from evals.python.evaluation import EvaluationSettings, Experiment, ModelPricing
+from evals.python import Experiment, datasets, evaluation
+from evals.python.evaluation import EvaluationSettings, ModelPricing
 
 
 @modelapi(name="genius-hf")

@@ -17,10 +17,10 @@ from kernel import REQUIRED_SCORES, source_hash
 
 import evals.python.integrations.inspect.pricing as pricing_adapter
 import evals.python.integrations.inspect.profiles as profiles_adapter
-from evals.python import EVALS_ROOT, evaluation
+from evals.python import EVALS_ROOT, Experiment, evaluation
 from evals.python.comparison import RunSummary
 from evals.python.estimation import Metrics, Trials
-from evals.python.evaluation import EvaluationSettings, Experiment
+from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.inspect import completeness
 
 
