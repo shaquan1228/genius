@@ -5,7 +5,7 @@ The kernel owns grading semantics; these records own the Genius policy it leaves
 
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Annotated
+from typing import Annotated, Literal
 
 from kernel import SourceFile, Task
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
@@ -49,25 +49,44 @@ class Case:
     files: tuple[SourceFile, ...]
 
 
+type RouteChoice = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]*$")] | None
+
+
 class Declaration(BaseModel):
-    """A native task and the Genius skill it evaluates."""
+    """A native task and the Genius skill it evaluates.
+
+    `routes` overrides the accepted choices per route kind; the skill route accepts only
+    `skill` unless overridden. `None` accepts choosing nothing.
+    """
 
     model_config = FROZEN
     skill: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     task: Task
+    routes: dict[str, Annotated[tuple[RouteChoice, ...], Field(min_length=1)]] = Field(
+        default_factory=dict
+    )
 
     def project(self) -> Case:
         case = self.task.project()
         return Case(case_id=case.case_id, skill=self.skill, prompt=case.prompt, files=case.files)
 
 
+type Placement = Literal["instructions", "discoverable"]
+
+
 class Profile(BaseModel):
-    """One instruction variant delivered to the candidate."""
+    """One instruction variant delivered to the candidate.
+
+    `instructions` placement copies documents beside the workspace for the preamble to
+    name. `discoverable` installs them where the agent finds skills itself, so the agent
+    chooses which skill to load.
+    """
 
     model_config = FROZEN
     name: Identifier
     preamble: str
     instructions: Instructions
+    placement: Placement = "instructions"
 
 
 BASELINE = Profile(name="baseline", preamble="", instructions=())
@@ -76,6 +95,9 @@ GENIUS = Profile(
     preamble="Read ../instructions/skills/{skill}/SKILL.md and its referenced files. Apply that "
     "skill to this task.\n\n",
     instructions=("docs", "skills"),
+)
+ROUTING = Profile(
+    name="routing", preamble="", instructions=("docs", "skills"), placement="discoverable"
 )
 
 

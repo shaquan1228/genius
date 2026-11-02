@@ -43,6 +43,7 @@ PUBLIC_OPERATIONS = {
         "render_report",
     },
     "estimation": {"differences", "estimates"},
+    "routing": {"assess"},
 }
 OWNER_TYPES = {
     "datasets": {"Case", "Dataset", "DatasetInfo", "Declaration", "Selection"},
@@ -66,6 +67,7 @@ OWNER_TYPES = {
         "Objective",
     },
     "estimation": {"Estimate", "Metrics", "Trials"},
+    "routing": {"KINDS", "Call", "Choice", "Route", "RouteKind"},
 }
 PUBLIC_NAMES = {
     owner: names | PUBLIC_OPERATIONS.get(owner, set()) for owner, names in OWNER_TYPES.items()
@@ -332,6 +334,9 @@ def integrations_import_public_namespaces_or_owned_types(path: Path) -> None:
         "Declaration",
         "Experiment",
         "Profile",
+        "BASELINE",
+        "GENIUS",
+        "ROUTING",
     }
     assert all(
         len(node.names) == 1

@@ -98,6 +98,28 @@ def document_selected(name: str, *, selected: tuple[str, ...], prefixes: tuple[s
     return name in selected or name.startswith(prefixes)
 
 
+def installed_files(
+    profile: Profile, *, documents: Mapping[str, bytes], skills_root: str
+) -> dict[str, bytes]:
+    """Selected documents at the paths the candidate reads them from."""
+    selected = document_files(profile, documents=documents)
+    if profile.placement == "instructions":
+        return selected
+    root = PurePosixPath(skills_root)
+    return {
+        str(root / name.removeprefix("instructions/")): contents
+        for name, contents in selected.items()
+    }
+
+
+def diagnosable(profile: Profile, *, case: Case) -> None:
+    """Reject delivery diagnostics the envelope cannot represent."""
+    if profile.placement == "discoverable":
+        raise ValueError("Discoverable instructions are delivered only as files")
+    if case.skill != "reasoning":
+        raise ValueError("Instruction delivery diagnostics currently support reasoning only")
+
+
 def prompt(
     profile: Profile,
     *,
@@ -109,8 +131,7 @@ def prompt(
     preamble = profile.preamble.format(skill=case.skill)
     if not profile.instructions or delivery == "files":
         return preamble + case.prompt
-    if case.skill != "reasoning":
-        raise ValueError("Instruction delivery diagnostics currently support reasoning only")
+    diagnosable(profile, case=case)
     envelope = document_envelope(delivery=delivery, root=instruction_root, documents=documents)
     return (preamble + envelope if delivery == "manifest" else envelope) + case.prompt
 
@@ -131,10 +152,13 @@ def samples(  # noqa: PLR0913 - explicit sample inputs and native delivery optio
     delivery: InstructionDelivery = "files",
     instruction_root: str = "../instructions",
     sandbox_image: str | None = None,
+    skills_root: str = "workspace/.claude",
 ) -> list[Sample]:
     instructions = {
         name: inline_file(contents=contents)
-        for name, contents in document_files(profile, documents=documents).items()
+        for name, contents in installed_files(
+            profile, documents=documents, skills_root=skills_root
+        ).items()
     }
     return [
         Sample(

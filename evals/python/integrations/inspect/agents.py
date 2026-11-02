@@ -20,6 +20,8 @@ class AgentSpec:
     options: dict[str, Any]
     # Inspect SWE starts the RuntimeError for a failed agent process with this text.
     failure_prefix: str
+    # Where the agent discovers skills; discoverable profiles install skills/ and docs/ here.
+    skills_root: str
     system_prompt: str = ""
 
 
@@ -34,6 +36,7 @@ AGENT_REGISTRY: dict[AgentKind, AgentSpec] = {
             "retry_uncaught_errors": 0,
         },
         failure_prefix="Error executing claude code agent",
+        skills_root="workspace/.claude",
     ),
     "codex": AgentSpec(
         default_version="0.137.0",
@@ -49,6 +52,8 @@ AGENT_REGISTRY: dict[AgentKind, AgentSpec] = {
             },
         },
         failure_prefix="Error executing codex cli agent",
+        # CODEX_HOME is home_dir, and Codex reads user skills from $CODEX_HOME/skills.
+        skills_root="/root/genius-codex",
         system_prompt=(
             "Use only tools registered for this session. "
             "If apply_patch is not registered, edit files through exec_command with cmd "
