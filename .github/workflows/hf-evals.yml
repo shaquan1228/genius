@@ -77,8 +77,52 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'benchmark')
     uses: ./.github/workflows/evals.yml
 
-  launch:
+  sandbox-image:
     needs: check
+    name: Prepared sandbox image
+    permissions:
+      contents: read
+      packages: write
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (contains(github.event.pull_request.labels.*.name, 'benchmark') &&
+       (github.event.action == 'synchronize' || github.event.label.name == 'benchmark'))
+    runs-on: ubuntu-24.04
+    outputs:
+      image: ${{ steps.reference.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: evals/docker
+          target: hosted
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ghcr.io/${{ github.repository_owner }}/genius-eval-sandbox:${{ hashFiles('evals/docker/Dockerfile') }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=genius-eval-sandbox
+          cache-to: type=gha,mode=max,scope=genius-eval-sandbox
+      - id: reference
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/genius-eval-sandbox:${{ hashFiles('evals/docker/Dockerfile') }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          echo "Sandbox image $IMAGE ($DIGEST)" >> "$GITHUB_STEP_SUMMARY"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+  launch:
+    needs: [check, sandbox-image]
     name: Benchmark comparison
     permissions:
       contents: read
@@ -135,6 +179,7 @@ jobs:
           EVAL_EPOCHS: ${{ inputs.epochs || '1' }}
           EVAL_AGENT: ${{ inputs.agent }}
           EVAL_VERSION: ${{ inputs.version }}
+          EVAL_SANDBOX_IMAGE: ${{ needs.sandbox-image.outputs.image }}
           CONTROL_REF: ${{ github.event.pull_request.base.sha || inputs.control_ref || 'origin/main' }}
           TREATMENT_REF: ${{ github.event.pull_request.head.sha || inputs.treatment_ref || github.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
