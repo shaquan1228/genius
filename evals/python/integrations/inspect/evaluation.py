@@ -12,6 +12,7 @@ from inspect_ai.log import EvalLog
 from inspect_ai.model import GenerateConfig, Model, get_model, modelapi
 from inspect_ai.model._providers.hf_inference_providers import HFInferenceProvidersAPI
 
+import evals.python.integrations.inspect.agents as agent_adapter
 import evals.python.integrations.inspect.completeness as completeness_adapter
 import evals.python.integrations.inspect.pricing as pricing_adapter
 import evals.python.integrations.inspect.profiles as profile_adapter
@@ -159,6 +160,11 @@ async def execute(
     epochs = 1 if request.deliveries else spec.epochs
     expected = completeness_adapter.expected_pairs(tasks, request=request, epochs=epochs)
     state.emit("expected", tuples=sorted(expected))
+    if request.sandbox == "hf" and request.agent == "codex":
+        await asyncio.to_thread(
+            agent_adapter.cache_codex_package,
+            request.version or agent_adapter.AGENT_REGISTRY["codex"].default_version,
+        )
     logs = await eval_async(
         tasks,
         model=model,

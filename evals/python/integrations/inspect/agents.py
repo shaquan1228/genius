@@ -2,13 +2,19 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import Any
+from urllib.request import urlopen
 
 from inspect_ai.agent import Agent, as_solver
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_swe import claude_code, codex_cli
+from inspect_swe._codex_cli.agentbinary import codex_cli_binary_source
 
 AgentKind = str
+CODEX_LINUX_X64_PACKAGES = {
+    "0.137.0": "b364488097efd12da3b5ffb1b0099cabd8b377b1f97043158f7f771b1456953f",
+}
 # Long CLI output keeps the exit code at the start and the provider error at the end.
 FAILURE_HEAD, FAILURE_TAIL = 200, 1800
 
@@ -68,6 +74,25 @@ def coding_agent(kind: AgentKind, *, version: str) -> Agent:
         attempts=1,
         **options,
     )
+
+
+def cache_codex_package(version: str) -> None:
+    digest = CODEX_LINUX_X64_PACKAGES.get(version)
+    package_path = codex_cli_binary_source().cached_package_path
+    if digest is None or package_path is None:
+        return
+    destination = package_path(version, "linux-x64")
+    if destination.exists():
+        return
+    url = (
+        f"https://github.com/openai/codex/releases/download/rust-v{version}/"
+        "codex-package-x86_64-unknown-linux-musl.tar.gz"
+    )
+    with urlopen(url, timeout=300) as response:
+        package = response.read()
+    if sha256(package).hexdigest() != digest:
+        raise ValueError(f"Codex {version} package does not match its pinned checksum")
+    destination.write_bytes(package)
 
 
 def truncated(message: str) -> str:

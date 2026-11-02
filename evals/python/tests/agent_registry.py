@@ -4,6 +4,9 @@ import asyncio
 import importlib
 import inspect
 from dataclasses import replace
+from hashlib import sha256
+from io import BytesIO
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -16,8 +19,10 @@ from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.agents import (
     AGENT_REGISTRY,
+    CODEX_LINUX_X64_PACKAGES,
     AgentKind,
     AgentSpec,
+    cache_codex_package,
     coding_agent,
     contained_agent,
     truncated,
@@ -189,3 +194,34 @@ def custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
     )
     assert task.metadata is not None
     assert (task.metadata["agent"], task.metadata["agent_version"]) == ("other", "custom-version")
+
+
+@pytest.mark.parametrize(
+    ("version", "body", "cached"),
+    [("0.137.0", b"package", True), ("0.137.0", b"tampered", False), ("9.9.9", b"package", False)],
+)
+def codex_package_fills_the_inspect_swe_cache_once(
+    version: str, *, body: bytes, cached: bool, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert AGENT_REGISTRY["codex"].default_version in CODEX_LINUX_X64_PACKAGES
+    monkeypatch.setitem(CODEX_LINUX_X64_PACKAGES, "0.137.0", sha256(b"package").hexdigest())
+    monkeypatch.setattr(
+        "inspect_swe._codex_cli.agentbinary.package_cache_dir", lambda _subdir: tmp_path
+    )
+    destination = tmp_path / f"codex-package-{version}-linux-x64.tar.gz"
+    with patch(
+        "evals.python.integrations.inspect.agents.urlopen",
+        side_effect=lambda *_a, **_k: BytesIO(body),
+    ) as download:
+        if body == b"tampered":
+            with pytest.raises(ValueError, match="pinned checksum"):
+                cache_codex_package(version)
+        else:
+            cache_codex_package(version)
+            cache_codex_package(version)
+    assert (destination.exists(), download.call_count) == (
+        cached,
+        int(version in CODEX_LINUX_X64_PACKAGES),
+    )
+    if cached:
+        assert destination.read_bytes() == b"package"
