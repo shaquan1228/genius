@@ -168,7 +168,7 @@ def hf_job_runs_both_profiles(
         inspect_eval.call_args.kwargs["sandbox"],
         inspect_eval.call_args.kwargs["epochs"],
     ) == (["baseline", "genius"], "hf", 5)
-    cached_codex_package.assert_called_once_with("0.137.0")
+    cached_codex_package.assert_called_once_with("codex", version="", sandbox="hf")
     model = inspect_eval.call_args.kwargs["model"]
     assert (
         isinstance(model.api, HFInferenceProvidersAPI),

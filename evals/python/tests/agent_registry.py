@@ -19,7 +19,7 @@ from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.agents import (
     AGENT_REGISTRY,
-    CODEX_LINUX_X64_PACKAGES,
+    CODEX_HF_PACKAGES,
     AgentKind,
     AgentSpec,
     cache_codex_package,
@@ -197,31 +197,39 @@ def custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
 
 
 @pytest.mark.parametrize(
-    ("version", "body", "cached"),
-    [("0.137.0", b"package", True), ("0.137.0", b"tampered", False), ("9.9.9", b"package", False)],
+    "case",
+    [
+        ("codex", "hf", "", 1),
+        ("codex", "hf", "0.137.0", 1),
+        ("codex", "hf", "9.9.9", 0),
+        ("codex", "docker", "0.137.0", 0),
+        ("claude", "hf", "", 0),
+    ],
 )
 def codex_package_fills_the_inspect_swe_cache_once(
-    version: str, *, body: bytes, cached: bool, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    case: tuple[AgentKind, str, str, int], *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    assert AGENT_REGISTRY["codex"].default_version in CODEX_LINUX_X64_PACKAGES
-    monkeypatch.setitem(CODEX_LINUX_X64_PACKAGES, "0.137.0", sha256(b"package").hexdigest())
-    monkeypatch.setattr(
-        "inspect_swe._codex_cli.agentbinary.package_cache_dir", lambda _subdir: tmp_path
-    )
-    destination = tmp_path / f"codex-package-{version}-linux-x64.tar.gz"
+    kind, sandbox, version, downloads = case
+    assert ("codex", "hf", AGENT_REGISTRY["codex"].default_version) in CODEX_HF_PACKAGES
+    monkeypatch.setitem(CODEX_HF_PACKAGES, ("codex", "hf", "0.137.0"), sha256(b"pkg").hexdigest())
+    monkeypatch.setattr("inspect_swe._codex_cli.agentbinary.package_cache_dir", lambda _: tmp_path)
     with patch(
         "evals.python.integrations.inspect.agents.urlopen",
-        side_effect=lambda *_a, **_k: BytesIO(body),
+        side_effect=lambda *_a, **_k: BytesIO(b"pkg"),
     ) as download:
-        if body == b"tampered":
-            with pytest.raises(ValueError, match="pinned checksum"):
-                cache_codex_package(version)
-        else:
-            cache_codex_package(version)
-            cache_codex_package(version)
-    assert (destination.exists(), download.call_count) == (
-        cached,
-        int(version in CODEX_LINUX_X64_PACKAGES),
-    )
-    if cached:
-        assert destination.read_bytes() == b"package"
+        cache_codex_package(kind, version=version, sandbox=sandbox)
+        cache_codex_package(kind, version=version, sandbox=sandbox)
+    assert download.call_count == downloads
+    assert [path.read_bytes() for path in tmp_path.iterdir()] == [b"pkg"] * downloads
+
+
+def codex_package_rejects_a_tampered_download(
+    *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("inspect_swe._codex_cli.agentbinary.package_cache_dir", lambda _: tmp_path)
+    with (
+        patch("evals.python.integrations.inspect.agents.urlopen", return_value=BytesIO(b"bad")),
+        pytest.raises(ValueError, match="pinned checksum"),
+    ):
+        cache_codex_package("codex", version="0.137.0", sandbox="hf")
+    assert not any(tmp_path.iterdir())

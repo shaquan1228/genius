@@ -160,11 +160,12 @@ async def execute(
     epochs = 1 if request.deliveries else spec.epochs
     expected = completeness_adapter.expected_pairs(tasks, request=request, epochs=epochs)
     state.emit("expected", tuples=sorted(expected))
-    if request.sandbox == "hf" and request.agent == "codex":
-        await asyncio.to_thread(
-            agent_adapter.cache_codex_package,
-            request.version or agent_adapter.AGENT_REGISTRY["codex"].default_version,
-        )
+    await asyncio.to_thread(
+        agent_adapter.cache_codex_package,
+        request.agent,
+        version=request.version,
+        sandbox=request.sandbox,
+    )
     logs = await eval_async(
         tasks,
         model=model,

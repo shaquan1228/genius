@@ -3,7 +3,8 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from hashlib import sha256
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 from urllib.request import urlopen
 
 from inspect_ai.agent import Agent, as_solver
@@ -12,8 +13,8 @@ from inspect_swe import claude_code, codex_cli
 from inspect_swe._codex_cli.agentbinary import codex_cli_binary_source
 
 AgentKind = str
-CODEX_LINUX_X64_PACKAGES = {
-    "0.137.0": "b364488097efd12da3b5ffb1b0099cabd8b377b1f97043158f7f771b1456953f",
+CODEX_HF_PACKAGES = {
+    ("codex", "hf", "0.137.0"): "b364488097efd12da3b5ffb1b0099cabd8b377b1f97043158f7f771b1456953f",
 }
 # Long CLI output keeps the exit code at the start and the provider error at the end.
 FAILURE_HEAD, FAILURE_TAIL = 200, 1800
@@ -76,13 +77,12 @@ def coding_agent(kind: AgentKind, *, version: str) -> Agent:
     )
 
 
-def cache_codex_package(version: str) -> None:
-    digest = CODEX_LINUX_X64_PACKAGES.get(version)
-    package_path = codex_cli_binary_source().cached_package_path
-    if digest is None or package_path is None:
-        return
+def cache_codex_package(kind: AgentKind, *, version: str, sandbox: str) -> None:
+    version = version or AGENT_REGISTRY[kind].default_version
+    digest = CODEX_HF_PACKAGES.get((kind, sandbox, version))
+    package_path = cast(Callable[[str, str], Path], codex_cli_binary_source().cached_package_path)
     destination = package_path(version, "linux-x64")
-    if destination.exists():
+    if digest is None or destination.exists():
         return
     url = (
         f"https://github.com/openai/codex/releases/download/rust-v{version}/"
