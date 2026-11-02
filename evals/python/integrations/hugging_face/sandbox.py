@@ -16,7 +16,8 @@ from evals.python.execution import Completion, Environment, Execution, Runtime
 IMAGE = "python:3.12-slim-bookworm"
 WORKDIR = PurePosixPath("/eval")
 INSTALL_TOOLS = (
-    "apt-get update -qq && apt-get install -y --no-install-recommends "
+    "apt-get -o Acquire::Retries=5 update -qq && "
+    "apt-get -o Acquire::Retries=5 install -y --no-install-recommends "
     "bash ca-certificates curl git ocaml-nox ripgrep && rm -rf /var/lib/apt/lists/*"
 )
 
@@ -54,7 +55,10 @@ def create(*, image: str | None = None) -> Sandbox:
         setup = prepared_check() if image else INSTALL_TOOLS
         result = client.run(["sh", "-c", setup], timeout=240, check=False)
         if result.exit_code != 0:
-            raise RuntimeError("Could not prepare eval tools in Hugging Face Sandbox")
+            raise RuntimeError(
+                "Could not prepare eval tools in Hugging Face Sandbox "
+                f"(exit {result.exit_code}): {result.stderr[-1000:]}"
+            )
         client.files.mkdir(str(WORKDIR))
         event("vm_ready", handle=client.id)
         return client
