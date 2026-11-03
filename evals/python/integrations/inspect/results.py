@@ -180,7 +180,15 @@ def trial(sample: EvalSample) -> Metrics:
         "cutoff": float(sample.limit is not None),
         "unrepresentable": float(bool(metadata.get("unrepresentable"))),
         **{name: float(passed) for name, passed in checks(metadata.get("assessment", {}))},
+        **{f"route.{kind}": float(route["passed"]) for kind, route in routes(sample).items()},
     }
+
+
+def routes(sample: EvalSample) -> dict[str, dict[str, Any]]:
+    """Graded routing choices by kind; runs scored before routing was graded have none."""
+    score = (sample.scores or {}).get("routes")
+    metadata = score.metadata if score is not None else None
+    return cast(dict[str, dict[str, Any]], (metadata or {}).get("routes", {}))
 
 
 def trials(log: EvalLog) -> Trials:

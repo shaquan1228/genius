@@ -105,6 +105,29 @@ Delivery diagnostics currently support reasoning cases.
 Inspect logs retain scores, verifier evidence, crashes, and cutoffs. Parent logs
 include sample lifecycle events and a final completeness report.
 
+## Grade routing
+
+The `genius` profile names the skill to apply, so it measures how well the agent follows
+a skill, not whether the agent picks it. The `routing` profile has no preamble.
+It installs `skills/` and `docs/` where the agent discovers skills on its own:
+`workspace/.claude` for Claude Code and `$CODEX_HOME` for Codex.
+Each skill's relative links still resolve.
+
+Every profile has a second scorer, `routes`, beside `evaluation`. It reads the recorded
+tool calls and grades each kind in `python/routing.py`. The `skill` kind takes the first
+skill the agent loaded, from a `Skill` tool call or a read of a `skills/<name>/SKILL.md`
+path. The expected answer is the case's `Declaration.skill`, so existing cases need no
+new dataset. To accept other choices, set `routes` on a declaration; `None` accepts loading
+no skill. Comparison reports show each kind as a `route.<kind>` metric. Add a new
+`RouteKind` to `KINDS` to grade another choice point.
+
+```sh
+export EVAL_VARIANT='{"name":"routing","preamble":"","placement":"discoverable"}'
+evals/bin/huggingface-run
+```
+
+Locally, run the `routing` Inspect task in `python/integrations/inspect/tasks.py`.
+
 ## Use from Python
 
 Run Python under the same opam switch as the setup commands.

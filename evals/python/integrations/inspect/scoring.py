@@ -21,8 +21,9 @@ from pydantic import JsonValue
 
 import evals.python.integrations.inspect.environments as environments_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import datasets, verification
-from evals.python.datasets import Dataset
+from evals.python import datasets, routing, verification
+from evals.python.datasets import Dataset, Declaration
+from evals.python.routing import KINDS, Call
 
 WORKSPACE = "workspace/"
 # The kernel bounds value nesting, and its observation record takes the first level.
@@ -107,6 +108,15 @@ def with_failure(explanation: str, *, failure: str | None) -> str:
     return f"Agent process crashed: {failure}\n\n{explanation}"
 
 
+def declaration(state: TaskState, *, dataset: Dataset | None) -> Declaration:
+    selected = datasets.load_dataset(
+        selection=dataset
+        if dataset is not None
+        else cast(str, state.metadata.get("dataset", "smoke"))
+    )
+    return selected.records[str(state.metadata["case_id"])]
+
+
 async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
     state: TaskState, target: Target, *, dataset: Dataset | None = None
 ) -> Score:
@@ -114,12 +124,7 @@ async def score_sample(  # noqa: PLR0917 - Inspect calls scorers positionally
     completion = state.output.completion
     changed = tuple(sorted(map(workspace_path, await workspace_adapter.changed_files(state))))
     current = sandbox()
-    selected = datasets.load_dataset(
-        selection=dataset
-        if dataset is not None
-        else cast(str, state.metadata.get("dataset", "smoke"))
-    )
-    task = selected.records[str(state.metadata["case_id"])].task
+    task = declaration(state, dataset=dataset).task
     evidence = await verification.verify(
         task.checks(),
         agent=environments_adapter.environment(current),
@@ -164,3 +169,28 @@ def evaluation() -> Scorer:
 def bound_evaluation(*, dataset: Dataset) -> Scorer:
     # Copy only the public registration; private inputs stay in the bound callback.
     return wraps(evaluation())(partial(score_sample, dataset=dataset))
+
+
+async def score_routes(  # noqa: PLR0917 - Inspect calls scorers positionally
+    state: TaskState, target: Target, *, dataset: Dataset | None = None
+) -> Score:
+    """Grade each routing choice the agent made, separately from the kernel's grade."""
+    calls = cast(list[Call], trace(state))
+    routes = routing.assess(calls, declaration=declaration(state, dataset=dataset))
+    return Score(
+        value=score_values([(route.kind, route.passed) for route in routes]),
+        explanation="; ".join(
+            f"{route.kind}: chose {route.observed}, accepts {list(route.accepted)}"
+            for route in routes
+        ),
+        metadata={"routes": {route.kind: route.details() for route in routes}},
+    )
+
+
+@scorer(metrics={kind.name: [accuracy(), stderr()] for kind in KINDS})
+def routes() -> Scorer:
+    return score_routes
+
+
+def bound_routes(*, dataset: Dataset) -> Scorer:
+    return wraps(routes())(partial(score_routes, dataset=dataset))

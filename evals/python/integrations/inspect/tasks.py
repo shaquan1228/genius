@@ -11,7 +11,7 @@ import evals.python.integrations.inspect.profiles as profile_adapter
 import evals.python.integrations.inspect.results as results_adapter
 import evals.python.integrations.inspect.scoring as scoring_adapter
 import evals.python.integrations.inspect.workspace as workspace_adapter
-from evals.python import Experiment, Profile, datasets, evaluation
+from evals.python import BASELINE, GENIUS, ROUTING, Experiment, Profile, datasets, evaluation
 from evals.python.datasets import Dataset
 from evals.python.evaluation import InstructionDelivery
 
@@ -44,10 +44,14 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
             delivery=instruction_delivery,
             instruction_root=instruction_root,
             sandbox_image=sandbox_image,
+            skills_root=agent_adapter.AGENT_REGISTRY[agent].skills_root,
         ),
         setup=workspace_adapter.prepare(),
         solver=agent_adapter.contained_agent(agent, version=agent_version),
-        scorer=scoring_adapter.bound_evaluation(dataset=catalog),
+        scorer=[
+            scoring_adapter.bound_evaluation(dataset=catalog),
+            scoring_adapter.bound_routes(dataset=catalog),
+        ],
         sandbox=sandbox,
         config=GenerateConfig(cache=spec.cache),
         epochs=spec.epochs,
@@ -70,6 +74,7 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
             ).hexdigest(),
             "instruction_delivery": instruction_delivery,
             "preamble_sha256": sha256(profile.preamble.encode()).hexdigest(),
+            "instruction_placement": profile.placement,
             "instructions_sha256": profile_adapter.content_hash(
                 files=profile_adapter.document_files(
                     profile,
@@ -82,11 +87,17 @@ def build_task(  # noqa: PLR0913 - canonical values and native Inspect options
     )
 
 
+NAMED_PROFILES = {profile.name: profile for profile in (BASELINE, GENIUS, ROUTING)}
+
+
 def _task(profile: str, *, agent: str, version: str, dataset: str) -> Task:
-    spec = evaluation.resolve_settings()
+    selected = NAMED_PROFILES[profile]
+    spec = Experiment.model_validate(
+        {**dict(evaluation.resolve_settings()), "profiles": (selected,)}
+    )
     catalog = datasets.load_dataset(selection=dataset)
     return build_task(
-        profile=profile_adapter.load_profile(profile, spec=spec),
+        profile=selected,
         spec=spec,
         catalog=catalog,
         documents=profile_adapter.load_documents(spec),
@@ -104,3 +115,8 @@ def baseline(*, agent: str = "claude", version: str = "", dataset: str = "smoke"
 @task
 def genius(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
     return _task("genius", agent=agent, version=version, dataset=dataset)
+
+
+@task
+def routing(*, agent: str = "claude", version: str = "", dataset: str = "smoke") -> Task:
+    return _task("routing", agent=agent, version=version, dataset=dataset)

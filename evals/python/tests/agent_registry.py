@@ -54,6 +54,7 @@ def registered_harness_uses_shared_and_custom_settings(
             factory=lambda: factory,
             options={"mode": "strict"},
             failure_prefix="Error executing other agent",
+            skills_root="workspace/.other",
         ),
     )
 

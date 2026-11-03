@@ -184,7 +184,8 @@ def cases() -> tuple[Declaration, ...]:
         ),
     )
     return (
-        Declaration(skill="reasoning", task=receipt()),
+        # A one-file fix with its check named is trivial for routing: loading no skill is fine.
+        Declaration(skill="reasoning", task=receipt(), routes={"skill": ("reasoning", None)}),
         Declaration(skill="preflight", task=timeout()),
         *(Declaration(skill="bayesian", task=task) for task in decisions),
     )
