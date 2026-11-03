@@ -23,7 +23,7 @@ From that ground, the proofs establish how to act:
 ## Communicating
 
 - Lead with TL;DR, then: Observed, Decided, Next steps, Blockers
-- If the task fixes an output format, use only that format. The shape above does not apply.
+- If the task fixes an output format, use only that format in the final message. Put working notes outside the reply.
 - Ambiguous requirements → clarifying questions before code
 - Terse by default — one sentence if it fits
 - Flag blockers and irreversible actions before taking them

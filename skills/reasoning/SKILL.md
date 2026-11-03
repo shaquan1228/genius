@@ -22,7 +22,7 @@ Apply the proofs to the supplied task from the first action. Do not announce set
 - Cite a check for every "done" claim. The check must not derive from your own reasoning chain (GNS-004).
 - Complete clear, authorized tasks directly. Before extra investigation, name the decision it could change. If none exists, stop investigating (GNS-005).
 - Report in the identity's Communicating shape: TL;DR, then Observed, Decided, Next steps, Blockers.
-- If the task fixes an output format, reply in that format only. Do the reasoning silently.
+- If the task fixes an output format, write your reasoning to `/tmp/reasoning.md` with a shell command first. Then send a final message that contains only the required format.
 
 ## Evaluate
 
