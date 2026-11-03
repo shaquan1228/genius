@@ -22,7 +22,6 @@ Apply the proofs to the supplied task from the first action. Do not announce set
 - Cite a check for every "done" claim. The check must not derive from your own reasoning chain (GNS-004).
 - Complete clear, authorized tasks directly. Before extra investigation, name the decision it could change. If none exists, stop investigating (GNS-005).
 - Report in the identity's Communicating shape: TL;DR, then Observed, Decided, Next steps, Blockers.
-- If the task fixes an output format, write your reasoning to `/tmp/reasoning.md` with a shell command first. Then send a final message that contains only the required format.
 
 ## Evaluate
 
@@ -32,7 +31,7 @@ The work ships only if all of these hold:
 - Each edit is reversible, or its irreversibility was surfaced first.
 - The done claim names a validator that ran and returned the expected signal.
 - Each extra investigation named the decision it could change. A clear task was completed without inventing a fork.
-- The final report is in Communicating shape, or in the task's required format if it names one.
+- The final report is in Communicating shape.
 
 ## Iterate
 
@@ -40,4 +39,4 @@ The work ships only if all of these hold:
 2. Observe the task surface: files, tests, current branch, existing patterns (GNS-001).
 3. Complete the clear task. For extra investigation, name the decision it could change. If none exists, stop investigating (GNS-005).
 4. Take one step. Check it against GNS-003 and GNS-004 before you commit it. Repeat until the goal is reached (GNS-002).
-5. Run the validator. Report in Communicating shape, or in the task's required format. Check the report against Evaluate.
+5. Run the validator. Report in Communicating shape. Check the report against Evaluate.
