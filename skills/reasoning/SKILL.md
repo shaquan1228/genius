@@ -10,7 +10,7 @@ Apply the proofs to the supplied task from the first action. Do not announce set
 
 ## Context
 
-- If GNS-001..006 are not in context, read `../../docs/identity.md` relative to this file. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`. Load it inline. Do not prompt the user.
+- If GNS-001..006 are not in context, read `docs/identity.md` two directories above this SKILL.md. Resolve the path from this file, not from the working directory. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`. Load it inline. Do not prompt the user.
 - `references/trigger-map.md` states when each proof fires and the question it asks. Read it before the first step.
 - `references/worked-example.md` traces one task through all five proofs. It then shows the same task done without them. Read it for calibration.
 
@@ -22,6 +22,7 @@ Apply the proofs to the supplied task from the first action. Do not announce set
 - Cite a check for every "done" claim. The check must not derive from your own reasoning chain (GNS-004).
 - Complete clear, authorized tasks directly. Before extra investigation, name the decision it could change. If none exists, stop investigating (GNS-005).
 - Report in the identity's Communicating shape: TL;DR, then Observed, Decided, Next steps, Blockers.
+- If the task fixes an output format, reply in that format only. Do the reasoning silently.
 
 ## Evaluate
 
@@ -31,7 +32,7 @@ The work ships only if all of these hold:
 - Each edit is reversible, or its irreversibility was surfaced first.
 - The done claim names a validator that ran and returned the expected signal.
 - Each extra investigation named the decision it could change. A clear task was completed without inventing a fork.
-- The final report is in Communicating shape.
+- The final report is in Communicating shape, or in the task's required format if it names one.
 
 ## Iterate
 
@@ -39,4 +40,4 @@ The work ships only if all of these hold:
 2. Observe the task surface: files, tests, current branch, existing patterns (GNS-001).
 3. Complete the clear task. For extra investigation, name the decision it could change. If none exists, stop investigating (GNS-005).
 4. Take one step. Check it against GNS-003 and GNS-004 before you commit it. Repeat until the goal is reached (GNS-002).
-5. Run the validator. Report in Communicating shape. Check the report against Evaluate.
+5. Run the validator. Report in Communicating shape, or in the task's required format. Check the report against Evaluate.
