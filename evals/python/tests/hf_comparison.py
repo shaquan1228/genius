@@ -189,9 +189,29 @@ def request_uses_existing_environment_configuration(provider: str) -> None:
     )
 
 
-def explicit_request_json_is_preserved() -> None:
-    with patch.dict("os.environ", {"COMPARISON_REQUEST": _request().model_dump_json()}, clear=True):
-        assert compare.request_from_environment() == _request()
+@pytest.mark.parametrize(
+    ("requested", "published", "expected"),
+    [
+        ("", "", ""),
+        ("", "ghcr.io/o/sandbox:1", "ghcr.io/o/sandbox:1"),
+        ("own/i:2", "ghcr.io/o/s:1", "own/i:2"),
+    ],
+)
+def explicit_request_json_is_preserved(requested: str, *, published: str, expected: str) -> None:
+    request = _request()
+    request = request.model_copy(
+        update={"shared": request.shared.model_copy(update={"sandbox_image": requested})}
+    )
+    environment = {"COMPARISON_REQUEST": request.model_dump_json(), "EVAL_SANDBOX_IMAGE": published}
+    with patch.dict("os.environ", environment, clear=True):
+        resolved = compare.request_from_environment()
+    assert resolved.shared.sandbox_image == expected
+    assert (
+        resolved.model_copy(
+            update={"shared": resolved.shared.model_copy(update={"sandbox_image": requested})}
+        )
+        == request
+    )
 
 
 def _repository(path: Path) -> None:

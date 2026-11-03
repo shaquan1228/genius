@@ -4,11 +4,12 @@ import asyncio
 import json
 import os
 import subprocess
+from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import assert_type
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from inspect_ai.model import GenerateConfig, get_model
@@ -30,6 +31,14 @@ def explicit_test_prices(monkeypatch: pytest.MonkeyPatch) -> None:
             {"input": 1.0, "output": 2.0, "input_cache_write": 1.0, "input_cache_read": 0.1}
         ),
     )
+
+
+@pytest.fixture(autouse=True)
+def cached_codex_package() -> Iterator[Mock]:
+    with patch(
+        "evals.python.integrations.inspect.evaluation.agent_adapter.cache_codex_package"
+    ) as cache:
+        yield cache
 
 
 def _configured_request() -> EvaluationSettings:
@@ -134,7 +143,9 @@ def inspect_evaluation_uses_request_without_reading_job_environment(
 
 
 @pytest.mark.parametrize("provider", ["openai", "hf-inference-providers"])
-def hf_job_runs_both_profiles(provider: str, *, monkeypatch: pytest.MonkeyPatch) -> None:
+def hf_job_runs_both_profiles(
+    provider: str, *, cached_codex_package: Mock, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("EVAL_MODEL", f"{provider}/test-model")
     monkeypatch.setenv("HF_TOKEN", "hf_test")
     monkeypatch.setenv("OPENAI_API_KEY", "test")
@@ -157,6 +168,7 @@ def hf_job_runs_both_profiles(provider: str, *, monkeypatch: pytest.MonkeyPatch)
         inspect_eval.call_args.kwargs["sandbox"],
         inspect_eval.call_args.kwargs["epochs"],
     ) == (["baseline", "genius"], "hf", 5)
+    cached_codex_package.assert_called_once_with("codex", version="", sandbox="hf")
     model = inspect_eval.call_args.kwargs["model"]
     assert (
         isinstance(model.api, HFInferenceProvidersAPI),

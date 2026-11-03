@@ -64,10 +64,12 @@ def lifecycle(client: Mock) -> None:
 @pytest.mark.parametrize("failure", ["exit", "mkdir"])
 def setup_failure_kills_sandbox(failure: str, *, client: Mock) -> None:
     if failure == "exit":
-        client.run.return_value = _result(1)
+        client.run.return_value = SandboxCommandResult(
+            exit_code=100, stdout="", stderr="E: Failed to fetch ocaml-nox", timed_out=False
+        )
     else:
         client.files.mkdir.side_effect = RuntimeError("mkdir failed")
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match=r"exit 100\): E: Failed to fetch|mkdir failed"):
         asyncio.run(HfSandboxEnvironment.sample_init("eval", None, {}))
     client.kill.assert_called_once_with()
     client.close.assert_called_once_with()

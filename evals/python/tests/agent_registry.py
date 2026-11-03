@@ -4,6 +4,9 @@ import asyncio
 import importlib
 import inspect
 from dataclasses import replace
+from hashlib import sha256
+from io import BytesIO
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -16,8 +19,10 @@ from evals.python.evaluation import EvaluationSettings
 from evals.python.integrations.inspect import profiles
 from evals.python.integrations.inspect.agents import (
     AGENT_REGISTRY,
+    CODEX_HF_PACKAGES,
     AgentKind,
     AgentSpec,
+    cache_codex_package,
     coding_agent,
     contained_agent,
     truncated,
@@ -189,3 +194,42 @@ def custom_agent_registry_stays_open_through_public_evaluation_and_tasks(
     )
     assert task.metadata is not None
     assert (task.metadata["agent"], task.metadata["agent_version"]) == ("other", "custom-version")
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ("codex", "hf", "", 1),
+        ("codex", "hf", "0.137.0", 1),
+        ("codex", "hf", "9.9.9", 0),
+        ("codex", "docker", "0.137.0", 0),
+        ("claude", "hf", "", 0),
+    ],
+)
+def codex_package_fills_the_inspect_swe_cache_once(
+    case: tuple[AgentKind, str, str, int], *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    kind, sandbox, version, downloads = case
+    assert ("codex", "hf", AGENT_REGISTRY["codex"].default_version) in CODEX_HF_PACKAGES
+    monkeypatch.setitem(CODEX_HF_PACKAGES, ("codex", "hf", "0.137.0"), sha256(b"pkg").hexdigest())
+    monkeypatch.setattr("inspect_swe._codex_cli.agentbinary.package_cache_dir", lambda _: tmp_path)
+    with patch(
+        "evals.python.integrations.inspect.agents.urlopen",
+        side_effect=lambda *_a, **_k: BytesIO(b"pkg"),
+    ) as download:
+        cache_codex_package(kind, version=version, sandbox=sandbox)
+        cache_codex_package(kind, version=version, sandbox=sandbox)
+    assert download.call_count == downloads
+    assert [path.read_bytes() for path in tmp_path.iterdir()] == [b"pkg"] * downloads
+
+
+def codex_package_rejects_a_tampered_download(
+    *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("inspect_swe._codex_cli.agentbinary.package_cache_dir", lambda _: tmp_path)
+    with (
+        patch("evals.python.integrations.inspect.agents.urlopen", return_value=BytesIO(b"bad")),
+        pytest.raises(ValueError, match="pinned checksum"),
+    ):
+        cache_codex_package("codex", version="0.137.0", sandbox="hf")
+    assert not any(tmp_path.iterdir())

@@ -14,7 +14,11 @@ from evals.python.integrations.hugging_face.job import configuration
 
 def request_from_environment() -> ComparisonRequest:
     if os.environ.get("COMPARISON_REQUEST"):
-        return ComparisonRequest.model_validate_json(os.environ["COMPARISON_REQUEST"])
+        request = ComparisonRequest.model_validate_json(os.environ["COMPARISON_REQUEST"])
+        image = request.shared.sandbox_image or os.environ.get("EVAL_SANDBOX_IMAGE", "")
+        return request.model_copy(
+            update={"shared": request.shared.model_copy(update={"sandbox_image": image})}
+        )
     variants = tuple(
         VariantRequest(
             variant=VariantSettings(
