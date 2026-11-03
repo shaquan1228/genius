@@ -19,6 +19,8 @@ from evals.python.integrations.inspect.scoring import (
         '  {"choice":"B","reason":"Cheap"}  ',
         '```json\n{"choice":"B","reason":"Cheap"}\n```',
         '\u2003{"choice":"B","reason":"Cheap"}\u2003',
+        'Cheap wins.\n\n{"choice":"B","reason":"Cheap"}',
+        'TL;DR: B.\n\nObserved: cheap.\n\n```json\n{"choice":"B","reason":"Cheap"}\n```',
     ],
 )
 def json_and_fences_decode_to_native_values(text: str) -> None:
@@ -34,6 +36,8 @@ def json_and_fences_decode_to_native_values(text: str) -> None:
         '{"choice":/*comment*/"B"}',
         '{"choice":"raw\nnewline"}',
         '{"choice":"B",}',
+        '{"choice":"B"}\n\nThen I changed my mind.',
+        "Prose first.\n\nnot JSON",
     ],
 )
 def malformed_candidates_produce_a_null_response(text: str) -> None:
