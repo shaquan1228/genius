@@ -1,0 +1,107 @@
+[[case]]
+skill = "touchup"
+id = "scaffold-drift"
+fixture = "skills"
+scope = ["skill-gamma.md"]
+prompt = "One skill in this repo has drifted from the scaffold the repo prescribes. Touch it up so it conforms. Make the change and summarize it."
+edits = [
+  { path = "skill-gamma.md", old = "workflow.\n---", new = "workflow.\nargument-hint: \"[task]\"\n---" },
+]
+completion = "Added argument-hint to skill-gamma.md, matching CONTRIBUTING.md."
+check = '''
+added, removed = delta("skill-gamma.md")
+assert removed == [], removed
+assert len(added) == 1, added
+assert added[0].startswith("argument-hint:") and added[0].split(":", 1)[1].strip(), added
+front = text("skill-gamma.md").split("---")[1].splitlines()
+assert added[0] in front, "argument-hint must be in the frontmatter"
+'''
+
+[[case]]
+skill = "touchup"
+id = "widen-note"
+fixture = "netkit"
+scope = ["retry.py"]
+prompt = "The retry comment in netkit is narrower than the behavior it describes. Widen it. Make the change and summarize it."
+edits = [
+  { path = "retry.py", old = "on timeouts.", new = "on timeouts and dropped connections." },
+]
+completion = "Widened the comment in retry.py to cover dropped connections."
+check = '''
+import ast
+
+assert ast.dump(ast.parse(text("retry.py"))) == ast.dump(ast.parse(ORIGINAL["retry.py"])), "code changed"
+added, removed = delta("retry.py")
+assert removed == ["        # Retry on timeouts."], removed
+assert len(added) == 1 and added[0].lstrip().startswith("#"), added
+assert "connection" in added[0].lower(), added
+'''
+
+[[case]]
+skill = "touchup"
+id = "codify-repo-pattern"
+fixture = "monorepo"
+scope = ["AGENTS.md"]
+prompt = "Every test target in this repo now runs Python with -I -B, and that is the convention from now on. Codify it where agents will read it. Make the change and summarize it."
+edits = [
+  { path = "AGENTS.md", old = "`build/`.\n", new = "`build/`.\n- Run tests with `python3 -I -B`.\n" },
+]
+completion = "Added the -I -B test rule to AGENTS.md Conventions; CLAUDE.md points there."
+check = '''
+added, removed = delta("AGENTS.md")
+assert removed == [], removed
+assert len(added) == 1 and added[0].startswith("- "), added
+assert added[0] in section("AGENTS.md", heading="## Conventions"), "rule must join the repo-wide list"
+assert "-I" in added[0] and "-B" in added[0], added
+'''
+
+[[case]]
+skill = "touchup"
+id = "codify-package-pattern"
+fixture = "monorepo"
+scope = ["AGENTS.md"]
+prompt = "Every web component now sets display_name. Write that convention down where agents will read it. Make the change and summarize it."
+edits = [
+  { path = "AGENTS.md", old = "`web_base.Component`.\n", new = "`web_base.Component`.\n- Every component sets `display_name`.\n" },
+]
+completion = "Added the display_name rule to the Web client section of AGENTS.md."
+check = '''
+added, removed = delta("AGENTS.md")
+assert removed == [], removed
+assert len(added) == 1 and added[0].startswith("- "), added
+assert added[0] in section("AGENTS.md", heading="## Web client"), "rule must join the web-only list"
+assert "display_name" in added[0], added
+'''
+
+[[case]]
+skill = "touchup"
+id = "dedupe-rule"
+fixture = "monorepo"
+scope = ["AGENTS.md"]
+prompt = "Add a rule so agents stop committing generated files in dist/. Make the change and summarize it."
+completion = "AGENTS.md already forbids committing dist/ output; no change was needed."
+check = '''
+assert sum("dist/" in line for line in text("AGENTS.md").splitlines()) == 1, "rule duplicated"
+added, removed = delta("AGENTS.md")
+assert all("dist/" in line for line in added + removed), (added, removed)
+'''
+
+[[case]]
+skill = "touchup"
+id = "delete-stale"
+fixture = "release"
+scope = ["README.md", "RELEASING.md"]
+prompt = "deploy.sh was removed and releases now publish from CI. Clean up the docs that still point to it. Make the change and summarize it."
+edits = [
+  { path = "README.md", old = "- `deploy.sh`: upload the wheel to the package index.\n", new = "" },
+  { path = "RELEASING.md", old = "For hotfixes, run `deploy.sh` locally.\n", new = "" },
+]
+completion = "Removed deploy.sh from README.md and RELEASING.md; the changelog is history."
+check = '''
+for path in ("README.md", "RELEASING.md"):
+    added, removed = delta(path)
+    assert "deploy.sh" not in text(path), path
+    assert removed and all("deploy.sh" in line for line in removed), (path, removed)
+    assert added == [], (path, added)
+assert "recieve" in text("README.md"), "unrelated typo was edited"
+'''

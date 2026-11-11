@@ -16,6 +16,11 @@ from evals.python.integrations.inspect.tasks import baseline, genius
 from evals.python.tests.scenarios import Mode
 from evals.python.tests.scenarios import crashing as _crashing
 from evals.python.tests.support import (
+    REPO_CASES,
+    SMOKE,
+    untouched,
+)
+from evals.python.tests.support import (
     crash_evidence as _crash_evidence,
 )
 from evals.python.tests.support import (
@@ -29,10 +34,7 @@ from evals.python.verification import VerificationResult
 
 def complete_suite_repeats_and_saves_logs(tmp_path: Path) -> None:
     logs = _offline_run([baseline(), genius()], mode="pass", directory=tmp_path, epochs=2)
-    expected = [
-        (case, CORRECT, CORRECT)
-        for case in ["clear-task", "known-preflight", "small-decision", "decision-review"]
-    ] * 2
+    expected = [(case, CORRECT, CORRECT) for case in SMOKE] * 2
     assert [(log.status, sorted(_results(log))) for log in logs] == [
         ("success", sorted(expected))
     ] * 2
@@ -73,7 +75,9 @@ def _assert_answer_judgments(sample: EvalSample) -> None:
 @pytest.mark.parametrize("mode", ["extra", "committed-extra", "instructions", "tampered-checks"])
 def scope_rejects_extra_committed_and_instruction_edits(*, mode: Mode, tmp_path: Path) -> None:
     logs = _offline_run([baseline(), genius()], mode=mode, directory=tmp_path)
-    assert [[scope for _, _, scope in _results(log)] for log in logs] == [[INCORRECT] * 4] * 2
+    assert [[scope for _, _, scope in _results(log)] for log in logs] == [
+        [INCORRECT] * len(SMOKE)
+    ] * 2
 
 
 def untouched_seeded_bugs_fail(tmp_path: Path) -> None:
@@ -84,6 +88,7 @@ def untouched_seeded_bugs_fail(tmp_path: Path) -> None:
             ("known-preflight", INCORRECT, CORRECT),
             ("small-decision", CORRECT, CORRECT),
             ("decision-review", CORRECT, CORRECT),
+            *((case, untouched(case), CORRECT) for case in REPO_CASES),
         ]
     )
 
@@ -95,6 +100,7 @@ def invalid_answers_fail(tmp_path: Path) -> None:
         "known-preflight": CORRECT,
         "small-decision": INCORRECT,
         "decision-review": INCORRECT,
+        **dict.fromkeys(REPO_CASES, CORRECT),
     }
 
 
@@ -124,8 +130,10 @@ def crashed_agent_is_scored_on_its_workspace(
     assert (log.status, _results(log)) == (
         "success",
         sorted(
-            (case, INCORRECT, CORRECT)
-            for case in ["clear-task", "known-preflight", "small-decision", "decision-review"]
+            [
+                *((case, INCORRECT, CORRECT) for case in SMOKE[:4]),
+                *((case, untouched(case), CORRECT) for case in REPO_CASES),
+            ]
         ),
     )
     crash = f"Agent process crashed: {message}"
@@ -134,6 +142,10 @@ def crashed_agent_is_scored_on_its_workspace(
         "known-preflight": (crash, message, "failed"),
         "small-decision": (crash, message, "unchecked"),
         "decision-review": (crash, message, "unchecked"),
+        **{
+            case: (crash, message, "passed" if untouched(case) == CORRECT else "failed")
+            for case in REPO_CASES
+        },
     }
 
 
