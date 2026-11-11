@@ -220,3 +220,19 @@ def verifier_skips_syntax_checks_for_text_inputs(
     monkeypatch.chdir(tmp_path)
     Path("notes.md").write_text("def broken(:\n")
     assert verifier.verify(("notes.md",), checks="")["status"] == "passed"
+
+
+def reference_edits_must_match_once_and_stay_in_scope() -> None:
+    layout = {"notes.md": "a\na\n"}
+    with pytest.raises(ValueError, match="occur once"):
+        touchup.apply(layout, edits=(touchup.Edit("notes.md", "a", "b"),))
+    with pytest.raises(ValueError, match="inside scope"):
+        touchup.touch(
+            id="outside",
+            fixture="release",
+            scope=("README.md",),
+            prompt="",
+            edits=(touchup.Edit("CHANGELOG.md", "x", "y"),),
+            body="",
+            completion="",
+        )

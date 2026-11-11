@@ -5,9 +5,15 @@ deprecated twin, vendored and archived copies, history, and a list scoped to one
 the repo. ``allowed_files`` scores the file choice. The private checks score the edit
 itself against the original text: what changed, and that nothing else did.
 
+Each scenario's repo lives as plain files under ``fixtures/touchup/<repo>/``. A case names
+its repo, the files in scope, and the reference as text replacements on those files.
+
 Fixture paths are flat because the pinned kernel accepts only single-segment paths, so
 layout is carried by file names, headers, and section scope rather than directories.
 """
+
+from pathlib import Path
+from typing import NamedTuple
 
 from kernel import Instruction, Reference, SourceFile, Task
 
@@ -50,6 +56,33 @@ def section(path, heading):
 '''
 
 
+FIXTURES = Path(__file__).with_name("fixtures") / "touchup"
+
+
+class Edit(NamedTuple):
+    """Replace ``old`` with ``new`` once in ``path``. An empty ``new`` deletes ``old``."""
+
+    path: str
+    old: str
+    new: str
+
+
+def repo(name: str) -> dict[str, str]:
+    """Every file of one fixture repo, keyed by its path in the candidate workspace."""
+    return {
+        path.name: path.read_text(encoding="utf-8") for path in sorted((FIXTURES / name).iterdir())
+    }
+
+
+def apply(layout: dict[str, str], *, edits: tuple[Edit, ...]) -> dict[str, str]:
+    result = dict(layout)
+    for edit in edits:
+        if result[edit.path].count(edit.old) != 1:
+            raise ValueError(f"Edit target must occur once in {edit.path}: {edit.old!r}")
+        result[edit.path] = result[edit.path].replace(edit.old, edit.new)
+    return result
+
+
 def files(layout: dict[str, str]) -> list[SourceFile]:
     return [SourceFile(path=path, contents=contents) for path, contents in layout.items()]
 
@@ -61,56 +94,42 @@ def program(layout: dict[str, str], *, inputs: tuple[str, ...], body: str) -> st
 def touch(  # noqa: PLR0913 - Each field is a distinct part of one declaration.
     *,
     id: str,
-    layout: dict[str, str],
+    fixture: str,
+    scope: tuple[str, ...],
     prompt: str,
-    edits: dict[str, str],
+    edits: tuple[Edit, ...],
     body: str,
     completion: str,
 ) -> Task:
-    inputs = tuple(edits)
+    """Build a case: the agent may change only ``scope``; ``edits`` produce the reference."""
+    if not {edit.path for edit in edits} <= set(scope):
+        raise ValueError("Reference edits must stay inside scope")
+    layout = repo(fixture)
+    reference = apply(layout, edits=edits)
     return Task(
         id=id,
         fixture=files(layout),
         instruction=Instruction(prompt=prompt + FINISH),
-        criterion=checks(inputs=inputs, program=program(layout, inputs=inputs, body=body)),
-        allowed_files=inputs,
-        reference=Reference(edits=files(edits), completion=completion),
-    )
-
-
-def skill(name: str, *, hint: bool = True, header: str = "") -> str:
-    argument = 'argument-hint: "[task]"\n' if hint else ""
-    return (
-        f"---\nname: {name}\ndescription: Run the {name} workflow.\n{argument}---\n\n"
-        f"{header}## Task\n\nApply {name} to the supplied task.\n"
+        criterion=checks(inputs=scope, program=program(layout, inputs=scope, body=body)),
+        allowed_files=scope,
+        reference=Reference(
+            edits=files({path: reference[path] for path in scope}), completion=completion
+        ),
     )
 
 
 def scaffold() -> Task:
     """A scaffold deviates from its template, contributor guide, and sibling majority."""
-    target = "skill-gamma.md"
-    layout = {
-        "CONTRIBUTING.md": "# Contributing\n\n## Skills\n\n"
-        "Each skill is a `skill-<name>.md` file. Start from `skill-template.md`.\n"
-        "Frontmatter declares `name`, `description`, and `argument-hint`.\n\n"
-        "`upstream-*.md` files mirror another repository. Do not edit them.\n"
-        "`*.archived.md` files are retired. Do not edit them.\n",
-        "skill-template.md": skill("<name>"),
-        "skill-alpha.md": skill("alpha"),
-        "skill-beta.md": skill("beta"),
-        target: skill("gamma", hint=False),
-        "upstream-skill-delta.md": skill(
-            "delta", hint=False, header="<!-- Vendored from upstream. Do not edit. -->\n\n"
-        ),
-        "skill-omega.archived.md": skill("omega", hint=False),
-    }
     return touch(
         id="scaffold-drift",
-        layout=layout,
+        fixture="skills",
+        scope=("skill-gamma.md",),
         prompt="One skill in this repo has drifted from the scaffold the repo prescribes. "
         "Touch it up so it conforms.",
-        edits={target: skill("gamma")},
-        body=f"""path = {target!r}
+        edits=(
+            Edit("skill-gamma.md", "workflow.\n---", 'workflow.\nargument-hint: "[task]"\n---'),
+        ),
+        body="""path = "skill-gamma.md"
 added, removed = delta(path)
 assert removed == [], removed
 assert len(added) == 1, added
@@ -122,47 +141,15 @@ assert added[0] in front, "argument-hint must be in the frontmatter"
     )
 
 
-def retry(*, comment: str, errors: str, header: str = "") -> str:
-    return (
-        f'{header}"""Retry helpers for the netkit client."""\n\nimport time\n\n\n'
-        "def call_with_retry(operation, attempts=3, delay=0.1):\n"
-        '    """Call operation again when calls do not recieve a reply."""\n'
-        "    for attempt in range(attempts):\n"
-        f"        # {comment}\n"
-        "        try:\n"
-        "            return operation()\n"
-        f"        except {errors}:\n"
-        "            if attempt == attempts - 1:\n"
-        "                raise\n"
-        "            time.sleep(delay)\n"
-    )
-
-
 def widen() -> Task:
     """A narrow comment must be widened in the live copy, not its legacy or built twins."""
-    target = "retry.py"
-    live = "(TimeoutError, ConnectionError)"
-    layout = {
-        "pyproject.toml": '[project]\nname = "netkit"\n\n'
-        '[tool.setuptools]\npy-modules = ["retry"]\n',
-        target: retry(comment="Retry on timeouts.", errors=live),
-        "retry_legacy.py": retry(
-            comment="Retry on timeouts.",
-            errors="TimeoutError",
-            header="# Deprecated: kept for the 1.x API. Not imported by netkit.\n",
-        ),
-        "retry_build.py": retry(
-            comment="Retry on timeouts.",
-            errors=live,
-            header="# Generated by setup.py build. Do not edit.\n",
-        ),
-    }
     return touch(
         id="widen-note",
-        layout=layout,
+        fixture="netkit",
+        scope=("retry.py",),
         prompt="The retry comment in netkit is narrower than the behavior it describes. Widen it.",
-        edits={target: retry(comment="Retry on timeouts and dropped connections.", errors=live)},
-        body=f"""path = {target!r}
+        edits=(Edit("retry.py", "on timeouts.", "on timeouts and dropped connections."),),
+        body="""path = "retry.py"
 assert ast.dump(ast.parse(text(path))) == ast.dump(ast.parse(ORIGINAL[path])), "code changed"
 added, removed = delta(path)
 assert removed == ["        # Retry on timeouts."], removed
@@ -171,40 +158,6 @@ assert "connection" in added[0].lower(), added
 """,
         completion="Widened the comment in retry.py to cover dropped connections.",
     )
-
-
-def agents(*, repo: tuple[str, ...] = (), web: tuple[str, ...] = ()) -> str:
-    """The canonical doc: repo-wide conventions first, then the web client's own section."""
-
-    def bullets(lines: tuple[str, ...]) -> str:
-        return "".join(f"- {line}\n" for line in lines)
-
-    return (
-        "# Agents\n\n## Conventions\n\nThese apply to every part of the repo.\n\n"
-        "- Keep functions small and name them for what they return.\n"
-        f"- Put tests next to the module they cover.\n{bullets(repo)}\n"
-        "## Web client\n\nThese apply only to `web_*.py` modules.\n\n"
-        f"- Components subclass `web_base.Component`.\n{bullets(web)}"
-    )
-
-
-def monorepo(root: str) -> dict[str, str]:
-    """A pointer file, the canonical doc it names, a contributor guide, and two services."""
-    return {
-        "CLAUDE.md": "See AGENTS.md for repository conventions.\n",
-        "AGENTS.md": root,
-        "CONTRIBUTING.md": "# Contributing\n\nOpen a pull request against `main`. "
-        "Agent conventions live in AGENTS.md.\n",
-        "Makefile": "test-api:\n\tpython3 -I -B -m unittest api_test\n\n"
-        "test-web:\n\tpython3 -I -B -m unittest web_test\n\n"
-        "test-tools:\n\tpython3 -I -B -m unittest tools_test\n",
-        "api_routes.py": 'ROUTES = {"/health": "ok"}\n',
-        "web_base.py": "class Component:\n    display_name = None\n",
-        "web_button.py": "from web_base import Component\n\n\n"
-        'class Button(Component):\n    display_name = "Button"\n',
-        "web_card.py": "from web_base import Component\n\n\n"
-        'class Card(Component):\n    display_name = "Card"\n',
-    }
 
 
 def added_bullet(*, heading: str, terms: tuple[str, ...]) -> str:
@@ -221,10 +174,11 @@ def repo_rule() -> Task:
     """A repo-wide pattern belongs in the repo-wide list of the doc a pointer names."""
     return touch(
         id="codify-repo-pattern",
-        layout=monorepo(agents()),
+        fixture="monorepo",
+        scope=("AGENTS.md",),
         prompt="Every test target in this repo now runs Python with -I -B, and that is the "
         "convention from now on. Codify it where agents will read it.",
-        edits={"AGENTS.md": agents(repo=("Run tests with `python3 -I -B`.",))},
+        edits=(Edit("AGENTS.md", "`build/`.\n", "`build/`.\n- Run tests with `python3 -I -B`.\n"),),
         body=added_bullet(heading="## Conventions", terms=("-I", "-B")),
         completion="Added the -I -B test rule to AGENTS.md Conventions; CLAUDE.md points there.",
     )
@@ -234,10 +188,17 @@ def package_rule() -> Task:
     """A pattern seen only in the web client belongs in that client's scoped list."""
     return touch(
         id="codify-package-pattern",
-        layout=monorepo(agents()),
+        fixture="monorepo",
+        scope=("AGENTS.md",),
         prompt="Every web component now sets display_name. Write that convention down where "
         "agents will read it.",
-        edits={"AGENTS.md": agents(web=("Every component sets `display_name`.",))},
+        edits=(
+            Edit(
+                "AGENTS.md",
+                "`web_base.Component`.\n",
+                "`web_base.Component`.\n- Every component sets `display_name`.\n",
+            ),
+        ),
         body=added_bullet(heading="## Web client", terms=("display_name",)),
         completion="Added the display_name rule to the Web client section of AGENTS.md.",
     )
@@ -245,12 +206,12 @@ def package_rule() -> Task:
 
 def dedupe() -> Task:
     """The requested rule already exists in other words; a second copy is a failure."""
-    root = agents(repo=("Never commit build output from `dist/` or `build/`.",))
     return touch(
         id="dedupe-rule",
-        layout=monorepo(root),
+        fixture="monorepo",
+        scope=("AGENTS.md",),
         prompt="Add a rule so agents stop committing generated files in dist/.",
-        edits={"AGENTS.md": root},
+        edits=(),
         body="""path = "AGENTS.md"
 assert sum("dist/" in line for line in text(path).splitlines()) == 1, "rule duplicated"
 added, removed = delta(path)
@@ -260,35 +221,18 @@ assert all("dist/" in line for line in added + removed), (added, removed)
     )
 
 
-def readme(*, deploy: bool) -> str:
-    line = "- `deploy.sh`: upload the wheel to the package index.\n" if deploy else ""
-    return (
-        "# Tool\n\n## Scripts\n\n- `build.sh`: build the wheel.\n"
-        f"{line}\n## Usage\n\nRun `tool --help` to recieve the full option list.\n"
-    )
-
-
-def release(*, deploy: bool) -> str:
-    line = "For hotfixes, run `deploy.sh` locally.\n" if deploy else ""
-    return f"# Releasing\n\nReleases publish from CI when a tag is pushed.\n{line}"
-
-
 def delete() -> Task:
     """Stale references leave current docs; the changelog keeps its history."""
-    layout = {
-        "build.sh": "#!/bin/sh\npython3 -m build\n",
-        "README.md": readme(deploy=True),
-        "RELEASING.md": release(deploy=True),
-        "CHANGELOG.md": "# Changelog\n\n## 2.0.0\n\n"
-        "- Removed `deploy.sh`. Releases publish from CI.\n\n"
-        "## 1.4.0\n\n- Added `deploy.sh`.\n",
-    }
     return touch(
         id="delete-stale",
-        layout=layout,
+        fixture="release",
+        scope=("README.md", "RELEASING.md"),
         prompt="deploy.sh was removed and releases now publish from CI. Clean up the "
         "docs that still point to it.",
-        edits={"README.md": readme(deploy=False), "RELEASING.md": release(deploy=False)},
+        edits=(
+            Edit("README.md", "- `deploy.sh`: upload the wheel to the package index.\n", ""),
+            Edit("RELEASING.md", "For hotfixes, run `deploy.sh` locally.\n", ""),
+        ),
         body="""for path in ("README.md", "RELEASING.md"):
     added, removed = delta(path)
     assert "deploy.sh" not in text(path), path
