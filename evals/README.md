@@ -108,8 +108,10 @@ include sample lifecycle events and a final completeness report.
 
 ## Measure touchup
 
-`python/datasets/touchup.py` holds six cases for `skills/touchup`. The repos the agent sees
-live as plain files under `python/datasets/fixtures/touchup/`. Each case asks for one
+`python/datasets/touchup.toml` declares six cases for `skills/touchup`, and
+`python/datasets/touchup.py` loads them. Each case names a repo fixture from
+`python/integrations/smoke/repos/`, which any dataset can reuse through `smoke.repo(name)`.
+Its check may call the helpers in `python/integrations/smoke/repo_support.py`. Each case asks for one
 small edit in a repo that holds decoys: a pointer file, generated and deprecated twins,
 vendored and archived copies, a changelog, and a rule list scoped to one part of the repo.
 Two scores grade each sample. `scope` checks that only the right file changed.

@@ -17,7 +17,7 @@ from kernel import Outcome, Task, Verification
 from evals.python import REPO_ROOT, datasets, verification
 from evals.python.datasets import touchup
 from evals.python.integrations.inspect.environments import environment, runtime
-from evals.python.integrations.smoke import verifier
+from evals.python.integrations.smoke import repo_support, verifier
 
 TASKS = {record.task.id: record.task for record in touchup.cases()}
 
@@ -69,7 +69,7 @@ def dataset_loads_six_touchup_cases_with_a_shipped_skill() -> None:
     assert len(dataset.records) == 6
     assert {record.skill for record in dataset.records.values()} == {"touchup"}
     assert (REPO_ROOT / "skills" / "touchup" / "SKILL.md").is_file()
-    assert all(case.prompt.endswith(touchup.FINISH) for case in dataset.cases.values())
+    assert all(case.prompt.endswith(touchup.load().finish) for case in dataset.cases.values())
 
 
 def every_fixture_holds_a_decoy_outside_scope() -> None:
@@ -225,14 +225,26 @@ def verifier_skips_syntax_checks_for_text_inputs(
 def reference_edits_must_match_once_and_stay_in_scope() -> None:
     layout = {"notes.md": "a\na\n"}
     with pytest.raises(ValueError, match="occur once"):
-        touchup.apply(layout, edits=(touchup.Edit("notes.md", "a", "b"),))
+        touchup.apply(layout, edits=(touchup.Edit(path="notes.md", old="a", new="b"),))
+    outside = touchup.Spec(
+        id="outside",
+        fixture="release",
+        scope=("README.md",),
+        prompt="",
+        edits=(touchup.Edit(path="CHANGELOG.md", old="x", new="y"),),
+        completion="",
+        check="",
+    )
     with pytest.raises(ValueError, match="inside scope"):
-        touchup.touch(
-            id="outside",
-            fixture="release",
-            scope=("README.md",),
-            prompt="",
-            edits=(touchup.Edit("CHANGELOG.md", "x", "y"),),
-            body="",
-            completion="",
-        )
+        touchup.task(outside, finish="")
+
+
+def repo_checks_compare_against_the_fixture(
+    tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(repo_support, "ORIGINAL", {"doc.md": "# A\n\n- one\n# B\n- two\n"})
+    Path("doc.md").write_text("# A\n\n- one\n- new\n# B\n")
+    assert repo_support.delta("doc.md") == (["- new"], ["- two"])
+    assert repo_support.section("doc.md", heading="# A") == ["", "- one", "- new"]
+    assert repo_support.section("doc.md", heading="# B") == []
