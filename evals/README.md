@@ -2,7 +2,8 @@
 
 Evaluate instruction variants with [Inspect AI](https://inspect.aisi.org.uk/)
 and [Inspect SWE](https://meridianlabs-ai.github.io/inspect_swe/).
-The bundled datasets are a four-case smoke suite and the 164-problem HumanEval+ benchmark.
+The bundled datasets are a four-case smoke suite, a six-case touchup suite, and the
+164-problem HumanEval+ benchmark.
 Use `python -m evals.python.integrations.hugging_face.compare --help` to compare variants or reuse saved runs.
 
 Comparison requests use schema 2: `variants` contains two or more uniquely named
@@ -85,7 +86,7 @@ private `genius-eval-results` bucket in your HF namespace. Commit changes before
 | Setting | Usage |
 | --- | --- |
 | `EVAL_MODEL` | `openai/...`, `anthropic/...`, or `hf-inference-providers/...` |
-| `EVAL_DATASET` | `smoke` (default) or `humanevalplus` |
+| `EVAL_DATASET` | `smoke` (default), `touchup`, or `humanevalplus` |
 | `EVAL_LIMIT` | Maximum cases per profile; omit for the full dataset |
 | `EVAL_SAMPLE_IDS` | JSON list of unique case IDs; use instead of `EVAL_LIMIT` |
 | `EVAL_EPOCHS` | Repeats per case; the hosted launcher defaults to `1` |
@@ -104,6 +105,37 @@ Delivery diagnostics currently support reasoning cases.
 
 Inspect logs retain scores, verifier evidence, crashes, and cutoffs. Parent logs
 include sample lifecycle events and a final completeness report.
+
+## Measure touchup
+
+`python/datasets/touchup.py` holds six cases for `skills/touchup`. Each case asks for one
+small edit in a repo that holds decoys: a pointer file, generated and deprecated twins,
+vendored and archived copies, a changelog, and a rule list scoped to one part of the repo.
+Two scores grade each sample. `scope` checks that only the right file changed.
+`correctness` checks the edit against the original text: the intended lines changed and
+nothing else did.
+
+The proof runs in two steps. First, check offline that the grader measures the skill.
+Every reference must pass, and every careless edit must lose a score. Careless edits
+include fixing the vendored copy too, widening the deprecated twin, duplicating an
+existing rule, editing history, and fixing a nearby typo:
+
+```sh
+opam exec --switch=genius-kernel-414 -- uv run --project evals pytest evals/python/tests/touchup.py
+```
+
+Then compare the skill against the baseline on the same cases. The skill works if the
+`genius` profile passes both scores more often than `baseline`, and the paired interval
+excludes zero:
+
+```sh
+export EVAL_DATASET='touchup'
+export EVAL_EPOCHS=5
+evals/bin/huggingface-run
+```
+
+Fixture paths are flat, because the pinned kernel accepts only single-segment paths.
+Layout comes from file names, headers, and section scope instead of directories.
 
 ## Use from Python
 
