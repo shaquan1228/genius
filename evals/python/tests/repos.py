@@ -8,7 +8,7 @@ from evals.python.integrations.smoke import repo_support, verifier
 CASE = '''
 [[case]]
 id = "drop-deploy"
-skill = "touchup"
+skill = "improve"
 fixture = "release"
 scope = ["README.md"]
 prompt = "Remove deploy.sh from the README."
@@ -38,7 +38,7 @@ def repo_cases_build_tasks_whose_reference_passes(
     task = declaration.task
     checks = task.checks()
     assert checks is not None
-    assert (declaration.skill, tuple(task.allowed_files)) == ("touchup", ("README.md",))
+    assert (declaration.skill, tuple(task.allowed_files)) == ("improve", ("README.md",))
     monkeypatch.chdir(tmp_path)
     original = smoke.repo("release")["README.md"]
     Path("README.md").write_text(original)
@@ -53,7 +53,7 @@ def reference_edits_must_match_once_and_stay_in_scope() -> None:
         smoke.apply({"notes.md": "a\na\n"}, edits=(smoke.Edit(path="notes.md", old="a", new="b"),))
     outside = smoke.RepoCase(
         id="outside",
-        skill="touchup",
+        skill="improve",
         fixture="release",
         scope=("README.md",),
         prompt="",
