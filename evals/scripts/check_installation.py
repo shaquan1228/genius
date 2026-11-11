@@ -100,7 +100,7 @@ cold = time.perf_counter() - start
 start = time.perf_counter()
 assert datasets.load_dataset(selection=selection) is first
 warm = time.perf_counter() - start
-assert len(first.cases) == {"smoke": 4, "humanevalplus": 164}[selection]
+assert len(first.cases) == {"smoke": 10, "humanevalplus": 164}[selection]
 datasets.clear_cache()
 assert datasets.load_dataset(selection=selection) is not first
 rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss

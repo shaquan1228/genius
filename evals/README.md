@@ -2,7 +2,7 @@
 
 Evaluate instruction variants with [Inspect AI](https://inspect.aisi.org.uk/)
 and [Inspect SWE](https://meridianlabs-ai.github.io/inspect_swe/).
-The bundled datasets are a four-case smoke suite and the 164-problem HumanEval+ benchmark.
+The bundled datasets are a smoke suite and the 164-problem HumanEval+ benchmark.
 Use `python -m evals.python.integrations.hugging_face.compare --help` to compare variants or reuse saved runs.
 
 Comparison requests use schema 2: `variants` contains two or more uniquely named

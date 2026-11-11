@@ -26,6 +26,10 @@ def container_evaluations(mode: Mode, *, tmp_path: Path) -> None:
         "known-preflight": expected,
         "small-decision": CORRECT,
         "decision-review": CORRECT,
+        **{
+            case: CORRECT if mode == "pass" else support.untouched(case)
+            for case in support.REPO_CASES
+        },
     }
 
 
