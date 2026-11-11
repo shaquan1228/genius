@@ -81,4 +81,4 @@ See [evals/README.md](evals/README.md) for the full run, logs, and results.
 | `/genius:preflight [task]` | Bind a 5-field contract before non-trivial action (one field per proof) |
 | `/genius:tcrei [task]` | Compose a paste-ready TCREI prompt for dispatching to another agent |
 | `/genius:bayesian [decision]` | Analyze a decision under uncertainty — options, Bayesian update, bounded verdict, counter-math |
-| `/genius:touchup [what to touch up]` | Make one small, reversible fix to scaffolding, docs, a comment, or a rule, in the file where it belongs |
+| `/genius:improve [what to improve]` | Make one small, reversible fix to scaffolding, docs, a comment, or a rule, in the file where it belongs |

@@ -34,7 +34,6 @@ def run(checks: str) -> subprocess.CompletedProcess[str]:
 
 
 def python_sources(sources: tuple[str, ...]) -> tuple[str, ...]:
-    """Only Python inputs are syntax-checked; text inputs such as Markdown are read by checks."""
     return tuple(name for name in sources if name.endswith(".py"))
 
 

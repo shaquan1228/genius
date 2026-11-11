@@ -1,7 +1,7 @@
 ---
-name: touchup
-description: Make one small, local, reversible improvement to a durable artifact. Durable artifacts include scaffolding, docs, a comment, a rule list, config, or dead code. Use when a scaffold deviates from the sources that codify it, when a new pattern or lesson is worth writing down, when a note is narrower or wider than the truth, or when a doc points at something that is gone. Triggers on "touch up", "touchup", "note that", "add a rule for", "widen this comment", "document this pattern", "clean that up", "this drifted".
-argument-hint: "[what to touch up; omit to use the latest lesson in the conversation]"
+name: improve
+description: Make one small, local, reversible improvement to a durable artifact. Durable artifacts include scaffolding, docs, a comment, a rule list, config, or dead code. Use when a scaffold deviates from the sources that codify it, when a new pattern or lesson is worth writing down, when a note is narrower or wider than the truth, or when a doc points at something that is gone. Triggers on "improve", "touch up", "note that", "add a rule for", "widen this comment", "document this pattern", "clean that up", "this drifted".
+argument-hint: "[what to improve; omit to use the latest lesson in the conversation]"
 ---
 
 ## Task
