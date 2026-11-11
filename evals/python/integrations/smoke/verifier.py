@@ -33,9 +33,13 @@ def run(checks: str) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
 
 
+def python_sources(sources: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(name for name in sources if name.endswith(".py"))
+
+
 def verify(sources: tuple[str, ...], *, checks: str) -> dict[str, str]:
     try:
-        for name in sources:
+        for name in python_sources(sources):
             compile(Path(name).read_bytes(), name, "exec")
     except SyntaxError as error:
         return {"status": "invalid_submission", "detail": str(error)}

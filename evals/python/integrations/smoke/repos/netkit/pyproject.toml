@@ -1,0 +1,5 @@
+[project]
+name = "netkit"
+
+[tool.setuptools]
+py-modules = ["retry"]
