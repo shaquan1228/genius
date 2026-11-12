@@ -6,6 +6,7 @@ from inspect_ai import Task as InspectTask
 from inspect_ai import eval
 from inspect_ai.log import EvalLog, EvalSample
 from inspect_ai.model import ModelCost, ModelInfo, get_model, set_model_info
+from inspect_ai.scorer import CORRECT, INCORRECT
 from kernel import Criterion, Instruction, Reference, Rubric, Task, TextRule, Verifier
 
 from evals.python import datasets
@@ -17,6 +18,22 @@ from evals.python.tests.scenarios import echo_model as _echo_model
 from evals.python.tests.scenarios import scripted as _scripted
 
 __test__ = False
+
+
+REPO_CASES = (
+    "scaffold-drift",
+    "widen-note",
+    "codify-repo-pattern",
+    "codify-package-pattern",
+    "dedupe-rule",
+    "delete-stale",
+)
+NO_CHANGE = "dedupe-rule"
+SMOKE = ("clear-task", "known-preflight", "small-decision", "decision-review", *REPO_CASES)
+
+
+def untouched(case: str) -> str:
+    return CORRECT if case == NO_CHANGE else INCORRECT
 
 
 def offline_run(

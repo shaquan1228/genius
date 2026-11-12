@@ -13,6 +13,7 @@ from evals.python.datasets import Case
 from evals.python.datasets import smoke as declarations
 from evals.python.integrations.smoke import __main__ as cli
 from evals.python.tests.declarations import _copy_case, _files, _reference_files
+from evals.python.tests.support import REPO_CASES
 from evals.python.verification import VerificationResult
 
 
@@ -33,6 +34,7 @@ def default_smoke_uses_python_owned_cases() -> None:
         "known-preflight",
         "small-decision",
         "decision-review",
+        *REPO_CASES,
     )
     assert tuple(_files(dataset.cases["clear-task"].files)) == ("receipt.py", "test_receipt.py")
 
@@ -72,6 +74,7 @@ def offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[str])
             ("known-preflight", "passed"),
             ("small-decision", "unchecked"),
             ("decision-review", "unchecked"),
+            *((case, "passed") for case in REPO_CASES),
         )
     ]
 

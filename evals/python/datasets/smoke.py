@@ -1,9 +1,9 @@
-"""Pure Python declarations for the default four-case smoke dataset."""
+from pathlib import Path
 
 from kernel import Criterion, Instruction, Reference, Rubric, SourceFile, Task, TextRule
 
 from evals.python import Declaration
-from evals.python.integrations.smoke import checks
+from evals.python.integrations.smoke import checks, repo_cases
 
 info = None
 
@@ -187,4 +187,5 @@ def cases() -> tuple[Declaration, ...]:
         Declaration(skill="reasoning", task=receipt()),
         Declaration(skill="preflight", task=timeout()),
         *(Declaration(skill="bayesian", task=task) for task in decisions),
+        *repo_cases(Path(__file__).with_suffix(".toml")),
     )
