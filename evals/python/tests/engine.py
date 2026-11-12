@@ -16,7 +16,8 @@ from evals.python.integrations.inspect.tasks import baseline, genius
 from evals.python.tests.scenarios import Mode
 from evals.python.tests.scenarios import crashing as _crashing
 from evals.python.tests.support import (
-    REPO_CASES,
+    ANSWER_CASES,
+    FILE_CASES,
     SMOKE,
     untouched,
 )
@@ -84,11 +85,8 @@ def untouched_seeded_bugs_fail(tmp_path: Path) -> None:
     log = _offline_run([baseline()], mode="untouched", directory=tmp_path)[0]
     assert _results(log) == sorted(
         [
-            ("clear-task", INCORRECT, CORRECT),
-            ("known-preflight", INCORRECT, CORRECT),
-            ("small-decision", CORRECT, CORRECT),
-            ("decision-review", CORRECT, CORRECT),
-            *((case, untouched(case), CORRECT) for case in REPO_CASES),
+            *((case, untouched(case), CORRECT) for case in FILE_CASES),
+            *((case, CORRECT, CORRECT) for case in ANSWER_CASES),
         ]
     )
 
@@ -96,11 +94,8 @@ def untouched_seeded_bugs_fail(tmp_path: Path) -> None:
 def invalid_answers_fail(tmp_path: Path) -> None:
     log = _offline_run([baseline()], mode="bad-answer", directory=tmp_path)[0]
     assert {case: correct for case, correct, _ in _results(log)} == {
-        "clear-task": CORRECT,
-        "known-preflight": CORRECT,
-        "small-decision": INCORRECT,
-        "decision-review": INCORRECT,
-        **dict.fromkeys(REPO_CASES, CORRECT),
+        **dict.fromkeys(FILE_CASES, CORRECT),
+        **dict.fromkeys(ANSWER_CASES, INCORRECT),
     }
 
 
@@ -131,21 +126,18 @@ def crashed_agent_is_scored_on_its_workspace(
         "success",
         sorted(
             [
-                *((case, INCORRECT, CORRECT) for case in SMOKE[:4]),
-                *((case, untouched(case), CORRECT) for case in REPO_CASES),
+                *((case, untouched(case), CORRECT) for case in FILE_CASES),
+                *((case, INCORRECT, CORRECT) for case in ANSWER_CASES),
             ]
         ),
     )
     crash = f"Agent process crashed: {message}"
     assert {str(sample.id): _crash_evidence(sample) for sample in log.samples or []} == {
-        "clear-task": (crash, message, "failed"),
-        "known-preflight": (crash, message, "failed"),
-        "small-decision": (crash, message, "unchecked"),
-        "decision-review": (crash, message, "unchecked"),
         **{
             case: (crash, message, "passed" if untouched(case) == CORRECT else "failed")
-            for case in REPO_CASES
+            for case in FILE_CASES
         },
+        **dict.fromkeys(ANSWER_CASES, (crash, message, "unchecked")),
     }
 
 

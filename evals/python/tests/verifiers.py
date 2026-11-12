@@ -8,11 +8,10 @@ from pathlib import Path
 
 import pytest
 from inspect_ai.util._sandbox.local import LocalSandboxEnvironment
-from kernel import Task, Verification, Verifier
+from kernel import Verification, Verifier
 
 from evals.python import datasets, verification
-from evals.python.datasets import Case, Declaration, Selection
-from evals.python.datasets import smoke as declarations
+from evals.python.datasets import Case, Selection
 from evals.python.integrations.inspect.environments import environment, runtime
 from evals.python.tests.declarations import _files, _reference_files
 from evals.python.tests.projections import reference, verifier
@@ -151,27 +150,3 @@ def visible_check_command_leaves_no_build_files(
     )
     assert result.returncode == 0, result.stderr
     assert _snapshot(tmp_path) == before
-
-
-@pytest.mark.parametrize(
-    ("definition", "filename", "fragment"),
-    [
-        (declarations.timeout(initial=7, requested=17), "config.py", "timeout_seconds = 7"),
-        (declarations.timeout(initial=30, requested=229), "config.py", "timeout_seconds = 30"),
-        (declarations.receipt(term="price * max(quantity, 1)"), "receipt.py", "max(quantity, 1)"),
-    ],
-)
-def family_variants_generate_working_seeds_and_solutions(
-    *,
-    definition: Task,
-    filename: str,
-    fragment: str,
-    tmp_path: Path,
-) -> None:
-    dataset = datasets.compile_dataset(cases=(Declaration(skill="reasoning", task=definition),))
-    case = datasets.list_cases(selection=dataset)[0]
-    assert fragment in _files(case.files)[filename]
-    _write_files(tmp_path, files=_files(case.files))
-    assert not _verify(case, directory=tmp_path, selection=dataset)
-    _write_files(tmp_path, files=_reference_files(reference(case.case_id, selection=dataset)))
-    assert _verify(case, directory=tmp_path, selection=dataset)

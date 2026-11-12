@@ -48,8 +48,8 @@ Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply 
 ## Evaluations
 
 Use [Inspect AI](https://inspect.aisi.org.uk/) for repeated baseline/Genius comparisons.
-Default smoke cases are declarations in
-`evals/python/datasets/smoke.py`; OCaml validates and grades them.
+Default smoke cases are declared in
+`evals/python/datasets/smoke.toml`; OCaml validates and grades them.
 Smoke executable checks use Python.
 GitHub Actions runs the same checks on every eval change. Follow the
 [toolchain setup](evals/README.md#check-the-harness-offline) for the pinned OCaml 4.14

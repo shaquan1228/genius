@@ -20,16 +20,12 @@ def container_evaluations(mode: Mode, *, tmp_path: Path) -> None:
     )[0]
     assert log.status == "success"
     observed = {case: correct for case, correct, _ in support.results(log)}
-    expected = CORRECT if mode == "pass" else INCORRECT
     assert observed == {
-        "clear-task": expected,
-        "known-preflight": expected,
-        "small-decision": CORRECT,
-        "decision-review": CORRECT,
         **{
             case: CORRECT if mode == "pass" else support.untouched(case)
-            for case in support.REPO_CASES
+            for case in support.FILE_CASES
         },
+        **dict.fromkeys(support.ANSWER_CASES, CORRECT),
     }
 
 

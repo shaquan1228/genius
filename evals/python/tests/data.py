@@ -147,15 +147,13 @@ def hash_tracks_contents_and_ignores_mapping_order() -> None:
 
 def cases_200_cases_are_python_values() -> None:
     dataset = datasets.compile_dataset(
-        cases=tuple(
-            _timeout_case(case_id=f"timeout-{i}", initial=15, requested=30 + i) for i in range(200)
-        )
+        cases=tuple(_timeout_case(case_id=f"timeout-{i}") for i in range(200))
     )
     cases = datasets.list_cases(selection=dataset)
-    assert len(cases) == 200
+    assert [case.case_id for case in cases] == [f"timeout-{i}" for i in range(200)]
     assert (
         _reference_files(reference(cases[199].case_id, selection=dataset))["config.py"]
-        == "timeout_seconds = 229\n"
+        == "timeout_seconds = 30\n"
     )
 
 
@@ -284,7 +282,7 @@ def experiment_configuration_reaches_tasks_and_profiles() -> None:
 
 
 def record_updates_cannot_bypass_kernel_validation() -> None:
-    definition = _timeout_case(case_id="updated", initial=15, requested=30)
+    definition = _timeout_case(case_id="updated")
     with pytest.raises(DomainValidationError, match="read files missing from the fixture"):
         _copy_case(definition, fixture=[])
 

@@ -20,7 +20,9 @@ from evals.python.tests.scenarios import scripted as _scripted
 __test__ = False
 
 
-REPO_CASES = (
+FILE_CASES = (
+    "clear-task",
+    "known-preflight",
     "scaffold-drift",
     "widen-note",
     "codify-repo-pattern",
@@ -29,7 +31,8 @@ REPO_CASES = (
     "delete-stale",
 )
 NO_CHANGE = "dedupe-rule"
-SMOKE = ("clear-task", "known-preflight", "small-decision", "decision-review", *REPO_CASES)
+ANSWER_CASES = ("small-decision", "decision-review")
+SMOKE = (*FILE_CASES, *ANSWER_CASES)
 
 
 def untouched(case: str) -> str:
@@ -83,9 +86,9 @@ def results(log: EvalLog) -> list[tuple[str, object, object]]:
     return sorted(sample_result(sample) for sample in log.samples or [])
 
 
-def timeout_case(*, case_id: str, initial: int, requested: int) -> Declaration:
-    task = smoke.timeout(initial=initial, requested=requested)
-    return _copy_case(Declaration(skill="preflight", task=task), id=case_id)
+def timeout_case(*, case_id: str) -> Declaration:
+    (declaration,) = (record for record in smoke.cases() if record.task.id == "known-preflight")
+    return _copy_case(declaration, id=case_id)
 
 
 def choice_case(*, case_id: str, a: int, b: int) -> Declaration:
