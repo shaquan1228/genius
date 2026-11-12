@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from kernel import Verification
 
 from evals.python.integrations import smoke
 from evals.python.integrations.smoke import repo_support, verifier
@@ -34,7 +35,7 @@ def repo_cases_build_tasks_whose_reference_passes(
 ) -> None:
     spec = tmp_path / "cases.toml"
     spec.write_text(CASE)
-    (declaration,) = smoke.repo_cases(spec)
+    (declaration,) = smoke.load_cases(spec)
     task = declaration.task
     checks = task.checks()
     assert checks is not None
@@ -46,6 +47,33 @@ def repo_cases_build_tasks_whose_reference_passes(
     (edit,) = task.reference.edits
     Path("README.md").write_text(edit.contents)
     assert verifier.verify(("README.md",), checks=checks.stdin)["status"] == "passed"
+
+
+def answer_cases_grade_expected_fields(tmp_path: Path) -> None:
+    spec = tmp_path / "cases.toml"
+    spec.write_text(
+        '[[case]]\nid = "pick"\nskill = "bayesian"\nprompt = "Pick A or B."\n'
+        'expected = { choice = "B", sure = true }\nreason = "B is cheaper."\n'
+    )
+    (declaration,) = smoke.load_cases(spec)
+    task = declaration.task
+    assert (task.checks(), tuple(task.allowed_files), tuple(task.fixture)) == (None, (), ())
+    assert task.reference.completion.to_python() == {
+        "choice": "B",
+        "sure": True,
+        "reason": "B is cheaper.",
+    }
+    assert all(dict(task.grade_reference(verification=Verification.Unchecked())).values())
+
+
+def cases_must_match_one_shape(tmp_path: Path) -> None:
+    spec = tmp_path / "cases.toml"
+    spec.write_text(
+        '[[case]]\nid = "pick"\nskill = "bayesian"\nprompt = ""\nexpected = {}\n'
+        'reason = ""\nscope = ["README.md"]\n'
+    )
+    with pytest.raises(ValueError, match="scope"):
+        smoke.load_cases(spec)
 
 
 def reference_edits_must_match_once_and_stay_in_scope() -> None:
