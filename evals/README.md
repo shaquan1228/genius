@@ -116,7 +116,7 @@ dataset = datasets.load_dataset(selection="smoke")
 cases = datasets.list_cases(selection=dataset)
 ```
 
-For dataset authoring, start with [datasets/smoke.py](python/datasets/smoke.py).
+For dataset authoring, start with [datasets/smoke.toml](python/datasets/smoke.toml).
 Use `datasets.compile_dataset(cases=...)` to work with your own declarations.
 
 Each domain component owns its type and constructors in its OCaml `.ml` and `.mli` files.

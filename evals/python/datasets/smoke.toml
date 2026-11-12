@@ -50,6 +50,20 @@ for value in (0, -1):
 '''
 
 [[case]]
+skill = "bayesian"
+id = "small-decision"
+prompt = "Choose a service for a one-month trial. A costs $10 total; B costs $8 total. Features, reliability, cancellation terms, and all other costs are identical. Reply with JSON containing choice (A or B) and reason (one sentence). Do not change files."
+expected = { choice = "B" }
+reason = "B costs less for identical service."
+
+[[case]]
+skill = "bayesian"
+id = "decision-review"
+prompt = "I took a one-time $1 bet with a known 80% chance of winning $1 profit and 20% chance of losing $1. I could comfortably afford the loss. I lost. No new information about the odds appeared. Was the original decision supported, and should this loss alone change the rule? Reply with JSON containing decision_was_supported (boolean), change_rule (boolean), and reason (one sentence). Do not change files."
+expected = { decision_was_supported = true, change_rule = false }
+reason = "One loss did not change the known odds."
+
+[[case]]
 skill = "improve"
 id = "scaffold-drift"
 fixture = "skills"

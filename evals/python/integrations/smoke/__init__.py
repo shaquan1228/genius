@@ -1,9 +1,9 @@
-"""Declare executable checks for private Python assertions."""
+"""Load smoke cases from TOML: repo edits with private checks, or graded answers."""
 
 import tomllib
 from pathlib import Path
 
-from kernel import Criterion, Instruction, Reference, SourceFile, Task, Verifier
+from kernel import Criterion, Instruction, Reference, Rubric, SourceFile, Task, TextRule, Verifier
 from pydantic import BaseModel, ConfigDict
 
 from evals.python import Declaration
@@ -62,9 +62,18 @@ class RepoCase(BaseModel):
     check: str
 
 
-class RepoCases(BaseModel):
+class AnswerCase(BaseModel):
     model_config = DATA
-    case: tuple[RepoCase, ...]
+    id: str
+    skill: str
+    prompt: str
+    expected: dict[str, str | bool]
+    reason: str
+
+
+class Cases(BaseModel):
+    model_config = DATA
+    case: tuple[RepoCase | AnswerCase, ...]
 
 
 def apply(files: dict[str, str], *, edits: tuple[Edit, ...]) -> dict[str, str]:
@@ -100,6 +109,26 @@ def repo_task(case: RepoCase) -> Task:
     )
 
 
-def repo_cases(path: Path) -> tuple[Declaration, ...]:
-    cases = RepoCases.model_validate(tomllib.loads(path.read_text(encoding="utf-8")))
-    return tuple(Declaration(skill=case.skill, task=repo_task(case)) for case in cases.case)
+def answer_task(case: AnswerCase) -> Task:
+    return Task(
+        id=case.id,
+        fixture=[],
+        instruction=Instruction(prompt=case.prompt),
+        criterion=Criterion.Answer(
+            rubric=Rubric(
+                expected=list(case.expected.items()),
+                text_rule=TextRule(field="reason", min_words=1, max_words=40),
+            )
+        ),
+        allowed_files=(),
+        reference=Reference(edits=[], completion={**case.expected, "reason": case.reason}),
+    )
+
+
+def task(case: RepoCase | AnswerCase) -> Task:
+    return repo_task(case) if isinstance(case, RepoCase) else answer_task(case)
+
+
+def load_cases(path: Path) -> tuple[Declaration, ...]:
+    cases = Cases.model_validate(tomllib.loads(path.read_text(encoding="utf-8")))
+    return tuple(Declaration(skill=case.skill, task=task(case)) for case in cases.case)

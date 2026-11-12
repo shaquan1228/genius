@@ -20,9 +20,11 @@ from evals.python.tests.scenarios import scripted as _scripted
 __test__ = False
 
 
-FILE_CASES = (
+SMOKE = (
     "clear-task",
     "known-preflight",
+    "small-decision",
+    "decision-review",
     "scaffold-drift",
     "widen-note",
     "codify-repo-pattern",
@@ -30,9 +32,9 @@ FILE_CASES = (
     "dedupe-rule",
     "delete-stale",
 )
-NO_CHANGE = "dedupe-rule"
 ANSWER_CASES = ("small-decision", "decision-review")
-SMOKE = (*FILE_CASES, *ANSWER_CASES)
+FILE_CASES = tuple(case for case in SMOKE if case not in ANSWER_CASES)
+NO_CHANGE = "dedupe-rule"
 
 
 def untouched(case: str) -> str:

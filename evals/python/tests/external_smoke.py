@@ -13,7 +13,7 @@ from evals.python.datasets import Case
 from evals.python.datasets import smoke as declarations
 from evals.python.integrations.smoke import __main__ as cli
 from evals.python.tests.declarations import _copy_case, _files, _reference_files
-from evals.python.tests.support import ANSWER_CASES, FILE_CASES, SMOKE
+from evals.python.tests.support import ANSWER_CASES, SMOKE
 from evals.python.verification import VerificationResult
 
 
@@ -56,17 +56,18 @@ def offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[str])
     output = capsys.readouterr().out
     rows = [json.loads(line) for line in output.splitlines()]
     assert rows == [
-        {"id": case_id, "verification": status, "scores": {"correctness": True, "scope": True}}
-        for case_id, status in (
-            *((case, "passed") for case in FILE_CASES),
-            *((case, "unchecked") for case in ANSWER_CASES),
-        )
+        {
+            "id": case_id,
+            "verification": "unchecked" if case_id in ANSWER_CASES else "passed",
+            "scores": {"correctness": True, "scope": True},
+        }
+        for case_id in SMOKE
     ]
 
 
 def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixture[str]) -> None:
     case = _copy_case(
-        declarations.cases()[SMOKE.index("small-decision")],
+        declarations.cases()[2],
         reference=Reference(edits=[], completion={}),
     )
     dataset = datasets.compile_dataset(cases=(case,))
