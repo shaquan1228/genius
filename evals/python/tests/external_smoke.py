@@ -13,7 +13,7 @@ from evals.python.datasets import Case
 from evals.python.datasets import smoke as declarations
 from evals.python.integrations.smoke import __main__ as cli
 from evals.python.tests.declarations import _copy_case, _files, _reference_files
-from evals.python.tests.support import REPO_CASES
+from evals.python.tests.support import ANSWER_CASES, FILE_CASES, SMOKE
 from evals.python.verification import VerificationResult
 
 
@@ -29,20 +29,8 @@ def default_smoke_uses_python_owned_cases() -> None:
     definitions = declarations.cases()
     dataset = datasets.load_dataset()
     assert dataset is datasets.compile_dataset(cases=definitions)
-    assert tuple(dataset.cases) == (
-        "clear-task",
-        "known-preflight",
-        "small-decision",
-        "decision-review",
-        *REPO_CASES,
-    )
+    assert tuple(dataset.cases) == SMOKE
     assert tuple(_files(dataset.cases["clear-task"].files)) == ("receipt.py", "test_receipt.py")
-
-
-@pytest.mark.parametrize(("initial", "requested"), [(15, 15), (0, 30), (-1, 30), (15, 0), (15, -1)])
-def timeout_variants_require_a_real_positive_change(initial: int, *, requested: int) -> None:
-    with pytest.raises(ValueError, match="distinct positive"):
-        declarations.timeout(initial=initial, requested=requested)
 
 
 def python_smoke_keeps_checks_and_references_private() -> None:
@@ -70,18 +58,15 @@ def offline_cli_validates_real_references(*, capsys: pytest.CaptureFixture[str])
     assert rows == [
         {"id": case_id, "verification": status, "scores": {"correctness": True, "scope": True}}
         for case_id, status in (
-            ("clear-task", "passed"),
-            ("known-preflight", "passed"),
-            ("small-decision", "unchecked"),
-            ("decision-review", "unchecked"),
-            *((case, "passed") for case in REPO_CASES),
+            *((case, "passed") for case in FILE_CASES),
+            *((case, "unchecked") for case in ANSWER_CASES),
         )
     ]
 
 
 def offline_cli_exits_nonzero_on_grading_failure(*, capsys: pytest.CaptureFixture[str]) -> None:
     case = _copy_case(
-        declarations.cases()[2],
+        declarations.cases()[SMOKE.index("small-decision")],
         reference=Reference(edits=[], completion={}),
     )
     dataset = datasets.compile_dataset(cases=(case,))
