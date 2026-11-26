@@ -2,7 +2,7 @@
 
 Operational language for each field. Each field check is a proof's branch trigger. It fires at task start, not mid-loop.
 
-The full proofs ship with the plugin at `../../../docs/proofs/`, relative to this file. Read one there when you need the derivation, not the summary.
+Resolve full derivations through the [selected proof backend](../../shared/proof-backend.md). The operational summaries below do not override that selection.
 
 Tool names below are examples from one stack. The field names the outcome. The executing agent observes which tool provides it.
 

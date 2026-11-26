@@ -3,9 +3,9 @@ name: Proof backends
 on:
   push:
     branches: [main]
-    paths: ["docs/postulates/**", "docs/proofs/**", "skills/reasoning/**", "bin/genius-proof", "tests/test_proof_backend.py", ".github/workflows/proofs.yml"]
+    paths: ["docs/postulates/**", "docs/proofs/**", "skills/**", "bin/genius-proof", "tests/test_proof_backend.py", ".github/workflows/proofs.yml"]
   pull_request:
-    paths: ["docs/postulates/**", "docs/proofs/**", "skills/reasoning/**", "bin/genius-proof", "tests/test_proof_backend.py", ".github/workflows/proofs.yml"]
+    paths: ["docs/postulates/**", "docs/proofs/**", "skills/**", "bin/genius-proof", "tests/test_proof_backend.py", ".github/workflows/proofs.yml"]
 
 permissions:
   contents: read

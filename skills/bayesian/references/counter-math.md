@@ -2,7 +2,7 @@
 
 The price is arithmetic done on premises. Arithmetic does not validate a premise (GNS-004). Counter-math tests each input. It reports what survives.
 
-GNS-004 is the proof under this whole file. The derivation is at `../../../docs/proofs/004-INDEPENDENT-PREMISE-VALIDATION.md`.
+GNS-004 is the proof under this whole file. Resolve its derivation through the [selected proof backend](../../shared/proof-backend.md).
 
 Run each section. Report the sections with content. Never omit the breakeven, the survival check, or the "do not know" line.
 

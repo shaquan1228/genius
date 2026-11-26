@@ -41,11 +41,11 @@ Start a new Codex thread, then invoke `$genius:reasoning` or describe the Genius
 
 Claude Code and Codex install this repository as the plugin and read the same identity at `docs/identity.md`. The identity defines how the model should observe, decide, and act. Codex activates the skill when it matches a request or when you invoke `$genius:reasoning`.
 
-`docs/identity.md` is the only file you need to understand or customize. It links the postulate and the proofs in `docs/`, which ship with the plugin.
+Start with `docs/identity.md` to understand or customize the framework. It links the postulate and the proofs in `docs/`, which ship with the plugin. All skills use the [shared proof-backend protocol](skills/shared/proof-backend.md) to select their proof treatment.
 
 Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply the reasoning framework to your current task.
 
-Choose `backend:markdown` (the default) or `backend:bend` when invoking the reasoning skill. Each postulate and derived proof has its own Bend 2 counterpart. Bend mode checks those files before loading them; it does not silently fall back to prose. See [proof backends](docs/proofs/BACKENDS.md) for the per-file mapping, assumptions, and toolchain setup.
+Choose `backend:markdown` (the default) or `backend:bend` when invoking any Genius skill. The choice carries across skills in the same conversation unless explicitly changed. Each postulate and derived proof has its own Bend 2 counterpart. Bend mode checks those files before loading them; it does not silently fall back to prose. See [proof backends](docs/proofs/BACKENDS.md) for the per-file mapping, assumptions, and toolchain setup.
 
 The same selection is available from the repository root:
 

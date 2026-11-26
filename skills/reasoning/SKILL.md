@@ -10,11 +10,7 @@ Apply the proofs to the supplied task from the first action. Do not announce set
 
 ## Context
 
-- If GNS-001..006 are not in context, read `../../docs/identity.md` relative to this file. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`. Load it inline. Do not prompt the user.
-- Choose the proof backend explicitly. Default to `backend:markdown`; an explicit `backend:bend` selects the `.bend` counterparts. If a different backend is already loaded, replace the proof-source context with the selected treatment rather than treating an earlier load as satisfying this selection.
-- For Markdown, read the postulate and proof `.md` sources linked from the identity. The standalone equivalent is `python3 bin/genius-proof --backend markdown`, run from the plugin root. This is prose reasoning, not a compiler proof receipt.
-- For Bend, run `python3 bin/genius-proof --backend bend` from the plugin root and load its checked source output, plus `docs/proofs/logic.bend`. The command requires Bend 2 and the Lean-backed kernel. Respect an explicit `BEND_BIN` compiler path. If the toolchain or any check fails, report the failure; do not silently use Markdown or claim the proof was checked. Use `--ordinary` only when the user explicitly asks for the weaker ordinary checker and label it as such.
-- The postulate remains an open hypothesis in either backend. The Bend files check the conclusions under their named premises; they do not prove those premises true or establish facts about the current task. The behavioral rules below apply in both modes.
+- Read and follow the [shared proof backend](../shared/proof-backend.md) before applying the proofs. It resolves the current or inherited backend, loads the identity and selected proof treatment, and handles verification failures.
 - `references/trigger-map.md` states when each proof fires and the question it asks. Read it before the first step.
 - `references/worked-example.md` traces one task through all five proofs. It then shows the same task done without them. Read it for calibration.
 

@@ -18,4 +18,4 @@ Condensed from `../../../docs/proofs/PROOF-TREE.md`. Each row says when a proof 
 - GNS-003 and GNS-004 fire together on every step. Check both before you commit a step.
 - GNS-006 fires only when the GNS-004 validator lives outside your loop. Examples: another team, CI, a future session.
 
-Full proofs: `../../../docs/proofs/`.
+Full proofs: resolve each ID through the [selected proof backend](../../shared/proof-backend.md).

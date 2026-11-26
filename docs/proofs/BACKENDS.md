@@ -7,14 +7,15 @@ Genius has two explicit treatments of the same postulate/proof corpus:
 
 This is a proof-source seam. It does not replace the agent's reasoning loop with a runtime classifier.
 
-## Choose from the reasoning skill
+## Choose from any Genius skill
 
 ```text
 /genius:reasoning <task> backend:markdown
 /genius:reasoning <task> backend:bend
+/genius:preflight <task> backend:bend
 ```
 
-In Codex, invoke the same skill as `$genius:reasoning` with the task and backend selection. The skill keeps the identity and behavioral rules in both modes. Bend mode runs the proof command and loads the checked formal treatment. A missing compiler, missing kernel, or failed check stops that selection with an error; it never silently falls back to Markdown.
+All five skills—reasoning, preflight, Bayesian analysis, improvement, and TCREI prompt composition—use the [shared selection protocol](../../skills/shared/proof-backend.md). An explicit current selection wins; otherwise a skill inherits the most recent explicit choice in the conversation, defaulting to Markdown only when none exists. In Codex, use the corresponding `$genius:<skill>` invocation. Each skill keeps the identity and its own behavioral rules in both modes. Bend mode runs the proof command and loads the checked formal treatment. A missing compiler, missing kernel, or failed check stops that selection with an error; it never silently falls back to Markdown.
 
 The standalone command must be available from the full plugin checkout. Evaluation instruction-only snapshots currently bundle `docs/` and `skills/`, not `bin/` or the Bend toolchain; enabling Bend inside those snapshots needs that explicit packaging work rather than assuming the command is present.
 
@@ -39,7 +40,7 @@ An explicitly weaker check is available for learning when the kernel is unavaila
 python3 bin/genius-proof GNS-004 --backend bend --ordinary
 ```
 
-This runs Bend's ordinary checker and labels its result accordingly. The reasoning skill may use it only when requested explicitly. No command installs a compiler, changes harness settings, or publishes anything.
+This runs Bend's ordinary checker and labels its result accordingly. Skills may use it only when requested explicitly. No command installs a compiler, changes harness settings, or publishes anything.
 
 ## One formal file per source
 

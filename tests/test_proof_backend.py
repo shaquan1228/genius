@@ -1,6 +1,7 @@
 """Backend selection contracts plus opt-in checks using the real Bend 2 compiler."""
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -231,6 +232,23 @@ class Corpus(unittest.TestCase):
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn(f"- expected : {expected}\n", output)
                     self.assertIn(f"- observed : {observed}\n", output)
+
+
+class SkillBackendRouting(unittest.TestCase):
+    def test_every_skill_routes_proofs_through_the_shared_backend(self):
+        shared = (ROOT / "skills" / "shared" / "proof-backend.md").resolve()
+        self.assertTrue(shared.is_file())
+        skills = list(ROOT.glob("skills/*/SKILL.md"))
+        self.assertTrue(skills)
+        for skill in skills:
+            with self.subTest(skill=skill.parent.name):
+                source = skill.read_text()
+                links = re.findall(r"\[[^\]]+\]\(([^)]+)\)", source)
+                self.assertIn(
+                    shared, [(skill.parent / link).resolve() for link in links]
+                )
+                self.assertIn("[backend:markdown|bend]", source)
+                self.assertNotIn("If GNS-001..006 are not in context", source)
 
 
 if __name__ == "__main__":

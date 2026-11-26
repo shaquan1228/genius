@@ -1,7 +1,7 @@
 ---
 name: improve
 description: Make one small, local, reversible improvement to a durable artifact. Durable artifacts include scaffolding, docs, a comment, a rule list, config, or dead code. Use when a scaffold deviates from the sources that codify it, when a new pattern or lesson is worth writing down, when a note is narrower or wider than the truth, or when a doc points at something that is gone. Triggers on "improve", "touch up", "note that", "add a rule for", "widen this comment", "document this pattern", "clean that up", "this drifted".
-argument-hint: "[what to improve; omit to use the latest lesson in the conversation]"
+argument-hint: "[what to improve; omit to use the latest lesson in the conversation] [backend:markdown|bend]"
 ---
 
 ## Task
@@ -11,7 +11,7 @@ Make one touch: the smallest edit that brings one durable artifact in line with 
 ## Context
 
 - GNS-003 (smallest reversible action) sets the size. GNS-001 (observe before acting) picks the home. GNS-004 (independent premise validation) gates widening and deletion.
-- If GNS-001..006 are not in context, read `../../docs/identity.md` relative to this file. In Claude Code, this is `$CLAUDE_PLUGIN_ROOT/docs/identity.md`. Load it inline. Do not prompt the user.
+- Read and follow the [shared proof backend](../shared/proof-backend.md) before applying the proofs. It resolves the current or inherited backend, loads the identity and selected proof treatment, and handles verification failures.
 - With no argument, the touch is the latest lesson, decision, or "we should remember that" in the conversation. If there is none, ask once.
 - `references/touch-kinds.md` defines the six kinds of touch and the evidence each one needs. Read it before you classify.
 - `references/finding-the-home.md` ranks the sources and maps confusing repo layouts. Read it before you pick a file.
