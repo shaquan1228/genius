@@ -45,6 +45,15 @@ Claude Code and Codex install this repository as the plugin and read the same id
 
 Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply the reasoning framework to your current task.
 
+Choose `backend:markdown` (the default) or `backend:bend` when invoking the reasoning skill. Each postulate and derived proof has its own Bend 2 counterpart. Bend mode checks those files before loading them; it does not silently fall back to prose. See [proof backends](docs/proofs/BACKENDS.md) for the per-file mapping, assumptions, and toolchain setup.
+
+The same selection is available from the repository root:
+
+```sh
+python3 bin/genius-proof GNS-004 --backend markdown
+python3 bin/genius-proof GNS-004 --backend bend
+```
+
 ## Evaluations
 
 Use [Inspect AI](https://inspect.aisi.org.uk/) for repeated baseline/Genius comparisons.

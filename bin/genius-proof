@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+"""Select the Markdown or Bend 2 treatment of Genius's proof corpus."""
+
+import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def entries():
+    result = {}
+    for folder, prefix in (("postulates", "POSTULATE"), ("proofs", "GNS")):
+        for path in sorted((ROOT / "docs" / folder).glob("[0-9][0-9][0-9]-*.md")):
+            identity = f"{prefix}-{path.name[:3]}"
+            if identity in result:
+                raise ValueError(f"Duplicate corpus identity: {identity}")
+            result[identity] = path
+    if not result:
+        raise ValueError("No postulate or proof sources found in this checkout")
+    return result
+
+
+def bend_path(identity, markdown):
+    return markdown.with_name(
+        identity.split("-", 1)[0] + "-" + markdown.with_suffix(".bend").name
+    )
+
+
+def checked_bend(path, compiler, ordinary):
+    result = subprocess.run(
+        [compiler, str(path), "--check-only" if ordinary else "--verdict"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=dict(os.environ, BEND_NO_TELEMETRY="1"),
+    )
+    output = result.stdout + result.stderr
+    if result.returncode != 0 or "ALL PROOFS CHECK" not in output:
+        raise ValueError(f"Bend check failed for {path.relative_to(ROOT)}:\n{output}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "identity", nargs="?", default="all", help="POSTULATE-001, GNS-001..006, or all"
+    )
+    parser.add_argument("--backend", choices=("markdown", "bend"), default="markdown")
+    parser.add_argument(
+        "--bend", default=os.environ.get("BEND_BIN", "bend"), help="Bend 2 executable"
+    )
+    parser.add_argument(
+        "--ordinary",
+        action="store_true",
+        help="Explicitly use the ordinary checker instead of the Lean-backed kernel",
+    )
+    parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Report availability/check status without printing source",
+    )
+    parser.add_argument(
+        "--list", action="store_true", help="List the paired corpus entries"
+    )
+    args = parser.parse_args()
+    try:
+        corpus = entries()
+        if args.ordinary and args.backend != "bend":
+            raise ValueError("--ordinary requires --backend bend")
+        if args.list:
+            for identity, path in corpus.items():
+                print(
+                    f"{identity}\t{path.relative_to(ROOT)}\t{bend_path(identity, path).relative_to(ROOT)}"
+                )
+            return 0
+        selected = (
+            corpus
+            if args.identity.lower() == "all"
+            else {args.identity.upper(): corpus[args.identity.upper()]}
+        )
+        if args.backend == "bend":
+            version = subprocess.run(
+                [args.bend, "version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True,
+            ).stdout.strip()
+            if version.removeprefix("bend ").split(".", 1)[0] != "2":
+                raise ValueError(f"Bend 2 required; observed {version!r}")
+        rendered = []
+        for identity, markdown in selected.items():
+            path = (
+                markdown
+                if args.backend == "markdown"
+                else bend_path(identity, markdown)
+            )
+            source = path.read_text()
+            if args.backend == "bend":
+                checked_bend(path, args.bend, args.ordinary)
+                status = (
+                    "ordinary checker accepted"
+                    if args.ordinary
+                    else "Lean-backed kernel accepted"
+                )
+                if identity.startswith("POSTULATE"):
+                    status += "; hypothesis stated, conditional consequences checked"
+            else:
+                status = "Markdown source; no machine-checked proof claim"
+            rendered.append(
+                f"{identity}: {status}\nSource: {path.relative_to(ROOT)}\n"
+                + ("" if args.check_only else "\n" + source)
+            )
+        print("\n".join(rendered))
+        return 0
+    except KeyError:
+        print(f"Unknown proof identity: {args.identity}", file=sys.stderr)
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        print(str(error), file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
