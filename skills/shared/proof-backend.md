@@ -1,28 +1,17 @@
-# Shared proof backend
+# Internal proof loading
 
-Every Genius skill uses this selection before applying GNS-001..006. The identity, behavioral rules, and proof triggers apply in either mode.
+All Genius skills use this policy. Proof treatment is an implementation detail, not a skill argument. Keep the identity, behavioral rules, and proof triggers in either treatment.
 
-## Select
+Resolve the plugin root as `../..` from this file, or `$CLAUDE_PLUGIN_ROOT` in Claude Code. Load `docs/identity.md` inline if needed, without announcing setup. Resolve a proof by its ID using the paired sources in `docs/proofs/BACKENDS.md`; `PROOF-TREE.md` remains the trigger/composability map.
 
-1. An explicit `backend:markdown` or `backend:bend` on the current invocation wins.
-2. Otherwise, inherit the most recent explicit selection in this conversation.
-3. With no selection, use Markdown.
+For each needed derivation:
 
-The selection applies across skills. Moving from reasoning to preflight, Bayesian analysis, improvement, or prompt composition does not reset it. Do not ask for a choice when these rules resolve it. Already having the identity or GNS citations in context does not bypass backend selection. When the user switches, use the newly selected proof treatment as authority rather than an earlier backend's receipt.
+- Prefer the paired Bend file when Bend 2 and its strong kernel are available. Use the installed `bend` executable or an explicitly configured `BEND_BIN`; Lean v4.34.0 on `PATH` or a usable `BENDTT` supplies the kernel. Run `bend <proof.bend> --verdict`, then read the checked file and any imported logical definitions.
+- When the formal counterpart or toolchain is unavailable, use the Markdown argument. Do not describe that as machine-checked. No installation or configuration change is required to use a skill.
+- If an attempted proof check fails, report it and do not bypass the failure with Markdown. An ordinary `--check-only` result is not a strong-kernel receipt.
 
-## Load
+Markdown links in skill references identify written sources and operational explanations; they do not replace a formal proof check. Already having the identity or a GNS citation in context does not establish that the current formal source was checked.
 
-Resolve the plugin root as `../..` from this file. In Claude Code it is also `$CLAUDE_PLUGIN_ROOT`. Load `docs/identity.md` inline if needed; do not announce setup.
+Postulate 001 remains an open hypothesis. Bend checks conclusions under named premises; it does not establish those premises' truth, prove facts about the current task, or perform the task's own validation.
 
-- **Markdown:** use the written postulate and proof sources linked from the identity. Read a full argument when needed. `python3 bin/genius-proof --backend markdown` is the standalone equivalent. Prose is not a machine-checking receipt.
-- **Bend:** from the plugin root, run `python3 bin/genius-proof --backend bend`, then load its checked source output and `docs/proofs/logic.bend`. Respect an explicit `BEND_BIN`. This requires Bend 2 and the Lean-backed kernel. A missing toolchain, missing counterpart, or failed check stops the selected mode with a reported error; never silently use Markdown or claim an unperformed check. Use `--ordinary` only on an explicit user request and label the weaker check.
-
-For a particular derivation, resolve its ID through the same backend, for example `python3 bin/genius-proof GNS-004 --backend bend`. Markdown links in skill references identify the written source or operational explanation; they do not override a Bend selection. `docs/proofs/PROOF-TREE.md` remains the trigger/composability map in both modes.
-
-The standalone command is stateless and defaults to Markdown. A skill inheriting a conversation's Bend selection must pass `--backend bend` explicitly. Full plugin checkouts contain the command; instruction-only evaluation snapshots do not yet package it or the toolchain. Do not pretend the command is available in those snapshots.
-
-## Interpret
-
-Postulate 001 remains an open hypothesis. Bend checks conditional conclusions under named premises; it does not establish those premises' truth, prove facts about the current task, or perform the task's own validation. Keep applying the invoking skill's behavioral and evidence requirements.
-
-When composing a prompt for another agent or session, carry the selected backend explicitly and tell the recipient to resolve the proofs in its own environment. Do not assume your checked context, compiler, or paths exist there.
+For a prompt sent to another agent or session, carry the relevant proof IDs and this loading policy. The recipient resolves the available treatment in its own environment; do not assume your compiler, paths, or check results exist there.

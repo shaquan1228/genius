@@ -1,46 +1,27 @@
 # Markdown and Bend reasoning
 
-Genius has two explicit treatments of the same postulate/proof corpus:
+Genius has two treatments of the same postulate/proof corpus:
 
-- **Markdown**: read the written discrete-math argument and its interpretation. This remains the default.
+- **Markdown**: read the written discrete-math argument and its interpretation when a formal counterpart or checking toolchain is unavailable.
 - **Bend**: load the corresponding Bend 2 proof after checking it with the Lean-backed kernel. The premises, intermediate implications, and conclusions are represented as types and proof functions.
 
 This is a proof-source seam. It does not replace the agent's reasoning loop with a runtime classifier.
 
-## Choose from any Genius skill
+## Proof use inside skills
 
-```text
-/genius:reasoning <task> backend:markdown
-/genius:reasoning <task> backend:bend
-/genius:preflight <task> backend:bend
-```
+All five skills use the [shared proof-loading policy](../../skills/shared/proof-backend.md). The choice of treatment is internal; skill invocations have no backend argument. The identity and each skill's behavioral rules apply in either treatment.
 
-All five skills—reasoning, preflight, Bayesian analysis, improvement, and TCREI prompt composition—use the [shared selection protocol](../../skills/shared/proof-backend.md). An explicit current selection wins; otherwise a skill inherits the most recent explicit choice in the conversation, defaulting to Markdown only when none exists. In Codex, use the corresponding `$genius:<skill>` invocation. Each skill keeps the identity and its own behavioral rules in both modes. Bend mode runs the proof command and loads the checked formal treatment. A missing compiler, missing kernel, or failed check stops that selection with an error; it never silently falls back to Markdown.
+Skills prefer a paired Bend proof when the native compiler and strong kernel are available. Otherwise they use Markdown without claiming a machine check. An attempted proof-check failure is reported and is not bypassed by changing treatment. This is shared policy rather than a new command or a per-skill option.
 
-The standalone command must be available from the full plugin checkout. Evaluation instruction-only snapshots currently bundle `docs/` and `skills/`, not `bin/` or the Bend toolchain; enabling Bend inside those snapshots needs that explicit packaging work rather than assuming the command is present.
+A Markdown argument is read as written. A Bend proof is checked with the native Bend command before the skill relies on it. There is no source-printing or backend-selection CLI between the skill and those files.
 
-## Choose from the command
-
-From the repository or plugin root:
+## Check a formal proof
 
 ```sh
-python3 bin/genius-proof --list
-python3 bin/genius-proof GNS-004 --backend markdown
-python3 bin/genius-proof GNS-004 --backend bend
-python3 bin/genius-proof all --backend bend --check-only
+bend docs/proofs/GNS-004-INDEPENDENT-PREMISE-VALIDATION.bend --verdict
 ```
 
-`POSTULATE-001` selects the open postulate. `GNS-001` through `GNS-006` select individual proofs. With no ID, the command selects the entire corpus. Markdown mode prints the `.md` source without invoking a compiler. Bend mode checks the `.bend` source before printing it. `--check-only` omits source text, not verification.
-
-Requirements for the default Bend mode are Bend 2 and Lean v4.34.0 on `PATH`, or a built kernel configured through Bend's `BENDTT` environment variable. This corpus was verified with Bend 2.0.40 and Lean v4.34.0. A custom compiler path can be selected using `--bend /absolute/path/to/bend` or `BEND_BIN`.
-
-An explicitly weaker check is available for learning when the kernel is unavailable:
-
-```sh
-python3 bin/genius-proof GNS-004 --backend bend --ordinary
-```
-
-This runs Bend's ordinary checker and labels its result accordingly. Skills may use it only when requested explicitly. No command installs a compiler, changes harness settings, or publishes anything.
+The strong check requires Bend 2 and Lean v4.34.0 on `PATH`, or a built kernel configured through Bend's `BENDTT` environment variable. The corpus was verified with Bend 2.0.40 and Lean v4.34.0. Maintainers can use `bend <file> --check-only` for the ordinary checker, but that result is weaker than a kernel check.
 
 ## One formal file per source
 
@@ -76,4 +57,4 @@ The supplied hypotheses remain hypotheses. The kernel checks that the conclusion
 python3 -m unittest discover -s tests -p test_proof_backend.py -v
 ```
 
-With `BEND_BIN` set (or `bend` on `PATH`), these tests also check all seven real files with `--verdict` and reject invalid derivations using exact type-mismatch diagnostics. Without Bend they report those compiler-dependent cases as skipped. The remaining tests check backend selection, missing tools/files, version rejection, explicit ordinary-checker use, and absence of Markdown fallback. Their fake compiler tests exercise only adapter behavior; they are not evidence that a mathematical proof passes.
+With `BEND_BIN` set (or `bend` on `PATH`), these tests invoke the compiler directly for every formal module and reject invalid derivations using exact type-mismatch diagnostics. Without Bend they report compiler-dependent cases as skipped. The skill-loading contract also checks that every skill refers to the same internal policy and exposes no backend argument.

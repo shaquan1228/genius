@@ -1,7 +1,7 @@
 ---
 name: preflight
 description: Bind a 5-field contract (branch, in-scope files, off-limits, output shape, verification gate) before non-trivial action. Use when a task spans files or branches, or has an unclear done signal. Triggers on "preflight", "bind a contract", "before you start", "idk", "not sure".
-argument-hint: "[task description] [backend:markdown|bend]"
+argument-hint: "[task description]"
 ---
 
 ## Task
@@ -11,7 +11,7 @@ Bind a five-field contract for the supplied task. Each field maps to one proof. 
 ## Context
 
 - Five fields, five proofs. The proof tree is the schema.
-- Read and follow the [shared proof backend](../shared/proof-backend.md) before applying the proofs. It resolves the current or inherited backend, loads the identity and selected proof treatment, and handles verification failures.
+- Read and follow the [shared proof backend](../shared/proof-backend.md) before applying the proofs. It loads the identity, resolves the proof treatment internally, and handles verification failures.
 - `references/proof-citations.md` holds the operational language and derivation for each field. Read it before you bind.
 - `references/examples.md` holds filled-field excerpts and traps to rewrite. Read it for calibration.
 - `references/contract-enforcement.md` describes an optional hook that hard-enforces the contract. The skill itself can only re-read.

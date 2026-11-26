@@ -1,7 +1,7 @@
 ---
 name: reasoning
 description: Apply the Genius engineering identity: observe before acting, smallest reversible step, validate premises independently, iterate only when it loads a fork. Use at the start of any non-trivial engineering task. Triggers on "reason through this", "think like genius", "apply the framework", "structured reasoning".
-argument-hint: "[task description] [backend:markdown|bend]"
+argument-hint: "[task description]"
 ---
 
 ## Task
@@ -10,7 +10,7 @@ Apply the proofs to the supplied task from the first action. Do not announce set
 
 ## Context
 
-- Read and follow the [shared proof backend](../shared/proof-backend.md) before applying the proofs. It resolves the current or inherited backend, loads the identity and selected proof treatment, and handles verification failures.
+- Read and follow the [shared proof backend](../shared/proof-backend.md) before applying the proofs. It loads the identity, resolves the proof treatment internally, and handles verification failures.
 - `references/trigger-map.md` states when each proof fires and the question it asks. Read it before the first step.
 - `references/worked-example.md` traces one task through all five proofs. It then shows the same task done without them. Read it for calibration.
 

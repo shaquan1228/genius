@@ -3,9 +3,9 @@ name: Proof backends
 on:
   push:
     branches: [main]
-    paths: ["docs/postulates/**", "docs/proofs/**", "skills/**", "bin/genius-proof", "tests/test_proof_backend.py", ".github/workflows/proofs.yml"]
+    paths: ["docs/postulates/**", "docs/proofs/**", "skills/**", "tests/test_proof*.py", ".github/scripts/install-proof-toolchain.sh", ".github/workflows/proofs.yml"]
   pull_request:
-    paths: ["docs/postulates/**", "docs/proofs/**", "skills/**", "bin/genius-proof", "tests/test_proof_backend.py", ".github/workflows/proofs.yml"]
+    paths: ["docs/postulates/**", "docs/proofs/**", "skills/**", "tests/test_proof*.py", ".github/scripts/install-proof-toolchain.sh", ".github/workflows/proofs.yml"]
 
 permissions:
   contents: read
@@ -21,16 +21,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install pinned Bend 2 and Lean toolchains
-        shell: bash
-        run: |
-          curl -fsSL https://github.com/bendlang/bend/releases/download/v2.0.40/bend-2.0.40-linux-x64.tar.gz -o "$RUNNER_TEMP/bend.tar.gz"
-          echo "c9ff8d67bd903fb6ad9a26b43d8a62c01021de82a44d55ce4a3dcd4732113d6b  $RUNNER_TEMP/bend.tar.gz" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/bend.tar.gz" -C "$RUNNER_TEMP"
-          curl -fsSL https://github.com/leanprover/lean4/releases/download/v4.34.0/lean-4.34.0-linux.tar.zst -o "$RUNNER_TEMP/lean.tar.zst"
-          echo "caaa98356098c85dc0fcbbd28e1ec66f39eb6551829972b752ff20e1286b646b  $RUNNER_TEMP/lean.tar.zst" | sha256sum -c -
-          tar --zstd -xf "$RUNNER_TEMP/lean.tar.zst" -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/bend/bin" >> "$GITHUB_PATH"
-          echo "$RUNNER_TEMP/lean-4.34.0-linux/bin" >> "$GITHUB_PATH"
-          echo "BEND_BIN=$RUNNER_TEMP/bend/bin/bend" >> "$GITHUB_ENV"
-      - name: Check selection seam and actual formal proofs
-        run: python3 -m unittest discover -s tests -p test_proof_backend.py -v
+        run: bash .github/scripts/install-proof-toolchain.sh "$RUNNER_TEMP/proof-toolchain"
+      - name: Check formal proofs and toolchain scripts
+        run: python3 -m unittest discover -s tests -p 'test_proof*.py' -v

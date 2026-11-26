@@ -1,7 +1,7 @@
 ---
 name: tcrei
 description: Compose a paste-ready TCREI prompt (Task / Context / Rules / Iterate) for dispatching to an agent. Use when handing work to a subagent or another session. Triggers on "write a prompt for", "dispatch this", "tcrei".
-argument-hint: "[task, or context to build the prompt from] [backend:markdown|bend]"
+argument-hint: "[task, or context to build the prompt from]"
 ---
 
 ## Task
@@ -12,7 +12,7 @@ Turn the supplied task, context, and conversation into one prompt. The prompt mu
 
 - The reader starts cold. It has no shared history and no visible environment. A link or abstract signpost will not survive.
 - GNS-001 (observe before acting) and GNS-004 (independent premise validation) govern this skill.
-- Read and follow the [shared proof backend](../shared/proof-backend.md) before applying the proofs. It resolves the current or inherited backend, loads the identity and selected proof treatment, and handles verification failures.
+- Read and follow the [shared proof backend](../shared/proof-backend.md) before applying the proofs. It loads the identity, resolves the proof treatment internally, and handles verification failures.
 - `references/prompt-anatomy.md` holds the section anatomy, the TCREI mapping, the rewrite table, and a template. Read it before you draft. Do not restate it here.
 - `references/examples.md` holds excerpts that work and portability traps to rewrite. Read it for calibration.
 

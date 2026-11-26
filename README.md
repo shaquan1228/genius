@@ -45,13 +45,12 @@ Start with `docs/identity.md` to understand or customize the framework. It links
 
 Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply the reasoning framework to your current task.
 
-Choose `backend:markdown` (the default) or `backend:bend` when invoking any Genius skill. The choice carries across skills in the same conversation unless explicitly changed. Each postulate and derived proof has its own Bend 2 counterpart. Bend mode checks those files before loading them; it does not silently fall back to prose. See [proof backends](docs/proofs/BACKENDS.md) for the per-file mapping, assumptions, and toolchain setup.
+Proof treatment is internal to the skills; there is no backend argument to learn. Each postulate and derived proof has a Bend 2 counterpart. See [proof treatments](docs/proofs/BACKENDS.md) for the loading policy, per-file mapping, assumptions, and toolchain setup.
 
-The same selection is available from the repository root:
+To check an individual formal proof directly:
 
 ```sh
-python3 bin/genius-proof GNS-004 --backend markdown
-python3 bin/genius-proof GNS-004 --backend bend
+bend docs/proofs/GNS-004-INDEPENDENT-PREMISE-VALIDATION.bend --verdict
 ```
 
 ## Evaluations
