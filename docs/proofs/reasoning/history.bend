@@ -1,7 +1,6 @@
 import Base
 import ../types.bend as T
 
-# Match the source before using its answer. A suite result cannot answer a parser question.
 def reading(+asked: T.Source, recorded: T.Source, actual: T.Answer(recorded)) -> T.Observation<asked>:
   match asked recorded:
     case T.CommittedFile{commit, path} T.CommittedFile{other_commit, other_path}:
@@ -27,7 +26,6 @@ def first_response(-source: T.Source, current: T.Observation<source>,
     case T.Returned{value}: T.Returned{value}
     case T.NoResponse{}: earlier(Unit{})
 
-# Histories are newest first. The latest response for this source decides the question.
 def answer_to(+source: T.Source, facts: List<&2, T.Fact>) -> T.Observation<source>:
   match facts:
     case Nil{}: T.NoResponse{}

@@ -4,7 +4,6 @@ import ../types.bend as T
 import ./history.bend as History
 import ./observation.bend as Obs
 
-# A response settles this step. Only an unrelated reading lets the search continue.
 def AtReading(+source: T.Source, hypothesis: T.Hypothesis<source>, response: T.Observation<source>,
   earlier: Data) -> Data:
   match response:
@@ -16,7 +15,6 @@ def AtFact(+source: T.Source, hypothesis: T.Hypothesis<source>, fact: T.Fact, ea
     case T.Reading{recorded, actual}: AtReading(source, hypothesis, History.reading(source, recorded, actual), earlier)
     case _: earlier
 
-# State the required evidence on the history itself, independently of answer_to.
 def Evidence(+source: T.Source, +hypothesis: T.Hypothesis<source>, facts: List<&2, T.Fact>) -> Data:
   match facts:
     case Nil{}: Empty
