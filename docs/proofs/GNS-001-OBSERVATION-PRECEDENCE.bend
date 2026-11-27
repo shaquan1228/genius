@@ -1,18 +1,15 @@
 import Base
+import ./ooda/main.bend as Loop
+import ./ooda/SPEC.bend as Spec
+import ./ooda/LAWS.bend as Laws
+import ./ooda/PROOF.bend as Proof
 
-# GNS-001, for an arbitrary fixed action A. Proposition parameters denote
-# NonTrivial(A), OODA(A), ObserveFirst(A), and PrecededByObservation(A).
-# P1, P2, and P3 are hypotheses; this theorem checks their composition.
 def theorem(
-  -NonTrivial: Type,
-  -OODA: Type,
-  -ObserveFirst: Type,
-  -PrecededByObservation: Type,
-  p1_nontrivial_enters_ooda: NonTrivial -> OODA,
-  p2_ooda_observes_first: OODA -> ObserveFirst,
-  p3_observe_first_precedes_action: ObserveFirst -> PrecededByObservation
-) -> NonTrivial -> PrecededByObservation:
-  nontrivial =>
-    ooda = p1_nontrivial_enters_ooda(nontrivial)
-    observe_first = p2_ooda_observes_first(ooda)
-    p3_observe_first_precedes_action(observe_first)
+  +viable_approaches: Nat,
+  +uncertain: Bool,
+  +attempt: Loop.Attempt,
+  +history: List<&2, Loop.TraceEvent>,
+  nontrivial: Spec.NonTrivial(viable_approaches, uncertain),
+  allowed: {Loop.observation_allows_act(viable_approaches, uncertain, attempt, history) == True{} : Bool}
+) -> Spec.ObservedFirst(attempt, history):
+  Laws.gns001_observation_precedence(viable_approaches, uncertain, attempt, history, nontrivial, allowed)
