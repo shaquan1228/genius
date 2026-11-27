@@ -40,6 +40,11 @@ def a_different_parser_input_leaves_the_question_open()
   -> {prepared([response(attempt(), "[]", T.Rejected{}), plan(attempt(), 17n)]) == False{} : Bool}:
   {==}
 
+def an_empty_test_suite_cannot_answer_the_parser_question()
+  -> {prepared([T.Entry{attempt(), T.Reading{T.TestSuite{"run-1", ".", "test_parser.py"}, False{}}},
+    plan(attempt(), 17n)]) == False{} : Bool}:
+  {==}
+
 def another_decisions_dependency_leaves_the_question_open()
   -> {prepared([response(attempt(), "[1,]", T.Accepted{}), plan(attempt(), 18n)]) == False{} : Bool}:
   {==}
