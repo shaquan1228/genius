@@ -1,94 +1,19 @@
 """Offline contracts for the Linux CI toolchain installer."""
 
-import io
 import os
+import platform
 import shutil
-import subprocess
 import sys
-import tarfile
-import tempfile
 import unittest
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-INSTALLER = ROOT / ".github" / "scripts" / "install-proof-toolchain.sh"
+from fixtures.proofs.toolchain import InstallerFixture
 
 
 @unittest.skipUnless(
-    sys.platform.startswith("linux") and shutil.which("zstd"),
-    "The CI installer targets Linux and requires zstd",
+    sys.platform.startswith("linux") and platform.machine() == "x86_64" and shutil.which("zstd"),
+    "The proof CI installer requires Linux x86_64 and zstd",
 )
-class ProofToolchainInstaller(unittest.TestCase):
-    def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="proof toolchain ")
-        self.addCleanup(self.temporary.cleanup)
-        self.work = Path(self.temporary.name)
-        self.commands = self.work / "commands"
-        self.commands.mkdir()
-        self.assets = self.work / "assets"
-        self.assets.mkdir()
-        self.destination = self.work / "installed tools"
-        self.environment = dict(os.environ)
-        self.environment.pop("GITHUB_PATH", None)
-        self.environment.pop("GITHUB_ENV", None)
-        self.environment.update(
-            PATH=str(self.commands) + os.pathsep + os.environ["PATH"],
-            TEST_ASSETS=str(self.assets),
-            TEST_CHECKSUM_LOG=str(self.work / "checksums"),
-        )
-        self.archive(self.assets / "bend.tar.gz", "bend/bin/bend", "w:gz")
-        lean_tar = self.assets / "lean.tar"
-        self.archive(lean_tar, "lean-4.34.0-linux/bin/lean", "w")
-        subprocess.run(
-            ["zstd", "-q", str(lean_tar), "-o", str(self.assets / "lean.tar.zst")],
-            check=True,
-        )
-        self.fake(
-            "curl",
-            "if os.environ.get('TEST_DOWNLOAD_FAIL'): sys.exit(22)\n"
-            "url = next(a for a in sys.argv if a.startswith('https://'))\n"
-            "output = sys.argv[sys.argv.index('--output') + 1]\n"
-            "asset = 'bend.tar.gz' if '/bendlang/' in url else 'lean.tar.zst'\n"
-            "shutil.copyfile(pathlib.Path(os.environ['TEST_ASSETS']) / asset, output)\n",
-        )
-
-    def archive(self, path, executable, mode):
-        contents = b"#!/bin/sh\nprintf 'fixture executable\\n'\n"
-        with tarfile.open(path, mode) as archive:
-            info = tarfile.TarInfo(executable)
-            info.mode = 0o755
-            info.size = len(contents)
-            archive.addfile(info, io.BytesIO(contents))
-
-    def fake(self, name, body):
-        executable = self.commands / name
-        executable.write_text(
-            f"#!{sys.executable}\nimport os, pathlib, shutil, sys\n" + body
-        )
-        executable.chmod(0o755)
-
-    def accept_fixture_checksums(self):
-        # Success-path fixtures exercise extraction and publication, not release hashes.
-        self.fake(
-            "sha256sum",
-            "with pathlib.Path(os.environ['TEST_CHECKSUM_LOG']).open('a') as log:\n"
-            " log.write(sys.stdin.read())\n",
-        )
-
-    def run_installer(self, *arguments, **environment):
-        return subprocess.run(
-            ["bash", str(INSTALLER), *map(str, arguments)],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=15,
-            env=self.environment | environment,
-        )
-
-    def assert_no_partial_install(self):
-        self.assertFalse(self.destination.exists())
-        self.assertEqual(list(self.work.glob(".proof-toolchain.*")), [])
-
+class ProofToolchainInstaller(InstallerFixture):
     def test_help_does_not_download_or_install(self):
         result = self.run_installer("--help", TEST_DOWNLOAD_FAIL="1")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -110,6 +35,14 @@ class ProofToolchainInstaller(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Destination already exists", result.stderr)
         self.assertEqual(marker.read_text(), "existing installation")
+
+    def test_destination_created_during_download_is_preserved(self):
+        self.accept_fixture_checksums()
+        result = self.run_installer(self.destination, TEST_RACE_DIR=str(self.destination))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Destination already exists", result.stderr)
+        self.assertEqual(list(self.destination.iterdir()), [])
+        self.assertEqual(list(self.work.glob(".proof-toolchain.*")), [])
 
     def test_failed_download_cleans_staging(self):
         result = self.run_installer(self.destination, TEST_DOWNLOAD_FAIL="1")

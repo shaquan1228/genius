@@ -1,7 +1,6 @@
 import Base
 import ./types.bend as T
 import ./reasoning/observation.bend as Obs
-import ./reasoning/confirmation.bend as Confirmation
 import ./logic.bend as Logic
 import ./reasoning/main.bend as Model
 import ./reasoning/SPEC.bend as Spec
@@ -50,6 +49,6 @@ def checked_evidence(
 ) -> Obs.Evidence(source, hypothesis, observation):
   match hypothesis observation:
     case T.Predict{_} T.NoResponse{}:
-      Confirmation.false_is_not_true(accepted)
+      Logic.false_is_not_true(accepted)
     case T.Predict{expected} T.Returned{actual}:
       Obs.agreed(Obs.agrees(source, expected, actual), accepted)

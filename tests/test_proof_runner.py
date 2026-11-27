@@ -12,21 +12,20 @@ RUNNER = ROOT / "skills/reasoning/scripts/prove.sh"
 
 @unittest.skipUnless(BEND, "Bend 2 is required for executable checks")
 class ProofRunner(unittest.TestCase):
-    def test_reasoning_skill_launcher_checks_named_suite(self):
+    def test_runner_checks_named_suite(self):
         fixture = ROOT / "evals/python/integrations/smoke/repos/reasoning_gate"
-        launcher = ROOT / "skills/reasoning/scripts/check-tests.sh"
         cases = (
-            (".", "checks_test.py", 0, "confirmed"),
-            (".", "optional_test.py", 0, "confirmed"),
-            (".", "integration_test.py", 1, "needs_evidence"),
-            (".", "compatibility_test.py", 1, "needs_evidence"),
-            (".", "setup_test.py", 1, "needs_evidence"),
+            (".", "checks_test.py", 0, "supported"),
+            (".", "optional_test.py", 0, "supported"),
+            (".", "integration_test.py", 1, "contradicted"),
+            (".", "compatibility_test.py", 1, "contradicted"),
+            (".", "setup_test.py", 1, "contradicted"),
             ("missing", "test*.py", 2, "unavailable"),
         )
         for directory, pattern, exit_code, decision in cases:
             with self.subTest(directory=directory, pattern=pattern):
                 result = subprocess.run(
-                    ["sh", str(launcher), directory, pattern],
+                    ["bash", RUNNER, "gns-004", "unittest", directory, pattern],
                     cwd=fixture,
                     capture_output=True,
                     text=True,
@@ -75,33 +74,3 @@ class ProofRunner(unittest.TestCase):
             check("postulate-001", path, [], 2, "undecided", unknown)
             check("gns-004", path, [recorded], 2, "undecided", unknown)
             check("gns-004", path, [other, other], 2, "")
-
-    def test_prediction_and_foreign_observation_are_rejected_as_evidence(self):
-        cases = (
-            (
-                "def bad(-source: T.Source, h: T.Hypothesis<source>) -> Bool:\n"
-                "  T.received(source, h)\n",
-                "T.Observation<source>", "T.Hypothesis<source>",
-            ),
-            (
-                'def bad(obs: T.Observation<T.TestSuite{"run-1", ".", "asked.py"}>) -> Bool:\n'
-                '  T.received(T.TestSuite{"run-2", ".", "asked.py"}, obs)\n',
-                'T.Observation<T.TestSuite{"run-2", ".", "asked.py"}>',
-                'T.Observation<T.TestSuite{"run-1", ".", "asked.py"}>',
-            ),
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            shutil.copy(ROOT / "docs/proofs/types.bend", root)
-            for body, expected, observed in cases:
-                with self.subTest(expected=expected):
-                    source = root / "invalid.bend"
-                    source.write_text("import Base\nimport ./types.bend as T\n" + body)
-                    result = subprocess.run(
-                        [BEND, source, "--check-only"], capture_output=True, text=True, timeout=30,
-                        env=dict(os.environ, BEND_NO_TELEMETRY="1"),
-                    )
-                    self.assertNotEqual(result.returncode, 0)
-                    diagnostic = result.stdout + result.stderr
-                    self.assertIn(f"- expected : {expected}\n", diagnostic)
-                    self.assertIn(f"- observed : {observed}\n", diagnostic)

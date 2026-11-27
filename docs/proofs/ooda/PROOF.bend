@@ -1,19 +1,9 @@
 import Base
+import ../logic.bend as Logic
 import ../types.bend as T
 import ./main.bend as Loop
 import ./SPEC.bend as Spec
 import ./LAWS.bend as Laws
-
-def IsTrue(flag: Bool) -> Type:
-  match flag:
-    case True{}:
-      Unit
-    case False{}:
-      Empty
-
-def false_is_not_true(equal: {False{} == True{} : Bool}) -> Empty:
-  %Equal.sym(Bool, False{}, True{}, equal) : IsTrue(_)
-  Unit{}
 
 def Agreement(+result: Bool, -P: Type) -> Type:
   ({result == True{} : Bool} -> P) & (P -> {result == True{} : Bool})
@@ -27,7 +17,7 @@ def agreement_complete(-result: Bool, -P: Type, agreement: Agreement(result, P))
   complete
 
 def false_agrees_with_empty() -> Agreement(False{}, Empty):
-  (false_is_not_true, impossible => Empty.absurd({False{} == True{} : Bool}, impossible))
+  (Logic.false_is_not_true, impossible => Empty.absurd({False{} == True{} : Bool}, impossible))
 
 def NonemptyEvidence(facts_empty: Bool, signals_empty: Bool, constraints_empty: Bool) -> Type:
   Or({facts_empty == False{} : Bool}, Or({signals_empty == False{} : Bool}, {constraints_empty == False{} : Bool}))
@@ -52,7 +42,7 @@ def has_observation_agrees(+facts_empty: Bool, +signals_empty: Bool, +constraint
     case True{} True{} False{}:
       (_ => Inr{Inr{{==}}}, _ => {==})
     case True{} True{} True{}:
-      (allowed => Empty.absurd(NonemptyEvidence(True{}, True{}, True{}), false_is_not_true(allowed)),
+      (allowed => Empty.absurd(NonemptyEvidence(True{}, True{}, True{}), Logic.false_is_not_true(allowed)),
         observed => no_nonempty_evidence(observed))
 
 def phase_agrees(+phase: T.Phase)
@@ -102,7 +92,7 @@ def required_from_spec(+a: Bool, +b: Bool, witness: Or({a == True{} : Bool}, {b 
     case False{}:
       match witness:
         case Inl{equal}:
-          Empty.absurd({b == True{} : Bool}, false_is_not_true(equal))
+          Empty.absurd({b == True{} : Bool}, Logic.false_is_not_true(equal))
         case Inr{equal}:
           equal
 

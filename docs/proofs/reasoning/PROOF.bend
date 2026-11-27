@@ -1,4 +1,5 @@
 import Base
+import ../logic.bend as Logic
 import ./confirmation.bend as Confirmation
 import ../types.bend as T
 import ./main.bend as Model
@@ -29,7 +30,7 @@ def direct_confirmation_sound(
   -> Spec.Predicates.ValidatedAt(premise, facts):
   match facts:
     case Nil{}:
-      Confirmation.false_is_not_true(found)
+      Logic.false_is_not_true(found)
     case head <> tail:
       search_found(
         Model.confirmation_matches(premise, head),

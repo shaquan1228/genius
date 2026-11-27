@@ -6,12 +6,12 @@ from pathlib import Path
 from uuid import uuid4
 
 
-class CountingResult(unittest.TextTestResult):
-    passed = 0
+class SuiteResult(unittest.TextTestResult):
+    any_passed = False
 
     def addSuccess(self, test):
         super().addSuccess(test)
-        self.passed += 1
+        self.any_passed = True
 
 
 def main(directory, pattern):
@@ -22,11 +22,10 @@ def main(directory, pattern):
     sys.path.insert(0, str(root))
     with contextlib.redirect_stdout(sys.stderr):
         suite = unittest.defaultTestLoader.discover(str(target), pattern=pattern)
-        result = unittest.TextTestRunner(resultclass=CountingResult).run(suite)
+        result = unittest.TextTestRunner(resultclass=SuiteResult).run(suite)
     # Reusing a result keeps its run ID. A fresh run gets a new one.
     print(uuid4().hex)
-    print(result.passed)
-    return 0 if result.wasSuccessful() else 1
+    return 0 if result.wasSuccessful() and result.any_passed else 1
 
 
 if __name__ == "__main__":

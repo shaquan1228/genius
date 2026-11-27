@@ -31,7 +31,9 @@ def checks(*, inputs: tuple[str, ...], program: str) -> Criterion:
 
 def repo(name: str) -> dict[str, str]:
     return {
-        path.name: path.read_text(encoding="utf-8") for path in sorted((REPOS / name).iterdir())
+        path.name: path.read_text(encoding="utf-8")
+        for path in sorted((REPOS / name).iterdir())
+        if path.is_file()
     }
 
 

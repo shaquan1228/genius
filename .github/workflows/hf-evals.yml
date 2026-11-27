@@ -109,13 +109,13 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: false
-          tags: ghcr.io/${{ github.repository_owner }}/genius-eval-sandbox:${{ hashFiles('evals/docker/Dockerfile') }}
+          tags: ghcr.io/${{ github.repository_owner }}/genius-eval-sandbox:${{ hashFiles('evals/docker/Dockerfile', 'evals/docker/install-bend.sh') }}
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=genius-eval-sandbox
           cache-to: type=gha,mode=max,scope=genius-eval-sandbox
       - id: reference
         env:
-          IMAGE: ghcr.io/${{ github.repository_owner }}/genius-eval-sandbox:${{ hashFiles('evals/docker/Dockerfile') }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/genius-eval-sandbox:${{ hashFiles('evals/docker/Dockerfile', 'evals/docker/install-bend.sh') }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           echo "Sandbox image $IMAGE ($DIGEST)" >> "$GITHUB_STEP_SUMMARY"

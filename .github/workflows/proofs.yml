@@ -3,23 +3,18 @@ name: Bend proofs
 on:
   push:
     branches: [main]
-    paths:
+    paths: &proof_paths
       - "docs/postulates/**"
       - "docs/proofs/**"
       - "skills/reasoning/**"
       - "tests/test_proof*.py"
+      - "tests/fixtures/proofs/**"
+      - "evals/docker/install-bend.sh"
       - "evals/python/integrations/smoke/repos/reasoning_gate/**"
       - ".github/scripts/install-proof-toolchain.sh"
       - ".github/workflows/proofs.yml"
   pull_request:
-    paths:
-      - "docs/postulates/**"
-      - "docs/proofs/**"
-      - "skills/reasoning/**"
-      - "tests/test_proof*.py"
-      - "evals/python/integrations/smoke/repos/reasoning_gate/**"
-      - ".github/scripts/install-proof-toolchain.sh"
-      - ".github/workflows/proofs.yml"
+    paths: *proof_paths
 
 permissions:
   contents: read

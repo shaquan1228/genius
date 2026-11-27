@@ -12,3 +12,14 @@ type Finding<-source: T.Source> is Data:
 # the same source for any hypothesis we claim to know.
 type Postulate<-source: T.Source, -Known: T.Hypothesis<source> -> Type> is Type:
   Assume{knowledge_requires_observation: @h: T.Hypothesis<source> -> Known(h) -> Finding<source>}
+
+def no_finding_rules_out_knowledge(
+  -source: T.Source,
+  -Known: T.Hypothesis<source> -> Type,
+  postulate: Postulate<source, Known>,
+  hypothesis: T.Hypothesis<source>,
+  no_finding: Finding<source> -> Empty
+) -> Known(hypothesis) -> Empty:
+  match postulate:
+    case Assume{finding_for}:
+      known => no_finding(finding_for(hypothesis, known))

@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly BEND_VERSION=2.0.40
 readonly LEAN_VERSION=4.34.0
-readonly BEND_SHA256=c9ff8d67bd903fb6ad9a26b43d8a62c01021de82a44d55ce4a3dcd4732113d6b
 readonly LEAN_SHA256=caaa98356098c85dc0fcbbd28e1ec66f39eb6551829972b752ff20e1286b646b
 STAGING_DIR=''
 
@@ -71,17 +69,15 @@ main() {
   STAGING_DIR=$(mktemp -d "$parent/.proof-toolchain.XXXXXXXX")
   mkdir "$STAGING_DIR/install"
 
-  download \
-    "https://github.com/bendlang/bend/releases/download/v$BEND_VERSION/bend-$BEND_VERSION-linux-x64.tar.gz" \
-    "$BEND_SHA256" "$STAGING_DIR/bend.tar.gz"
+  bash "$(dirname -- "$0")/../../evals/docker/install-bend.sh" "$STAGING_DIR/install"
   download \
     "https://github.com/leanprover/lean4/releases/download/v$LEAN_VERSION/lean-$LEAN_VERSION-linux.tar.zst" \
     "$LEAN_SHA256" "$STAGING_DIR/lean.tar.zst"
-  tar -xzf "$STAGING_DIR/bend.tar.gz" -C "$STAGING_DIR/install"
   tar --zstd -xf "$STAGING_DIR/lean.tar.zst" -C "$STAGING_DIR/install"
   [[ -x $STAGING_DIR/install/bend/bin/bend && -x $STAGING_DIR/install/lean-$LEAN_VERSION-linux/bin/lean ]] \
     || die 'Verified archives did not contain the expected executables.'
-  mv -T -- "$STAGING_DIR/install" "$destination"
+  mv -nT -- "$STAGING_DIR/install" "$destination"
+  [[ ! -d $STAGING_DIR/install ]] || die "Destination already exists: $destination"
 
   bend_bin="$destination/bend/bin"
   lean_bin="$destination/lean-$LEAN_VERSION-linux/bin"

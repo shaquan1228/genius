@@ -33,11 +33,6 @@ def received(-source: Source, observation: Observation<source>) -> Bool:
     case Returned{_}:
       True{}
 
-# Each executable check gets only the arguments it consumes.
-type Question<-source: Source> is Data:
-  DidRespond{}
-  CheckPrediction{hypothesis: Hypothesis<source>}
-
 type Attempt is Data:
   AttemptKey{action: Nat, number: Nat}
 
