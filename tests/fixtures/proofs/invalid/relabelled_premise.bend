@@ -10,6 +10,5 @@ def ctx() -> T.Context<T.ActionUse>:
     T.Reading{parser, T.Accepted{}}]
   T.Frame{0n, T.Use{1n, replacement, 2n, False{}}, before, Nil{}, T.NoIntervention{}}
 
-# A dependency on the original prediction cannot be reused for its opposite.
 def bad() -> Spec.Predicates.PremiseRequiredBefore(ctx()):
   (Inl{{==}}, Inl{{==}})

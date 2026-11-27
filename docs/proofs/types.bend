@@ -4,7 +4,6 @@ type ParseOutcome is Data:
   Accepted{}
   Rejected{}
 
-# A source identifies the exact question a reading answers.
 type Source is Data:
   CommittedFile{commit: String, path: String}
   TestSuite{run_id: String, directory: String, pattern: String}

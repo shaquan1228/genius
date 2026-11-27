@@ -66,7 +66,6 @@ def agreed(flag: Bool, accepted: {supported(verdict(flag)) == True{}: Bool}) -> 
     case False{}:
       accepted
 
-# When the executable check supports a hypothesis, its source returned the expected answer.
 def checked_evidence(
   +source: T.Source,
   +hypothesis: T.Hypothesis<source>,

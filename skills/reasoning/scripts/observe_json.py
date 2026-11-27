@@ -1,4 +1,3 @@
-"""Observe how the installed standard-library JSON parser handles the literal input."""
 import json
 import sys
 
@@ -7,7 +6,6 @@ def parse(text):
     try:
         json.loads(text)
     except ValueError:
-        # Includes syntax errors and the decoder's integer-length limit.
         return "rejected"
     return "accepted"
 

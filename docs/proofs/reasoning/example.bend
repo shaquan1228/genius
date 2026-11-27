@@ -17,7 +17,6 @@ def expected() -> {
 }:
   {==}
 
-# A suite may have completed while the parser question is still open.
 def rejects_trailing_comma(history: List<&2, T.Fact>) -> T.Verdict:
   Model.verdict(T.ParserCase{"v1", "[1,]"}, T.Predict{T.Rejected{}}, history)
 
