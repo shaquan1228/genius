@@ -19,12 +19,13 @@ def tinkering_never_justified(
   -LoadsFork: Type,
   -Tinkering: Type,
   -Justified: Type,
-  p1: Iteration -> DwellState,
-  p2: DwellState -> Logic.Xor<LoadsFork, Tinkering>,
-  p3b: Logic.Conj<DwellState, LoadsFork -> Empty> -> Justified -> Empty,
+  dwell_of_iteration: Iteration -> DwellState,
+  loading_or_tinkering: DwellState -> Logic.Xor<LoadsFork, Tinkering>,
+  no_loading_rules_out_justification: Logic.Conj<DwellState, LoadsFork -> Empty> -> Justified -> Empty,
   iteration: Iteration,
   tinkering: Tinkering
 ) -> Justified -> Empty:
-  +dwell = p1(iteration)
-  not_loading = tinkering_excludes_loading(LoadsFork, Tinkering, p2(dwell), tinkering)
-  p3b(Logic.Conjunction{dwell, not_loading})
+  +dwell = dwell_of_iteration(iteration)
+  alternatives = loading_or_tinkering(dwell)
+  not_loading = tinkering_excludes_loading(LoadsFork, Tinkering, alternatives, tinkering)
+  no_loading_rules_out_justification(Logic.Conjunction{dwell, not_loading})
