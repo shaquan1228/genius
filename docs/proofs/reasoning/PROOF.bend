@@ -58,3 +58,29 @@ def Laws.gns006_structural_enforcement(ctx, premises):
   match premises:
     case Spec.EnforcementPremises{_, forward, effects}:
       (confirmed => Laws.gns006_validation_implies_enforcement(ctx, forward, confirmed), effects)
+
+def validation_burden(
+  -NonTrivial: Type,
+  -PrecededByObservation: Type,
+  -DistinguishesKnownFromAssumed: Type,
+  -DependsOn: Type,
+  -ValidatedIndependently: Type,
+  -Assumption: Type,
+  -CascadeRisk: Type,
+  gns001_observation_precedence: NonTrivial -> PrecededByObservation,
+  p1_observation_classifies: PrecededByObservation -> DistinguishesKnownFromAssumed,
+  p2_unvalidated_is_assumed: Logic.Conj<
+    DistinguishesKnownFromAssumed,
+    ValidatedIndependently -> Empty> -> Assumption,
+  p3_assumed_dependency_creates_risk: Logic.Conj<DependsOn, Assumption> -> CascadeRisk,
+  n_no_cascade_risk: CascadeRisk -> Empty,
+  trigger: Logic.Conj<NonTrivial, DependsOn>
+) -> (ValidatedIndependently -> Empty) -> Empty:
+  match trigger:
+    case Logic.Conjunction{nontrivial, depends_on}:
+      observed = gns001_observation_precedence(nontrivial)
+      classified = p1_observation_classifies(observed)
+      unvalidated =>
+        assumed = p2_unvalidated_is_assumed(Logic.Conjunction{classified, unvalidated})
+        risk = p3_assumed_dependency_creates_risk(Logic.Conjunction{depends_on, assumed})
+        n_no_cascade_risk(risk)

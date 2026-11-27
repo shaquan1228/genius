@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -40,6 +41,17 @@ class Corpus(unittest.TestCase):
         for source in sources:
             with self.subTest(source=source.name):
                 self.assertTrue(source.with_suffix(".bend").is_file())
+
+    def test_numbered_proofs_export_only_theorem(self):
+        proofs = sorted(ROOT.glob("docs/proofs/[0-9][0-9][0-9]-*.bend"))
+        self.assertTrue(proofs)
+        for proof in proofs:
+            with self.subTest(proof=proof.name):
+                names = re.findall(
+                    r"^[ \t]*(?:@unsafe[ \t]+)?(?:def\??|law|type)[ \t]+([^\s(<:]+)",
+                    proof.read_text(), re.MULTILINE,
+                )
+                self.assertEqual(set(names), {"theorem"})
 
     @unittest.skipUnless(
         BEND, "Bend 2 is required for real proof checking; set BEND_BIN"
