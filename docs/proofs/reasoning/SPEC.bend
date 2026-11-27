@@ -1,6 +1,7 @@
 import Base
 import ../types.bend as T
 import ./main.bend as Model
+import ./latest.bend as Latest
 
 def Member(-A: Data, +wanted: A, items: List<&2, A>) -> Data:
   match items:
@@ -12,8 +13,10 @@ def Member(-A: Data, +wanted: A, items: List<&2, A>) -> Data:
 def Predicates.NonTrivial(viable_approaches: Nat, uncertain: Bool) -> Data:
   Either<&2, &2, {Nat.is_lt(1n, viable_approaches) == True{} : Bool}, {uncertain == True{} : Bool}>
 
-def Predicates.ValidatedAt(premise: Nat, state: List<&2, T.Fact>) -> Data:
-  Member(T.Fact, T.Confirmation{premise, T.Direct{}}, state)
+def Predicates.ValidatedAt(+premise: T.PremiseClaim, state: List<&2, T.Fact>) -> Data:
+  match premise:
+    case T.Claim{_, source, hypothesis}:
+      Latest.Evidence(source, hypothesis, state)
 
 def Predicates.DependsAt(dependent: T.Subject, prerequisite: T.Subject,
   state: List<&2, T.Fact>) -> Data:

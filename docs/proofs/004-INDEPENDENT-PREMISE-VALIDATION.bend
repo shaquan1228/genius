@@ -47,8 +47,4 @@ def checked_evidence(
   +observation: T.Observation<source>,
   accepted: {Obs.supported(Obs.check(source, hypothesis, observation)) == True{}: Bool}
 ) -> Obs.Evidence(source, hypothesis, observation):
-  match hypothesis observation:
-    case T.Predict{_} T.NoResponse{}:
-      Logic.false_is_not_true(accepted)
-    case T.Predict{expected} T.Returned{actual}:
-      Obs.agreed(Obs.agrees(source, expected, actual), accepted)
+  Obs.checked_evidence(source, hypothesis, observation, accepted)
