@@ -18,16 +18,16 @@ def has_observation_agrees(+facts_empty: Bool, +signals_empty: Bool, +constraint
     Spec.NonemptyEvidence(facts_empty, signals_empty, constraints_empty)):
   match facts_empty signals_empty constraints_empty:
     case False{} _ _:
-      Logic.Equivalence{_ => Inl{{==}}, _ => {==}}
+      (_ => Inl{{==}}, _ => {==})
     case True{} False{} _:
-      Logic.Equivalence{_ => Inr{Inl{{==}}}, _ => {==}}
+      (_ => Inr{Inl{{==}}}, _ => {==})
     case True{} True{} False{}:
-      Logic.Equivalence{_ => Inr{Inr{{==}}}, _ => {==}}
+      (_ => Inr{Inr{{==}}}, _ => {==})
     case True{} True{} True{}:
-      Logic.Equivalence{
+      (
         allowed => Empty.absurd(Spec.NonemptyEvidence(True{}, True{}, True{}), Logic.false_is_not_true(allowed)),
         observed => Equal.sym(Bool, True{}, False{}, empty_field_witness(observed))
-      }
+      )
 
 def phase_agrees(+phase: T.Phase)
   -> Logic.SubjectAgrees(T.Phase, Loop.is_recorded_observation, Spec.RecordedObservation, phase):
@@ -66,9 +66,11 @@ def gate_agrees(+viable_approaches: Nat, +uncertain: Bool, +attempt: T.Attempt, 
     Spec.ObservedFirst(attempt, history), required, first)
 
 def Laws.gns001_observation_precedence(viable_approaches, uncertain, attempt, history, nontrivial, allowed):
+  agreement = gate_agrees(viable_approaches, uncertain, attempt, history, nontrivial)
   Logic.agreement_sound(Loop.observation_allows_act(viable_approaches, uncertain, attempt, history),
-    Spec.ObservedFirst(attempt, history), gate_agrees(viable_approaches, uncertain, attempt, history, nontrivial))(allowed)
+    Spec.ObservedFirst(attempt, history), agreement, allowed)
 
 def Laws.gns001_observation_gate_complete(viable_approaches, uncertain, attempt, history, nontrivial, observed):
+  agreement = gate_agrees(viable_approaches, uncertain, attempt, history, nontrivial)
   Logic.agreement_complete(Loop.observation_allows_act(viable_approaches, uncertain, attempt, history),
-    Spec.ObservedFirst(attempt, history), gate_agrees(viable_approaches, uncertain, attempt, history, nontrivial))(observed)
+    Spec.ObservedFirst(attempt, history), agreement, observed)
