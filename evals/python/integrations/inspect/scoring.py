@@ -30,12 +30,11 @@ NESTING = NESTING_LIMIT - 1
 
 
 def decode_response(text: str) -> JsonValue:
-    """Decode a JSON reply; anything else is a null response."""
-    text = text.strip()
-    if text.startswith("```json\n") and text.endswith("\n```"):
-        text = text[8:-4]
-    with suppress(ValueError, RecursionError):
-        return cast(JsonValue, json.loads(text))
+    """Decode a JSON reply, or the final paragraph after prose; anything else is a null response."""
+    for candidate in (text.strip(), text.rsplit("\n\n", 1)[-1].strip()):
+        fenced = candidate.startswith("```json\n") and candidate.endswith("\n```")
+        with suppress(ValueError, RecursionError):
+            return cast(JsonValue, json.loads(candidate[8:-4] if fenced else candidate))
     return None
 
 
