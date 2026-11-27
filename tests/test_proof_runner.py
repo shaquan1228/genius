@@ -13,7 +13,7 @@ RUNNER = ROOT / "skills/reasoning/scripts/prove.sh"
 @unittest.skipUnless(BEND, "Bend 2 is required for executable checks")
 class ProofRunner(unittest.TestCase):
     def test_runner_checks_named_suite(self):
-        fixture = ROOT / "evals/python/integrations/smoke/repos/reasoning_gate"
+        fixture = ROOT / "evals/python/integrations/smoke/repos/basic"
         cases = (
             (".", "checks_test.py", 0, "supported"),
             (".", "optional_test.py", 0, "supported"),
@@ -31,7 +31,7 @@ class ProofRunner(unittest.TestCase):
                     text=True,
                     check=False,
                     timeout=30,
-                    env=dict(os.environ, BEND_BIN=BEND, BEND_NO_TELEMETRY="1"),
+                    env=dict(os.environ, GENIUS_PROOF_BACKEND="bend", BEND_BIN=BEND, BEND_NO_TELEMETRY="1"),
                 )
                 self.assertEqual(result.returncode, exit_code, result.stderr)
                 self.assertEqual(result.stdout.strip(), decision)
@@ -44,7 +44,7 @@ class ProofRunner(unittest.TestCase):
             result = subprocess.run(
                 ["bash", RUNNER, proof, "git-blob", revision or commit, path, *expected],
                 cwd=repo, text=True, capture_output=True, timeout=30,
-                env=dict(os.environ, BEND_BIN=BEND),
+                env=dict(os.environ, GENIUS_PROOF_BACKEND="bend", BEND_BIN=BEND),
             )
             self.assertEqual((result.returncode, result.stdout.strip()), (code, verdict), result.stderr)
 

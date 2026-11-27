@@ -18,7 +18,8 @@ def main(directory, pattern):
     root = Path.cwd()
     target = (root / directory).resolve()
     if not target.is_relative_to(root) or not target.is_dir():
-        sys.exit("test directory must exist inside the checkout")
+        print("test directory must exist inside the checkout", file=sys.stderr)
+        return 2
     sys.path.insert(0, str(root))
     with contextlib.redirect_stdout(sys.stderr):
         suite = unittest.defaultTestLoader.discover(str(target), pattern=pattern)
@@ -29,4 +30,9 @@ def main(directory, pattern):
 
 
 if __name__ == "__main__":
-    sys.exit(main(*sys.argv[1:]))
+    try:
+        status = main(*sys.argv[1:])
+    except (Exception, SystemExit) as error:
+        print(f"unittest did not produce a result: {error}", file=sys.stderr)
+        status = 2
+    sys.exit(status)

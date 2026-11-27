@@ -10,7 +10,7 @@ on:
       - "tests/test_proof*.py"
       - "tests/fixtures/proofs/**"
       - "evals/docker/install-bend.sh"
-      - "evals/python/integrations/smoke/repos/reasoning_gate/**"
+      - "evals/python/integrations/smoke/repos/basic/**"
       - ".github/scripts/install-proof-toolchain.sh"
       - ".github/workflows/proofs.yml"
   pull_request:

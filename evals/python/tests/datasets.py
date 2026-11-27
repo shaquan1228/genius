@@ -72,12 +72,11 @@ def clear_compiled_cache_preserves_live_snapshots() -> None:
 
 
 @pytest.mark.parametrize("case_id", ["completion-verified", "completion-all-skipped"])
-def reasoning_gate_fixtures(case_id: str) -> None:
-    declaration = datasets.load_dataset(selection="reasoning_gate").records[case_id]
+def reasoning_fixtures(case_id: str) -> None:
+    declaration = datasets.load_dataset(selection="reasoning").records[case_id]
     assert declaration.skill == "reasoning"
-    assert {"checks_test.py", "observe_suite.py"} <= {
-        file.path for file in declaration.task.fixture
-    }
+    smoke = datasets.load_dataset(selection="smoke").records["clear-task"]
+    assert declaration.task.fixture == smoke.task.fixture
     assert not declaration.task.allowed_files
 
 
@@ -86,8 +85,8 @@ def reasoning_gate_fixtures(case_id: str) -> None:
     [("completion-verified", True), ("completion-all-skipped", False)],
 )
 @pytest.mark.parametrize("claim", [True, False])
-def reasoning_gate_claims(case_id: str, *, suite_passed: bool, claim: bool) -> None:
-    task = datasets.load_dataset(selection="reasoning_gate").records[case_id].task
+def reasoning_claims(case_id: str, *, suite_passed: bool, claim: bool) -> None:
+    task = datasets.load_dataset(selection="reasoning").records[case_id].task
     outcome = Outcome(
         changed_files=[],
         verification=Verification.Unchecked(),

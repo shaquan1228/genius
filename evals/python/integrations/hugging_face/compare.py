@@ -1,9 +1,12 @@
 """Compare named variants using evidence acquired through Hugging Face."""
 
 import argparse
+import json
 import os
 from pathlib import Path
 from uuid import uuid4
+
+from pydantic import JsonValue, TypeAdapter
 
 from evals.python import comparison
 from evals.python.comparison import ComparisonRequest, VariantRequest
@@ -12,13 +15,22 @@ from evals.python.integrations.hugging_face import dispatch
 from evals.python.integrations.hugging_face.job import configuration
 
 
+def workflow_request(raw: str, *, comparison_id: str) -> ComparisonRequest:
+    fields = TypeAdapter(dict[str, JsonValue]).validate_json(raw)
+    fields.setdefault("comparison_id", comparison_id)
+    if "shared" not in fields:
+        fields["shared"] = configuration(os.environ).model_dump(mode="json")
+    request = ComparisonRequest.model_validate_json(json.dumps(fields))
+    image = request.shared.sandbox_image or os.environ.get("EVAL_SANDBOX_IMAGE", "")
+    return request.model_copy(
+        update={"shared": request.shared.model_copy(update={"sandbox_image": image})}
+    )
+
+
 def request_from_environment() -> ComparisonRequest:
-    if os.environ.get("COMPARISON_REQUEST"):
-        request = ComparisonRequest.model_validate_json(os.environ["COMPARISON_REQUEST"])
-        image = request.shared.sandbox_image or os.environ.get("EVAL_SANDBOX_IMAGE", "")
-        return request.model_copy(
-            update={"shared": request.shared.model_copy(update={"sandbox_image": image})}
-        )
+    comparison_id = os.environ.get("COMPARISON_ID", f"comparison-{uuid4().hex}")
+    if raw := os.environ.get("COMPARISON_REQUEST"):
+        return workflow_request(raw, comparison_id=comparison_id)
     variants = tuple(
         VariantRequest(
             variant=VariantSettings(
@@ -29,7 +41,7 @@ def request_from_environment() -> ComparisonRequest:
         for role in ("control", "treatment")
     )
     return ComparisonRequest(
-        comparison_id=os.environ.get("COMPARISON_ID", f"comparison-{uuid4().hex}"),
+        comparison_id=comparison_id,
         shared=configuration(os.environ),
         variants=variants,
         baseline="control",

@@ -91,7 +91,7 @@ private `genius-eval-results` bucket in your HF namespace. Commit changes before
 | Setting | Usage |
 | --- | --- |
 | `EVAL_MODEL` | `openai/...`, `anthropic/...`, or `hf-inference-providers/...` |
-| `EVAL_DATASET` | `smoke` (default), `humanevalplus`, `pokerbench`, or `reasoning_gate` |
+| `EVAL_DATASET` | `smoke` (default), `humanevalplus`, `pokerbench`, or `reasoning` |
 | `EVAL_LIMIT` | Maximum cases per profile; omit for the full dataset |
 | `EVAL_SAMPLE_IDS` | JSON list of unique case IDs; use instead of `EVAL_LIMIT` |
 | `EVAL_EPOCHS` | Repeats per case; the hosted launcher defaults to `1` |

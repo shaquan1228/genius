@@ -11,7 +11,7 @@ from types import MappingProxyType
 from inspect_ai.dataset import Sample
 
 from evals.python import REPO_ROOT, Case, Experiment, Profile
-from evals.python.evaluation import InstructionDelivery
+from evals.python.evaluation import InstructionDelivery, VariantSettings
 
 REASONING_DOCUMENTS = (
     "skills/reasoning/SKILL.md",
@@ -30,6 +30,16 @@ def load_documents(spec: Experiment, *, source_dir: str | None = None) -> Mappin
             for path in instruction_files(root, folder=folder)
         }
     )
+
+
+def variant_documents(spec: Experiment, *, variant: VariantSettings | None) -> Mapping[str, bytes]:
+    documents = load_documents(spec, source_dir=variant.source_dir if variant else None)
+    if variant is None or variant.proof_backend is None:
+        return documents
+    flag = "instructions/skills/reasoning/proof-backend"
+    if flag not in documents:
+        raise ValueError("A proof_backend requires the reasoning skill's proof-backend file")
+    return {**documents, flag: f"{variant.proof_backend}\n".encode()}
 
 
 def instruction_files(root: Path, *, folder: str) -> list[Path]:
