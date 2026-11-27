@@ -2,12 +2,6 @@ import Base
 import ../types.bend as T
 import ./trace.bend as Trace
 
-def NonTrivial(viable_approaches: Nat, uncertain: Bool) -> Type:
-  Or(
-    {Cmp.is_lt(Nat.cmp(1n, viable_approaches)) == True{} : Bool},
-    {uncertain == True{} : Bool}
-  )
-
 def NonemptyEvidence(facts_empty: Bool, signals_empty: Bool, constraints_empty: Bool) -> Type:
   Or({facts_empty == False{} : Bool}, Or({signals_empty == False{} : Bool}, {constraints_empty == False{} : Bool}))
 

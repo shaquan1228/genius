@@ -32,6 +32,17 @@ MISMATCHES = {
 
 
 class Corpus(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        temporary = tempfile.TemporaryDirectory(prefix="Bend proofs ")
+        cls.addClassCleanup(temporary.cleanup)
+        cls.modules = Path(temporary.name)
+        for module in (ROOT / "docs/proofs").iterdir():
+            if module.suffix == ".bend" and module.name[:3].isdigit():
+                shutil.copy(module, cls.modules / f"GNS{module.name[:3]}.bend")
+            elif module.is_dir() or module.suffix == ".bend":
+                (cls.modules / module.name).symlink_to(module, target_is_directory=module.is_dir())
+
     def test_each_source_has_a_bend_counterpart(self):
         sources = [
             *ROOT.glob("docs/postulates/[0-9][0-9][0-9]-*.md"),
@@ -67,6 +78,7 @@ class Corpus(unittest.TestCase):
         self.assertTrue(sources)
         sources.append(ROOT / "docs/proofs/reasoning/example.bend")
         sources.append(ROOT / "tests/fixtures/proofs/trace.bend")
+        sources.append(Path(shutil.copy(ROOT / "tests/fixtures/proofs/iteration.bend", self.modules)))
         for source in sources:
             with self.subTest(source=source.name):
                 result = subprocess.run(
@@ -84,27 +96,18 @@ class Corpus(unittest.TestCase):
         BEND, "Bend 2 is required for invalid-proof checks; set BEND_BIN"
     )
     def test_invalid_derivations_are_rejected_for_the_expected_type_mismatch(self):
-        # Numbered proof entries can run directly. Bend imports need a letter first.
-        proofs = ROOT / "docs/proofs"
-        with tempfile.TemporaryDirectory(prefix="invalid Bend proof ") as temporary:
-            target = Path(temporary)
-            for name in ("types.bend", "logic.bend", "ooda", "reasoning"):
-                module = proofs / name
-                (target / name).symlink_to(module, target_is_directory=module.is_dir())
-            shutil.copy(proofs / "001-OBSERVATION-PRECEDENCE.bend", target / "GNS001.bend")
-            shutil.copy(proofs / "004-INDEPENDENT-PREMISE-VALIDATION.bend", target / "GNS004.bend")
-            for name, (expected, observed) in MISMATCHES.items():
-                fixture = ROOT / "tests/fixtures/proofs/invalid" / f"{name}.bend"
-                with self.subTest(fixture=fixture.stem):
-                    source = shutil.copy(fixture, target)
-                    result = subprocess.run(
-                        [BEND, source, "--check-only"],
-                        capture_output=True, text=True, timeout=30,
-                    )
-                    self.assertNotEqual(result.returncode, 0)
-                    output = result.stdout + result.stderr
-                    self.assertIn(f"- expected : {expected}\n", output)
-                    self.assertIn(f"- observed : {observed}\n", output)
+        for name, (expected, observed) in MISMATCHES.items():
+            fixture = ROOT / "tests/fixtures/proofs/invalid" / f"{name}.bend"
+            with self.subTest(fixture=fixture.stem):
+                source = shutil.copy(fixture, self.modules)
+                result = subprocess.run(
+                    [BEND, source, "--check-only"],
+                    capture_output=True, text=True, timeout=30,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                output = result.stdout + result.stderr
+                self.assertIn(f"- expected : {expected}\n", output)
+                self.assertIn(f"- observed : {observed}\n", output)
 
 
 if __name__ == "__main__":

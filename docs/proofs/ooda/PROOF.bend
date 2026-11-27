@@ -38,7 +38,7 @@ def phase_agrees(+phase: T.Phase)
     case T.Decided{}: Logic.false_agrees_with_empty()
     case T.Acted{}: Logic.false_agrees_with_empty()
 
-def required_from_spec(+a: Bool, +b: Bool, witness: Or({a == True{} : Bool}, {b == True{} : Bool}))
+def required_from_spec(+a: Bool, +b: Bool, witness: Either<&2, &2, {a == True{} : Bool}, {b == True{} : Bool}>)
   -> {Bool.or(a, b) == True{} : Bool}:
   match a:
     case True{}:
@@ -57,9 +57,9 @@ def required_gate_agrees(+required: Bool, -observed: Bool, -Expected: Type,
   agreement
 
 def gate_agrees(+viable_approaches: Nat, +uncertain: Bool, +attempt: T.Attempt, +history: List<&2, T.TraceEvent>,
-  nontrivial: Spec.NonTrivial(viable_approaches, uncertain))
+  nontrivial: T.NonTrivial(viable_approaches, uncertain))
   -> Logic.Agreement(Loop.observation_allows_act(viable_approaches, uncertain, attempt, history), Spec.ObservedFirst(attempt, history)):
-  +multiple = Cmp.is_lt(Nat.cmp(1n, viable_approaches))
+  +multiple = Nat.is_lt(1n, viable_approaches)
   required = required_from_spec(multiple, uncertain, nontrivial)
   first = Trace.first_agrees(~Loop.is_recorded_observation, ~Spec.RecordedObservation, ~phase_agrees, attempt, history)
   required_gate_agrees(Bool.or(multiple, uncertain), Loop.observed_first(attempt, history),

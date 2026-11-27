@@ -39,8 +39,16 @@ def received(-source: Source, observation: Observation<source>) -> Bool:
     case Returned{_}:
       True{}
 
+def NonTrivial(viable_approaches: Nat, uncertain: Bool) -> Data:
+  Either<&2, &2, {Nat.is_lt(1n, viable_approaches) == True{} : Bool}, {uncertain == True{} : Bool}>
+
 type Attempt is Data:
   AttemptKey{action: Nat, number: Nat}
+
+def same_attempt(a: Attempt, b: Attempt) -> Bool:
+  match a b:
+    case AttemptKey{action, number} AttemptKey{other_action, other_number}:
+      Bool.and(Nat.is_eq(action, other_action), Nat.is_eq(number, other_number))
 
 type Phase is Data:
   Observed{facts: String, signals: String, constraints: String}
@@ -48,8 +56,11 @@ type Phase is Data:
   Decided{}
   Acted{}
 
-type TraceEvent is Data:
-  Entry{key: Attempt, phase: Phase}
+type AttemptEvent<-Payload: Data> is Data:
+  Entry{key: Attempt, value: Payload}
+
+def TraceEvent() -> Data:
+  AttemptEvent<Phase>
 
 type PremiseClaim is Data:
   Claim{number: Nat, source: Source, hypothesis: Hypothesis<source>}
@@ -88,3 +99,9 @@ type ActionUse is Data:
 
 type ExternalUse is Data:
   UseOutput{use: ActionUse, loop: Nat, output: Nat}
+
+type Iteration is Data:
+  Prepare{attempt: Attempt, decision: Nat}
+
+def IterationHistory() -> Data:
+  List<&2, AttemptEvent<Fact>>
