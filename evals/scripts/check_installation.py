@@ -79,6 +79,7 @@ def main() -> None:
         ).strip()
         code = """
 import json, os, resource, sys, time, tracemalloc
+from importlib.metadata import version
 from pathlib import Path
 start = time.perf_counter()
 import evals, kernel
@@ -91,6 +92,7 @@ assert Path(evals.__file__).resolve().is_relative_to(Path.cwd().resolve())
 assert Path(kernel.__file__).resolve().is_relative_to(Path.cwd().resolve())
 assert Path(evals.__file__).with_name("py.typed").exists()
 assert Path(kernel.__file__).with_name("__init__.pyi").exists()
+assert kernel.version() == version("genius-bench-kernel")
 assert harness_hash() == EXPECTED_HASH
 tracemalloc.start()
 start = time.perf_counter()
@@ -106,6 +108,7 @@ assert datasets.load_dataset(selection=selection) is not first
 rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 print(json.dumps(dict(dataset=selection, native_import_seconds=native_import,
                      sdk_import_seconds=sdk_import, cold_seconds=cold, warm_seconds=warm,
+                     kernel_version=kernel.version(), kernel_sha256=kernel.source_hash(),
                      peak_rss_bytes=rss * (1024 if sys.platform == "linux" else 1),
                      python_peak_bytes=tracemalloc.get_traced_memory()[1])))
 """
