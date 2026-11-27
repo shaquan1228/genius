@@ -4,6 +4,7 @@ import json
 import runpy
 import subprocess
 from collections.abc import Mapping
+from io import BytesIO
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
@@ -92,6 +93,45 @@ def runs_independent_jobs_with_pinned_inputs(api: MagicMock, *, tmp_path: Path) 
     assert (tmp_path / "summary.md").read_text() == "summary"
 
 
+@pytest.mark.parametrize("provider", ["retired", "paused", "text-only", "live"])
+def pinned_hf_route_is_checked_before_launch(
+    api: MagicMock, *, tmp_path: Path, provider: str
+) -> None:
+    request = _request()
+    shared = request.shared.model_copy(
+        update={"model": f"hf-inference-providers/org/model:{provider}"}
+    )
+    request = request.model_copy(update={"shared": shared})
+    catalog = {
+        "data": {
+            "providers": [
+                {"provider": "live", "status": "live"},
+                {"provider": "paused", "status": "staging"},
+                {"provider": "text-only", "status": "live", "supports_tools": False},
+            ]
+        }
+    }
+    response = BytesIO(json.dumps(catalog).encode())
+    with patch.object(dispatch, "urlopen", return_value=response) as lookup:
+        if provider == "live":
+            compare.execute(request, output=tmp_path, namespace="owner")
+            assert api.run_job.call_count == 2
+        else:
+            with pytest.raises(ValueError, match=f"org/model:{provider}"):
+                compare.execute(request, output=tmp_path, namespace="owner")
+            api.run_job.assert_not_called()
+        lookup.assert_called_once_with(
+            "https://router.huggingface.co/v1/models/org/model", timeout=20
+        )
+
+
+@pytest.mark.parametrize("suffix", ["", ":fastest", ":cheapest", ":preferred"])
+def automatic_hf_routing_skips_the_pinned_provider_check(suffix: str) -> None:
+    with patch.object(dispatch, "urlopen") as lookup:
+        dispatch.check_model_route(f"hf-inference-providers/org/model{suffix}")
+        lookup.assert_not_called()
+
+
 def _assert_volumes(api: MagicMock) -> None:
     for call in api.run_job.call_args_list:
         assert (
@@ -120,9 +160,13 @@ def saved_runs_skip_only_the_requested_jobs(
         else selected
         for selected in request.variants
     )
-    compare.execute(
-        request.model_copy(update={"variants": variants}), output=tmp_path, namespace="owner"
-    )
+    request = request.model_copy(update={"variants": variants})
+    if len(roles) == len(variants):
+        shared = request.shared.model_copy(update={"model": "hf-inference-providers/org/model:old"})
+        request = request.model_copy(update={"shared": shared})
+    with patch.object(dispatch, "urlopen") as lookup:
+        compare.execute(request, output=tmp_path, namespace="owner")
+        lookup.assert_not_called()
     assert api.run_job.call_count == 2 - len(roles)
 
 
@@ -155,7 +199,9 @@ def submission_failure_cancels_saved_job_ids(
 
 
 def failed_remote_job_cancels_the_remaining_work(api: MagicMock, *, tmp_path: Path) -> None:
-    api.wait_for_job.return_value = SimpleNamespace(status=SimpleNamespace(stage="ERROR"))
+    api.wait_for_job.return_value = SimpleNamespace(
+        id="failed-job", status=SimpleNamespace(stage="ERROR", message=None)
+    )
     with pytest.raises(RuntimeError, match="did not complete"):
         compare.execute(_request(), output=tmp_path, namespace="owner")
     assert api.cancel_job.call_count == 2
@@ -298,12 +344,14 @@ def either_failure_cancels_without_waiting_for_its_peer(
 
     def waiting(job_id: str, **kwargs: object) -> SimpleNamespace:
         if job_id == f"{failed_role}-job":
-            return SimpleNamespace(status=SimpleNamespace(stage="ERROR"))
+            return SimpleNamespace(
+                id=job_id, status=SimpleNamespace(stage="ERROR", message="worker exited")
+            )
         assert cancelled.wait(timeout=5), "peer cancellation was blocked behind its wait"
         return SimpleNamespace(status=SimpleNamespace(stage="CANCELLED"))
 
     api.wait_for_job.side_effect = waiting
-    with pytest.raises(RuntimeError, match="did not complete"):
+    with pytest.raises(RuntimeError, match=rf"{failed_role}-job.*ERROR.*worker exited"):
         compare.execute(_request(), output=tmp_path, namespace="owner")
     assert cancelled.is_set()
 

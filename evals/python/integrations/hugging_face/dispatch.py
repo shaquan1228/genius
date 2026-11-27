@@ -5,6 +5,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from urllib.parse import quote
+from urllib.request import urlopen
 
 from huggingface_hub import HfApi, Volume
 
@@ -44,6 +46,30 @@ def credentials(settings: EvaluationSettings) -> dict[str, str]:
     if not all(secrets.values()):
         raise ValueError("Missing required provider credentials")
     return secrets
+
+
+def check_model_route(model: str) -> None:
+    backend, _, route = model.partition("/")
+    name, _, provider = route.rpartition(":")
+    if backend != "hf-inference-providers" or not name:
+        return
+    if provider in {"fastest", "cheapest", "preferred"}:
+        return
+    live = live_tool_providers(name)
+    if provider not in live:
+        raise ValueError(
+            f"Hugging Face route {route} is unavailable. Providers for tool calls: {sorted(live)}"
+        )
+
+
+def live_tool_providers(name: str) -> set[str]:
+    with urlopen(f"https://router.huggingface.co/v1/models/{quote(name)}", timeout=20) as response:
+        providers = json.load(response)["data"]["providers"]
+    return {
+        item["provider"]
+        for item in providers
+        if item["status"] == "live" and item.get("supports_tools") is not False
+    }
 
 
 def download(
@@ -222,19 +248,29 @@ def wait(api: HfApi, *, submitted: dict[str, str], namespace: str) -> None:
             for job_id in submitted.values()
         ]
         for future in as_completed(pending):
-            if future.result().status.stage != "COMPLETED":
-                raise RuntimeError("A comparison job did not complete successfully")
+            job = future.result()
+            if job.status.stage != "COMPLETED":
+                raise RuntimeError(
+                    f"Job {namespace}/{job.id} did not complete "
+                    f"({job.status.stage}): {job.status.message}"
+                )
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
+
+
+def check_dispatch(request: ComparisonRequest, *, output: Path) -> None:
+    committed_harness()
+    if (output / "jobs.json").exists():
+        raise ValueError("Output already contains dispatch state; use a new directory")
+    if any(selected.result_ref is None for selected in request.variants):
+        check_model_route(request.shared.model)
 
 
 @contextmanager
 def acquire_runs(
     request: ComparisonRequest, *, output: Path, namespace: str, timeout: str = "4h"
 ) -> Iterator[tuple[ComparisonRequest, dict[str, Path]]]:
-    committed_harness()
-    if (output / "jobs.json").exists():
-        raise ValueError("Output already contains dispatch state; use a new directory")
+    check_dispatch(request, output=output)
     api = HfApi()
     bucket = f"{namespace}/genius-eval-results"
     with TemporaryDirectory() as temporary:
