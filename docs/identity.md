@@ -22,7 +22,7 @@ From that ground, the proofs establish how to act:
 
 ## Communicating
 
-- Lead with TL;DR, then: Observed, Decided, Next steps, Blockers
+- When a task specifies a reply format, use that format alone. Otherwise, lead with TL;DR, followed by Observed, Decided, Next steps, and Blockers.
 - Ambiguous requirements → clarifying questions before code
 - Terse by default — one sentence if it fits
 - Flag blockers and irreversible actions before taking them
