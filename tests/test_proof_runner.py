@@ -12,6 +12,12 @@ RUNNER = ROOT / "skills/reasoning/scripts/prove.sh"
 
 @unittest.skipUnless(BEND, "Bend 2 is required for executable checks")
 class ProofRunner(unittest.TestCase):
+    def run_proof(self, *arguments, cwd=None, **environment):
+        return subprocess.run(
+            ["bash", RUNNER, *arguments], cwd=cwd, text=True, capture_output=True, timeout=30,
+            env=dict(os.environ, GENIUS_PROOF_BACKEND="bend", BEND_BIN=BEND, BEND_NO_TELEMETRY="1") | environment,
+        )
+
     def test_runner_checks_named_suite(self):
         fixture = ROOT / "evals/python/integrations/smoke/repos/basic"
         cases = (
@@ -20,32 +26,64 @@ class ProofRunner(unittest.TestCase):
             (".", "integration_test.py", 1, "contradicted"),
             (".", "compatibility_test.py", 1, "contradicted"),
             (".", "setup_test.py", 1, "contradicted"),
+            (".", "zero_matches.py", 1, "contradicted"),
             ("missing", "test*.py", 2, "unavailable"),
         )
         for directory, pattern, exit_code, decision in cases:
             with self.subTest(directory=directory, pattern=pattern):
-                result = subprocess.run(
-                    ["bash", RUNNER, "gns-004", "unittest", directory, pattern],
-                    cwd=fixture,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                    timeout=30,
-                    env=dict(os.environ, GENIUS_PROOF_BACKEND="bend", BEND_BIN=BEND, BEND_NO_TELEMETRY="1"),
-                )
+                result = self.run_proof("gns-004", "unittest", directory, pattern, cwd=fixture)
                 self.assertEqual(result.returncode, exit_code, result.stderr)
                 self.assertEqual(result.stdout.strip(), decision)
+
+    def test_predictions_about_literal_parser_inputs(self):
+        cases = (
+            ("[1,]", "rejected", 0, "supported"),
+            ("[1,]", "accepted", 1, "contradicted"),
+            ("[1]", "accepted", 0, "supported"),
+            ("", "rejected", 0, "supported"),
+            ("9" * 5000, "rejected", 0, "supported"),
+            ('"line\r\nbreak"', "rejected", 0, "supported"),
+        )
+        for text, prediction, code, verdict in cases:
+            with self.subTest(text=text, prediction=prediction):
+                result = self.run_proof("gns-004", "json-parse", text, prediction)
+                self.assertEqual((result.returncode, result.stdout.strip()), (code, verdict), result.stderr)
+
+    def test_parser_version_is_matched_against_the_runner(self):
+        args = ("gns-004", "json-parse", "[1,]", "rejected")
+        observed = self.run_proof(*args)
+        version = observed.stderr.strip()
+        self.assertIn("json.loads", version)
+        for pin, code, verdict in ((version, 0, "supported"), ("another version", 2, "undecided")):
+            with self.subTest(pin=pin):
+                result = self.run_proof(*args, pin)
+                self.assertEqual((result.returncode, result.stdout.strip()), (code, verdict), result.stderr)
+
+    def test_failed_or_incomplete_parser_observer_cannot_support_a_prediction(self):
+        cases = (
+            ("echo observer-failed >&2; exit 2", "observer-failed"),
+            ("echo version-only", "version and outcome"),
+            ("printf 'version\nunknown\n'", "unknown outcome"),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            observer = Path(temporary) / "python3"
+            for command, detail in cases:
+                with self.subTest(command=command):
+                    observer.write_text("#!/bin/sh\n" + command + "\n")
+                    observer.chmod(0o755)
+                    result = self.run_proof(
+                        "gns-004", "json-parse", "[1,]", "rejected",
+                        PATH=temporary + os.pathsep + os.environ["PATH"],
+                    )
+                    self.assertEqual((result.returncode, result.stdout.strip()), (2, "unavailable"))
+                    self.assertIn(detail, result.stderr)
 
     def test_one_committed_observation_checks_two_predictions(self):
         def git(*args):
             return subprocess.check_output(["git", *args], cwd=repo, text=True).strip()
 
         def check(proof, path, expected, code, verdict, revision=None):
-            result = subprocess.run(
-                ["bash", RUNNER, proof, "git-blob", revision or commit, path, *expected],
-                cwd=repo, text=True, capture_output=True, timeout=30,
-                env=dict(os.environ, GENIUS_PROOF_BACKEND="bend", BEND_BIN=BEND),
-            )
+            result = self.run_proof(proof, "git-blob", revision or commit, path, *expected, cwd=repo)
             self.assertEqual((result.returncode, result.stdout.strip()), (code, verdict), result.stderr)
 
         with tempfile.TemporaryDirectory() as tmp:

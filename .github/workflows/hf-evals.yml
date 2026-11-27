@@ -19,9 +19,8 @@ on:
         type: string
         default: ""
       model:
-        description: Exact Inspect provider/model ID, for example hf-inference-providers/openai/gpt-oss-20b:nscale
-        default: hf-inference-providers/openai/gpt-oss-20b:nscale
-        required: true
+        description: Exact Inspect model (empty uses the repository model or GPT-OSS-20B on CoreWeave)
+        default: ""
         type: string
       dataset:
         description: Dataset adapter name
@@ -169,13 +168,15 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           HF_NAMESPACE: ${{ vars.HF_NAMESPACE || github.repository_owner }}
-          EVAL_MODEL: ${{ inputs.model || vars.EVAL_MODEL || 'hf-inference-providers/openai/gpt-oss-20b:nscale' }}
+          EVAL_MODEL: ${{ inputs.model || vars.EVAL_MODEL }}
+          REPOSITORY_MODEL: ${{ vars.EVAL_MODEL }}
+          REPOSITORY_MODEL_COST: ${{ vars.EVAL_MODEL_COST }}
           EVAL_DATASET: ${{ inputs.dataset || 'smoke' }}
           EVAL_LIMIT: ${{ inputs.limit }}
           EVAL_JOB_TIMEOUT: ${{ inputs.job_timeout || '4h' }}
           EVAL_MAX_SAMPLES: ${{ inputs.max_samples || '1' }}
           EVAL_COST_LIMIT: ${{ inputs.cost_limit || '0.25' }}
-          EVAL_MODEL_COST: ${{ inputs.model_cost || vars.EVAL_MODEL_COST }}
+          EVAL_MODEL_COST: ${{ inputs.model_cost }}
           EVAL_EPOCHS: ${{ inputs.epochs || '1' }}
           EVAL_AGENT: ${{ inputs.agent }}
           EVAL_VERSION: ${{ inputs.version }}
@@ -186,6 +187,16 @@ jobs:
           COMPARISON_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
           COMPARISON_REQUEST: ${{ inputs.comparison_request }}
         run: |
+          default_model='hf-inference-providers/openai/gpt-oss-20b:coreweave'
+          export EVAL_MODEL=${EVAL_MODEL:-$default_model}
+          if [[ -z $EVAL_MODEL_COST && $EVAL_MODEL == "$REPOSITORY_MODEL" ]]; then
+            export EVAL_MODEL_COST=$REPOSITORY_MODEL_COST
+          fi
+          if [[ -z $EVAL_MODEL_COST && $EVAL_MODEL == "$default_model" ]]; then
+            # CoreWeave serverless rates per million tokens: input, output, and cache hit.
+            # https://coreweave.com/forge-pricing/inference-agents
+            export EVAL_MODEL_COST='{"input":0.03,"output":0.13,"input_cache_write":0.03,"input_cache_read":0.03}'
+          fi
           uv run --project evals --no-sync python -m evals.python.integrations.hugging_face.compare --output evals/reports/comparison
       - name: Publish job summary
         if: always()

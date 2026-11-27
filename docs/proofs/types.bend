@@ -1,9 +1,14 @@
 import Base
 
-# A source names what was checked. A Git commit pins a historical observation.
+type ParseOutcome is Data:
+  Accepted{}
+  Rejected{}
+
+# A source identifies the exact question a reading answers.
 type Source is Data:
   CommittedFile{commit: String, path: String}
   TestSuite{run_id: String, directory: String, pattern: String}
+  ParserCase{parser_version: String, input: String}
 
 def Answer(source: Source) -> Data:
   match source:
@@ -11,6 +16,8 @@ def Answer(source: Source) -> Data:
       Maybe<&2, String>
     case TestSuite{_, _, _}:
       Bool
+    case ParserCase{_, _}:
+      ParseOutcome
 
 # The source is part of both types. A result for one source cannot be used
 # with a prediction about another. The CLI reads the actual value at its source.
@@ -45,28 +52,26 @@ type Phase is Data:
 type TraceEvent is Data:
   Entry{key: Attempt, phase: Phase}
 
+type PremiseClaim is Data:
+  Claim{number: Nat, source: Source, hypothesis: Hypothesis<source>}
+
 type Subject is Data:
   Action{number: Nat}
-  Premise{number: Nat}
+  Premise{claim: PremiseClaim}
   Output{loop: Nat, number: Nat}
-
-type Provenance is Data:
-  Direct{}
-  Derived{}
-  Directed{}
 
 type Fact is Data:
   Dependency{dependent: Subject, prerequisite: Subject}
-  Confirmation{premise: Nat, source: Provenance}
+  Reading{source: Source, actual: Answer(source)}
   ExternalLoop{actor: Nat, loop: Nat}
   Observable{actor: Nat, output: Subject}
-  DefaultEstablished{premise: Nat}
-  CascadeOccurred{action: Nat, premise: Nat}
+  DefaultEstablished{premise: PremiseClaim}
+  CascadeOccurred{action: Nat, premise: PremiseClaim}
 
 type Intervention is Data:
   Probe{output: Subject}
   Signal{output: Subject}
-  SafeguardInstalled{premise: Nat}
+  SafeguardInstalled{premise: PremiseClaim}
   NoIntervention{}
   OtherIntervention{}
 
@@ -80,7 +85,7 @@ type Context<-S: Data> is Data:
   }
 
 type ActionUse is Data:
-  Use{action: Nat, premise: Nat, viable_approaches: Nat, uncertain: Bool}
+  Use{action: Nat, premise: PremiseClaim, viable_approaches: Nat, uncertain: Bool}
 
 type ExternalUse is Data:
   UseOutput{use: ActionUse, loop: Nat, output: Nat}

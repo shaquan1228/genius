@@ -12,7 +12,11 @@ BEND = os.environ.get("BEND_BIN") or shutil.which("bend")
 MISMATCHES = {
     "without_recorded_observation": ("False{}", "True{}"),
     "without_norm": ("Empty", "Unit"),
-    "with_derived_confirmation_only": ("False{}", "True{}"),
+    "relabelled_premise": (
+        'T.Dependency{T.Action{1n}, T.Premise{T.Claim{2n, T.ParserCase{"v1", "[1,]"}, T.Predict{T.Accepted{}}}}}',
+        'T.Dependency{T.Action{1n}, T.Premise{T.Claim{2n, T.ParserCase{"v1", "[1,]"}, T.Predict{T.Rejected{}}}}}',
+    ),
+    "without_a_matching_reading_before_action": ("False{}", "True{}"),
     "without_full_enforcement_effects": (
         "@_:Spec.Predicates.Enforcement(ctx) -> Spec.Predicates.EnforcementEffects<ctx>",
         "@_:Spec.Predicates.Enforcement(ctx) -> Spec.Predicates.ValidatedAfter(ctx)",

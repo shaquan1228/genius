@@ -7,11 +7,16 @@ import ../../../docs/proofs/ooda/main.bend as Loop
 def target() -> T.Attempt:
   T.AttemptKey{7n, 2n}
 
+def observed_fact(facts: String) -> T.Phase:
+  signals: String = ""
+  constraints: String = ""
+  T.Observed{facts, signals, constraints}
+
 def history() -> List<&2, T.TraceEvent>:
-  T.Entry{T.AttemptKey{7n, 1n}, T.Observed{"earlier attempt", "", ""}} <>
-  T.Entry{T.AttemptKey{8n, 2n}, T.Observed{"different action", "", ""}} <>
+  T.Entry{T.AttemptKey{7n, 1n}, observed_fact("earlier attempt")} <>
+  T.Entry{T.AttemptKey{8n, 2n}, observed_fact("different action")} <>
   T.Entry{target(), T.Decided{}} <>
-  T.Entry{target(), T.Observed{"too late", "", ""}} <> Nil{}
+  T.Entry{target(), observed_fact("too late")} <> Nil{}
 
 def first_phase_uses_both_parts_of_the_key()
   -> {Trace.first_phase(target(), history()) == Some{T.Decided{}} : Maybe<&2, T.Phase>}:
