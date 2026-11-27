@@ -1,4 +1,5 @@
 import Base
+import ../types.bend as T
 import ./main.bend as Loop
 import ./SPEC.bend as Spec
 import ./LAWS.bend as Laws
@@ -54,19 +55,19 @@ def has_observation_agrees(+facts_empty: Bool, +signals_empty: Bool, +constraint
       (allowed => Empty.absurd(NonemptyEvidence(True{}, True{}, True{}), false_is_not_true(allowed)),
         observed => no_nonempty_evidence(observed))
 
-def phase_agrees(+phase: Loop.Phase)
+def phase_agrees(+phase: T.Phase)
   -> Agreement(Loop.is_recorded_observation(phase), Spec.RecordedObservation(phase)):
   match phase:
-    case Loop.Observed{facts, signals, constraints}:
+    case T.Observed{facts, signals, constraints}:
       has_observation_agrees(String.is_empty(facts), String.is_empty(signals), String.is_empty(constraints))
-    case Loop.Oriented{}:
+    case T.Oriented{}:
       false_agrees_with_empty()
-    case Loop.Decided{}:
+    case T.Decided{}:
       false_agrees_with_empty()
-    case Loop.Acted{}:
+    case T.Acted{}:
       false_agrees_with_empty()
 
-def first_match_agrees(+matches: Bool, +phase: Loop.Phase, -tail_result: Bool, -TailSpec: Type,
+def first_match_agrees(+matches: Bool, +phase: T.Phase, -tail_result: Bool, -TailSpec: Type,
   tail_agreement: Unit -> Agreement(tail_result, TailSpec))
   -> Agreement(Loop.check_first_match(matches, phase, _ => tail_result), Spec.FirstMatchingEvent(matches, phase, TailSpec)):
   match matches:
@@ -75,18 +76,18 @@ def first_match_agrees(+matches: Bool, +phase: Loop.Phase, -tail_result: Bool, -
     case False{}:
       tail_agreement(Unit{})
 
-def same_attempt_agrees(+attempt: Loop.Attempt, +key: Loop.Attempt)
+def same_attempt_agrees(+attempt: T.Attempt, +key: T.Attempt)
   -> {Loop.same_attempt(attempt, key) == Spec.same_attempt(attempt, key) : Bool}:
   match attempt key:
-    case Loop.AttemptKey{action, number} Loop.AttemptKey{other_action, other_number}:
+    case T.AttemptKey{action, number} T.AttemptKey{other_action, other_number}:
       {==}
 
-def history_agrees(+attempt: Loop.Attempt, +history: List<&2, Loop.TraceEvent>)
+def history_agrees(+attempt: T.Attempt, +history: List<&2, T.TraceEvent>)
   -> Agreement(Loop.observed_first(attempt, history), Spec.ObservedFirst(attempt, history)):
   match history:
     case Nil{}:
       false_agrees_with_empty()
-    case Loop.Entry{key, phase} <> tail:
+    case T.Entry{key, phase} <> tail:
       %same_attempt_agrees(attempt, key) : Agreement(
         Loop.check_first_match(Loop.same_attempt(attempt, key), phase, _ => Loop.observed_first(attempt, tail)),
         Spec.FirstMatchingEvent(_, phase, Spec.ObservedFirst(attempt, tail)))
@@ -111,7 +112,7 @@ def required_gate_agrees(+required: Bool, -observed: Bool, -Expected: Type,
   %Equal.sym(Bool, required, True{}, proof) : Agreement(Loop.allow_act(_, _ => observed), Expected)
   agreement
 
-def gate_agrees(+viable_approaches: Nat, +uncertain: Bool, +attempt: Loop.Attempt, +history: List<&2, Loop.TraceEvent>,
+def gate_agrees(+viable_approaches: Nat, +uncertain: Bool, +attempt: T.Attempt, +history: List<&2, T.TraceEvent>,
   nontrivial: Spec.NonTrivial(viable_approaches, uncertain))
   -> Agreement(Loop.observation_allows_act(viable_approaches, uncertain, attempt, history), Spec.ObservedFirst(attempt, history)):
   +multiple = Cmp.is_lt(Nat.cmp(1n, viable_approaches))

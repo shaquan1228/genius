@@ -1,6 +1,6 @@
 # Trigger map
 
-Condensed from `../../../docs/proofs/PROOF-TREE.md`. Each row says when a proof fires and the question to ask. Read the full proof for the derivation.
+Condensed from `../../../docs/proofs/PROOF-TREE.md`. Each row says when a proof fires and the question to ask. Read the full proof for the derivation. Run `bash ../scripts/prove.sh --help` (relative to this file) for executable checks and their arguments.
 
 | Proof | Fires when | Ask |
 |---|---|---|
