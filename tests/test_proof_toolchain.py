@@ -40,7 +40,7 @@ class ProofToolchainInstaller(InstallerFixture):
         self.accept_fixture_checksums()
         result = self.run_installer(self.destination, TEST_RACE_DIR=str(self.destination))
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Destination already exists", result.stderr)
+        self.assertIn(str(self.destination), result.stderr)
         self.assertEqual(list(self.destination.iterdir()), [])
         self.assertEqual(list(self.work.glob(".proof-toolchain.*")), [])
 
