@@ -7,15 +7,15 @@ def theorem(
   -DwellState: Data,
   -LoadsFork: Type,
   -Justified: Type,
-  p1: Iteration -> DwellState,
-  p3a: Logic.Conj<DwellState, LoadsFork> -> Justified,
-  p3b: Logic.Conj<DwellState, LoadsFork -> Empty> -> Justified -> Empty,
+  dwell_of_iteration: Iteration -> DwellState,
+  loading_justifies_iteration: Logic.Conj<DwellState, LoadsFork> -> Justified,
+  no_loading_rules_out_justification: Logic.Conj<DwellState, LoadsFork -> Empty> -> Justified -> Empty,
   eliminate_double_negation: ((LoadsFork -> Empty) -> Empty) -> LoadsFork,
   iteration: Iteration
 ) -> Logic.Iff<Justified, LoadsFork>:
-  +dwell = p1(iteration)
+  +dwell = dwell_of_iteration(iteration)
   Logic.Equivalence{
     justified => eliminate_double_negation(not_loading =>
-      p3b(Logic.Conjunction{dwell, not_loading}, justified)),
-    loading => p3a(Logic.Conjunction{dwell, loading})
+      no_loading_rules_out_justification(Logic.Conjunction{dwell, not_loading}, justified)),
+    loading => loading_justifies_iteration(Logic.Conjunction{dwell, loading})
   }
