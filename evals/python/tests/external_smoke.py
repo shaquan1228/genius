@@ -30,7 +30,9 @@ def default_smoke_uses_python_owned_cases() -> None:
     dataset = datasets.load_dataset()
     assert dataset is datasets.compile_dataset(cases=definitions)
     assert tuple(dataset.cases) == SMOKE
-    assert tuple(_files(dataset.cases["clear-task"].files)) == ("receipt.py", "test_receipt.py")
+    assert {"receipt.py", "test_receipt.py", "observe_suite.py"} <= _files(
+        dataset.cases["clear-task"].files
+    ).keys()
 
 
 def python_smoke_keeps_checks_and_references_private() -> None:

@@ -42,6 +42,7 @@ class VariantSettings(Profile):
     preamble: str = GENIUS.preamble
     source_dir: str | None = None
     source_ref: str | None = None
+    proof_backend: Literal["markdown", "bend"] | None = None
 
 
 class EvaluationSettings(BaseModel):

@@ -175,6 +175,28 @@ def existing_dispatch_state_is_preserved(api: MagicMock, *, tmp_path: Path) -> N
     assert (tmp_path / "jobs.json").read_text() == "existing"
 
 
+def reasoning_recipe_uses_workflow_settings() -> None:
+    recipe = Path(__file__).resolve().parents[2] / "comparisons/reasoning.json"
+    environment = {
+        "COMPARISON_REQUEST": recipe.read_text(),
+        "COMPARISON_ID": "paired-trial",
+        "EVAL_MODEL": "openai/test",
+        "EVAL_DATASET": "reasoning",
+        "EVAL_EPOCHS": "3",
+    }
+    with patch.dict("os.environ", environment, clear=True):
+        request = compare.request_from_environment()
+    assert (request.comparison_id, request.shared.dataset, request.shared.epochs) == (
+        "paired-trial",
+        "reasoning",
+        3,
+    )
+    assert [(v.variant.source_ref, v.variant.proof_backend) for v in request.variants] == [
+        ("HEAD", "markdown"),
+        ("HEAD", "bend"),
+    ]
+
+
 @pytest.mark.parametrize("provider", ["openai", "anthropic"])
 def request_uses_existing_environment_configuration(provider: str) -> None:
     with patch.dict(

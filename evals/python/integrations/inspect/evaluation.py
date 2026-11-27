@@ -63,13 +63,8 @@ def variant_experiment(spec: Experiment, *, request: EvaluationSettings) -> Expe
 
 def evaluation_tasks(spec: Experiment, *, request: EvaluationSettings) -> list[Task]:
     spec = variant_experiment(spec, request=request)
-    source_dir = request.variant.source_dir if request.variant else None
     catalog = datasets.load_dataset(selection=request.dataset)
-    documents = (
-        profile_adapter.load_documents(spec)
-        if source_dir is None
-        else profile_adapter.load_documents(spec, source_dir=source_dir)
-    )
+    documents = profile_adapter.variant_documents(spec, variant=request.variant)
     build = partial(
         task_adapter.build_task,
         spec=spec,
