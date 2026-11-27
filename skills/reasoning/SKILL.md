@@ -40,3 +40,13 @@ The work ships only if all of these hold:
 3. Complete the clear task. For extra investigation, name the decision it could change. If none exists, stop investigating (GNS-005).
 4. Take one step. Check it against GNS-003 and GNS-004 before you commit it. Repeat until the goal is reached (GNS-002).
 5. Run the validator. Report in Communicating shape. Check the report against Evaluate.
+
+### Python unittest completion claims
+
+When the chosen validator is a Python `unittest` discovery suite, run this from the checkout immediately before claiming that suite passed. Resolve the script path relative to this skill file.
+
+```sh
+python3 <skill-directory>/scripts/check-tests.py --start-directory <suite-directory>
+```
+
+The script runs the named suite and checks its result with the GNS-004 Bend gate. Use `confirmed` as evidence for the suite named in the result. With `needs_evidence`, report the failure or missing evidence and withhold the pass claim. With `unavailable`, report why the gate could not decide and cite any independently observed validator result separately. Run the script again after edits before making a fresh pass claim.

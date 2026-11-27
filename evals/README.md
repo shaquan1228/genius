@@ -105,6 +105,33 @@ Delivery diagnostics currently support reasoning cases.
 Inspect logs retain scores, verifier evidence, crashes, and cutoffs. Parent logs
 include sample lifecycle events and a final completeness report.
 
+## Evaluate the reasoning completion gate
+
+With Bend 2.0.40 installed, run the gate and an exit-status-only control over
+the same local `unittest` fixtures:
+
+```sh
+BEND_BIN=/path/to/bend python3 evals/scripts/reasoning_gate.py
+```
+
+The fixtures cover passing tests, passing tests with skips, failures, import
+errors, empty and skipped suites, a missing suite, and misleading reports from
+an older run or a different suite.
+
+To compare the original reasoning skill with the gate-enabled skill, use an
+authenticated Codex CLI and a fixed model and baseline commit:
+
+```sh
+BEND_BIN=/path/to/bend python3 evals/scripts/reasoning_gate.py \
+  --baseline-ref <commit-before-the-pilot> --model <model-id> --repeats 3
+```
+
+The paired comparison gives both arms fresh copies of the same fixtures.
+It scores completion claims against the fixture result and observed verifier
+calls, and reports unsupported claims, withheld valid claims, and run errors.
+The offline control measures the runner and gate behavior. The live arm
+measures agent behavior under the skill instructions.
+
 ## Use from Python
 
 Run Python under the same opam switch as the setup commands.
