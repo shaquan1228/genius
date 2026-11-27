@@ -18,13 +18,12 @@ from evals.python.integrations.hugging_face.job import configuration
 def workflow_request(raw: str, *, comparison_id: str) -> ComparisonRequest:
     fields = TypeAdapter(dict[str, JsonValue]).validate_json(raw)
     fields.setdefault("comparison_id", comparison_id)
+    shared = fields.get("shared")
     if "shared" not in fields:
         fields["shared"] = configuration(os.environ).model_dump(mode="json")
-    request = ComparisonRequest.model_validate_json(json.dumps(fields))
-    image = request.shared.sandbox_image or os.environ.get("EVAL_SANDBOX_IMAGE", "")
-    return request.model_copy(
-        update={"shared": request.shared.model_copy(update={"sandbox_image": image})}
-    )
+    elif isinstance(shared, dict) and shared.get("sandbox_image", "") == "":
+        shared["sandbox_image"] = os.environ.get("EVAL_SANDBOX_IMAGE", "")
+    return ComparisonRequest.model_validate_json(json.dumps(fields))
 
 
 def request_from_environment() -> ComparisonRequest:

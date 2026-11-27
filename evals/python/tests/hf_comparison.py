@@ -12,8 +12,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from huggingface_hub import HfApi
+from pydantic import ValidationError
 
-from evals.python import comparison, evaluation
+from evals.python import EVALS_ROOT, comparison, evaluation
 from evals.python.comparison import (
     ComparisonReport,
     ComparisonRequest,
@@ -176,7 +177,7 @@ def existing_dispatch_state_is_preserved(api: MagicMock, *, tmp_path: Path) -> N
 
 
 def reasoning_recipe_uses_workflow_settings() -> None:
-    recipe = Path(__file__).resolve().parents[2] / "comparisons/reasoning.json"
+    recipe = EVALS_ROOT / "comparisons/reasoning.json"
     environment = {
         "COMPARISON_REQUEST": recipe.read_text(),
         "COMPARISON_ID": "paired-trial",
@@ -220,20 +221,21 @@ def request_uses_existing_environment_configuration(provider: str) -> None:
     ],
 )
 def explicit_request_json_is_preserved(requested: str, *, published: str, expected: str) -> None:
-    request = _request()
-    request = request.model_copy(
-        update={"shared": request.shared.model_copy(update={"sandbox_image": requested})}
-    )
-    environment = {"COMPARISON_REQUEST": request.model_dump_json(), "EVAL_SANDBOX_IMAGE": published}
+    fields = _request().model_dump(mode="json")
+    fields["shared"]["sandbox_image"] = requested
+    environment = {"COMPARISON_REQUEST": json.dumps(fields), "EVAL_SANDBOX_IMAGE": published}
     with patch.dict("os.environ", environment, clear=True):
         resolved = compare.request_from_environment()
-    assert resolved.shared.sandbox_image == expected
-    assert (
-        resolved.model_copy(
-            update={"shared": resolved.shared.model_copy(update={"sandbox_image": requested})}
-        )
-        == request
-    )
+    fields["shared"]["sandbox_image"] = expected
+    assert resolved.model_dump(mode="json") == fields
+
+
+@pytest.mark.parametrize("shared", [None, {"model": "openai/test", "sandbox_image": False}])
+def workflow_defaults_preserve_validation_errors(shared: object) -> None:
+    fields = _request().model_dump(mode="json")
+    fields["shared"] = shared
+    with pytest.raises(ValidationError, match="shared"):
+        compare.workflow_request(json.dumps(fields), comparison_id="request")
 
 
 def _repository(path: Path) -> None:
