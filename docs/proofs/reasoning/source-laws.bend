@@ -2,7 +2,6 @@ import Base
 import ../types.bend as T
 import ./history.bend as History
 
-# Each law pins the identity fields and the value a matching reading must return.
 def file_reading(+commit: String, +path: String, +recorded_commit: String, +recorded_path: String,
   +blob: Maybe<&2, String>) -> {
     History.from_fact(T.CommittedFile{commit, path}, T.Reading{T.CommittedFile{recorded_commit, recorded_path}, blob}) ==
@@ -27,7 +26,6 @@ def parser_reading(+version: String, +input: String, +recorded_version: String, 
     : T.Observation<T.ParserCase{version, input}>}:
   {==}
 
-# Sources of different kinds never answer one another's questions.
 def DifferentKind(asked: T.Source, recorded: T.Source) -> Data:
   match asked recorded:
     case T.ParserCase{_, _} T.ParserCase{_, _}: Empty
