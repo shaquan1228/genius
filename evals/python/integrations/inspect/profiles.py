@@ -11,7 +11,7 @@ from types import MappingProxyType
 from inspect_ai.dataset import Sample
 
 from evals.python import REPO_ROOT, Case, Experiment, Profile
-from evals.python.evaluation import InstructionDelivery, ProofBackend
+from evals.python.evaluation import InstructionDelivery, VariantSettings
 
 REASONING_DOCUMENTS = (
     "skills/reasoning/SKILL.md",
@@ -21,20 +21,23 @@ REASONING_DOCUMENTS = (
 )
 
 
-def load_documents(
-    spec: Experiment, *, source_dir: str | None = None, proof_backend: ProofBackend | None = None
-) -> Mapping[str, bytes]:
+def load_documents(spec: Experiment, *, source_dir: str | None = None) -> Mapping[str, bytes]:
     root = Path(source_dir).resolve() if source_dir is not None else REPO_ROOT
     documents = {
         f"instructions/{path.relative_to(root).as_posix()}": path.read_bytes()
         for path in instruction_files(spec, root=root)
     }
-    if proof_backend is not None:
-        flag = "instructions/skills/reasoning/proof-backend"
-        if flag not in documents:
-            raise ValueError("A proof_backend requires the reasoning skill's proof-backend file")
-        documents[flag] = f"{proof_backend}\n".encode()
     return MappingProxyType(documents)
+
+
+def variant_documents(spec: Experiment, *, variant: VariantSettings | None) -> Mapping[str, bytes]:
+    documents = load_documents(spec, source_dir=variant.source_dir if variant else None)
+    if variant is None or variant.proof_backend is None:
+        return documents
+    flag = "instructions/skills/reasoning/proof-backend"
+    if flag not in documents:
+        raise ValueError("A proof_backend requires the reasoning skill's proof-backend file")
+    return MappingProxyType({**documents, flag: f"{variant.proof_backend}\n".encode()})
 
 
 def instruction_files(spec: Experiment, *, root: Path) -> Iterator[Path]:
