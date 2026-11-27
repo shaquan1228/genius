@@ -6,10 +6,13 @@ usage() {
 Usage: prove.sh postulate-001 git-blob COMMIT PATH
        prove.sh gns-004 git-blob COMMIT PATH EXPECTED_BLOB
        prove.sh gns-004 unittest DIRECTORY [PATTERN]
+       prove.sh gns-004 json-parse INPUT accepted|rejected [PARSER_VERSION]
 
 Use a full object ID resolving to a commit and a repository-relative path.
 A completed lookup tells you whether that path names a blob. An unreadable
 commit leaves the question undecided. unittest checks whether the suite passed.
+json-parse checks the literal input with the installed Python JSON parser.
+You can pin the parser version printed by the observer.
 
 The markdown backend prints the rule and the source observation for you to
 interpret. A completed suite prints its run ID. A successful Git lookup with
@@ -48,6 +51,11 @@ case "$proof/$source" in
     esac
     program=check-file.bend
     ;;
+  gns-004/json-parse)
+    [[ $# == 2 || ( $# == 3 && -n $3 ) ]] || invalid
+    [[ $2 == accepted || $2 == rejected ]] || invalid
+    program=check-parser.bend
+    ;;
   gns-004/unittest)
     [[ $# == 1 || $# == 2 ]] || invalid
     pattern=${2-test*.py}
@@ -72,6 +80,13 @@ case "${GENIUS_PROOF_BACKEND-$backend}" in
     cat -- "$rule"
     printf '\nSource observation (%s)\n' "$source"
     case "$source" in
+      json-parse)
+        printf 'Parser input: %q\n' "$1"
+        if [[ $# == 3 ]]; then
+          printf 'Requested parser version: %s\n' "$3"
+        fi
+        printf '%s' "$1" | python3 -I -B "$scripts/observe_json.py"
+        ;;
       unittest)
         exec python3 -I -B "$scripts/observe_suite.py" "$@"
         ;;

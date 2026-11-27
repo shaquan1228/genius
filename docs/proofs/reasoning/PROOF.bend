@@ -1,93 +1,24 @@
 import Base
 import ../logic.bend as Logic
-import ./confirmation.bend as Confirmation
+import ./latest.bend as Latest
+import ./source-laws.bend as Sources
+import ./observation.bend as Obs
 import ../types.bend as T
 import ./main.bend as Model
 import ./SPEC.bend as Spec
 import ./LAWS.bend as Laws
 
-def search_found(
-  +matches: Bool,
-  -rest: Bool,
-  -Here: Data,
-  -Later: Data,
-  here: {matches == True{}: Bool} -> Here,
-  later: {rest == True{}: Bool} -> Later,
-  found: {List.any.if(_ => rest, matches) == True{}: Bool}
-)
-  -> Either<&2, &2, Here, Later>:
-  match matches:
-    case True{}:
-      Inl{here({==})}
-    case False{}:
-      Inr{later(found)}
-
-def direct_confirmation_sound(
-  +premise: Nat,
-  +facts: List<&2, T.Fact>,
-  found: {Model.has_direct_confirmation(premise, facts) == True{}: Bool}
-)
-  -> Spec.Predicates.ValidatedAt(premise, facts):
-  match facts:
-    case Nil{}:
-      Logic.false_is_not_true(found)
-    case head <> tail:
-      search_found(
-        Model.confirmation_matches(premise, head),
-        Model.has_direct_confirmation(premise, tail),
-        Confirmation.ConfirmationMatch(premise, head),
-        Spec.Predicates.ValidatedAt(premise, tail),
-        matches => Confirmation.confirmation_match_sound(premise, head, matches),
-        rest => direct_confirmation_sound(premise, tail, rest),
-        found
-      )
-
-def search_succeeds_at_head(+matches: Bool, -rest: Bool, found: {matches == True{}: Bool})
-  -> {List.any.if(_ => rest, matches) == True{}: Bool}:
-  %Equal.sym(Bool, matches, True{}, found): {List.any.if(_ => rest, _) == True{}: Bool}
-  {==}
-
-def search_succeeds_in_tail(matches: Bool, -rest: Bool, found: {rest == True{}: Bool})
-  -> {List.any.if(_ => rest, matches) == True{}: Bool}:
-  match matches:
-    case True{}:
-      {==}
-    case False{}:
-      found
-
-def direct_confirmation_complete(
-  +premise: Nat,
-  +facts: List<&2, T.Fact>,
-  confirmed: Spec.Predicates.ValidatedAt(premise, facts)
-)
-  -> {Model.has_direct_confirmation(premise, facts) == True{}: Bool}:
-  match facts:
-    case Nil{}:
-      match confirmed:
-    case head <> tail:
-      match confirmed:
-        case Inl{equal}:
-          search_succeeds_at_head(
-            Model.confirmation_matches(premise, head),
-            Model.has_direct_confirmation(premise, tail),
-            Confirmation.confirmation_match_complete(premise, head, equal)
-          )
-        case Inr{in_tail}:
-          search_succeeds_in_tail(
-            Model.confirmation_matches(premise, head),
-            Model.has_direct_confirmation(premise, tail),
-            direct_confirmation_complete(premise, tail, in_tail)
-          )
-
 def Laws.gns004_independent_premise_validation(ctx, applicable, allowed):
   match ctx:
-    case T.Frame{_, T.Use{_, premise, _, _}, before, _, _}:
-      direct_confirmation_sound(premise, before, allowed)
+    case T.Frame{_, T.Use{_, T.Claim{_, source, hypothesis}, _, _}, before, _, _}:
+      Logic.agreement_sound(Obs.supported(Model.verdict(source, hypothesis, before)), Latest.Evidence(source, hypothesis, before),
+        Latest.lookup_agrees(source, hypothesis, before), allowed)
 
 def Laws.gns004_validation_gate_complete(ctx, applicable, confirmed):
   match ctx:
-    case T.Frame{_, T.Use{_, premise, _, _}, before, _, _}:
-      direct_confirmation_complete(premise, before, confirmed)
+    case T.Frame{_, T.Use{_, T.Claim{_, source, hypothesis}, _, _}, before, _, _}:
+      Logic.agreement_complete(Obs.supported(Model.verdict(source, hypothesis, before)), Latest.Evidence(source, hypothesis, before),
+        Latest.lookup_agrees(source, hypothesis, before), confirmed)
 
 def eliminate_alternatives(
   -ctx: T.Context<T.ExternalUse>,

@@ -28,5 +28,8 @@ def observation_allows_act(viable_approaches: Nat, uncertain: Bool, attempt: T.A
 
 def main() -> Bool:
   +attempt: T.Attempt = T.AttemptKey{1n, 1n}
-  history: List<&2, T.TraceEvent> = T.Entry{attempt, T.Observed{"The input has two viable approaches", "", ""}} <> Nil{}
+  facts: String = "The input has two viable approaches"
+  signals: String = ""
+  constraints: String = ""
+  history: List<&2, T.TraceEvent> = T.Entry{attempt, T.Observed{facts, signals, constraints}} <> Nil{}
   observation_allows_act(2n, False{}, attempt, history)

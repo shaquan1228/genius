@@ -1,37 +1,23 @@
 import Base
 import ../types.bend as T
+import ./history.bend as History
+import ./observation.bend as Obs
 
 def action_context(ctx: T.Context<T.ExternalUse>) -> T.Context<T.ActionUse>:
   match ctx:
     case T.Frame{actor, T.UseOutput{use, _, _}, before, after, intervention}:
       T.Frame{actor, use, before, after, intervention}
 
-def confirmation_matches(premise: Nat, fact: T.Fact) -> Bool:
-  match fact:
-    case T.Confirmation{confirmed, T.Direct{}}:
-      Nat.is_eq(premise, confirmed)
-    case other:
-      False{}
-
-def has_direct_confirmation(+premise: Nat, facts: List<&2, T.Fact>) -> Bool:
-  match facts:
-    case Nil{}:
-      False{}
-    case head <> tail:
-      List.any.if(_ => has_direct_confirmation(premise, tail), confirmation_matches(premise, head))
+def verdict(+source: T.Source, hypothesis: T.Hypothesis<source>, history: List<&2, T.Fact>) -> T.Verdict:
+  Obs.check(source, hypothesis, History.answer_to(source, history))
 
 def premise_gate(ctx: T.Context<T.ActionUse>) -> Bool:
   match ctx:
-    case T.Frame{_, T.Use{_, premise, _, _}, before, _, _}:
-      has_direct_confirmation(premise, before)
+    case T.Frame{_, T.Use{_, T.Claim{_, source, hypothesis}, _, _}, before, _, _}:
+      Obs.supported(verdict(source, hypothesis, before))
 
 def main() -> Bool:
-  premise_gate(
-    T.Frame{
-      1n,
-      T.Use{2n, 3n, 2n, False{}},
-      T.Confirmation{3n, T.Direct{}} <> Nil{},
-      Nil{},
-      T.NoIntervention{}
-    }
-  )
+  +source: T.Source = T.ParserCase{"parser-v1", "[1,]"}
+  premise: T.PremiseClaim = T.Claim{3n, source, T.Predict{T.Rejected{}}}
+  premise_gate(T.Frame{1n, T.Use{2n, premise, 2n, False{}},
+    T.Reading{source, T.Rejected{}} <> Nil{}, Nil{}, T.NoIntervention{}})

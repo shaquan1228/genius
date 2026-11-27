@@ -1,6 +1,6 @@
 # Trigger map
 
-Condensed from `../../../docs/proofs/PROOF-TREE.md`. Each row says when a proof fires and the question to ask. Read the full proof for the derivation. Use the commands in the skill's [Iterate step](../SKILL.md#iterate) to check unittest suites and Git blobs with `prove.sh`.
+Condensed from `../../../docs/proofs/PROOF-TREE.md`. Each row says when a proof fires and the question to ask. Read the full proof for the derivation. Use the commands in the skill's [Iterate step](../SKILL.md#iterate) to check unittest suites, JSON parser inputs, and Git blobs with `prove.sh`.
 
 | Proof | Fires when | Ask |
 |---|---|---|

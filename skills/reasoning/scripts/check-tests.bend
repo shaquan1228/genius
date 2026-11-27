@@ -1,13 +1,7 @@
 import Base
 import ../../../docs/proofs/types.bend as T
 import ./report.bend as Report
-
-# Resolve the observer from the installed checker, independent of the test checkout.
-def observer_path(program: String) -> String:
-  parts = List.reverse(&2, String, String.split(program, '/'))
-  parents = List.drop(&2, String, parts, 1n)
-  directory = String.join(List.reverse(&2, String, parents), "/")
-  directory ++ "/observe_suite.py"
+import ./observer.bend as Observer
 
 # The observer writes a fresh run ID only after unittest returns a result.
 def checked_run(directory: String, pattern: String, run_id: String, passed: Bool) -> IO(Unit):
@@ -36,7 +30,7 @@ def report(directory: String, pattern: String,
 def run(program: String, +directory: String, +pattern: String) -> IO(Unit):
   do IO<Unit>:
     answer: Result<&1, &1, U32 & String, U32 & (String & String)> <- Process.run(
-      "python3", ["-I", "-B", observer_path(program), directory, pattern], "", 2097152, 120000)
+      "python3", ["-I", "-B", Observer.path(program, "observe_suite.py"), directory, pattern], "", 2097152, 120000)
     report(directory, pattern, answer)
 
 def arguments(args: List<String>) -> IO(Unit):
