@@ -13,7 +13,6 @@ __all__ = [
     "InstructionDelivery",
     "ModelPricing",
     "Profile",
-    "ProofBackend",
     "VariantSettings",
     "evaluate",
     "prepare_run",
@@ -24,7 +23,6 @@ __all__ = [
 
 
 type InstructionDelivery = Literal["files", "manifest", "inline"]
-type ProofBackend = Literal["markdown", "bend"]
 
 
 class ModelPricing(BaseModel):
@@ -44,7 +42,7 @@ class VariantSettings(Profile):
     preamble: str = GENIUS.preamble
     source_dir: str | None = None
     source_ref: str | None = None
-    proof_backend: ProofBackend | None = None
+    proof_backend: Literal["markdown", "bend"] | None = None
 
 
 class EvaluationSettings(BaseModel):

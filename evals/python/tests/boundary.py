@@ -54,7 +54,6 @@ OWNER_TYPES = {
         "ModelPricing",
         "InstructionDelivery",
         "Profile",
-        "ProofBackend",
         "VariantSettings",
     },
     "comparison": {
