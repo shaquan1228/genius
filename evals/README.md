@@ -2,8 +2,10 @@
 
 Evaluate instruction variants with [Inspect AI](https://inspect.aisi.org.uk/)
 and [Inspect SWE](https://meridianlabs-ai.github.io/inspect_swe/).
-The bundled datasets are a smoke suite and the 164-problem HumanEval+ benchmark.
-Use `python -m evals.python.integrations.hugging_face.compare --help` to compare variants or reuse saved runs.
+The bundled smoke suite covers structured answers and repository edits.
+HumanEval+ and PokerBench are downloaded on demand from pinned sources.
+Use `uv run --project evals python -m evals.python.integrations.hugging_face.compare --help`
+to compare variants or reuse saved runs.
 
 Comparison requests use schema 2: `variants` contains two or more uniquely named
 `VariantRequest` values; `baseline` selects one name. A variant's `result_ref` reuses
@@ -18,50 +20,54 @@ The `benchmark` PR label launches independent HF jobs and reports accuracy and m
 
 | Path | Contains |
 | --- | --- |
-| `ocaml/` | Domain types, validation, grading, and `.ocamlformat` configuration |
-| `ocaml/tools/` | Build executables for source provenance and binding generation |
 | `python/` | Dataset loading, evaluation workflows, and integrations |
-| `python/kernel/` | The installed Python package `kernel` and its binding-generation support |
+| `python/datasets/` | Smoke declarations and benchmark adapters |
 | `python/tests/` | Python tests and their `conftest.py` collection hook |
 
-The shared Makefile, Dune project, and Python package configuration live at this root.
+The Genius Bench kernel owns task validation and grading. The Python package is
+installed as `genius-bench-kernel` and imported as `kernel`.
+[Genius Bench](https://github.com/shaquan1228/genius-bench)
 
 ## Check the harness offline
 
-Run `make -C evals setup` for locked CPython 3.12 dependencies and the required OCaml 4.14.2 native switch.
-`make -C evals check-install` tests installation outside the checkout and measures import time, dataset loading, and memory.
-HumanEval+ loads eagerly and retains eight cached snapshots; release them with `datasets.clear_cache()`.
-
-Install opam, [uv](https://docs.astral.sh/uv/), Git, Make, and a C compiler.
-Run from the repository root:
+Install [uv](https://docs.astral.sh/uv/), Git, Make, and a C compiler and linker.
+Setup uses CPython 3.12. The lockfile pins Genius Bench to a Git commit, so the
+first install builds the Python binding from source. Maturin can provision Rust
+when Cargo is unavailable. Run from the repository root.
 
 ```sh
 make -C evals setup
-opam install --switch genius-kernel-414 --yes ocamlformat.0.29.0
-opam exec --switch=genius-kernel-414 -- make -C evals check
+make -C evals check
+make -C evals check-install
 ```
 
-The offline checks use mock models and local sandboxes; no API keys are needed.
-Use `make -C evals format` under the same opam switch to apply formatting.
+The checks use mock models and local sandboxes and require no API keys.
+Inspect can download tokenizer data on the first run.
+`check-install` installs the built package outside the checkout, runs the smoke
+references, and reports the kernel version and source hash alongside install
+measurements. Use `make -C evals format` to apply formatting.
 
-With Docker running, check three offline container evals and candidate/grader isolation:
-`opam exec --switch=genius-kernel-414 -- uv run --project evals pytest evals/tests/docker.py`.
-[Container configuration](docker/compose.yaml) disables networking; live CLI agents need separate proxy setup.
-The subprocess `local` backend is for trusted code. Docker shares its host kernel; workspace volumes have no disk quota.
+With Docker running, use `uv run --project evals pytest evals/tests/docker.py`
+to check three offline container evals and candidate/grader isolation.
+The container configuration disables networking. Live CLI agents need separate
+proxy setup. [Container configuration](docker/compose.yaml)
+
+The subprocess `local` backend is for trusted code. Docker shares its host
+kernel, and workspace volumes have no disk quota.
 
 ## Validate references
 
-These commands make no model calls or hosted requests:
+These commands make no model calls. HumanEval+ validation downloads the pinned
+dataset on first use and checks its checksum.
 
 ```sh
-opam exec --switch=genius-kernel-414 -- uv run --project evals python -m evals.python.integrations.smoke
-opam exec --switch=genius-kernel-414 -- uv run --project evals python -m evals.python.integrations.evalplus.benchmarks info
-opam exec --switch=genius-kernel-414 -- uv run --project evals python -m evals.python.integrations.evalplus.benchmarks validate --limit 3
+uv run --project evals python -m evals.python.integrations.smoke
+uv run --project evals python -m evals.python.integrations.evalplus.benchmarks info
+uv run --project evals python -m evals.python.integrations.evalplus.benchmarks validate --limit 3
 ```
 
-HumanEval+ downloads are pinned and checksum verified by `python/datasets/humanevalplus.py`.
-Its `HumanEval/32` reference
-fails the pinned official evaluator; full reference validation therefore exits nonzero.
+Full HumanEval+ reference validation exits nonzero because the `HumanEval/32`
+reference fails the pinned official evaluator.
 
 ## Run on Hugging Face
 
@@ -85,7 +91,7 @@ private `genius-eval-results` bucket in your HF namespace. Commit changes before
 | Setting | Usage |
 | --- | --- |
 | `EVAL_MODEL` | `openai/...`, `anthropic/...`, or `hf-inference-providers/...` |
-| `EVAL_DATASET` | `smoke` (default) or `humanevalplus` |
+| `EVAL_DATASET` | `smoke` (default), `humanevalplus`, or `pokerbench` |
 | `EVAL_LIMIT` | Maximum cases per profile; omit for the full dataset |
 | `EVAL_SAMPLE_IDS` | JSON list of unique case IDs; use instead of `EVAL_LIMIT` |
 | `EVAL_EPOCHS` | Repeats per case; the hosted launcher defaults to `1` |
@@ -107,7 +113,7 @@ include sample lifecycle events and a final completeness report.
 
 ## Use from Python
 
-Run Python under the same opam switch as the setup commands.
+Run Python with `uv run --project evals python` from the repository root.
 
 ```python
 from evals.python import datasets
@@ -116,56 +122,40 @@ dataset = datasets.load_dataset(selection="smoke")
 cases = datasets.list_cases(selection=dataset)
 ```
 
-For dataset authoring, start with [datasets/smoke.toml](python/datasets/smoke.toml).
-Use `datasets.compile_dataset(cases=...)` to work with your own declarations.
+Edit `smoke.toml` to add a smoke case, or pass your own `Declaration` records to
+`datasets.compile_dataset(cases=...)`. Each declaration pairs a Genius skill name
+with a validated native `Task`. Use `datasets.clear_cache()` to release cached
+dataset snapshots. [Smoke declarations](python/datasets/smoke.toml)
 
-Each domain component owns its type and constructors in its OCaml `.ml` and `.mli` files.
-The public binding interface is generated from those compiled owner contracts.
-Constrained records and alternatives are private:
-Python authors use `Task.create(...)`, `Verifier.create(...)`, `Instruction.create(...)`,
-`TextRule.create(...)`, and `Rubric.create(...)`. These factories return immutable native
-values after checking their invariants. Raw representations stay inside the OCaml
-implementation; projections and graders accept the validated values directly.
-
-`Rubric.create(expected=...)` accepts a checked `Response`. Create responses with
-`Response.create(fields=[ResponseField.create(name="choice", value=ResponseValue.create(string="B"))])`.
-Structured reference completions use `Completion.create(structured=...)`; fields remain readable through
-`response.fields`. Resource resolution returns a new validated task and preserves the
-original declaration.
-
-Alternative factories require exactly one named input: `Content.create(inline="text")` or
-`Content.create(resource="checker")`, and `Completion.create(plain="done")` or
-`Completion.create(structured=response)`. The OCaml owner checks that contract; generated
-Python overloads reject both or neither input during type checking. Named payloads remain
-available for inspection, such as `content.text` and `completion.response`.
-
-The `kernel` package exports types and exceptions. Operations belong to those types:
-`Case.create(task=...)`, `Task.grade(task=..., response=..., outcome=...)`,
-`Fixture.files(fixture=...)`, and `Experiment.resolve(...)`. Compiled source provenance
-is available through the native `Kernel.current` value and its `sources` collection.
-Bindings adapt native results and named calls without duplicating domain policy.
-
-Inspect calls loaded skill files `documents`; their path-to-bytes mapping stays local
-to the file and SDK adapter. `Instruction` remains the core task's skill and prompt.
+Genius collects the response, changed files, and verifier status in an
+`Outcome`. `Task.grade(outcome=...)` scores that outcome and
+`Task.grade_reference(verification=...)` scores the stored reference.
+For example, this answer case earns correctness for an integer answer of 42
+and fails scope if the candidate edits a file.
 
 ```python
-from kernel import ValidationError, Verifier
+from kernel import Criterion, Instruction, Outcome, Reference, Rubric, Task, Verification
 
-try:
-    Verifier.create(
-        inputs=("solution.py",), files=(), tools=(), command=(), stdin="", timeout_seconds=0
-    )
-except ValidationError as error:
-    for issue in error.issues:
-        print(issue.code, issue.field, issue.message, tuple(issue.values))
+task = Task(
+    id="multiply",
+    fixture=[],
+    instruction=Instruction(prompt='What is six times seven? Reply with {"answer": <number>}.'),
+    criterion=Criterion.Answer(rubric=Rubric(expected=[("answer", 42)], text_rule=None)),
+    allowed_files=(),
+    reference=Reference(edits=[], completion={"answer": 42}),
+)
+outcome = Outcome(
+    response={"answer": 42},
+    changed_files=["extra.txt"],
+    verification=Verification.Unchecked(),
+    facts=(),
+)
+print(dict(task.grade(outcome=outcome)))
 ```
 
-The OCaml constructors return typed `result` values. The generated native Python adapter
-unwraps successful results and raises `ValidationError` with native issues on rejected
-input. A verifier harness malfunction raises `GradingError`, retaining its native failure
-in `error.error`; an incorrect or malformed candidate answer receives an unsuccessful
-correctness score. Domain objects and errors cross the in-process bridge directly.
-Runtime JSON decoding remains at external text boundaries such as candidate responses.
-
-The pinned bridge patch preserves private-record construction restrictions, distinct
-polymorphic result parameters, and domain type context while adapting result payloads.
+Invalid declarations raise `ValidationError` with field-level `issues`.
+A verifier harness failure raises `GradingError`. Candidate answers that fail
+the rubric receive a false correctness score.
+Inspect logs record the kernel's source hash as part of run provenance.
+After a kernel upgrade, rerun both variants to compare them under the same grader.
+[Genius Bench Python binding](https://github.com/shaquan1228/genius-bench/tree/main/bindings/python)

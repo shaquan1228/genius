@@ -1,9 +1,8 @@
 """Runner-independent verification policy over immutable execution capabilities."""
 
-from collections.abc import Sequence
 from secrets import token_hex
 
-from kernel import SourceFile, Task, Verification, Verifier
+from kernel import Task, Verification, Verifier
 from pydantic import InstanceOf, validate_call
 
 from evals.python import FROZEN, execution
@@ -79,12 +78,9 @@ async def verify(
         return VerificationResult(verification=Verification.HarnessError(detail=str(error)))
 
 
-async def stage_reference(fixture: Sequence[SourceFile], *, agent: Environment) -> None:
-    result = await agent.execute(Execution(command=("mkdir", "-p", "workspace")))
-    if result.returncode != 0:
-        raise RuntimeError(f"Could not create reference workspace: {result.stderr}")
-    for file in fixture:
-        await agent.write_bytes(f"workspace/{file.path}", file.contents.encode())
+def _reference_inputs(task: Task, *, checks: Verifier) -> dict[str, bytes]:
+    files = {file.path: file.contents for file in (*task.fixture, *task.reference.edits)}
+    return {name: files[name].encode() for name in checks.inputs}
 
 
 @validate_call(config=FROZEN)
@@ -98,8 +94,8 @@ async def validate_reference(
         return VerificationResult(verification=Verification.Unchecked())
     runtime = runtime or execution.create_runtime()
     try:
-        async with execution.allocated(runtime) as agent:
-            await stage_reference(task.reference.edits, agent=agent)
-            return await verify(checks, agent=agent, runtime=runtime)
+        inputs = _reference_inputs(task, checks=checks)
+        async with execution.allocated(runtime) as grader:
+            return await _execute(checks, grader=grader, inputs=inputs)
     except Exception as error:
         return VerificationResult(verification=Verification.HarnessError(detail=str(error)))
