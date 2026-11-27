@@ -85,7 +85,7 @@ private `genius-eval-results` bucket in your HF namespace. Commit changes before
 | Setting | Usage |
 | --- | --- |
 | `EVAL_MODEL` | `openai/...`, `anthropic/...`, or `hf-inference-providers/...` |
-| `EVAL_DATASET` | `smoke` (default) or `humanevalplus` |
+| `EVAL_DATASET` | `smoke` (default), `humanevalplus`, or `reasoning_gate` |
 | `EVAL_LIMIT` | Maximum cases per profile; omit for the full dataset |
 | `EVAL_SAMPLE_IDS` | JSON list of unique case IDs; use instead of `EVAL_LIMIT` |
 | `EVAL_EPOCHS` | Repeats per case; the hosted launcher defaults to `1` |
@@ -104,25 +104,6 @@ Delivery diagnostics currently support reasoning cases.
 
 Inspect logs retain scores, verifier evidence, crashes, and cutoffs. Parent logs
 include sample lifecycle events and a final completeness report.
-
-## Evaluate the reasoning completion gate
-
-Select `reasoning_gate` in the existing comparison workflow. Use the reasoning
-skill before the gate as the control and the gate-enabled skill as the
-treatment. Both variants receive the same checkout fixtures and answer rubric.
-
-```sh
-export EVAL_DATASET=reasoning_gate
-export CONTROL_REF='<commit-before-the-gate>'
-export TREATMENT_REF='<commit-with-the-gate>'
-python -m evals.python.integrations.hugging_face.compare --output evals/reports/reasoning-gate
-```
-
-Use the hosted setup above and an eval sandbox image built from this checkout's
-`evals/docker/Dockerfile`, which provides Bend. The seven cases cover passing
-tests, passing tests with skips, failures, empty and skipped suites, and pass
-reports from an older run or a different suite. The comparison scores the
-skill's final claims. Inspect logs retain tool calls for checking gate use.
 
 ## Use from Python
 

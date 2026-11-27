@@ -1,6 +1,12 @@
 #!/bin/sh
+# Compatibility for callers of the original unittest pilot.
 set -eu
-
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-BEND_NO_TELEMETRY=1 exec "${BEND_BIN:-bend}" \
-  "$script_dir/../../../docs/proofs/reasoning/check-tests.bend" "$@"
+scripts=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+status=0
+result=$(bash "$scripts/prove.sh" gns-004 unittest "$@") || status=$?
+case "$result" in
+  supported) echo confirmed ;;
+  contradicted) echo needs_evidence ;;
+  *) echo unavailable ;;
+esac
+exit "$status"
