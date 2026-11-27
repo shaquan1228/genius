@@ -1,18 +1,10 @@
 import Base
 
-type Conj<-A: Type, -B: Type> is Type:
-  Conjunction{left: A, right: B}
+def Iff(-A: Type, -B: Type) -> Type:
+  (A -> B) & (B -> A)
 
-type Disj<-A: Type, -B: Type> is Type:
-  DisjunctionLeft{value: A}
-  DisjunctionRight{value: B}
-
-type Iff<-A: Type, -B: Type> is Type:
-  Equivalence{forward: A -> B, backward: B -> A}
-
-type Xor<-A: Type, -B: Type> is Type:
-  ExclusiveLeft{value: A, excludes: B -> Empty}
-  ExclusiveRight{value: B, excludes: A -> Empty}
+def Xor(-A: Type, -B: Type) -> Type:
+  Or(A & (B -> Empty), B & (A -> Empty))
 
 def IsTrue(flag: Bool) -> Data:
   match flag:
@@ -27,18 +19,18 @@ def false_is_not_true(equal: {False{} == True{}: Bool}) -> Empty:
 
 # A successful check gives a witness for Claim, and any witness makes the check pass.
 def Agreement(+result: Bool, -Claim: Type) -> Type:
-  Iff<{result == True{} : Bool}, Claim>
+  Iff({result == True{} : Bool}, Claim)
 
 def SubjectAgrees(-S: Data, check: S -> Bool, Claim: S -> Type, +subject: S) -> Type:
   Agreement(check(subject), Claim(subject))
 
-def agreement_sound(-result: Bool, -P: Type, agreement: Agreement(result, P)) -> {result == True{} : Bool} -> P:
-  Equivalence{sound, _} = agreement
+def agreement_sound(-result: Bool, -Claim: Type, agreement: Agreement(result, Claim)) -> {result == True{} : Bool} -> Claim:
+  (sound, _) = agreement
   sound
 
-def agreement_complete(-result: Bool, -P: Type, agreement: Agreement(result, P)) -> P -> {result == True{} : Bool}:
-  Equivalence{_, complete} = agreement
+def agreement_complete(-result: Bool, -Claim: Type, agreement: Agreement(result, Claim)) -> Claim -> {result == True{} : Bool}:
+  (_, complete) = agreement
   complete
 
 def false_agrees_with_empty() -> Agreement(False{}, Empty):
-  Equivalence{false_is_not_true, impossible => Empty.absurd({False{} == True{} : Bool}, impossible)}
+  (false_is_not_true, impossible => Empty.absurd({False{} == True{} : Bool}, impossible))

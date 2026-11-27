@@ -2,23 +2,21 @@ import Base
 import ../logic.bend as Logic
 import ./latest.bend as Latest
 import ./source-laws.bend as Sources
-import ./observation.bend as Obs
 import ../types.bend as T
 import ./main.bend as Model
 import ./SPEC.bend as Spec
 import ./LAWS.bend as Laws
 
-def Laws.gns004_independent_premise_validation(ctx, applicable, allowed):
+def gate_agrees(+ctx: T.Context<T.ActionUse>) -> Logic.Agreement(Model.premise_gate(ctx), Spec.Predicates.ValidatedBefore(ctx)):
   match ctx:
     case T.Frame{_, T.Use{_, T.Claim{_, source, hypothesis}, _, _}, before, _, _}:
-      Logic.agreement_sound(Obs.supported(Model.verdict(source, hypothesis, before)), Latest.Evidence(source, hypothesis, before),
-        Latest.lookup_agrees(source, hypothesis, before), allowed)
+      Latest.lookup_agrees(source, hypothesis, before)
+
+def Laws.gns004_independent_premise_validation(ctx, applicable, allowed):
+  Logic.agreement_sound(Model.premise_gate(ctx), Spec.Predicates.ValidatedBefore(ctx), gate_agrees(ctx), allowed)
 
 def Laws.gns004_validation_gate_complete(ctx, applicable, confirmed):
-  match ctx:
-    case T.Frame{_, T.Use{_, T.Claim{_, source, hypothesis}, _, _}, before, _, _}:
-      Logic.agreement_complete(Obs.supported(Model.verdict(source, hypothesis, before)), Latest.Evidence(source, hypothesis, before),
-        Latest.lookup_agrees(source, hypothesis, before), confirmed)
+  Logic.agreement_complete(Model.premise_gate(ctx), Spec.Predicates.ValidatedBefore(ctx), gate_agrees(ctx), confirmed)
 
 def eliminate_alternatives(
   -ctx: T.Context<T.ExternalUse>,
@@ -69,18 +67,15 @@ def validation_burden(
   -CascadeRisk: Type,
   gns001_observation_precedence: NonTrivial -> PrecededByObservation,
   p1_observation_classifies: PrecededByObservation -> DistinguishesKnownFromAssumed,
-  p2_unvalidated_is_assumed: Logic.Conj<
-    DistinguishesKnownFromAssumed,
-    ValidatedIndependently -> Empty> -> Assumption,
-  p3_assumed_dependency_creates_risk: Logic.Conj<DependsOn, Assumption> -> CascadeRisk,
+  p2_unvalidated_is_assumed: DistinguishesKnownFromAssumed -> (ValidatedIndependently -> Empty) -> Assumption,
+  p3_assumed_dependency_creates_risk: DependsOn -> Assumption -> CascadeRisk,
   n_no_cascade_risk: CascadeRisk -> Empty,
-  trigger: Logic.Conj<NonTrivial, DependsOn>
+  trigger: NonTrivial & DependsOn
 ) -> (ValidatedIndependently -> Empty) -> Empty:
-  match trigger:
-    case Logic.Conjunction{nontrivial, depends_on}:
-      observed = gns001_observation_precedence(nontrivial)
-      classified = p1_observation_classifies(observed)
-      unvalidated =>
-        assumed = p2_unvalidated_is_assumed(Logic.Conjunction{classified, unvalidated})
-        risk = p3_assumed_dependency_creates_risk(Logic.Conjunction{depends_on, assumed})
-        n_no_cascade_risk(risk)
+  (nontrivial, depends_on) = trigger
+  observed = gns001_observation_precedence(nontrivial)
+  classified = p1_observation_classifies(observed)
+  unvalidated =>
+    assumed = p2_unvalidated_is_assumed(classified, unvalidated)
+    risk = p3_assumed_dependency_creates_risk(depends_on, assumed)
+    n_no_cascade_risk(risk)
