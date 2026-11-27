@@ -10,7 +10,7 @@ def theorem(
   +uncertain: Bool,
   +attempt: T.Attempt,
   +history: List<&2, T.TraceEvent>,
-  nontrivial: Spec.NonTrivial(viable_approaches, uncertain),
+  nontrivial: T.NonTrivial(viable_approaches, uncertain),
   allowed: {Loop.observation_allows_act(viable_approaches, uncertain, attempt, history) == True{} : Bool}
 ) -> Spec.ObservedFirst(attempt, history):
   Laws.gns001_observation_precedence(viable_approaches, uncertain, attempt, history, nontrivial, allowed)

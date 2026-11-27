@@ -10,9 +10,6 @@ def Member(-A: Data, +wanted: A, items: List<&2, A>) -> Data:
     case head <> tail:
       Either<&2, &2, {wanted == head : A}, Member(A, wanted, tail)>
 
-def Predicates.NonTrivial(viable_approaches: Nat, uncertain: Bool) -> Data:
-  Either<&2, &2, {Nat.is_lt(1n, viable_approaches) == True{} : Bool}, {uncertain == True{} : Bool}>
-
 def Predicates.ValidatedAt(+premise: T.PremiseClaim, state: List<&2, T.Fact>) -> Data:
   match premise:
     case T.Claim{_, source, hypothesis}:
@@ -25,7 +22,7 @@ def Predicates.DependsAt(dependent: T.Subject, prerequisite: T.Subject,
 def Predicates.PremiseRequiredBefore(ctx: T.Context<T.ActionUse>) -> Type:
   match ctx:
     case T.Frame{actor, T.Use{action, premise, approaches, uncertain}, before, after, intervention}:
-      (Predicates.NonTrivial(approaches, uncertain) &
+      (T.NonTrivial(approaches, uncertain) &
         Predicates.DependsAt(T.Action{action}, T.Premise{premise}, before))
 
 def Predicates.ValidatedBefore(ctx: T.Context<T.ActionUse>) -> Data:
@@ -91,7 +88,7 @@ type Premises.Forward<-ctx: T.Context<T.ExternalUse>> is Type:
   Forward{
     external_dependency: Predicates.ExternalDependency(ctx),
     signal_cannot_validate: Predicates.Signaled(ctx) -> Predicates.ValidatedAfter(ctx) -> Empty,
-    classify_validation: Predicates.ExternalDependency(ctx) -> Predicates.ValidatedAfter(ctx) ->
+    classify_validation: Predicates.ValidatedAfter(ctx) ->
       Or(Predicates.Probed(ctx), Or(Predicates.Signaled(ctx), Predicates.Enforcement(ctx))),
     probe_requires_observability: Predicates.Probed(ctx) -> Predicates.ObservableBefore(ctx),
     future_output_unobservable: Predicates.ObservableBefore(ctx) -> Empty
