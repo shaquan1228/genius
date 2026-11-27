@@ -107,30 +107,22 @@ include sample lifecycle events and a final completeness report.
 
 ## Evaluate the reasoning completion gate
 
-With Bend 2.0.40 installed, run the gate and an exit-status-only control over
-the same local `unittest` fixtures:
+Select `reasoning_gate` in the existing comparison workflow. Use the reasoning
+skill before the gate as the control and the gate-enabled skill as the
+treatment. Both variants receive the same checkout fixtures and answer rubric.
 
 ```sh
-BEND_BIN=/path/to/bend python3 evals/scripts/reasoning_gate.py
+export EVAL_DATASET=reasoning_gate
+export CONTROL_REF='<commit-before-the-gate>'
+export TREATMENT_REF='<commit-with-the-gate>'
+python -m evals.python.integrations.hugging_face.compare --output evals/reports/reasoning-gate
 ```
 
-The fixtures cover passing tests, passing tests with skips, failures, import
-errors, empty and skipped suites, a missing suite, and misleading reports from
-an older run or a different suite.
-
-To compare the original reasoning skill with the gate-enabled skill, use an
-authenticated Codex CLI and a fixed model and baseline commit:
-
-```sh
-BEND_BIN=/path/to/bend python3 evals/scripts/reasoning_gate.py \
-  --baseline-ref <commit-before-the-pilot> --model <model-id> --repeats 3
-```
-
-The paired comparison gives both arms fresh copies of the same fixtures.
-It scores completion claims against the fixture result and observed verifier
-calls, and reports unsupported claims, withheld valid claims, and run errors.
-The offline control measures the runner and gate behavior. The live arm
-measures agent behavior under the skill instructions.
+Use the hosted setup above and an eval sandbox image built from this checkout's
+`evals/docker/Dockerfile`, which provides Bend. The seven cases cover passing
+tests, passing tests with skips, failures, empty and skipped suites, and pass
+reports from an older run or a different suite. The comparison scores the
+skill's final claims. Inspect logs retain tool calls for checking gate use.
 
 ## Use from Python
 

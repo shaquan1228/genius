@@ -69,6 +69,7 @@ class AnswerCase(BaseModel):
     prompt: str
     expected: dict[str, str | bool]
     reason: str
+    fixture: str | None = None
 
 
 class Cases(BaseModel):
@@ -112,7 +113,7 @@ def repo_task(case: RepoCase) -> Task:
 def answer_task(case: AnswerCase) -> Task:
     return Task(
         id=case.id,
-        fixture=[],
+        fixture=_sources(repo(case.fixture)) if case.fixture else [],
         instruction=Instruction(prompt=case.prompt),
         criterion=Criterion.Answer(
             rubric=Rubric(

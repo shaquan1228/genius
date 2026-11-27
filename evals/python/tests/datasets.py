@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from kernel import Outcome, Verification
 
 from evals.python import datasets
 from evals.python.datasets.humanevalplus import _cache_path, _download
@@ -68,3 +69,24 @@ def clear_compiled_cache_preserves_live_snapshots() -> None:
     after = datasets.load_dataset()
     assert after is not before
     assert tuple(before.cases) == tuple(after.cases)
+
+
+@pytest.mark.parametrize(
+    ("case_id", "suite_passed"),
+    [("completion-verified", True), ("completion-all-skipped", False)],
+)
+def reasoning_gate_fixtures_and_claims(case_id: str, *, suite_passed: bool) -> None:
+    dataset = datasets.load_dataset(selection="reasoning_gate")
+    declaration = dataset.records[case_id]
+    assert declaration.skill == "reasoning"
+    task = declaration.task
+    assert "checks_test.py" in {file.path for file in task.fixture}
+    assert not task.allowed_files
+    for claim in (suite_passed, not suite_passed):
+        outcome = Outcome(
+            changed_files=[],
+            verification=Verification.Unchecked(),
+            response={"suite_passed": claim, "reason": "The current suite supplied the evidence."},
+            facts=[],
+        )
+        assert dict(task.grade(outcome=outcome))["correctness"] == (claim == suite_passed)

@@ -46,7 +46,7 @@ The work ships only if all of these hold:
 When the chosen validator is a Python `unittest` discovery suite, run this from the checkout immediately before claiming that suite passed. Resolve the script path relative to this skill file.
 
 ```sh
-python3 <skill-directory>/scripts/check-tests.py --start-directory <suite-directory>
+sh <skill-directory>/scripts/check-tests.sh <suite-directory>
 ```
 
-The script runs the named suite and checks its result with the GNS-004 Bend gate. Use `confirmed` as evidence for the suite named in the result. With `needs_evidence`, report the failure or missing evidence and withhold the pass claim. With `unavailable`, report why the gate could not decide and cite any independently observed validator result separately. Run the script again after edits before making a fresh pass claim.
+If the validator uses a discovery pattern, pass it as a quoted second argument. The script invokes Bend, which runs the named suite and checks its result with the GNS-004 gate. Use `confirmed` as evidence for that suite in the current checkout. With `needs_evidence`, report the failure or missing evidence and withhold the pass claim. If the script reports `unavailable` or the Bend command fails to start, report why the gate could not decide and cite any independently observed validator result separately. Run the script again after edits before making a fresh pass claim.

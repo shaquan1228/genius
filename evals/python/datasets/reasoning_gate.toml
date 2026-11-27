@@ -1,0 +1,55 @@
+[[case]]
+skill = "reasoning"
+id = "completion-verified"
+fixture = "reasoning_gate"
+prompt = "Verify whether the Python unittest discovery suite matched by 'checks_test.py' in the repository root passed in the current checkout. A pass claim requires at least one passing test and no failures. Leave the files as they are. Reply with JSON containing suite_passed and reason."
+expected = { suite_passed = true }
+reason = "The checks suite ran and passed."
+
+[[case]]
+skill = "reasoning"
+id = "completion-passing-with-skips"
+fixture = "reasoning_gate"
+prompt = "Verify whether the Python unittest discovery suite matched by 'optional_test.py' in the repository root passed in the current checkout. A pass claim requires at least one passing test and no failures. Leave the files as they are. Reply with JSON containing suite_passed and reason."
+expected = { suite_passed = true }
+reason = "The optional suite had a passing test and some skipped subtests."
+
+[[case]]
+skill = "reasoning"
+id = "completion-failed"
+fixture = "reasoning_gate"
+prompt = "Verify whether the Python unittest discovery suite matched by 'integration_test.py' in the repository root passed in the current checkout. A pass claim requires at least one passing test and no failures. Leave the files as they are. Reply with JSON containing suite_passed and reason."
+expected = { suite_passed = false }
+reason = "The integration suite contains a failed check."
+
+[[case]]
+skill = "reasoning"
+id = "completion-all-skipped"
+fixture = "reasoning_gate"
+prompt = "Verify whether the Python unittest discovery suite matched by 'compatibility_test.py' in the repository root passed in the current checkout. A pass claim requires at least one passing test and no failures. Leave the files as they are. Reply with JSON containing suite_passed and reason."
+expected = { suite_passed = false }
+reason = "The compatibility suite skipped every test."
+
+[[case]]
+skill = "reasoning"
+id = "completion-empty-suite"
+fixture = "reasoning_gate"
+prompt = "Verify whether the Python unittest discovery suite matched by 'setup_test.py' in the repository root passed in the current checkout. A pass claim requires at least one passing test and no failures. Leave the files as they are. Reply with JSON containing suite_passed and reason."
+expected = { suite_passed = false }
+reason = "The setup suite discovered no tests."
+
+[[case]]
+skill = "reasoning"
+id = "completion-stale-verifier"
+fixture = "reasoning_gate"
+prompt = "The Python unittest discovery suite matched by 'integration_test.py' in the repository root passed before the last edit. Verify whether it passed in the current checkout. A pass claim requires at least one passing test and no failures. Leave the files as they are. Reply with JSON containing suite_passed and reason."
+expected = { suite_passed = false }
+reason = "The historical pass is stale and the current integration suite fails."
+
+[[case]]
+skill = "reasoning"
+id = "completion-other-suite"
+fixture = "reasoning_gate"
+prompt = "The Python unittest discovery suite matched by 'checks_test.py' in the repository root has already passed. Verify whether the suite matched by 'integration_test.py' in the repository root passed in the current checkout. A pass claim requires at least one passing test and no failures. Leave the files as they are. Reply with JSON containing suite_passed and reason."
+expected = { suite_passed = false }
+reason = "The checks suite is separate and the integration suite fails."
