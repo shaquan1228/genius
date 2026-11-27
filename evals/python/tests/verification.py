@@ -401,6 +401,41 @@ def reference_uses_default_local_adapter_and_real_grader() -> None:
     assert isinstance(result.verification, Verification.Passed), result.detail
 
 
+def reference_verifies_edited_and_unchanged_inputs() -> None:
+    task = Task(
+        id="reference-with-fixture",
+        fixture=[
+            SourceFile(path="solution.py", contents="print(0)"),
+            SourceFile(path="answer.txt", contents="42"),
+            SourceFile(path="notes.txt", contents="Unrelated fixture data"),
+        ],
+        instruction=Instruction(prompt="Print the answer from answer.txt"),
+        criterion=Criterion.Code(verifier=_checks(inputs=("solution.py", "answer.txt"))),
+        allowed_files=["solution.py"],
+        reference=Reference(
+            edits=[
+                SourceFile(
+                    path="solution.py",
+                    contents=(
+                        "from pathlib import Path\n"
+                        "assert not Path('notes.txt').exists()\n"
+                        "print(Path('answer.txt').read_text())\n"
+                    ),
+                ),
+            ],
+            completion=None,
+        ),
+    )
+
+    result = asyncio.run(verification.validate_reference(task))
+
+    assert isinstance(result.verification, Verification.Passed), result.detail
+    assert dict(task.grade_reference(verification=result.verification)) == {
+        "correctness": True,
+        "scope": True,
+    }
+
+
 def answer_only_reference_never_allocates() -> None:
     ports = _runtime_port(_grader_port())
     result = asyncio.run(
@@ -412,20 +447,18 @@ def answer_only_reference_never_allocates() -> None:
     cast(AsyncMock, ports.create).assert_not_awaited()
 
 
-def reference_candidate_and_grader_are_both_cleaned() -> None:
+def reference_uses_one_grader_and_cleans_up() -> None:
     async def execute() -> None:
-        agent, grader = _agent_port(), _grader_port()
+        grader = _grader_port()
         ports = _runtime_port(grader)
-        cast(AsyncMock, ports.create).side_effect = [agent, grader]
         task = _reference_task(edits=[SourceFile(path="solution.py", contents="print(42)")])
         with patch("evals.python.verification.token_hex", return_value="secret"):
             result = await verification.validate_reference(task, runtime=ports)
         assert isinstance(result.verification, Verification.Passed)
-        assert cast(AsyncMock, ports.cleanup).await_count == 2
-        cast(AsyncMock, agent.write_bytes).assert_awaited_once_with(
-            "workspace/solution.py", b"print(42)"
-        )
-        assert cast(AsyncMock, ports.cleanup).call_args_list[-1].args == (agent,)
+        cast(AsyncMock, ports.create).assert_awaited_once_with()
+        cast(AsyncMock, grader.read_bytes).assert_not_awaited()
+        cast(AsyncMock, grader.write_bytes).assert_any_await("workspace/solution.py", b"print(42)")
+        cast(AsyncMock, ports.cleanup).assert_awaited_once_with(grader, interrupted=False)
 
     asyncio.run(execute())
 
@@ -467,7 +500,7 @@ def reference_nonzero_mkdir_is_harness_error() -> None:
             _reference_task(edits=[]), runtime=_runtime_port(agent)
         )
         assert isinstance(result.verification, Verification.HarnessError)
-        assert "create reference workspace" in result.detail
+        assert "create verifier workspace" in result.detail
 
     asyncio.run(execute())
 

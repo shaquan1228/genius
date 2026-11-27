@@ -48,20 +48,18 @@ Run `/genius:reasoning` in Claude Code or `$genius:reasoning` in Codex to apply 
 ## Evaluations
 
 Use [Inspect AI](https://inspect.aisi.org.uk/) for repeated baseline/Genius comparisons.
-Default smoke cases are declared in
-`evals/python/datasets/smoke.toml`; OCaml validates and grades them.
-Smoke executable checks use Python.
-GitHub Actions runs the same checks on every eval change. Follow the
-[toolchain setup](evals/README.md#check-the-harness-offline) for the pinned OCaml 4.14
-native bridge and ocamlformat 0.29.0, then run the offline checks, strict typing,
-coverage, and CRAP gate:
+The default smoke cases live in `evals/python/datasets/smoke.toml`.
+Python runs the executable checks, and the Genius Bench Rust kernel validates
+and grades the cases. [Genius Bench](https://github.com/shaquan1228/genius-bench)
+
+Follow the toolchain setup to run the same checks as GitHub Actions.
+[Toolchain setup](evals/README.md#check-the-harness-offline)
 
 ```sh
-opam exec --switch=genius-kernel-414 -- make -C evals check
+make -C evals check
 ```
 
-From a checkout of the completed eval stack (or `main` after merge), launch a one-epoch
-smoke test on Hugging Face Jobs after adding a positive credit balance:
+With Hugging Face Jobs credit, launch a one-epoch smoke run from a committed checkout.
 
 ```sh
 uvx --from huggingface_hub==2.2.0 hf auth whoami
