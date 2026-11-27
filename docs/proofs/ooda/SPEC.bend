@@ -1,5 +1,5 @@
 import Base
-import ./main.bend as Loop
+import ../types.bend as T
 
 def NonTrivial(viable_approaches: Nat, uncertain: Bool) -> Type:
   Or(
@@ -7,33 +7,33 @@ def NonTrivial(viable_approaches: Nat, uncertain: Bool) -> Type:
     {uncertain == True{} : Bool}
   )
 
-def same_attempt(a: Loop.Attempt, b: Loop.Attempt) -> Bool:
+def same_attempt(a: T.Attempt, b: T.Attempt) -> Bool:
   match a b:
-    case Loop.AttemptKey{action, number} Loop.AttemptKey{other_action, other_number}:
+    case T.AttemptKey{action, number} T.AttemptKey{other_action, other_number}:
       Bool.and(
         Cmp.is_eq(Nat.cmp(action, other_action)),
         Cmp.is_eq(Nat.cmp(number, other_number))
       )
 
-def RecordedObservation(phase: Loop.Phase) -> Type:
+def RecordedObservation(phase: T.Phase) -> Type:
   match phase:
-    case Loop.Observed{facts, signals, constraints}:
+    case T.Observed{facts, signals, constraints}:
       Or({String.is_empty(facts) == False{} : Bool},
         Or({String.is_empty(signals) == False{} : Bool},
           {String.is_empty(constraints) == False{} : Bool}))
     case other:
       Empty
 
-def FirstMatchingEvent(matches: Bool, phase: Loop.Phase, later: Type) -> Type:
+def FirstMatchingEvent(matches: Bool, phase: T.Phase, later: Type) -> Type:
   match matches:
     case True{}:
       RecordedObservation(phase)
     case False{}:
       later
 
-def ObservedFirst(+attempt: Loop.Attempt, history: List<&2, Loop.TraceEvent>) -> Type:
+def ObservedFirst(+attempt: T.Attempt, history: List<&2, T.TraceEvent>) -> Type:
   match history:
     case Nil{}:
       Empty
-    case Loop.Entry{key, phase} <> tail:
+    case T.Entry{key, phase} <> tail:
       FirstMatchingEvent(same_attempt(attempt, key), phase, ObservedFirst(attempt, tail))

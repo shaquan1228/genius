@@ -1,4 +1,7 @@
 import Base
+import ./types.bend as T
+import ./reasoning/observation.bend as Obs
+import ./reasoning/confirmation.bend as Confirmation
 import ./logic.bend as Logic
 import ./reasoning/main.bend as Model
 import ./reasoning/SPEC.bend as Spec
@@ -6,7 +9,7 @@ import ./reasoning/LAWS.bend as Laws
 import ./reasoning/PROOF.bend as Proof
 
 def theorem(
-  +ctx: Model.Context<Model.ActionUse>,
+  +ctx: T.Context<T.ActionUse>,
   applicable: Spec.Predicates.PremiseRequiredBefore(ctx),
   allowed: {Model.premise_gate(ctx) == True{}: Bool}
 ) -> Spec.Predicates.ValidatedBefore(ctx):
@@ -37,3 +40,16 @@ def validation_burden(
         assumed = p2_unvalidated_is_assumed(Logic.Conjunction{classified, unvalidated})
         risk = p3_assumed_dependency_creates_risk(Logic.Conjunction{depends_on, assumed})
         n_no_cascade_risk(risk)
+
+# When the executable check supports a hypothesis, its source returned the expected answer.
+def checked_evidence(
+  +source: T.Source,
+  +hypothesis: T.Hypothesis<source>,
+  +observation: T.Observation<source>,
+  accepted: {Obs.supported(Obs.check(source, hypothesis, observation)) == True{}: Bool}
+) -> Obs.Evidence(source, hypothesis, observation):
+  match hypothesis observation:
+    case T.Predict{_} T.NoResponse{}:
+      Confirmation.false_is_not_true(accepted)
+    case T.Predict{expected} T.Returned{actual}:
+      Obs.agreed(Obs.agrees(source, expected, actual), accepted)

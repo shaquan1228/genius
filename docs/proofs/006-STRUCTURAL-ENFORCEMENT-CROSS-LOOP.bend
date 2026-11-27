@@ -1,12 +1,12 @@
 import Base
+import ./types.bend as T
 import ./logic.bend as Logic
-import ./reasoning/main.bend as Model
 import ./reasoning/SPEC.bend as Spec
 import ./reasoning/LAWS.bend as Laws
 import ./reasoning/PROOF.bend as Proof
 
 def theorem(
-  +ctx: Model.Context<Model.ExternalUse>,
+  +ctx: T.Context<T.ExternalUse>,
   premises: Spec.Premises.Enforcement<ctx>
 ) -> (
   (
@@ -17,7 +17,7 @@ def theorem(
   Laws.gns006_structural_enforcement(ctx, premises)
 
 def validation_implies_enforcement(
-  +ctx: Model.Context<Model.ExternalUse>,
+  +ctx: T.Context<T.ExternalUse>,
   premises: Spec.Premises.Forward<ctx>,
   confirmed: Spec.Predicates.ValidatedAfter(ctx)
 ) -> Spec.Predicates.Enforcement(ctx):
