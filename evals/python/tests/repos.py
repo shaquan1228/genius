@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from kernel import Verification
+from kernel import ValidationError, Verification
 
 from evals.python.integrations import smoke
 from evals.python.integrations.smoke import repo_support, verifier
@@ -11,7 +11,7 @@ CASE = '''
 id = "drop-deploy"
 skill = "improve"
 fixture = "release"
-scope = ["README.md"]
+scope = ["README.md", "CHANGELOG.md"]
 prompt = "Remove deploy.sh from the README."
 completion = "Removed it."
 check = """
@@ -39,14 +39,16 @@ def repo_cases_build_tasks_whose_reference_passes(
     task = declaration.task
     checks = task.checks()
     assert checks is not None
-    assert (declaration.skill, tuple(task.allowed_files)) == ("improve", ("README.md",))
+    assert (declaration.skill, checks.inputs) == ("improve", ("README.md", "CHANGELOG.md"))
     monkeypatch.chdir(tmp_path)
-    original = smoke.repo("release")["README.md"]
-    Path("README.md").write_text(original)
-    assert verifier.verify(("README.md",), checks=checks.stdin)["status"] == "failed"
+    original = smoke.repo("release")
+    Path("README.md").write_text(original["README.md"])
+    Path("CHANGELOG.md").write_text(original["CHANGELOG.md"])
+    before = verifier.verify(checks.inputs, checks=checks.stdin)["status"]
     (edit,) = task.reference.edits
     Path("README.md").write_text(edit.contents)
-    assert verifier.verify(("README.md",), checks=checks.stdin)["status"] == "passed"
+    after = verifier.verify(checks.inputs, checks=checks.stdin)["status"]
+    assert (edit.path, before, after) == ("README.md", "failed", "passed")
 
 
 def answer_cases_grade_expected_fields(tmp_path: Path) -> None:
@@ -85,12 +87,16 @@ def reference_edits_must_match_once_and_stay_in_scope() -> None:
         fixture="release",
         scope=("README.md",),
         prompt="",
-        edits=(smoke.Edit(path="CHANGELOG.md", old="x", new="y"),),
+        edits=(smoke.Edit(path="CHANGELOG.md", old="# Changelog", new="# Release history"),),
         completion="",
         check="",
     )
-    with pytest.raises(ValueError, match="inside scope"):
+    with pytest.raises(ValidationError) as error:
         smoke.repo_task(outside)
+    assert [issue.field for issue in error.value.issues] == ["reference.edits"]
+    typo = outside.model_copy(update={"edits": (smoke.Edit(path="CHANGLOG.md", old="x", new="y"),)})
+    with pytest.raises(ValueError, match=r"missing from the fixture: CHANGLOG\.md"):
+        smoke.repo_task(typo)
 
 
 def repo_support_compares_against_the_fixture(

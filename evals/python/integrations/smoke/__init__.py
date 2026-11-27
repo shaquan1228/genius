@@ -79,9 +79,12 @@ class Cases(BaseModel):
 def apply(files: dict[str, str], *, edits: tuple[Edit, ...]) -> dict[str, str]:
     result = dict(files)
     for edit in edits:
-        if result[edit.path].count(edit.old) != 1:
+        current = result.get(edit.path)
+        if current is None:
+            raise ValueError(f"Edit path is missing from the fixture: {edit.path}")
+        if current.count(edit.old) != 1:
             raise ValueError(f"Edit target must occur once in {edit.path}: {edit.old!r}")
-        result[edit.path] = result[edit.path].replace(edit.old, edit.new)
+        result[edit.path] = current.replace(edit.old, edit.new)
     return result
 
 
@@ -90,10 +93,8 @@ def _sources(files: dict[str, str]) -> list[SourceFile]:
 
 
 def repo_task(case: RepoCase) -> Task:
-    if not {edit.path for edit in case.edits} <= set(case.scope):
-        raise ValueError(f"Reference edits must stay inside scope: {case.id}")
     fixture = repo(case.fixture)
-    reference = apply(fixture, edits=case.edits)
+    updated = apply(fixture, edits=case.edits)
     return Task(
         id=case.id,
         fixture=_sources(fixture),
@@ -103,7 +104,7 @@ def repo_task(case: RepoCase) -> Task:
         ),
         allowed_files=case.scope,
         reference=Reference(
-            edits=_sources({path: reference[path] for path in case.scope}),
+            edits=_sources({edit.path: updated[edit.path] for edit in case.edits}),
             completion=case.completion,
         ),
     )
