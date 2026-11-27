@@ -1,10 +1,6 @@
 import Base
 import ../types.bend as T
-
-def same_attempt(a: T.Attempt, b: T.Attempt) -> Bool:
-  match a b:
-    case T.AttemptKey{action, number} T.AttemptKey{other_action, other_number}:
-      Bool.and(Nat.is_eq(action, other_action), Nat.is_eq(number, other_number))
+import ./trace.bend as Trace
 
 def has_observation(facts_empty: Bool, signals_empty: Bool, constraints_empty: Bool) -> Bool:
   Bool.not(Bool.and(facts_empty, Bool.and(signals_empty, constraints_empty)))
@@ -16,19 +12,8 @@ def is_recorded_observation(phase: T.Phase) -> Bool:
     case other:
       False{}
 
-def check_first_match(matches: Bool, phase: T.Phase, later: Unit -> Bool) -> Bool:
-  match matches:
-    case True{}:
-      is_recorded_observation(phase)
-    case False{}:
-      later(Unit{})
-
-def observed_first(+attempt: T.Attempt, history: List<&2, T.TraceEvent>) -> Bool:
-  match history:
-    case Nil{}:
-      False{}
-    case T.Entry{key, phase} <> tail:
-      check_first_match(same_attempt(attempt, key), phase, _ => observed_first(attempt, tail))
+def observed_first(attempt: T.Attempt, history: List<&2, T.TraceEvent>) -> Bool:
+  Trace.check_phase(is_recorded_observation, Trace.first_phase(attempt, history))
 
 def allow_act(observation_required: Bool, observed: Unit -> Bool) -> Bool:
   match observation_required:
