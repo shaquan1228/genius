@@ -20,3 +20,14 @@ def reductio(
   burden: (A -> Empty) -> Empty
 ) -> A:
   eliminate(burden)
+
+def IsTrue(flag: Bool) -> Data:
+  match flag:
+    case True{}:
+      Unit
+    case False{}:
+      Empty
+
+def false_is_not_true(equal: {False{} == True{}: Bool}) -> Empty:
+  %Equal.sym(Bool, False{}, True{}, equal): IsTrue(_)
+  Unit{}
