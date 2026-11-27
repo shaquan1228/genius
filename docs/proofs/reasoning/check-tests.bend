@@ -1,102 +1,60 @@
 import Base
-import ./main.bend as Model
+import ../types.bend as T
+import ./report.bend as Report
 
-def unittest_observation() -> String:
-  "from pathlib import Path\n"
-    ++ "import contextlib, sys, unittest\n"
-    ++ "class CountingResult(unittest.TextTestResult):\n"
-    ++ "    passed = 0\n"
-    ++ "    def addSuccess(self, test):\n"
-    ++ "        super().addSuccess(test)\n"
-    ++ "        self.passed += 1\n"
-    ++ "root = Path.cwd().resolve()\n"
-    ++ "directory = (root / sys.argv[1]).resolve()\n"
-    ++ "if not directory.is_relative_to(root) or not directory.is_dir():\n"
-    ++ "    sys.exit('test directory must exist inside the checkout')\n"
-    ++ "sys.path.insert(0, str(root))\n"
-    ++ "with contextlib.redirect_stdout(sys.stderr):\n"
-    ++ "    suite = unittest.defaultTestLoader.discover(str(directory.relative_to(root)), pattern=sys.argv[2])\n"
-    ++ "    result = unittest.TextTestRunner(resultclass=CountingResult).run(suite)\n"
-    ++ "print(result.passed)\n"
-    ++ "sys.exit(0 if result.wasSuccessful() else 1)\n"
+# Resolve the observer from the installed checker, independent of the test checkout.
+def observer_path(program: String) -> String:
+  parts = List.reverse(&2, String, String.split(program, '/'))
+  parents = List.drop(&2, String, parts, 1n)
+  directory = String.join(List.reverse(&2, String, parents), "/")
+  directory ++ "/../../../skills/reasoning/scripts/observe_suite.py"
 
-def before_snapshot(confirmed: Bool) -> List<&2, Model.Fact>:
-  match confirmed:
-    case True{}:
-      Model.Confirmation{1n, Model.Direct{}} <> Nil{}
-    case False{}:
-      Nil{}
-
-def print_decision(allowed: Bool) -> IO(Unit):
-  match allowed:
-    case True{}:
-      IO.print("confirmed")
-    case False{}:
-      do IO<Unit>:
-        written: Unit <- IO.print("needs_evidence")
-        IO.exit(1)
-
-def unavailable(detail: String) -> IO(Unit):
-  do IO<Unit>:
-    logged: Unit <- IO.print_err(detail)
-    written: Unit <- IO.print("unavailable")
-    IO.exit(2)
-
-def check_observation(complete: Bool, code: U32, count: String) -> IO(Unit):
+def check_count(
+  +run_id: String, directory: String, pattern: String, code: U32, count: String, complete: Bool
+) -> IO(Unit):
   match complete:
     case False{}:
-      unavailable("unittest did not report a passing-test count")
+      Report.unavailable("unittest did not return a run ID and passing-test count")
     case True{}:
-      observed = Bool.and(U32.is_eq(code, 0), Bool.not(String.starts_with(count, "0")))
-      subject: Model.ActionUse = Model.Use{1n, 1n, 2n, False{}}
-      ctx: Model.Context<
-        Model.ActionUse> = Model.Frame{
-        0n,
-        subject,
-        before_snapshot(observed),
-        Nil{},
-        Model.NoIntervention{}
-      }
-      print_decision(Model.premise_gate(ctx))
+      passed = Bool.and(U32.is_eq(code, 0), Bool.not(String.starts_with(count, "0")))
+      source: T.Source = T.TestSuite{run_id, directory, pattern}
+      Report.check(source, T.CheckPrediction{T.Predict{True{}}}, T.Returned{passed})
 
-def evaluate_observation(code: U32, +count: String) -> IO(Unit):
-  complete = Bool.and(
-    Bool.not(String.is_empty(count)),
-    List.all(&2, Char, Char.is_digit, String.to_list(count))
-  )
-  check_observation(complete, code, count)
+def read_result(directory: String, pattern: String, +code: U32, lines: List<&2, String>) -> IO(Unit):
+  match lines:
+    case +run_id <> +count <> Nil{}:
+      valid_id = Bool.not(String.is_empty(run_id))
+      digits = List.all(&2, Char, Char.is_digit, String.to_list(count))
+      valid_count = Bool.and(digits, Bool.not(String.is_empty(count)))
+      complete = Bool.and(U32.is_le(code, 1), Bool.and(valid_id, valid_count))
+      check_count(run_id, directory, pattern, code, count, complete)
+    case other:
+      Report.unavailable("unittest did not return a run ID and passing-test count")
 
-def report_run(result: Result<&1, &1, U32 & String, U32 & (String & String)>) -> IO(Unit):
-  match result:
+def report(directory: String, pattern: String,
+  answer: Result<&1, &1, U32 & String, U32 & (String & String)>) -> IO(Unit):
+  match answer:
     case Done{(code, (stdout, stderr))}:
       do IO<Unit>:
         logged: Unit <- IO.print_err(stderr)
-        evaluate_observation(code, String.trim(stdout))
-    case Fail{(code, message)}:
-      unavailable(message)
+        read_result(directory, pattern, code, String.lines(String.trim(stdout)))
+    case Fail{(_, detail)}:
+      Report.unavailable(detail)
 
-def run_suite(directory: String, pattern: String) -> IO(Unit):
+def run(program: String, +directory: String, +pattern: String) -> IO(Unit):
   do IO<Unit>:
-    result: Result<&1, &1, U32 & String, U32 & (String & String)> <-
-      Process.run(
-        "python3",
-        ["-I", "-B", "-c", unittest_observation(), directory, pattern],
-        "",
-        2097152,
-        120000
-      )
-    report_run(result)
+    answer: Result<&1, &1, U32 & String, U32 & (String & String)> <- Process.run(
+      "python3", ["-I", "-B", observer_path(program), directory, pattern], "", 2097152, 120000)
+    report(directory, pattern, answer)
 
-def check_args(args: List<String>) -> IO(Unit):
+def arguments(args: List<String>) -> IO(Unit):
   match args:
-    case _ <> directory <> Nil{}:
-      run_suite(directory, "test*.py")
-    case _ <> directory <> pattern <> Nil{}:
-      run_suite(directory, pattern)
+    case program <> directory <> pattern <> Nil{}:
+      run(program, directory, pattern)
     case other:
-      unavailable("usage: check-tests.sh <suite-directory> [filename-pattern]")
+      Report.unavailable("expected a suite directory and a discovery pattern")
 
 def main() -> IO(Unit):
   do IO<Unit>:
     args: List<String> <- IO.args()
-    check_args(args)
+    arguments(args)
