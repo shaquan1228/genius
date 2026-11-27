@@ -31,3 +31,21 @@ def IsTrue(flag: Bool) -> Data:
 def false_is_not_true(equal: {False{} == True{}: Bool}) -> Empty:
   %Equal.sym(Bool, False{}, True{}, equal): IsTrue(_)
   Unit{}
+
+# A successful check gives a witness for Claim, and any witness makes the check pass.
+def Agreement(+result: Bool, -Claim: Type) -> Type:
+  Iff<{result == True{} : Bool}, Claim>
+
+def SubjectAgrees(-S: Data, check: S -> Bool, Claim: S -> Type, +subject: S) -> Type:
+  Agreement(check(subject), Claim(subject))
+
+def agreement_sound(-result: Bool, -P: Type, agreement: Agreement(result, P)) -> {result == True{} : Bool} -> P:
+  Equivalence{sound, _} = agreement
+  sound
+
+def agreement_complete(-result: Bool, -P: Type, agreement: Agreement(result, P)) -> P -> {result == True{} : Bool}:
+  Equivalence{_, complete} = agreement
+  complete
+
+def false_agrees_with_empty() -> Agreement(False{}, Empty):
+  Equivalence{false_is_not_true, impossible => Empty.absurd({False{} == True{} : Bool}, impossible)}
