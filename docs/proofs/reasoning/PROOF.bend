@@ -40,7 +40,7 @@ def eliminate_alternatives(
 def Laws.gns006_validation_implies_enforcement(ctx, premises, confirmed):
   match premises:
     case Spec.Forward{
-      dependency,
+      _,
       signal_cannot_validate,
       classify,
       probe_requires_observability,
@@ -49,7 +49,7 @@ def Laws.gns006_validation_implies_enforcement(ctx, premises, confirmed):
       +evidence = confirmed
       eliminate_alternatives(
         ctx,
-        classify(dependency, evidence),
+        classify(evidence),
         probe => unobservable(probe_requires_observability(probe)),
         signal => signal_cannot_validate(signal, evidence)
       )

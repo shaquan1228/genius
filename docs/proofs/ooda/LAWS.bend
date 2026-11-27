@@ -8,7 +8,7 @@ law gns001_observation_precedence:
   for +uncertain: Bool
   for +attempt: T.Attempt
   for +history: List<&2, T.TraceEvent>
-  for nontrivial: Spec.NonTrivial(viable_approaches, uncertain)
+  for nontrivial: T.NonTrivial(viable_approaches, uncertain)
   for allowed: {
     Loop.observation_allows_act(viable_approaches, uncertain, attempt, history) == True{} : Bool
   }
@@ -19,7 +19,7 @@ law gns001_observation_gate_complete:
   for +uncertain: Bool
   for +attempt: T.Attempt
   for +history: List<&2, T.TraceEvent>
-  for nontrivial: Spec.NonTrivial(viable_approaches, uncertain)
+  for nontrivial: T.NonTrivial(viable_approaches, uncertain)
   for observed: Spec.ObservedFirst(attempt, history)
   {
     Loop.observation_allows_act(viable_approaches, uncertain, attempt, history) == True{} : Bool
