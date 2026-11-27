@@ -50,6 +50,7 @@ class Corpus(unittest.TestCase):
         )
         self.assertTrue(sources)
         sources.append(ROOT / "docs/proofs/reasoning/example.bend")
+        sources.append(ROOT / "tests/fixtures/proofs/trace.bend")
         for source in sources:
             with self.subTest(source=source.name):
                 result = subprocess.run(
