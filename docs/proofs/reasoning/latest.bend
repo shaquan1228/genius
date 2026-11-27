@@ -29,8 +29,8 @@ def step_agrees(+source: T.Source, +hypothesis: T.Hypothesis<source>, +current: 
   match current:
     case T.NoResponse{}: recurse(Unit{})
     case T.Returned{+actual}:
-      Logic.Equivalence{Obs.checked_evidence(source, hypothesis, T.Returned{actual}),
-        Obs.evidence_supported(source, hypothesis, T.Returned{actual})}
+      (Obs.checked_evidence(source, hypothesis, T.Returned{actual}),
+        Obs.evidence_supported(source, hypothesis, T.Returned{actual}))
 
 def fact_agrees(+source: T.Source, +hypothesis: T.Hypothesis<source>, +fact: T.Fact,
   -earlier: T.Observation<source>, -Earlier: Data,

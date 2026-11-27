@@ -32,7 +32,7 @@ def missing_attempt_has_no_phase()
 
 # A different phase rule accepts any entry. Its proof reuses the same scan.
 def any_phase_agrees(+phase: T.Phase) -> Logic.Agreement(True{}, Unit):
-  Logic.Equivalence{_ => Unit{}, _ => {==}}
+  (_ => Unit{}, _ => {==})
 
 def any_event_agrees(+attempt: T.Attempt, +events: List<&2, T.TraceEvent>)
   -> Logic.Agreement(Trace.check_phase(_ => True{}, Trace.first_phase(attempt, events)),
