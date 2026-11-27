@@ -28,7 +28,6 @@ proof=$1
 source=$2
 shift 2
 scripts=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-checks="$scripts/../../../docs/proofs/reasoning"
 
 case "$proof/$source" in
   postulate-001/git-blob|gns-004/git-blob)
@@ -54,4 +53,4 @@ case "$proof/$source" in
   *) invalid ;;
 esac
 
-BEND_NO_TELEMETRY=1 exec "${BEND_BIN:-bend}" "$checks/$program" -- "$@"
+BEND_NO_TELEMETRY=1 exec "${BEND_BIN:-bend}" "$scripts/$program" -- "$@"

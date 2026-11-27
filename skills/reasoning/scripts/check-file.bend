@@ -1,5 +1,5 @@
 import Base
-import ../types.bend as T
+import ../../../docs/proofs/types.bend as T
 import ./report.bend as Report
 
 # ls-tree returns one entry for a literal path, or an empty response for an
@@ -10,7 +10,7 @@ def blob_id(+entry: String) -> Maybe<&2, String>:
 def report(
   +commit: String,
   +path: String,
-  question: T.Question<T.CommittedFile{commit, path}>,
+  question: Report.Question<T.CommittedFile{commit, path}>,
   answer: Result<&1, &1, U32 & String, U32 & (String & String)>
 ) -> IO(Unit):
   match answer:
@@ -20,7 +20,7 @@ def report(
     case other:
       Report.check(T.CommittedFile{commit, path}, question, T.NoResponse{})
 
-def run(+commit: String, +path: String, question: T.Question<T.CommittedFile{commit, path}>) -> IO(Unit):
+def run(+commit: String, +path: String, question: Report.Question<T.CommittedFile{commit, path}>) -> IO(Unit):
   command: List<String> = ["--no-replace-objects", "--literal-pathspecs", "ls-tree", "--full-tree",
     "--format=%(objecttype) %(objectname)", commit ++ "^{commit}", "--", path]
   do IO<Unit>:
@@ -31,9 +31,9 @@ def run(+commit: String, +path: String, question: T.Question<T.CommittedFile{com
 def arguments(args: List<String>) -> IO(Unit):
   match args:
     case _ <> commit <> path <> Nil{}:
-      run(commit, path, T.DidRespond{})
+      run(commit, path, Report.DidRespond{})
     case _ <> commit <> path <> expected <> Nil{}:
-      run(commit, path, T.CheckPrediction{T.Predict{Some{expected}}})
+      run(commit, path, Report.CheckPrediction{T.Predict{Some{expected}}})
     case other:
       Report.unavailable("expected a commit and a path, optionally followed by a predicted blob ID")
 

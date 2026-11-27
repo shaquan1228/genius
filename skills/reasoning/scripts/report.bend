@@ -1,6 +1,11 @@
 import Base
-import ../types.bend as T
-import ./observation.bend as Obs
+import ../../../docs/proofs/types.bend as T
+import ../../../docs/proofs/reasoning/observation.bend as Obs
+
+# The runner asks one of two questions of the same observation.
+type Question<-source: T.Source> is Data:
+  DidRespond{}
+  CheckPrediction{hypothesis: T.Hypothesis<source>}
 
 def result(message: String, code: U32) -> IO(Unit):
   do IO<Unit>:
@@ -28,9 +33,9 @@ def response(recorded: Bool) -> IO(Unit):
     case False{}:
       decision(T.Undecided{})
 
-def check(+source: T.Source, question: T.Question<source>, observation: T.Observation<source>) -> IO(Unit):
+def check(+source: T.Source, question: Question<source>, observation: T.Observation<source>) -> IO(Unit):
   match question:
-    case T.DidRespond{}:
+    case DidRespond{}:
       response(T.received(source, observation))
-    case T.CheckPrediction{hypothesis}:
+    case CheckPrediction{hypothesis}:
       decision(Obs.check(source, hypothesis, observation))

@@ -1,17 +1,7 @@
 import Base
+import ../logic.bend as Logic
 import ../types.bend as T
 import ./main.bend as Model
-
-def IsTrue(flag: Bool) -> Data:
-  match flag:
-    case True{}:
-      Unit
-    case False{}:
-      Empty
-
-def false_is_not_true(equal: {False{} == True{}: Bool}) -> Empty:
-  %Equal.sym(Bool, False{}, True{}, equal): IsTrue(_)
-  Unit{}
 
 def nat_eq_refl(+n: Nat) -> {Nat.is_eq(n, n) == True{}: Bool}:
   match n:
@@ -26,9 +16,9 @@ def nat_eq_sound(left: Nat, right: Nat, equal: {Nat.is_eq(left, right) == True{}
     case 0n 0n:
       {==}
     case 0n 1n+r:
-      Empty.absurd({0n == 1n+r: Nat}, false_is_not_true(equal))
+      Empty.absurd({0n == 1n+r: Nat}, Logic.false_is_not_true(equal))
     case 1n+l 0n:
-      Empty.absurd({1n+l == 0n: Nat}, false_is_not_true(equal))
+      Empty.absurd({1n+l == 0n: Nat}, Logic.false_is_not_true(equal))
     case 1n+l 1n+r:
       %nat_eq_sound(l, r, equal): {1n+l == 1n+_: Nat}
       {==}
@@ -38,7 +28,7 @@ def ConfirmationMatch(premise: Nat, fact: T.Fact) -> Data:
 
 def impossible_confirmation(-premise: Nat, -fact: T.Fact, matches: {False{} == True{}: Bool})
   -> ConfirmationMatch(premise, fact):
-  Empty.absurd(ConfirmationMatch(premise, fact), false_is_not_true(matches))
+  Empty.absurd(ConfirmationMatch(premise, fact), Logic.false_is_not_true(matches))
 
 def confirmation_match_sound(
   premise: Nat,

@@ -12,21 +12,20 @@ RUNNER = ROOT / "skills/reasoning/scripts/prove.sh"
 
 @unittest.skipUnless(BEND, "Bend 2 is required for executable checks")
 class ProofRunner(unittest.TestCase):
-    def test_reasoning_skill_launcher_checks_named_suite(self):
+    def test_runner_checks_named_suite(self):
         fixture = ROOT / "evals/python/integrations/smoke/repos/reasoning_gate"
-        launcher = ROOT / "skills/reasoning/scripts/check-tests.sh"
         cases = (
-            (".", "checks_test.py", 0, "confirmed"),
-            (".", "optional_test.py", 0, "confirmed"),
-            (".", "integration_test.py", 1, "needs_evidence"),
-            (".", "compatibility_test.py", 1, "needs_evidence"),
-            (".", "setup_test.py", 1, "needs_evidence"),
+            (".", "checks_test.py", 0, "supported"),
+            (".", "optional_test.py", 0, "supported"),
+            (".", "integration_test.py", 1, "contradicted"),
+            (".", "compatibility_test.py", 1, "contradicted"),
+            (".", "setup_test.py", 1, "contradicted"),
             ("missing", "test*.py", 2, "unavailable"),
         )
         for directory, pattern, exit_code, decision in cases:
             with self.subTest(directory=directory, pattern=pattern):
                 result = subprocess.run(
-                    ["sh", str(launcher), directory, pattern],
+                    ["bash", RUNNER, "gns-004", "unittest", directory, pattern],
                     cwd=fixture,
                     capture_output=True,
                     text=True,
