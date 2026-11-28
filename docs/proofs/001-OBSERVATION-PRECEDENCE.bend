@@ -9,7 +9,7 @@ def theorem(
   +viable_approaches: Nat,
   +uncertain: Bool,
   +attempt: T.Attempt,
-  +history: List<&2, T.TraceEvent>,
+  +history: T.History<T.TraceEvent>,
   nontrivial: T.NonTrivial(viable_approaches, uncertain),
   allowed: {Loop.observation_allows_act(viable_approaches, uncertain, attempt, history) == True{} : Bool}
 ) -> Spec.ObservedFirst(attempt, history):

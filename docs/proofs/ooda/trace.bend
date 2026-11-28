@@ -2,8 +2,8 @@ import Base
 import ../logic.bend as Logic
 import ../types.bend as T
 
-def first_phase(+attempt: T.Attempt, history: List<&2, T.TraceEvent>) -> Maybe<&2, T.Phase>:
-  match history:
+def first_phase(+attempt: T.Attempt, oldest_first: List<&2, T.TraceEvent>) -> Maybe<&2, T.Phase>:
+  match oldest_first:
     case Nil{}: None{}
     case T.Entry{key, phase} <> tail:
       List.find.if(T.Phase, phase, _ => first_phase(attempt, tail), T.same_attempt(attempt, key))
@@ -19,8 +19,8 @@ def OnMatch(matches: Bool, here: Type, later: Type) -> Type:
     case False{}: later
 
 # The first entry for this attempt must satisfy Claim. An empty history has no witness.
-def AtFirst(~Claim: T.Phase -> Type, +attempt: T.Attempt, history: List<&2, T.TraceEvent>) -> Type:
-  match history:
+def AtFirst(~Claim: T.Phase -> Type, +attempt: T.Attempt, oldest_first: List<&2, T.TraceEvent>) -> Type:
+  match oldest_first:
     case Nil{}: Empty
     case T.Entry{key, phase} <> tail:
       OnMatch(T.same_attempt(attempt, key), Claim(phase), AtFirst(~Claim, attempt, tail))
@@ -40,9 +40,9 @@ def on_match_agrees(~check: T.Phase -> Bool, ~Claim: T.Phase -> Type,
 
 def first_agrees(~check: T.Phase -> Bool, ~Claim: T.Phase -> Type,
   ~agrees: @+phase: T.Phase -> Logic.SubjectAgrees(T.Phase, check, Claim, phase),
-  +attempt: T.Attempt, +history: List<&2, T.TraceEvent>)
-  -> Logic.Agreement(check_phase(check, first_phase(attempt, history)), AtFirst(~Claim, attempt, history)):
-  match history:
+  +attempt: T.Attempt, +oldest_first: List<&2, T.TraceEvent>)
+  -> Logic.Agreement(check_phase(check, first_phase(attempt, oldest_first)), AtFirst(~Claim, attempt, oldest_first)):
+  match oldest_first:
     case Nil{}: Logic.false_agrees_with_empty()
     case T.Entry{key, phase} <> tail:
       on_match_agrees(~check, ~Claim, T.same_attempt(attempt, key), phase,
