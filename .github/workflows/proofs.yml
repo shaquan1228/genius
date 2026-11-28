@@ -1,0 +1,35 @@
+name: Bend proofs
+
+on:
+  push:
+    branches: [main]
+    paths: &proof_paths
+      - "docs/postulates/**"
+      - "docs/proofs/**"
+      - "skills/reasoning/**"
+      - "tests/test_proof*.py"
+      - "tests/fixtures/proofs/**"
+      - "evals/docker/install-bend.sh"
+      - "evals/python/integrations/smoke/repos/basic/**"
+      - ".github/scripts/install-proof-toolchain.sh"
+      - ".github/workflows/proofs.yml"
+  pull_request:
+    paths: *proof_paths
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    env:
+      BEND_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned Bend 2 and Lean toolchains
+        run: bash .github/scripts/install-proof-toolchain.sh "$RUNNER_TEMP/proof-toolchain"
+      - name: Check formal proofs, gate, and toolchain scripts
+        run: python3 -m unittest discover -s tests -p 'test_proof*.py' -v

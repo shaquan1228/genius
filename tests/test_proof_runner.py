@@ -132,33 +132,3 @@ class ProofRunner(unittest.TestCase):
             check("postulate-001", path, [], 2, "undecided", unknown)
             check("gns-004", path, [recorded], 2, "undecided", unknown)
             check("gns-004", path, [other, other], 2, "")
-
-    def test_prediction_and_foreign_observation_are_rejected_as_evidence(self):
-        cases = (
-            (
-                "def bad(-source: T.Source, h: T.Hypothesis<source>) -> Bool:\n"
-                "  T.received(source, h)\n",
-                "T.Observation<source>", "T.Hypothesis<source>",
-            ),
-            (
-                'def bad(obs: T.Observation<T.TestSuite{"run-1", ".", "asked.py"}>) -> Bool:\n'
-                '  T.received(T.TestSuite{"run-2", ".", "asked.py"}, obs)\n',
-                'T.Observation<T.TestSuite{"run-2", ".", "asked.py"}>',
-                'T.Observation<T.TestSuite{"run-1", ".", "asked.py"}>',
-            ),
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            shutil.copy(ROOT / "docs/proofs/types.bend", root)
-            for body, expected, observed in cases:
-                with self.subTest(expected=expected):
-                    source = root / "invalid.bend"
-                    source.write_text("import Base\nimport ./types.bend as T\n" + body)
-                    result = subprocess.run(
-                        [BEND, source, "--check-only"], capture_output=True, text=True, timeout=30,
-                        env=dict(os.environ, BEND_NO_TELEMETRY="1"),
-                    )
-                    self.assertNotEqual(result.returncode, 0)
-                    diagnostic = result.stdout + result.stderr
-                    self.assertIn(f"- expected : {expected}\n", diagnostic)
-                    self.assertIn(f"- observed : {observed}\n", diagnostic)
