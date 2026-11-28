@@ -31,8 +31,10 @@ def load_documents(spec: Experiment, *, source_dir: str | None = None) -> Mappin
 
 
 def variant_documents(spec: Experiment, *, variant: VariantSettings | None) -> Mapping[str, bytes]:
-    documents = load_documents(spec, source_dir=variant.source_dir if variant else None)
-    if variant is None or variant.proof_backend is None:
+    if variant is None:
+        return load_documents(spec)
+    documents = load_documents(spec, source_dir=variant.source_dir)
+    if variant.proof_backend is None:
         return documents
     for flag in (
         "instructions/skills/reasoning/references/proof-backend",
