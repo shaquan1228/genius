@@ -5,6 +5,7 @@ usage() {
   cat <<'HELP'
 Usage: prove.sh postulate-001 git-blob COMMIT PATH
        prove.sh gns-004 git-blob COMMIT PATH EXPECTED_BLOB
+       prove.sh gns-004 poker-to-call STREET_WAGER HERO_COMMITTED EXPECTED
        prove.sh gns-004 unittest DIRECTORY [PATTERN]
        prove.sh gns-004 json-parse INPUT accepted|rejected [PARSER_VERSION]
 
@@ -13,6 +14,11 @@ A completed lookup tells you whether that path names a blob. An unreadable
 commit leaves the question undecided. unittest checks whether the suite passed.
 json-parse checks the literal input with the installed Python JSON parser.
 You can pin the parser version printed by the observer.
+
+poker-to-call checks the amount needed to match the current wager before
+stack limits. Use the current street's total wager and the player's total
+contribution on that street. Use one unit throughout, with up to two decimal
+places.
 
 The markdown backend prints the rule and the source observation for you to
 interpret. A completed suite prints its run ID. A successful Git lookup with
@@ -24,6 +30,12 @@ HELP
 invalid() {
   usage >&2
   exit 2
+}
+
+hundredths() {
+  [[ $1 =~ ^([0-9]{1,8})(\.([0-9]{1,2}))?$ ]] || return 1
+  local fraction=${BASH_REMATCH[3]:-}00
+  printf '%s\n' "$((10#${BASH_REMATCH[1]} * 100 + 10#${fraction:0:2}))"
 }
 
 if [[ ${1:-} == --help ]]; then
@@ -38,6 +50,14 @@ shift 2
 scripts=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 case "$proof/$source" in
+  gns-004/poker-to-call)
+    [[ $# == 3 ]] || invalid
+    wager=$(hundredths "$1") || invalid
+    committed=$(hundredths "$2") || invalid
+    expected=$(hundredths "$3") || invalid
+    set -- "$wager" "$committed" "$expected"
+    program=check-poker-call.bend
+    ;;
   postulate-001/git-blob|gns-004/git-blob)
     oid='^([0-9a-f]{40}|[0-9a-f]{64})$'
     if [[ $proof == postulate-001 ]]; then
@@ -80,6 +100,14 @@ case "${GENIUS_PROOF_BACKEND-$backend}" in
     cat -- "$rule"
     printf '\nSource observation (%s)\n' "$source"
     case "$source" in
+      poker-to-call)
+        if (( $2 > $1 )); then
+          printf 'The street commitment exceeds the current wager.\n' >&2
+          printf 'unavailable\n'
+          exit 2
+        fi
+        printf 'Amount to match (hundredths): %s\n' "$(($1 - $2))"
+        ;;
       json-parse)
         printf 'Parser input: %q\n' "$1"
         if [[ $# == 3 ]]; then

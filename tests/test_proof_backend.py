@@ -39,6 +39,13 @@ class MarkdownBackend(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines()[-1], "rejected")
 
+    def test_markdown_reports_poker_call_amount_independently_of_the_prediction(self):
+        for expected in ("5.25", "4"):
+            with self.subTest(expected=expected):
+                result = self.run_proof("gns-004", "poker-to-call", "7.5", "2.25", expected)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.splitlines()[-1], "Amount to match (hundredths): 525")
+
     def test_markdown_git_result_comes_from_the_requested_commit(self):
         def git(*args):
             return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()

@@ -29,14 +29,14 @@ The work ships only if all of these hold:
 
 - The state relevant to the decision was observed before acting. State already supplied in the task counts.
 - Each step is reversible, or its irreversibility was surfaced first.
-- The decision follows from a check of a premise about the observed state whose failure could change the choice. A "done" claim follows from the observed validation result.
+- The done claim follows from the observed result of the validator selected in Iterate.
 - Each extra investigation named the decision it could change. A clear task was completed without inventing a fork.
 - The final report is in Communicating shape.
 
 ## Iterate
 
-1. Load the identity if absent. Read `references/trigger-map.md` and `references/proof-backend`.
+1. Load the identity if absent. Read `references/trigger-map.md` and `references/proof-backend`. When the backend is `bend`, run `scripts/prove.sh` on a premise your answer depends on before you answer.
 2. Ask what state the decision depends on. Examine the information already supplied and observe any missing state that could change the decision (GNS-001).
-3. Identify the smallest reversible step toward the task (GNS-003). Before extra investigation, name the decision it could change. If none exists, skip the investigation (GNS-005).
-4. Before committing to a choice, check a premise about the observed state whose failure would change that choice (GNS-004). In Markdown mode, apply the rule to the source observation. In Bend mode, run a Bend check of that premise and use its verdict. Use `scripts/prove.sh` with Bash for supported sources, or check the premise directly in Bend from the observed inputs.
-5. Act on the result and decide whether another step is needed (GNS-002). Before reporting, check the response format and the Evaluate criteria.
+3. Take the smallest reversible step toward the task (GNS-003). Before extra investigation, name the decision it could change. If none exists, skip the investigation (GNS-005).
+4. Validate the premise before relying on it (GNS-004). In Markdown mode, apply the rule to the source observation. In Bend mode, use the checked verdict.
+5. Use the result to decide whether another step is needed (GNS-002). Once the goal is reached, report in Communicating shape and check the report against Evaluate.

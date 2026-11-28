@@ -49,6 +49,26 @@ class ProofRunner(unittest.TestCase):
                 result = self.run_proof("gns-004", "json-parse", text, prediction)
                 self.assertEqual((result.returncode, result.stdout.strip()), (code, verdict), result.stderr)
 
+    def test_poker_call_amount_checks_the_observed_wager(self):
+        cases = (
+            ("58", "16", "42", 0, "supported"),
+            ("58", "16", "41", 1, "contradicted"),
+            ("7.5", "2.25", "5.25", 0, "supported"),
+            ("2.50", "2.5", "0", 0, "supported"),
+            ("5", "6", "0", 2, "unavailable"),
+        )
+        for wager, committed, expected, code, verdict in cases:
+            with self.subTest(wager=wager, committed=committed, expected=expected):
+                result = self.run_proof("gns-004", "poker-to-call", wager, committed, expected)
+                self.assertEqual((result.returncode, result.stdout.strip()), (code, verdict), result.stderr)
+
+    def test_poker_call_amount_rejects_malformed_observations(self):
+        for wager in ("-2", "3.001", "nan", "1e2", '{"action":"call"}'):
+            with self.subTest(wager=wager):
+                result = self.run_proof("gns-004", "poker-to-call", wager, "0", "0")
+                self.assertEqual((result.returncode, result.stdout), (2, ""))
+                self.assertIn("Usage:", result.stderr)
+
     def test_parser_version_is_matched_against_the_runner(self):
         args = ("gns-004", "json-parse", "[1,]", "rejected")
         observed = self.run_proof(*args)
