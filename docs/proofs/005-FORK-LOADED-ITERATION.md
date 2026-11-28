@@ -28,10 +28,6 @@ In the genius system, iteration within a stable form is justified if and only if
 
 P3a and P3b join the two sorts. P3a imports GNS-002. P3b imports GNS-003. Each premise grounds one direction of the biconditional.
 
-In the general proof, P1 gives the dwell state for this iteration. P3a then takes that dwell state and evidence of loading and concludes that the iteration is justified.
-
-The Bend check takes an iteration and its history, newest record first. An iteration identifies its attempt and the decision it prepares. `Found` carries evidence that the attempt recorded a dependency of that decision, then received an answer from the corresponding source. Either outcome can inform the decision. `Missing` means the history contains no such pair and leaves the broader question of justification open. The [general derivation](reasoning/iteration.bend) also covers preparation through capability or insight.
-
 ---
 
 ## Definitions

@@ -32,48 +32,48 @@ def Predicates.ValidatedBefore(ctx: T.Context<T.ActionUse>) -> Data:
 
 def Predicates.ValidatedAfter(ctx: T.Context<T.ExternalUse>) -> Data:
   match ctx:
-    case T.Frame{actor, T.UseOutput{T.Use{action, premise, approaches, uncertain}, loop, output}, before, after, intervention}:
+    case T.Frame{_, T.UseOutput{T.Use{_, premise, _, _}, _}, _, after, _}:
       Predicates.ValidatedAt(premise, after)
 
 def Predicates.ExternalDependency(ctx: T.Context<T.ExternalUse>) -> Type:
   match ctx:
-    case T.Frame{actor, T.UseOutput{T.Use{action, premise, approaches, uncertain}, loop, output}, before, after, intervention}:
-      (Predicates.DependsAt(T.Premise{premise}, T.Output{loop, output}, before) &
+    case T.Frame{actor, T.UseOutput{T.Use{_, premise, _, _}, T.Output{+loop, number}}, before, _, _}:
+      (Predicates.DependsAt(T.Premise{premise}, T.OutputSubject{T.Output{loop, number}}, before) &
         Member(T.Fact, T.ExternalLoop{actor, loop}, before))
 
 def Predicates.Probed(ctx: T.Context<T.ExternalUse>) -> Type:
   match ctx:
-    case T.Frame{actor, T.UseOutput{use, loop, output}, before, after, intervention}:
-      {intervention == T.Probe{T.Output{loop, output}} : T.Intervention}
+    case T.Frame{_, T.UseOutput{_, output}, _, _, intervention}:
+      {intervention == T.Probe{output} : T.Intervention}
 
 def Predicates.Signaled(ctx: T.Context<T.ExternalUse>) -> Type:
   match ctx:
-    case T.Frame{actor, T.UseOutput{use, loop, output}, before, after, intervention}:
-      {intervention == T.Signal{T.Output{loop, output}} : T.Intervention}
+    case T.Frame{_, T.UseOutput{_, output}, _, _, intervention}:
+      {intervention == T.Signal{output} : T.Intervention}
 
 def Predicates.Enforcement(ctx: T.Context<T.ExternalUse>) -> Type:
   match ctx:
-    case T.Frame{actor, T.UseOutput{T.Use{action, premise, approaches, uncertain}, loop, output}, before, after, intervention}:
+    case T.Frame{_, T.UseOutput{T.Use{_, premise, _, _}, _}, _, _, intervention}:
       {intervention == T.SafeguardInstalled{premise} : T.Intervention}
 
 def Predicates.ObservableBefore(ctx: T.Context<T.ExternalUse>) -> Data:
   match ctx:
-    case T.Frame{actor, T.UseOutput{use, loop, output}, before, after, intervention}:
-      Member(T.Fact, T.Observable{actor, T.Output{loop, output}}, before)
+    case T.Frame{actor, T.UseOutput{_, output}, before, _, _}:
+      Member(T.Fact, T.Observable{actor, output}, before)
 
 def Predicates.DefaultEstablishedAfter(ctx: T.Context<T.ExternalUse>) -> Data:
   match ctx:
-    case T.Frame{actor, T.UseOutput{T.Use{action, premise, approaches, uncertain}, loop, output}, before, after, intervention}:
+    case T.Frame{_, T.UseOutput{T.Use{_, premise, _, _}, _}, _, after, _}:
       Member(T.Fact, T.DefaultEstablished{premise}, after)
 
 def Predicates.OutputDependencyAfter(ctx: T.Context<T.ExternalUse>) -> Data:
   match ctx:
-    case T.Frame{actor, T.UseOutput{T.Use{action, premise, approaches, uncertain}, loop, output}, before, after, intervention}:
-      Predicates.DependsAt(T.Premise{premise}, T.Output{loop, output}, after)
+    case T.Frame{_, T.UseOutput{T.Use{_, premise, _, _}, output}, _, after, _}:
+      Predicates.DependsAt(T.Premise{premise}, T.OutputSubject{output}, after)
 
 def Predicates.CascadeRecordedAfter(ctx: T.Context<T.ExternalUse>) -> Data:
   match ctx:
-    case T.Frame{actor, T.UseOutput{T.Use{action, premise, approaches, uncertain}, loop, output}, before, after, intervention}:
+    case T.Frame{_, T.UseOutput{T.Use{action, premise, _, _}, _}, _, after, _}:
       Member(T.Fact, T.CascadeOccurred{action, premise}, after)
 
 type Predicates.EnforcementEffects<-ctx: T.Context<T.ExternalUse>> is Type:

@@ -6,34 +6,11 @@ import ./SPEC.bend as Spec
 import ./LAWS.bend as Laws
 import ./trace.bend as Trace
 
-# With all three fields empty, any proposed witness would equate True and False.
-def empty_field_witness(observed: Spec.NonemptyEvidence(True{}, True{}, True{})) -> {True{} == False{} : Bool}:
-  match observed:
-    case Inl{fact}: fact
-    case Inr{Inl{signal}}: signal
-    case Inr{Inr{constraint}}: constraint
-
-def has_observation_agrees(+facts_empty: Bool, +signals_empty: Bool, +constraints_empty: Bool)
-  -> Logic.Agreement(Loop.has_observation(facts_empty, signals_empty, constraints_empty),
-    Spec.NonemptyEvidence(facts_empty, signals_empty, constraints_empty)):
-  match facts_empty signals_empty constraints_empty:
-    case False{} _ _:
-      (_ => Inl{{==}}, _ => {==})
-    case True{} False{} _:
-      (_ => Inr{Inl{{==}}}, _ => {==})
-    case True{} True{} False{}:
-      (_ => Inr{Inr{{==}}}, _ => {==})
-    case True{} True{} True{}:
-      (
-        allowed => Empty.absurd(Spec.NonemptyEvidence(True{}, True{}, True{}), Logic.false_is_not_true(allowed)),
-        observed => Equal.sym(Bool, True{}, False{}, empty_field_witness(observed))
-      )
-
 def phase_agrees(+phase: T.Phase)
   -> Logic.SubjectAgrees(T.Phase, Loop.is_recorded_observation, Spec.RecordedObservation, phase):
   match phase:
-    case T.Observed{facts, signals, constraints}:
-      has_observation_agrees(String.is_empty(facts), String.is_empty(signals), String.is_empty(constraints))
+    case T.Observed{_, T.Returned{_}}: (_ => Unit{}, _ => {==})
+    case T.Observed{_, T.NoResponse{}}: Logic.false_agrees_with_empty()
     case T.Oriented{}: Logic.false_agrees_with_empty()
     case T.Decided{}: Logic.false_agrees_with_empty()
     case T.Acted{}: Logic.false_agrees_with_empty()
@@ -56,12 +33,13 @@ def required_gate_agrees(+required: Bool, -observed: Bool, -Expected: Type,
   %Equal.sym(Bool, required, True{}, proof) : Logic.Agreement(Loop.allow_act(_, _ => observed), Expected)
   agreement
 
-def gate_agrees(+viable_approaches: Nat, +uncertain: Bool, +attempt: T.Attempt, +history: List<&2, T.TraceEvent>,
+def gate_agrees(+viable_approaches: Nat, +uncertain: Bool, +attempt: T.Attempt, +history: T.History<T.TraceEvent>,
   nontrivial: T.NonTrivial(viable_approaches, uncertain))
   -> Logic.Agreement(Loop.observation_allows_act(viable_approaches, uncertain, attempt, history), Spec.ObservedFirst(attempt, history)):
   +multiple = Nat.is_lt(1n, viable_approaches)
   required = required_from_spec(multiple, uncertain, nontrivial)
-  first = Trace.first_agrees(~Loop.is_recorded_observation, ~Spec.RecordedObservation, ~phase_agrees, attempt, history)
+  first = Trace.first_agrees(~Loop.is_recorded_observation, ~Spec.RecordedObservation, ~phase_agrees, attempt,
+    T.oldest_first(T.TraceEvent, history))
   required_gate_agrees(Bool.or(multiple, uncertain), Loop.observed_first(attempt, history),
     Spec.ObservedFirst(attempt, history), required, first)
 

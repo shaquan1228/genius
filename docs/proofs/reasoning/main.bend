@@ -5,7 +5,7 @@ import ./observation.bend as Obs
 
 def action_context(ctx: T.Context<T.ExternalUse>) -> T.Context<T.ActionUse>:
   match ctx:
-    case T.Frame{actor, T.UseOutput{use, _, _}, before, after, intervention}:
+    case T.Frame{actor, T.UseOutput{use, _}, before, after, intervention}:
       T.Frame{actor, use, before, after, intervention}
 
 def verdict(+source: T.Source, hypothesis: T.Hypothesis<source>, history: List<&2, T.Fact>) -> T.Verdict:

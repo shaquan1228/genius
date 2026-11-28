@@ -11,6 +11,9 @@ BEND = os.environ.get("BEND_BIN") or shutil.which("bend")
 
 
 MISMATCHES = {
+    "opinion_as_observation": ('T.Observation<T.ParserCase{"v1", "[1,]"}>', "String"),
+    "prediction_as_phase_observation": ("T.Observation<source>", "T.Hypothesis<source>"),
+    "action_as_probe_output": ("T.LoopOutput", "T.Subject"),
     "without_recorded_observation": ("False{}", "True{}"),
     "without_norm": ("Empty", "Unit"),
     "relabelled_premise": (
@@ -78,6 +81,7 @@ class Corpus(unittest.TestCase):
         self.assertTrue(sources)
         sources.append(ROOT / "docs/proofs/reasoning/example.bend")
         sources.append(ROOT / "tests/fixtures/proofs/trace.bend")
+        sources.append(ROOT / "tests/fixtures/proofs/external_output.bend")
         sources.append(Path(shutil.copy(ROOT / "tests/fixtures/proofs/iteration.bend", self.modules)))
         for source in sources:
             with self.subTest(source=source.name):

@@ -7,19 +7,27 @@ import ../../../docs/proofs/ooda/main.bend as Loop
 def target() -> T.Attempt:
   T.AttemptKey{7n, 2n}
 
-def observed_fact(facts: String) -> T.Phase:
-  signals: String = ""
-  constraints: String = ""
-  T.Observed{facts, signals, constraints}
+def parser_returned(actual: T.ParseOutcome) -> T.Phase:
+  T.Observed{T.ParserCase{"v1", "[1,]"}, T.Returned{actual}}
 
-def history() -> List<&2, T.TraceEvent>:
-  T.Entry{T.AttemptKey{7n, 1n}, observed_fact("earlier attempt")} <>
-  T.Entry{T.AttemptKey{8n, 2n}, observed_fact("different action")} <>
-  T.Entry{target(), T.Decided{}} <>
-  T.Entry{target(), observed_fact("too late")} <> Nil{}
+def history() -> T.History<T.TraceEvent>:
+  previous: T.TraceEvent = T.Entry{T.AttemptKey{7n, 1n}, parser_returned(T.Rejected{})}
+  other: T.TraceEvent = T.Entry{T.AttemptKey{8n, 2n}, parser_returned(T.Accepted{})}
+  decision: T.TraceEvent = T.Entry{target(), T.Decided{}}
+  late_response: T.TraceEvent = T.Entry{target(), parser_returned(T.Rejected{})}
+  T.Record{late_response, T.Record{decision, T.Record{other, T.Record{previous, T.Start{}}}}}
+
+def either_parser_answer_counts_as_an_observation(actual: T.ParseOutcome)
+  -> {Loop.observed_first(target(), T.Record{T.Entry{target(), parser_returned(actual)}, T.Start{}}) == True{} : Bool}:
+  {==}
+
+def a_missing_response_cannot_open_the_observation_gate()
+  -> {Loop.observed_first(target(), T.Record{T.Entry{target(), T.Observed{T.ParserCase{"v1", "[1,]"}, T.NoResponse{}}},
+    T.Start{}}) == False{} : Bool}:
+  {==}
 
 def first_phase_uses_both_parts_of_the_key()
-  -> {Trace.first_phase(target(), history()) == Some{T.Decided{}} : Maybe<&2, T.Phase>}:
+  -> {Trace.first_phase(target(), T.oldest_first(T.TraceEvent, history())) == Some{T.Decided{}} : Maybe<&2, T.Phase>}:
   {==}
 
 def a_later_observation_cannot_justify_the_decision()
@@ -27,7 +35,7 @@ def a_later_observation_cannot_justify_the_decision()
   {==}
 
 def missing_attempt_has_no_phase()
-  -> {Trace.first_phase(T.AttemptKey{8n, 1n}, history()) == None{} : Maybe<&2, T.Phase>}:
+  -> {Trace.first_phase(T.AttemptKey{8n, 1n}, T.oldest_first(T.TraceEvent, history())) == None{} : Maybe<&2, T.Phase>}:
   {==}
 
 # A different phase rule accepts any entry. Its proof reuses the same scan.

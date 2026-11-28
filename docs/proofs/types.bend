@@ -51,7 +51,7 @@ def same_attempt(a: Attempt, b: Attempt) -> Bool:
       Bool.and(Nat.is_eq(action, other_action), Nat.is_eq(number, other_number))
 
 type Phase is Data:
-  Observed{facts: String, signals: String, constraints: String}
+  Observed{source: Source, response: Observation<source>}
   Oriented{}
   Decided{}
   Acted{}
@@ -62,25 +62,40 @@ type AttemptEvent<-Payload: Data> is Data:
 def TraceEvent() -> Data:
   AttemptEvent<Phase>
 
+type History<-Event: Data> is Data:
+  Start{}
+  Record{event: Event, earlier: History<Event>}
+
+def oldest_first.go(-Event: Data, history: History<Event>, newer: List<&2, Event>) -> List<&2, Event>:
+  match history:
+    case Start{}: newer
+    case Record{event, earlier}: oldest_first.go(Event, earlier, event <> newer)
+
+def oldest_first(-Event: Data, history: History<Event>) -> List<&2, Event>:
+  oldest_first.go(Event, history, Nil{})
+
 type PremiseClaim is Data:
   Claim{number: Nat, source: Source, hypothesis: Hypothesis<source>}
+
+type LoopOutput is Data:
+  Output{loop: Nat, number: Nat}
 
 type Subject is Data:
   Action{number: Nat}
   Premise{claim: PremiseClaim}
-  Output{loop: Nat, number: Nat}
+  OutputSubject{output: LoopOutput}
 
 type Fact is Data:
   Dependency{dependent: Subject, prerequisite: Subject}
   Reading{source: Source, actual: Answer(source)}
   ExternalLoop{actor: Nat, loop: Nat}
-  Observable{actor: Nat, output: Subject}
+  Observable{actor: Nat, output: LoopOutput}
   DefaultEstablished{premise: PremiseClaim}
   CascadeOccurred{action: Nat, premise: PremiseClaim}
 
 type Intervention is Data:
-  Probe{output: Subject}
-  Signal{output: Subject}
+  Probe{output: LoopOutput}
+  Signal{output: LoopOutput}
   SafeguardInstalled{premise: PremiseClaim}
   NoIntervention{}
   OtherIntervention{}
@@ -98,10 +113,10 @@ type ActionUse is Data:
   Use{action: Nat, premise: PremiseClaim, viable_approaches: Nat, uncertain: Bool}
 
 type ExternalUse is Data:
-  UseOutput{use: ActionUse, loop: Nat, output: Nat}
+  UseOutput{use: ActionUse, output: LoopOutput}
 
 type Iteration is Data:
   Prepare{attempt: Attempt, decision: Nat}
 
 def IterationHistory() -> Data:
-  List<&2, AttemptEvent<Fact>>
+  History<AttemptEvent<Fact>>
