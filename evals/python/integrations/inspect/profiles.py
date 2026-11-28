@@ -3,7 +3,7 @@
 import base64
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from itertools import chain
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
@@ -11,7 +11,7 @@ from types import MappingProxyType
 from inspect_ai.dataset import Sample
 
 from evals.python import REPO_ROOT, Case, Experiment, Profile
-from evals.python.evaluation import InstructionDelivery
+from evals.python.evaluation import InstructionDelivery, VariantSettings
 
 REASONING_DOCUMENTS = (
     "skills/reasoning/SKILL.md",
@@ -23,22 +23,37 @@ REASONING_DOCUMENTS = (
 
 def load_documents(spec: Experiment, *, source_dir: str | None = None) -> Mapping[str, bytes]:
     root = Path(source_dir).resolve() if source_dir is not None else REPO_ROOT
-    return MappingProxyType(
-        {
-            f"instructions/{path.relative_to(root).as_posix()}": path.read_bytes()
-            for folder in sorted(set(chain.from_iterable(p.instructions for p in spec.profiles)))
-            for path in instruction_files(root, folder=folder)
-        }
-    )
+    documents = {
+        f"instructions/{path.relative_to(root).as_posix()}": path.read_bytes()
+        for path in instruction_files(spec, root=root)
+    }
+    return MappingProxyType(documents)
 
 
-def instruction_files(root: Path, *, folder: str) -> list[Path]:
-    selected = root / folder
-    safe_instruction(selected, root=root)
-    paths = [selected] if selected.is_file() else sorted(selected.rglob("*"))
-    for path in paths:
-        safe_instruction(path, root=root)
-    return [path for path in paths if path.is_file()]
+def variant_documents(spec: Experiment, *, variant: VariantSettings | None) -> Mapping[str, bytes]:
+    if variant is None:
+        return load_documents(spec)
+    documents = load_documents(spec, source_dir=variant.source_dir)
+    if variant.proof_backend is None:
+        return documents
+    for flag in (
+        "instructions/skills/reasoning/references/proof-backend",
+        "instructions/skills/reasoning/proof-backend",
+    ):
+        if flag in documents:
+            return MappingProxyType({**documents, flag: f"{variant.proof_backend}\n".encode()})
+    raise ValueError("A proof_backend requires the reasoning skill's proof-backend file")
+
+
+def instruction_files(spec: Experiment, *, root: Path) -> Iterator[Path]:
+    folders = chain.from_iterable(profile.instructions for profile in spec.profiles)
+    for folder in sorted(set(folders)):
+        selected = root / folder
+        safe_instruction(selected, root=root)
+        paths = [selected] if selected.is_file() else sorted(selected.rglob("*"))
+        for path in paths:
+            safe_instruction(path, root=root)
+        yield from filter(Path.is_file, paths)
 
 
 def safe_instruction(path: Path, *, root: Path) -> None:

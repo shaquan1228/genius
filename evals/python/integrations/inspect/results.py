@@ -128,8 +128,11 @@ def read_run(directory: Path) -> EvalLog:
 def _complete(log: EvalLog, *, settings: EvaluationSettings) -> None:
     spec = evaluation.resolve_experiment(settings)
     expected = set(product([log.eval.task], settings.sample_ids or (), range(1, spec.epochs + 1)))
-    if completeness.failed(completeness.report([log], expected=expected)):
-        raise ValueError("Incomplete evaluation evidence")
+    summary = completeness.report([log], expected=expected)
+    if completeness.failed(summary):
+        raise ValueError(
+            f"Incomplete evaluation evidence for {log.eval.task}: {json.dumps(summary)}"
+        )
     for sample in log.samples or []:
         elapsed(sample)
 

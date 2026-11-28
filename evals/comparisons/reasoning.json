@@ -1,0 +1,7 @@
+{
+  "baseline": "control",
+  "variants": [
+    {"variant": {"name": "control", "source_ref": "HEAD", "proof_backend": "markdown"}},
+    {"variant": {"name": "treatment", "source_ref": "HEAD", "proof_backend": "bend"}}
+  ]
+}

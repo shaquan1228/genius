@@ -125,9 +125,10 @@ def _change(log: Any, *, change: str) -> None:
 )
 def rejects_incomplete_native_evidence(changed: Path, *, change: str) -> None:
     _rewrite(changed, change=change)
-    with pytest.raises(
-        ValueError, match=r"Incomplete|elapsed|validation error|case selection|provenance"
-    ):
+    pattern = r"Incomplete|elapsed|validation error|case selection|provenance"
+    if change == "missing":
+        pattern = r"Incomplete.*control.*small-decision"
+    with pytest.raises(ValueError, match=pattern):
         results.read_run(changed)
 
 

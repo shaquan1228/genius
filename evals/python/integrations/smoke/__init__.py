@@ -31,7 +31,9 @@ def checks(*, inputs: tuple[str, ...], program: str) -> Criterion:
 
 def repo(name: str) -> dict[str, str]:
     return {
-        path.name: path.read_text(encoding="utf-8") for path in sorted((REPOS / name).iterdir())
+        path.name: path.read_text(encoding="utf-8")
+        for path in sorted((REPOS / name).iterdir())
+        if path.is_file()
     }
 
 
@@ -69,6 +71,7 @@ class AnswerCase(BaseModel):
     prompt: str
     expected: dict[str, str | bool]
     reason: str
+    fixture: str | None = None
 
 
 class Cases(BaseModel):
@@ -113,7 +116,7 @@ def repo_task(case: RepoCase) -> Task:
 def answer_task(case: AnswerCase) -> Task:
     return Task(
         id=case.id,
-        fixture=[],
+        fixture=_sources(repo(case.fixture)) if case.fixture else [],
         instruction=Instruction(prompt=case.prompt),
         criterion=Criterion.Answer(
             rubric=Rubric(

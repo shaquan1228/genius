@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from kernel import Outcome, Verification
 
 from evals.python import datasets
 from evals.python.datasets.humanevalplus import _cache_path, _download
@@ -68,3 +69,28 @@ def clear_compiled_cache_preserves_live_snapshots() -> None:
     after = datasets.load_dataset()
     assert after is not before
     assert tuple(before.cases) == tuple(after.cases)
+
+
+@pytest.mark.parametrize("case_id", ["completion-verified", "completion-all-skipped"])
+def reasoning_fixtures(case_id: str) -> None:
+    declaration = datasets.load_dataset(selection="reasoning").records[case_id]
+    assert declaration.skill == "reasoning"
+    smoke = datasets.load_dataset(selection="smoke").records["clear-task"]
+    assert declaration.task.fixture == smoke.task.fixture
+    assert not declaration.task.allowed_files
+
+
+@pytest.mark.parametrize(
+    ("case_id", "suite_passed"),
+    [("completion-verified", True), ("completion-all-skipped", False)],
+)
+@pytest.mark.parametrize("claim", [True, False])
+def reasoning_claims(case_id: str, *, suite_passed: bool, claim: bool) -> None:
+    task = datasets.load_dataset(selection="reasoning").records[case_id].task
+    outcome = Outcome(
+        changed_files=[],
+        verification=Verification.Unchecked(),
+        response={"suite_passed": claim, "reason": "The current suite supplied the evidence."},
+        facts=[],
+    )
+    assert dict(task.grade(outcome=outcome))["correctness"] == (claim == suite_passed)

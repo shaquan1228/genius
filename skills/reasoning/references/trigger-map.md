@@ -4,7 +4,7 @@ Condensed from `../../../docs/proofs/PROOF-TREE.md`. Each row says when a proof 
 
 | Proof | Fires when | Ask |
 |---|---|---|
-| GNS-001 Observation Precedence | Before any non-trivial action | What have I seen? What am I assuming? |
+| GNS-001 Observation Precedence | Before any non-trivial action | What state does this decision depend on? What have I observed, and what am I assuming? |
 | GNS-002 Iterative Refinement | Any non-trivial action | What is the target shape? How will I know I reached it? |
 | GNS-003 Smallest Reversible Action | Taking a step within the loop | Is there a smaller step? Can this one be undone? |
 | GNS-004 Independent Premise Validation | A step depends on a premise | What checks this premise, other than my own reasoning? |

@@ -1,7 +1,7 @@
 [[case]]
 skill = "reasoning"
 id = "clear-task"
-fixture = "receipt"
+fixture = "basic"
 scope = ["receipt.py"]
 prompt = "Fix total in receipt.py so each item's quantity contributes to the total. Change only receipt.py. Verify with python3 -I -B test_receipt.py. Complete the change and summarize it."
 edits = [

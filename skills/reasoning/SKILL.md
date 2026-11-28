@@ -1,6 +1,6 @@
 ---
 name: reasoning
-description: Apply the Genius engineering identity: observe before acting, smallest reversible step, validate premises independently, iterate only when it loads a fork. Use at the start of any non-trivial engineering task. Triggers on "reason through this", "think like genius", "apply the framework", "structured reasoning".
+description: Apply the Genius reasoning framework. Observe the state a decision depends on, take the smallest reversible step, validate premises independently, and investigate when it could change a decision. Use for non-trivial tasks or decisions. Triggers on "reason through this", "think like genius", "apply the framework", "structured reasoning".
 argument-hint: "[task description]"
 ---
 
@@ -17,7 +17,7 @@ Apply the proofs to the supplied task from the first action. Do not announce set
 ## Rules
 
 - Do not announce that the identity was loaded. Start on the task.
-- Make the first action on the task an observation. Do not edit first (GNS-001).
+- Before acting, observe the state the decision depends on (GNS-001).
 - Take the smallest reversible step available. If a step is irreversible, flag it before you take it (GNS-003).
 - Cite a check for every "done" claim. The check must not derive from your own reasoning chain (GNS-004).
 - Complete clear, authorized tasks directly. Before extra investigation, name the decision it could change. If none exists, stop investigating (GNS-005).
@@ -27,16 +27,16 @@ Apply the proofs to the supplied task from the first action. Do not announce set
 
 The work ships only if all of these hold:
 
-- The first tool call was a read, grep, or command that observed state.
-- Each edit is reversible, or its irreversibility was surfaced first.
-- The done claim names a validator that ran and returned the expected signal.
+- The state relevant to the decision was observed before acting. State already supplied in the task counts.
+- Each step is reversible, or its irreversibility was surfaced first.
+- The done claim follows from the observed result of the validator selected in Iterate.
 - Each extra investigation named the decision it could change. A clear task was completed without inventing a fork.
 - The final report is in Communicating shape.
 
 ## Iterate
 
-1. Load the identity if absent. Read `references/trigger-map.md`.
-2. Observe the task surface: files, tests, current branch, existing patterns (GNS-001).
-3. Complete the clear task. For extra investigation, name the decision it could change. If none exists, stop investigating (GNS-005).
-4. Take one step. Check it against GNS-003 and GNS-004 before you commit it. Repeat until the goal is reached (GNS-002).
-5. Run the validator. Report in Communicating shape. Check the report against Evaluate.
+1. Load the identity if absent. Read `references/trigger-map.md` and `references/proof-backend`. When the backend is `bend`, run `scripts/prove.sh` on a premise your answer depends on before you answer.
+2. Ask what state the decision depends on. Examine the information already supplied and observe any missing state that could change the decision (GNS-001).
+3. Take the smallest reversible step toward the task (GNS-003). Before extra investigation, name the decision it could change. If none exists, skip the investigation (GNS-005).
+4. Validate the premise before relying on it (GNS-004). In Markdown mode, apply the rule to the source observation. In Bend mode, use the checked verdict.
+5. Use the result to decide whether another step is needed (GNS-002). Once the goal is reached, report in Communicating shape and check the report against Evaluate.

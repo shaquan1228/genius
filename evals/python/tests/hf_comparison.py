@@ -4,6 +4,7 @@ import json
 import runpy
 import subprocess
 from collections.abc import Mapping
+from io import BytesIO
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
@@ -12,8 +13,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from huggingface_hub import HfApi
+from pydantic import ValidationError
 
-from evals.python import comparison, evaluation
+from evals.python import EVALS_ROOT, comparison, evaluation
 from evals.python.comparison import (
     ComparisonReport,
     ComparisonRequest,
@@ -91,6 +93,45 @@ def runs_independent_jobs_with_pinned_inputs(api: MagicMock, *, tmp_path: Path) 
     assert (tmp_path / "summary.md").read_text() == "summary"
 
 
+@pytest.mark.parametrize("provider", ["retired", "paused", "text-only", "live"])
+def pinned_hf_route_is_checked_before_launch(
+    api: MagicMock, *, tmp_path: Path, provider: str
+) -> None:
+    request = _request()
+    shared = request.shared.model_copy(
+        update={"model": f"hf-inference-providers/org/model:{provider}"}
+    )
+    request = request.model_copy(update={"shared": shared})
+    catalog = {
+        "data": {
+            "providers": [
+                {"provider": "live", "status": "live"},
+                {"provider": "paused", "status": "staging"},
+                {"provider": "text-only", "status": "live", "supports_tools": False},
+            ]
+        }
+    }
+    response = BytesIO(json.dumps(catalog).encode())
+    with patch.object(dispatch, "urlopen", return_value=response) as lookup:
+        if provider == "live":
+            compare.execute(request, output=tmp_path, namespace="owner")
+            assert api.run_job.call_count == 2
+        else:
+            with pytest.raises(ValueError, match=f"org/model:{provider}"):
+                compare.execute(request, output=tmp_path, namespace="owner")
+            api.run_job.assert_not_called()
+        lookup.assert_called_once_with(
+            "https://router.huggingface.co/v1/models/org/model", timeout=20
+        )
+
+
+@pytest.mark.parametrize("suffix", ["", ":fastest", ":cheapest", ":preferred"])
+def automatic_hf_routing_skips_the_pinned_provider_check(suffix: str) -> None:
+    with patch.object(dispatch, "urlopen") as lookup:
+        dispatch.check_model_route(f"hf-inference-providers/org/model{suffix}")
+        lookup.assert_not_called()
+
+
 def _assert_volumes(api: MagicMock) -> None:
     for call in api.run_job.call_args_list:
         assert (
@@ -119,9 +160,13 @@ def saved_runs_skip_only_the_requested_jobs(
         else selected
         for selected in request.variants
     )
-    compare.execute(
-        request.model_copy(update={"variants": variants}), output=tmp_path, namespace="owner"
-    )
+    request = request.model_copy(update={"variants": variants})
+    if len(roles) == len(variants):
+        shared = request.shared.model_copy(update={"model": "hf-inference-providers/org/model:old"})
+        request = request.model_copy(update={"shared": shared})
+    with patch.object(dispatch, "urlopen") as lookup:
+        compare.execute(request, output=tmp_path, namespace="owner")
+        lookup.assert_not_called()
     assert api.run_job.call_count == 2 - len(roles)
 
 
@@ -154,7 +199,9 @@ def submission_failure_cancels_saved_job_ids(
 
 
 def failed_remote_job_cancels_the_remaining_work(api: MagicMock, *, tmp_path: Path) -> None:
-    api.wait_for_job.return_value = SimpleNamespace(status=SimpleNamespace(stage="ERROR"))
+    api.wait_for_job.return_value = SimpleNamespace(
+        id="failed-job", status=SimpleNamespace(stage="ERROR", message=None)
+    )
     with pytest.raises(RuntimeError, match="did not complete"):
         compare.execute(_request(), output=tmp_path, namespace="owner")
     assert api.cancel_job.call_count == 2
@@ -173,6 +220,28 @@ def existing_dispatch_state_is_preserved(api: MagicMock, *, tmp_path: Path) -> N
     with pytest.raises(ValueError, match="already contains"):
         compare.execute(_request(), output=tmp_path, namespace="owner")
     assert (tmp_path / "jobs.json").read_text() == "existing"
+
+
+def reasoning_recipe_uses_workflow_settings() -> None:
+    recipe = EVALS_ROOT / "comparisons/reasoning.json"
+    environment = {
+        "COMPARISON_REQUEST": recipe.read_text(),
+        "COMPARISON_ID": "paired-trial",
+        "EVAL_MODEL": "openai/test",
+        "EVAL_DATASET": "reasoning",
+        "EVAL_EPOCHS": "3",
+    }
+    with patch.dict("os.environ", environment, clear=True):
+        request = compare.request_from_environment()
+    assert (request.comparison_id, request.shared.dataset, request.shared.epochs) == (
+        "paired-trial",
+        "reasoning",
+        3,
+    )
+    assert [(v.variant.source_ref, v.variant.proof_backend) for v in request.variants] == [
+        ("HEAD", "markdown"),
+        ("HEAD", "bend"),
+    ]
 
 
 @pytest.mark.parametrize("provider", ["openai", "anthropic"])
@@ -198,20 +267,21 @@ def request_uses_existing_environment_configuration(provider: str) -> None:
     ],
 )
 def explicit_request_json_is_preserved(requested: str, *, published: str, expected: str) -> None:
-    request = _request()
-    request = request.model_copy(
-        update={"shared": request.shared.model_copy(update={"sandbox_image": requested})}
-    )
-    environment = {"COMPARISON_REQUEST": request.model_dump_json(), "EVAL_SANDBOX_IMAGE": published}
+    fields = _request().model_dump(mode="json")
+    fields["shared"]["sandbox_image"] = requested
+    environment = {"COMPARISON_REQUEST": json.dumps(fields), "EVAL_SANDBOX_IMAGE": published}
     with patch.dict("os.environ", environment, clear=True):
         resolved = compare.request_from_environment()
-    assert resolved.shared.sandbox_image == expected
-    assert (
-        resolved.model_copy(
-            update={"shared": resolved.shared.model_copy(update={"sandbox_image": requested})}
-        )
-        == request
-    )
+    fields["shared"]["sandbox_image"] = expected
+    assert resolved.model_dump(mode="json") == fields
+
+
+@pytest.mark.parametrize("shared", [None, {"model": "openai/test", "sandbox_image": False}])
+def workflow_defaults_preserve_validation_errors(shared: object) -> None:
+    fields = _request().model_dump(mode="json")
+    fields["shared"] = shared
+    with pytest.raises(ValidationError, match="shared"):
+        compare.workflow_request(json.dumps(fields), comparison_id="request")
 
 
 def _repository(path: Path) -> None:
@@ -274,12 +344,14 @@ def either_failure_cancels_without_waiting_for_its_peer(
 
     def waiting(job_id: str, **kwargs: object) -> SimpleNamespace:
         if job_id == f"{failed_role}-job":
-            return SimpleNamespace(status=SimpleNamespace(stage="ERROR"))
+            return SimpleNamespace(
+                id=job_id, status=SimpleNamespace(stage="ERROR", message="worker exited")
+            )
         assert cancelled.wait(timeout=5), "peer cancellation was blocked behind its wait"
         return SimpleNamespace(status=SimpleNamespace(stage="CANCELLED"))
 
     api.wait_for_job.side_effect = waiting
-    with pytest.raises(RuntimeError, match="did not complete"):
+    with pytest.raises(RuntimeError, match=rf"{failed_role}-job.*ERROR.*worker exited"):
         compare.execute(_request(), output=tmp_path, namespace="owner")
     assert cancelled.is_set()
 

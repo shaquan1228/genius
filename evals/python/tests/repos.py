@@ -30,6 +30,15 @@ def repo_reads_every_fixture_file() -> None:
     assert set(smoke.repo("release")) == {"CHANGELOG.md", "README.md", "RELEASING.md", "build.sh"}
 
 
+def suite_fixture_ignores_python_cache(tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(smoke, "REPOS", tmp_path)
+    suite = tmp_path / "suite"
+    suite.mkdir()
+    (suite / "__pycache__").mkdir()
+    (suite / "parser_test.py").write_text("import unittest")
+    assert smoke.repo("suite") == {"parser_test.py": "import unittest"}
+
+
 def repo_cases_build_tasks_whose_reference_passes(
     tmp_path: Path, *, monkeypatch: pytest.MonkeyPatch
 ) -> None:

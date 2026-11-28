@@ -12,6 +12,7 @@ from evals.python import datasets, verification
 from evals.python.datasets import Case
 from evals.python.datasets import smoke as declarations
 from evals.python.integrations.smoke import __main__ as cli
+from evals.python.integrations.smoke import repo
 from evals.python.tests.declarations import _copy_case, _files, _reference_files
 from evals.python.tests.support import ANSWER_CASES, SMOKE
 from evals.python.verification import VerificationResult
@@ -30,7 +31,7 @@ def default_smoke_uses_python_owned_cases() -> None:
     dataset = datasets.load_dataset()
     assert dataset is datasets.compile_dataset(cases=definitions)
     assert tuple(dataset.cases) == SMOKE
-    assert tuple(_files(dataset.cases["clear-task"].files)) == ("receipt.py", "test_receipt.py")
+    assert _files(dataset.cases["clear-task"].files) == repo("basic")
 
 
 def python_smoke_keeps_checks_and_references_private() -> None:

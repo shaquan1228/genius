@@ -91,7 +91,7 @@ private `genius-eval-results` bucket in your HF namespace. Commit changes before
 | Setting | Usage |
 | --- | --- |
 | `EVAL_MODEL` | `openai/...`, `anthropic/...`, or `hf-inference-providers/...` |
-| `EVAL_DATASET` | `smoke` (default), `humanevalplus`, or `pokerbench` |
+| `EVAL_DATASET` | `smoke` (default), `humanevalplus`, `pokerbench`, or `reasoning` |
 | `EVAL_LIMIT` | Maximum cases per profile; omit for the full dataset |
 | `EVAL_SAMPLE_IDS` | JSON list of unique case IDs; use instead of `EVAL_LIMIT` |
 | `EVAL_EPOCHS` | Repeats per case; the hosted launcher defaults to `1` |
@@ -110,6 +110,26 @@ Delivery diagnostics currently support reasoning cases.
 
 Inspect logs retain scores, verifier evidence, crashes, and cutoffs. Parent logs
 include sample lifecycle events and a final completeness report.
+
+### Run the Markdown and Bend comparison
+
+From the reasoning integration branch, this dispatch runs all ten cases once per
+variant, with two concurrent samples per job. The model cost threshold is $0.25
+per sample. Both variants use the same checkout and provider.
+
+```sh
+gh workflow run hf-evals.yml --ref spike/bend-reasoning-integration \
+  -f dataset=reasoning -F comparison_request=@evals/comparisons/reasoning.json \
+  -f model=hf-inference-providers/moonshotai/Kimi-K2.7-Code:coreweave \
+  -f 'model_cost={"input":0.6,"output":3,"input_cache_write":0.6,"input_cache_read":0.12}' \
+  -f epochs=1 -f max_samples=2 -f cost_limit=0.25
+```
+
+Check the provider's current prices before dispatch. For a repository default,
+configure `EVAL_MODEL` and `EVAL_MODEL_COST` together. The
+`benchmark-comparison` workflow artifact contains the native logs and
+`summary.md`. A saved variant with missing cases needs a fresh job. Omit its
+`result_ref` to launch it again.
 
 ## Use from Python
 
