@@ -66,7 +66,7 @@ case "$proof/$source" in
   *) invalid ;;
 esac
 
-read -r backend < "$scripts/../proof-backend"
+read -r backend < "$scripts/../references/proof-backend"
 case "${GENIUS_PROOF_BACKEND-$backend}" in
   bend)
     BEND_NO_TELEMETRY=1 exec "${BEND_BIN:-bend}" "$scripts/$program" -- "$@"

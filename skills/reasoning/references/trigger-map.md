@@ -1,6 +1,6 @@
 # Trigger map
 
-Condensed from `../../../docs/proofs/PROOF-TREE.md`. Each row says when a proof fires and the question to ask. Read the full proof for the derivation. Use the commands in the skill's [Iterate step](../SKILL.md#iterate) to check deterministically with `prove.sh`.
+Condensed from `../../../docs/proofs/PROOF-TREE.md`. Each row says when a proof fires and the question to ask. Read the full proof for the derivation.
 
 | Proof | Fires when | Ask |
 |---|---|---|
