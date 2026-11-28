@@ -81,6 +81,7 @@ class Corpus(unittest.TestCase):
         self.assertTrue(sources)
         sources.append(ROOT / "docs/proofs/reasoning/example.bend")
         sources.append(ROOT / "tests/fixtures/proofs/trace.bend")
+        sources.append(ROOT / "tests/fixtures/proofs/ranked_lookup.bend")
         sources.append(ROOT / "tests/fixtures/proofs/external_output.bend")
         sources.append(Path(shutil.copy(ROOT / "tests/fixtures/proofs/iteration.bend", self.modules)))
         for source in sources:
