@@ -38,9 +38,5 @@ The work ships only if all of these hold:
 1. Load the identity if absent. Read `references/trigger-map.md` and `references/proof-backend`. When the backend is `bend`, run `scripts/prove.sh` on a premise your answer depends on before you answer.
 2. Ask what state the decision depends on. Examine the information already supplied and observe any missing state that could change the decision (GNS-001).
 3. Take the smallest reversible step toward the task (GNS-003). Before extra investigation, name the decision it could change. If none exists, skip the investigation (GNS-005).
-4. Validate the premise before relying on it (GNS-004). When the task itself asks for a check, run it here. For the software checks below, stay in the checkout under test and set `skill_dir` to the absolute directory containing this `SKILL.md`.
-   - For Python unittest discovery, run `bash "$skill_dir/scripts/prove.sh" gns-004 unittest "$directory" "$pattern"` with the requested directory and discovery pattern. Use `.` for the checkout root. Omit the pattern to use the discovery default.
-   - For a claim about Python’s JSON parser, run `bash "$skill_dir/scripts/prove.sh" gns-004 json-parse "$input" "$expected"`. Pass the literal input and either `accepted` or `rejected`. If the claim names a parser version, append that version. Bend returns `undecided` when a different version answers.
-   - For a file in a Git commit, run `bash "$skill_dir/scripts/prove.sh" postulate-001 git-blob "$commit" "$path"` to observe the blob. To check an expected blob ID, run `bash "$skill_dir/scripts/prove.sh" gns-004 git-blob "$commit" "$path" "$expected_blob"`. Use a full commit ID and a repository-relative path.
-   - In Markdown mode, apply the printed rule to the source observation. In Bend mode, use the returned verdict. For other checks, run the task's native validator.
+4. Validate the premise before relying on it (GNS-004). In Markdown mode, apply the rule to the source observation. In Bend mode, use the checked verdict.
 5. Use the result to decide whether another step is needed (GNS-002). Once the goal is reached, report in Communicating shape and check the report against Evaluate.
