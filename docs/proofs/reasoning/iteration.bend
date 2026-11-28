@@ -1,23 +1,35 @@
 import Base
 import ../logic.bend as Logic
 
+def justified_loads_fork(
+  -LoadsFork: Type,
+  -Tinkering: Type,
+  -Justified: Type,
+  alternatives: Logic.Xor(LoadsFork, Tinkering),
+  no_loading_rules_out_justification: (LoadsFork -> Empty) -> Justified -> Empty,
+  justified: Justified
+) -> LoadsFork:
+  match alternatives:
+    case Inl{(loading, _)}: loading
+    case Inr{(_, no_loading)}:
+      Empty.absurd(LoadsFork, no_loading_rules_out_justification(no_loading, justified))
+
 def fork_loaded_iteration(
   -Iteration: Type,
   -DwellState: Data,
   -LoadsFork: Type,
+  -Tinkering: Type,
   -Justified: Type,
   dwell_of_iteration: Iteration -> DwellState,
+  loading_or_tinkering: DwellState -> Logic.Xor(LoadsFork, Tinkering),
   loading_justifies_iteration: DwellState -> LoadsFork -> Justified,
   no_loading_rules_out_justification: DwellState -> (LoadsFork -> Empty) -> Justified -> Empty,
-  eliminate_double_negation: ((LoadsFork -> Empty) -> Empty) -> LoadsFork,
   iteration: Iteration
 ) -> Logic.Iff(Justified, LoadsFork):
   +dwell = dwell_of_iteration(iteration)
-  (
-    justified => eliminate_double_negation(not_loading =>
-      no_loading_rules_out_justification(dwell, not_loading, justified)),
-    loading => loading_justifies_iteration(dwell, loading)
-  )
+  alternatives = loading_or_tinkering(dwell)
+  (justified_loads_fork(LoadsFork, Tinkering, Justified, alternatives, no_loading_rules_out_justification(dwell)),
+   loading_justifies_iteration(dwell))
 
 def tinkering_excludes_loading(
   -LoadsFork: Type,

@@ -9,8 +9,8 @@ type Decision<-Claim: Type> is Type:
 def Somewhere(~Q: Data, ~Claim: Q -> T.AttemptEvent<T.Fact> -> T.IterationHistory -> Type,
   +query: Q, history: T.IterationHistory) -> Type:
   match history:
-    case Nil{}: Empty
-    case event <> earlier: Or(Claim(query, event, earlier), Somewhere(~Q, ~Claim, query, earlier))
+    case T.Start{}: Empty
+    case T.Record{event, earlier}: Or(Claim(query, event, earlier), Somewhere(~Q, ~Claim, query, earlier))
 
 def refute_either(-A: Type, -B: Type, no_a: A -> Empty, no_b: B -> Empty, either: Or(A, B)) -> Empty:
   match either:
@@ -33,8 +33,8 @@ def find(~Q: Data, ~Claim: Q -> T.AttemptEvent<T.Fact> -> T.IterationHistory -> 
   ~test: @+query: Q -> @+event: T.AttemptEvent<T.Fact> -> @+earlier: T.IterationHistory -> Decision<Claim(query, event, earlier)>,
   +query: Q, +history: T.IterationHistory) -> Decision<Somewhere(~Q, ~Claim, query, history)>:
   match history:
-    case Nil{}: Missing{impossible => impossible}
-    case event <> earlier:
+    case T.Start{}: Missing{impossible => impossible}
+    case T.Record{event, earlier}:
       first_match(Claim(query, event, earlier), Somewhere(~Q, ~Claim, query, earlier), test(query, event, earlier),
         _ => find(~Q, ~Claim, ~test, query, earlier))
 
