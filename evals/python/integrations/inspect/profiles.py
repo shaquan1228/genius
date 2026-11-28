@@ -34,10 +34,13 @@ def variant_documents(spec: Experiment, *, variant: VariantSettings | None) -> M
     documents = load_documents(spec, source_dir=variant.source_dir if variant else None)
     if variant is None or variant.proof_backend is None:
         return documents
-    flag = "instructions/skills/reasoning/proof-backend"
-    if flag not in documents:
-        raise ValueError("A proof_backend requires the reasoning skill's proof-backend file")
-    return MappingProxyType({**documents, flag: f"{variant.proof_backend}\n".encode()})
+    for flag in (
+        "instructions/skills/reasoning/references/proof-backend",
+        "instructions/skills/reasoning/proof-backend",
+    ):
+        if flag in documents:
+            return MappingProxyType({**documents, flag: f"{variant.proof_backend}\n".encode()})
+    raise ValueError("A proof_backend requires the reasoning skill's proof-backend file")
 
 
 def instruction_files(spec: Experiment, *, root: Path) -> Iterator[Path]:

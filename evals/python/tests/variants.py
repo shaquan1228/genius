@@ -106,7 +106,7 @@ def reasoning_variants_change_only_the_installed_backend_flag() -> None:
 
 
 def _assert_paired_samples(control: Sample, *, treatment: Sample) -> None:
-    flag = "instructions/skills/reasoning/proof-backend"
+    flag = "instructions/skills/reasoning/references/proof-backend"
     left, right = dict(control.files or {}), dict(treatment.files or {})
     assert (left.pop(flag), right.pop(flag)) == (
         inline_file(contents=b"markdown\n"),

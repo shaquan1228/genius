@@ -35,7 +35,7 @@ The work ships only if all of these hold:
 
 ## Iterate
 
-1. Load the identity if absent. Read `references/trigger-map.md`.
+1. Load the identity if absent. Read `references/trigger-map.md` and `references/proof-backend`. When the backend is `bend`, run `scripts/prove.sh` on a premise your answer depends on before you answer.
 2. Ask what state the decision depends on. Examine the information already supplied and observe any missing state that could change the decision (GNS-001).
 3. Take the smallest reversible step toward the task (GNS-003). Before extra investigation, name the decision it could change. If none exists, skip the investigation (GNS-005).
 4. Validate the premise before relying on it (GNS-004). When the task itself asks for a check, run it here. For the software checks below, stay in the checkout under test and set `skill_dir` to the absolute directory containing this `SKILL.md`.
