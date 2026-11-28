@@ -1,0 +1,122 @@
+import Base
+
+type ParseOutcome is Data:
+  Accepted{}
+  Rejected{}
+
+type Source is Data:
+  CommittedFile{commit: String, path: String}
+  TestSuite{run_id: String, directory: String, pattern: String}
+  ParserCase{parser_version: String, input: String}
+
+def Answer(source: Source) -> Data:
+  match source:
+    case CommittedFile{_, _}:
+      Maybe<&2, String>
+    case TestSuite{_, _, _}:
+      Bool
+    case ParserCase{_, _}:
+      ParseOutcome
+
+# The source is part of both types. A result for one source cannot be used
+# with a prediction about another. The CLI reads the actual value at its source.
+type Hypothesis<-source: Source> is Data:
+  Predict{expected: Answer(source)}
+
+type Observation<-source: Source> is Data:
+  NoResponse{}
+  Returned{actual: Answer(source)}
+
+type Verdict is Data:
+  Supported{}
+  Contradicted{}
+  Undecided{}
+
+def received(-source: Source, observation: Observation<source>) -> Bool:
+  match observation:
+    case NoResponse{}:
+      False{}
+    case Returned{_}:
+      True{}
+
+def NonTrivial(viable_approaches: Nat, uncertain: Bool) -> Data:
+  Either<&2, &2, {Nat.is_lt(1n, viable_approaches) == True{} : Bool}, {uncertain == True{} : Bool}>
+
+type Attempt is Data:
+  AttemptKey{action: Nat, number: Nat}
+
+def same_attempt(a: Attempt, b: Attempt) -> Bool:
+  match a b:
+    case AttemptKey{action, number} AttemptKey{other_action, other_number}:
+      Bool.and(Nat.is_eq(action, other_action), Nat.is_eq(number, other_number))
+
+type Phase is Data:
+  Observed{source: Source, response: Observation<source>}
+  Oriented{}
+  Decided{}
+  Acted{}
+
+type AttemptEvent<-Payload: Data> is Data:
+  Entry{key: Attempt, value: Payload}
+
+def TraceEvent() -> Data:
+  AttemptEvent<Phase>
+
+type History<-Event: Data> is Data:
+  Start{}
+  Record{event: Event, earlier: History<Event>}
+
+def oldest_first.go(-Event: Data, history: History<Event>, newer: List<&2, Event>) -> List<&2, Event>:
+  match history:
+    case Start{}: newer
+    case Record{event, earlier}: oldest_first.go(Event, earlier, event <> newer)
+
+def oldest_first(-Event: Data, history: History<Event>) -> List<&2, Event>:
+  oldest_first.go(Event, history, Nil{})
+
+type PremiseClaim is Data:
+  Claim{number: Nat, source: Source, hypothesis: Hypothesis<source>}
+
+type LoopOutput is Data:
+  Output{loop: Nat, number: Nat}
+
+type Subject is Data:
+  Action{number: Nat}
+  Premise{claim: PremiseClaim}
+  OutputSubject{output: LoopOutput}
+
+type Fact is Data:
+  Dependency{dependent: Subject, prerequisite: Subject}
+  Reading{source: Source, actual: Answer(source)}
+  ExternalLoop{actor: Nat, loop: Nat}
+  Observable{actor: Nat, output: LoopOutput}
+  DefaultEstablished{premise: PremiseClaim}
+  CascadeOccurred{action: Nat, premise: PremiseClaim}
+
+type Intervention is Data:
+  Probe{output: LoopOutput}
+  Signal{output: LoopOutput}
+  SafeguardInstalled{premise: PremiseClaim}
+  NoIntervention{}
+  OtherIntervention{}
+
+type Context<-S: Data> is Data:
+  Frame{
+    actor: Nat,
+    subject: S,
+    before: List<&2, Fact>,
+    after: List<&2, Fact>,
+    intervention: Intervention
+  }
+
+type ActionUse is Data:
+  Use{action: Nat, premise: PremiseClaim, viable_approaches: Nat, uncertain: Bool}
+
+type ExternalUse is Data:
+  UseOutput{use: ActionUse, output: LoopOutput}
+
+type Iteration is Data:
+  Prepare{attempt: Attempt, decision: Nat}
+
+def IterationHistory() -> Data:
+  History<AttemptEvent<Fact>>
